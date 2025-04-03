@@ -1,38 +1,81 @@
+/**
+ * BSD 3-Clause License
+ * 
+ * Copyright (c) 2025, Riccardo Balbo
+ * 
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ * 
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the documentation
+ *    and/or other materials provided with the distribution.
+ * 
+ * 3. Neither the name of the copyright holder nor the names of its
+ *    contributors may be used to endorse or promote products derived from
+ *    this software without specific prior written permission.
+ * 
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 package org.ngengine.nostr4j.platform.jvm;
 
 import java.math.BigInteger;
-import java.security.NoSuchAlgorithmException;
 import java.nio.charset.StandardCharsets;
-
+import java.security.NoSuchAlgorithmException;
 import org.ngengine.nostr4j.utils.NostrUtils;
 
 class Point {
-    private final static BigInteger p = new BigInteger(
-            "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F", 16);
-    private final static BigInteger n = new BigInteger(
-            "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141", 16);
-    public final static Point G = new Point(
-            new BigInteger("79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798", 16),
-            new BigInteger("483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8", 16),
-            false
+
+    private static final BigInteger p = new BigInteger(
+        "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F",
+        16
+    );
+    private static final BigInteger n = new BigInteger(
+        "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141",
+        16
+    );
+    public static final Point G = new Point(
+        new BigInteger(
+            "79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798",
+            16
+        ),
+        new BigInteger(
+            "483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8",
+            16
+        ),
+        false
     );
 
-    private final static BigInteger BI_TWO = BigInteger.valueOf(2);
-    private final static BigInteger BI_THREE = BigInteger.valueOf(3L);
-    private final static BigInteger BI_SEVEN = BigInteger.valueOf(7L);
-    private final static BigInteger P_PLUS_ONE_DIV_FOUR = p.add(BigInteger.ONE).divide(BigInteger.valueOf(4L));
-    private final static BigInteger P_MINUS_ONE_DIV_TWO = p.subtract(BigInteger.ONE).divide(BI_TWO);
-    private final static byte[] ZEROES = new byte[32];
+    private static final BigInteger BI_TWO = BigInteger.valueOf(2);
+    private static final BigInteger BI_THREE = BigInteger.valueOf(3L);
+    private static final BigInteger BI_SEVEN = BigInteger.valueOf(7L);
+    private static final BigInteger P_PLUS_ONE_DIV_FOUR = p
+        .add(BigInteger.ONE)
+        .divide(BigInteger.valueOf(4L));
+    private static final BigInteger P_MINUS_ONE_DIV_TWO = p
+        .subtract(BigInteger.ONE)
+        .divide(BI_TWO);
+    private static final byte[] ZEROES = new byte[32];
 
- 
     private final BigInteger[] coords;
     private byte[] cachedBytes;
-    private final static Point INFINITY = new Point(null, null, false);
+    private static final Point INFINITY = new Point(null, null, false);
 
     public Point(BigInteger x, BigInteger y) {
         this(x, y, true);
     }
-    
+
     private Point(BigInteger x, BigInteger y, boolean verify) {
         this.coords = new BigInteger[] { x, y };
 
@@ -45,9 +88,15 @@ class Point {
     // Validate that the point lies on the curve y² = x³ + 7 (mod p)
     private void validateOnCurve(BigInteger x, BigInteger y) {
         // Check x and y are in the valid range [0, p-1]
-        if (x.compareTo(BigInteger.ZERO) < 0 || x.compareTo(p) >= 0 ||
-                y.compareTo(BigInteger.ZERO) < 0 || y.compareTo(p) >= 0) {
-            throw new IllegalArgumentException("Point coordinates outside valid range");
+        if (
+            x.compareTo(BigInteger.ZERO) < 0 ||
+            x.compareTo(p) >= 0 ||
+            y.compareTo(BigInteger.ZERO) < 0 ||
+            y.compareTo(p) >= 0
+        ) {
+            throw new IllegalArgumentException(
+                "Point coordinates outside valid range"
+            );
         }
 
         // Calculate left side: y²
@@ -61,7 +110,7 @@ class Point {
             throw new IllegalArgumentException("Point is not on the curve");
         }
     }
-    
+
     public static BigInteger getp() {
         return p;
     }
@@ -96,20 +145,18 @@ class Point {
     }
 
     public static Point add(Point P1, Point P2) {
-        if ((P1 == null || P1.isInfinite()) && (P2 == null || P2.isInfinite()))
-            return INFINITY;
-        if (P1 == null || P1.isInfinite())
-            return P2;
-        if (P2 == null || P2.isInfinite())
-            return P1;
+        if (
+            (P1 == null || P1.isInfinite()) && (P2 == null || P2.isInfinite())
+        ) return INFINITY;
+        if (P1 == null || P1.isInfinite()) return P2;
+        if (P2 == null || P2.isInfinite()) return P1;
         JacobianPoint J1 = P1.toJacobian();
         JacobianPoint J2 = P2.toJacobian();
         return JacobianPoint.add(J1, J2).toAffine();
     }
 
     public static Point mul(Point P, BigInteger k) {
-        if (P == null || P.isInfinite())
-            return INFINITY;
+        if (P == null || P.isInfinite()) return INFINITY;
         JacobianPoint J = P.toJacobian();
         return JacobianPoint.wNAFScalarMul(J, k).toAffine();
     }
@@ -132,13 +179,18 @@ class Point {
 
     public static boolean hasSquareY(Point P) {
         if (isInfinite(P)) {
-            throw new IllegalArgumentException("Cannot test square property of infinity point");
+            throw new IllegalArgumentException(
+                "Cannot test square property of infinity point"
+            );
         }
         return isSquare(P.getY());
     }
 
-    public static byte[] taggedHash(String tag, byte[] msg) throws NoSuchAlgorithmException {
-        byte[] tagHash = NostrUtils.getPlatform().sha256(tag.getBytes(StandardCharsets.UTF_8));
+    public static byte[] taggedHash(String tag, byte[] msg)
+        throws NoSuchAlgorithmException {
+        byte[] tagHash = NostrUtils
+            .getPlatform()
+            .sha256(tag.getBytes(StandardCharsets.UTF_8));
         int len = (tagHash.length * 2) + msg.length;
         byte[] buf = new byte[len];
         System.arraycopy(tagHash, 0, buf, 0, tagHash.length);
@@ -148,8 +200,7 @@ class Point {
     }
 
     public byte[] toBytes() {
-        if (isInfinite())
-            return ZEROES;
+        if (isInfinite()) return ZEROES;
         if (cachedBytes == null) {
             cachedBytes = bytesFromPoint(this);
         }
@@ -162,14 +213,15 @@ class Point {
 
     public static Point liftX(byte[] b) {
         BigInteger x = Util.bigIntFromBytes(b);
-        if (x.compareTo(p) >= 0)
-            return null;
+        if (x.compareTo(p) >= 0) return null;
         BigInteger y_sq = x.modPow(BI_THREE, p).add(BI_SEVEN).mod(p);
         BigInteger y = y_sq.modPow(P_PLUS_ONE_DIV_FOUR, p);
-        if (!y.modPow(BI_TWO, p).equals(y_sq))
-            return null;
-        else
-            return new Point(x, (y.testBit(0)) ? p.subtract(y) : y);
+        if (
+            !y.modPow(BI_TWO, p).equals(y_sq)
+        ) return null; else return new Point(
+            x,
+            (y.testBit(0)) ? p.subtract(y) : y
+        );
     }
 
     public static Point infinityPoint() {
@@ -178,22 +230,17 @@ class Point {
 
     @Override
     public boolean equals(Object obj) {
-        if (this == obj)
-            return true;
-        if (obj == null || getClass() != obj.getClass())
-            return false;
+        if (this == obj) return true;
+        if (obj == null || getClass() != obj.getClass()) return false;
         Point other = (Point) obj;
-        if (this.isInfinite() && other.isInfinite())
-            return true;
-        if (this.isInfinite() || other.isInfinite())
-            return false;
+        if (this.isInfinite() && other.isInfinite()) return true;
+        if (this.isInfinite() || other.isInfinite()) return false;
         return getX().equals(other.getX()) && getY().equals(other.getY());
     }
 
     @Override
     public int hashCode() {
-        if (isInfinite())
-            return 0;
+        if (isInfinite()) return 0;
         return 31 * getX().hashCode() + getY().hashCode();
     }
 
@@ -216,8 +263,12 @@ class Point {
      */
     private JacobianPoint toJacobian() {
         return isInfinite()
-                ? new JacobianPoint(BigInteger.ZERO, BigInteger.ONE, BigInteger.ZERO)
-                : new JacobianPoint(getX(), getY(), BigInteger.ONE);
+            ? new JacobianPoint(
+                BigInteger.ZERO,
+                BigInteger.ONE,
+                BigInteger.ZERO
+            )
+            : new JacobianPoint(getX(), getY(), BigInteger.ONE);
     }
 
     /**
@@ -226,8 +277,9 @@ class Point {
      * The representation avoids repeated modular inversions.
      */
     private static class JacobianPoint {
+
         private final BigInteger X, Y, Z;
-        private final static int WINDOW_SIZE = 4;
+        private static final int WINDOW_SIZE = 4;
         private static final JacobianPoint[] precomputedG = precomputeG();
 
         public JacobianPoint(BigInteger X, BigInteger Y, BigInteger Z) {
@@ -245,8 +297,7 @@ class Point {
          * This requires one modular inversion.
          */
         public Point toAffine() {
-            if (isInfinity())
-                return infinityPoint();
+            if (isInfinity()) return infinityPoint();
             BigInteger zInv = Z.modInverse(p);
             BigInteger zInv2 = zInv.multiply(zInv).mod(p);
             BigInteger xAff = X.multiply(zInv2).mod(p);
@@ -259,14 +310,15 @@ class Point {
          * Point doubling in Jacobian coordinates.
          */
         public JacobianPoint doublePoint() {
-            if (isInfinity())
-                return this;
+            if (isInfinity()) return this;
             BigInteger Y2 = Y.multiply(Y).mod(p);
             BigInteger S = X.multiply(Y2.shiftLeft(2)).mod(p);
             BigInteger M = X.multiply(X).multiply(BI_THREE).mod(p);
             BigInteger X3 = M.multiply(M).subtract(S.shiftLeft(1)).mod(p);
-            BigInteger Y3 = M.multiply(S.subtract(X3))
-                    .subtract(Y2.multiply(Y2).shiftLeft(3)).mod(p);
+            BigInteger Y3 = M
+                .multiply(S.subtract(X3))
+                .subtract(Y2.multiply(Y2).shiftLeft(3))
+                .mod(p);
             BigInteger Z3 = Y.shiftLeft(1).multiply(Z).mod(p);
             return new JacobianPoint(X3, Y3, Z3);
         }
@@ -283,10 +335,8 @@ class Point {
          * Point addition in Jacobian coordinates.
          */
         public static JacobianPoint add(JacobianPoint P, JacobianPoint Q) {
-            if (P.isInfinity())
-                return Q;
-            if (Q.isInfinity())
-                return P;
+            if (P.isInfinity()) return Q;
+            if (Q.isInfinity()) return P;
             // U1 = X1 * Z2^2, U2 = X2 * Z1^2
             BigInteger Z1Sq = P.Z.multiply(P.Z).mod(p);
             BigInteger Z2Sq = Q.Z.multiply(Q.Z).mod(p);
@@ -298,16 +348,28 @@ class Point {
             BigInteger S1 = P.Y.multiply(Z2Cu).mod(p);
             BigInteger S2 = Q.Y.multiply(Z1Cu).mod(p);
             if (U1.equals(U2)) {
-                return S1.equals(S2) ? P.doublePoint()
-                        : new JacobianPoint(BigInteger.ZERO, BigInteger.ONE, BigInteger.ZERO);
+                return S1.equals(S2)
+                    ? P.doublePoint()
+                    : new JacobianPoint(
+                        BigInteger.ZERO,
+                        BigInteger.ONE,
+                        BigInteger.ZERO
+                    );
             }
             BigInteger H = U2.subtract(U1).mod(p);
             BigInteger R = S2.subtract(S1).mod(p);
             BigInteger H2 = H.multiply(H).mod(p);
             BigInteger H3 = H2.multiply(H).mod(p);
             BigInteger U1H2 = U1.multiply(H2).mod(p);
-            BigInteger X3 = R.multiply(R).subtract(H3).subtract(U1H2.shiftLeft(1)).mod(p);
-            BigInteger Y3 = R.multiply(U1H2.subtract(X3)).subtract(S1.multiply(H3)).mod(p);
+            BigInteger X3 = R
+                .multiply(R)
+                .subtract(H3)
+                .subtract(U1H2.shiftLeft(1))
+                .mod(p);
+            BigInteger Y3 = R
+                .multiply(U1H2.subtract(X3))
+                .subtract(S1.multiply(H3))
+                .mod(p);
             BigInteger Z3 = P.Z.multiply(Q.Z).multiply(H).mod(p);
             return new JacobianPoint(X3, Y3, Z3);
         }
@@ -326,7 +388,9 @@ class Point {
                 if (tmp.testBit(0)) {
                     BigInteger mod = tmp.mod(twoPowW);
                     int digit = mod.intValue();
-                    if (BigInteger.valueOf(digit).compareTo(twoPowWMinus1) >= 0) {
+                    if (
+                        BigInteger.valueOf(digit).compareTo(twoPowWMinus1) >= 0
+                    ) {
                         digit -= (1 << width);
                     }
                     buffer[pos++] = digit;
@@ -345,9 +409,11 @@ class Point {
          * Single-scalar multiplication using the wNAF method.
          * If the point equals the fixed base point G, use a precomputed table.
          */
-        public static JacobianPoint wNAFScalarMul(JacobianPoint P, BigInteger k) {
-            if (P.equals(G.toJacobian()))
-                return wNAFScalarMulPrecomputed(k);
+        public static JacobianPoint wNAFScalarMul(
+            JacobianPoint P,
+            BigInteger k
+        ) {
+            if (P.equals(G.toJacobian())) return wNAFScalarMulPrecomputed(k);
             int[] wnaf = computeWNAF(k, WINDOW_SIZE);
             int tableSize = 1 << (WINDOW_SIZE - 1);
             JacobianPoint[] table = new JacobianPoint[tableSize];
@@ -356,13 +422,19 @@ class Point {
             for (int i = 1; i < tableSize; i++) {
                 table[i] = add(table[i - 1], twoP);
             }
-            JacobianPoint R = new JacobianPoint(BigInteger.ZERO, BigInteger.ONE, BigInteger.ZERO);
+            JacobianPoint R = new JacobianPoint(
+                BigInteger.ZERO,
+                BigInteger.ONE,
+                BigInteger.ZERO
+            );
             for (int i = wnaf.length - 1; i >= 0; i--) {
                 R = R.doublePoint();
                 int digit = wnaf[i];
                 if (digit != 0) {
                     int index = Math.abs(digit) / 2;
-                    R = digit > 0 ? add(R, table[index])
+                    R =
+                        digit > 0
+                            ? add(R, table[index])
                             : add(R, table[index].negate());
                 }
             }
@@ -374,13 +446,19 @@ class Point {
          */
         private static JacobianPoint wNAFScalarMulPrecomputed(BigInteger k) {
             int[] wnaf = computeWNAF(k, WINDOW_SIZE);
-            JacobianPoint R = new JacobianPoint(BigInteger.ZERO, BigInteger.ONE, BigInteger.ZERO);
+            JacobianPoint R = new JacobianPoint(
+                BigInteger.ZERO,
+                BigInteger.ONE,
+                BigInteger.ZERO
+            );
             for (int i = wnaf.length - 1; i >= 0; i--) {
                 R = R.doublePoint();
                 int digit = wnaf[i];
                 if (digit != 0) {
                     int index = Math.abs(digit) / 2;
-                    R = digit > 0 ? add(R, precomputedG[index])
+                    R =
+                        digit > 0
+                            ? add(R, precomputedG[index])
                             : add(R, precomputedG[index].negate());
                 }
             }
@@ -391,7 +469,12 @@ class Point {
          * Double-scalar multiplication using the wNAF method.
          * Computes R = s * P + t * Q.
          */
-        public static JacobianPoint doubleScalarWNAF(JacobianPoint P, BigInteger s, JacobianPoint Q, BigInteger t) {
+        public static JacobianPoint doubleScalarWNAF(
+            JacobianPoint P,
+            BigInteger s,
+            JacobianPoint Q,
+            BigInteger t
+        ) {
             int[] wnafS = computeWNAF(s, WINDOW_SIZE);
             int[] wnafT = computeWNAF(t, WINDOW_SIZE);
             int len = Math.max(wnafS.length, wnafT.length);
@@ -412,18 +495,28 @@ class Point {
                 tableP[i] = add(tableP[i - 1], twoP);
                 tableQ[i] = add(tableQ[i - 1], twoQ);
             }
-            JacobianPoint R = new JacobianPoint(BigInteger.ZERO, BigInteger.ONE, BigInteger.ZERO);
+            JacobianPoint R = new JacobianPoint(
+                BigInteger.ZERO,
+                BigInteger.ONE,
+                BigInteger.ZERO
+            );
             for (int i = len - 1; i >= 0; i--) {
                 R = R.doublePoint();
                 int dS = padS[i];
                 int dQ = padT[i];
                 if (dS != 0) {
                     int idx = Math.abs(dS) / 2;
-                    R = dS > 0 ? add(R, tableP[idx]) : add(R, tableP[idx].negate());
+                    R =
+                        dS > 0
+                            ? add(R, tableP[idx])
+                            : add(R, tableP[idx].negate());
                 }
                 if (dQ != 0) {
                     int idx = Math.abs(dQ) / 2;
-                    R = dQ > 0 ? add(R, tableQ[idx]) : add(R, tableQ[idx].negate());
+                    R =
+                        dQ > 0
+                            ? add(R, tableQ[idx])
+                            : add(R, tableQ[idx].negate());
                 }
             }
             return R;
@@ -445,22 +538,21 @@ class Point {
 
         @Override
         public boolean equals(Object obj) {
-            if (this == obj)
-                return true;
-            if (obj == null || getClass() != obj.getClass())
-                return false;
+            if (this == obj) return true;
+            if (obj == null || getClass() != obj.getClass()) return false;
             JacobianPoint other = (JacobianPoint) obj;
-            if (this.isInfinity() && other.isInfinity())
-                return true;
-            if (this.isInfinity() || other.isInfinity())
-                return false;
-            return this.X.equals(other.X) && this.Y.equals(other.Y) && this.Z.equals(other.Z);
+            if (this.isInfinity() && other.isInfinity()) return true;
+            if (this.isInfinity() || other.isInfinity()) return false;
+            return (
+                this.X.equals(other.X) &&
+                this.Y.equals(other.Y) &&
+                this.Z.equals(other.Z)
+            );
         }
 
         @Override
         public int hashCode() {
-            if (isInfinity())
-                return 0;
+            if (isInfinity()) return 0;
             int result = X.hashCode();
             result = 31 * result + Y.hashCode();
             result = 31 * result + Z.hashCode();

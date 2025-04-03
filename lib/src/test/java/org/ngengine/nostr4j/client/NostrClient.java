@@ -1,37 +1,59 @@
+/**
+ * BSD 3-Clause License
+ * 
+ * Copyright (c) 2025, Riccardo Balbo
+ * 
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ * 
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the documentation
+ *    and/or other materials provided with the distribution.
+ * 
+ * 3. Neither the name of the copyright holder nor the names of its
+ *    contributors may be used to endorse or promote products derived from
+ *    this software without specific prior written permission.
+ * 
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 package org.ngengine.nostr4j.client;
 
 import java.awt.*;
 import java.awt.event.*;
 import java.time.Instant;
-
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.swing.*;
 import javax.swing.border.*;
-
 import org.ngengine.nostr4j.NostrFilter;
 import org.ngengine.nostr4j.NostrPool;
 import org.ngengine.nostr4j.NostrSubscription;
 import org.ngengine.nostr4j.TestLogger;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.nip50.NostrSearchFilter;
-import org.ngengine.nostr4j.platform.jvm.JVMAsyncPlatform;
-import org.ngengine.nostr4j.utils.Bech32.Bech32Exception;
-
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Random;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 public class NostrClient extends JFrame {
+
     private static final long serialVersionUID = 1L;
     private static final Logger rootLogger = TestLogger.getRoot(Level.FINEST);
 
     // Custom event data structure
-   
+
     // UI Components
     private JScrollPane scrollPane;
     private JPanel contentPanel;
@@ -46,47 +68,56 @@ public class NostrClient extends JFrame {
 
     public NostrClient(String title) {
         super(title);
-
         // Initialize UI
         setupUI();
 
         this.pool = new NostrPool();
         this.pool.ensureRelay("wss://nostr.wine");
         this.pool.addNoticeListener((relay, notice) -> {
-            SwingUtilities.invokeLater(() -> {
-                JOptionPane.showMessageDialog(null, notice, "Notice", JOptionPane.INFORMATION_MESSAGE);
+                SwingUtilities.invokeLater(() -> {
+                    JOptionPane.showMessageDialog(
+                        null,
+                        notice,
+                        "Notice",
+                        JOptionPane.INFORMATION_MESSAGE
+                    );
+                });
             });
-        });
 
-        NostrSubscription sub = this.pool
-                .subscribe(
-                Arrays.asList(
-                        new NostrSearchFilter().kind(1).limit(10)));
+        NostrSubscription sub =
+            this.pool.subscribe(
+                    Arrays.asList(new NostrSearchFilter().kind(1).limit(10))
+                );
 
         sub.listenEvent((s, event, stored) -> {
             addEventToFeed(event, true);
-            
         });
 
         sub.open();
-       
     }
 
-    private void loadMore(){
+    private void loadMore() {
         this.pool.fetch(
-            new NostrFilter().kind(1)
-            .until(Instant.ofEpochSecond(earliestEvent))
-            .limit(3)           
-        ).exceptionally((e) -> {
-            JOptionPane.showMessageDialog(this, "Error loading more events: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
-        }).then((events) -> {
-            for (SignedNostrEvent event : events) {
-                System.out.println("Loaded more event: " + event);
-                addEventToFeed(event, false);
-                
-            }
-            return null;
-        });
+                new NostrFilter()
+                    .kind(1)
+                    .until(Instant.ofEpochSecond(earliestEvent))
+                    .limit(3)
+            )
+            .exceptionally(e -> {
+                JOptionPane.showMessageDialog(
+                    this,
+                    "Error loading more events: " + e.getMessage(),
+                    "Error",
+                    JOptionPane.ERROR_MESSAGE
+                );
+            })
+            .then(events -> {
+                for (SignedNostrEvent event : events) {
+                    System.out.println("Loaded more event: " + event);
+                    addEventToFeed(event, false);
+                }
+                return null;
+            });
     }
 
     private void setupUI() {
@@ -109,17 +140,23 @@ public class NostrClient extends JFrame {
         searchBar = new JTextField();
         searchBar.setFont(new Font("SansSerif", Font.PLAIN, 14));
         searchBar.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
-        searchBar.addKeyListener(new KeyAdapter() {
-            @Override
-            public void keyReleased(KeyEvent e) {
-                if (debounceTimer != null) {
-                    debounceTimer.stop();
+        searchBar.addKeyListener(
+            new KeyAdapter() {
+                @Override
+                public void keyReleased(KeyEvent e) {
+                    if (debounceTimer != null) {
+                        debounceTimer.stop();
+                    }
+                    debounceTimer =
+                        new Timer(
+                            300,
+                            evt -> performSearch(searchBar.getText().trim())
+                        );
+                    debounceTimer.setRepeats(false);
+                    debounceTimer.start();
                 }
-                debounceTimer = new Timer(300, evt -> performSearch(searchBar.getText().trim()));
-                debounceTimer.setRepeats(false);
-                debounceTimer.start();
             }
-        });
+        );
 
         // Create content panel with vertical layout
         contentPanel = new JPanel();
@@ -147,7 +184,9 @@ public class NostrClient extends JFrame {
 
         // Create scroll pane
         scrollPane = new JScrollPane(mainContainer);
-        scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
+        scrollPane.setVerticalScrollBarPolicy(
+            JScrollPane.VERTICAL_SCROLLBAR_ALWAYS
+        );
         scrollPane.getVerticalScrollBar().setUnitIncrement(16); // Smoother scrolling
 
         // Add components to the frame
@@ -168,7 +207,10 @@ public class NostrClient extends JFrame {
         // Reinitialize the pool with the new search filter
         pool.unsubscribeAll();
         NostrSubscription sub = pool.subscribe(
-                Arrays.asList(new NostrSearchFilter().kind(1).limit(10).search(query)));
+            Arrays.asList(
+                new NostrSearchFilter().kind(1).limit(10).search(query)
+            )
+        );
 
         sub.listenEvent((s, event, stored) -> {
             addEventToFeed(event, true);
@@ -180,9 +222,9 @@ public class NostrClient extends JFrame {
         contentPanel.revalidate();
         contentPanel.repaint();
     }
-    
+
     private void addEventToFeed(SignedNostrEvent event, boolean top) {
-        if(event.getCreatedAt() < earliestEvent){
+        if (event.getCreatedAt() < earliestEvent) {
             earliestEvent = event.getCreatedAt();
         }
 
@@ -209,14 +251,22 @@ public class NostrClient extends JFrame {
         contentPanel.revalidate();
         contentPanel.repaint();
     }
-    private JPanel createEventPanel(SignedNostrEvent event)  {
+
+    private JPanel createEventPanel(SignedNostrEvent event) {
         // Main panel with rounded corners and shadow effect
         JPanel panel = new JPanel();
         panel.setLayout(new BorderLayout());
         panel.setBackground(new Color(248, 249, 250));
-        panel.setBorder(BorderFactory.createCompoundBorder(
-                new SoftBevelBorder(BevelBorder.RAISED, Color.LIGHT_GRAY, Color.GRAY),
-                BorderFactory.createEmptyBorder(5, 10, 5, 10)));
+        panel.setBorder(
+            BorderFactory.createCompoundBorder(
+                new SoftBevelBorder(
+                    BevelBorder.RAISED,
+                    Color.LIGHT_GRAY,
+                    Color.GRAY
+                ),
+                BorderFactory.createEmptyBorder(5, 10, 5, 10)
+            )
+        );
 
         // Header panel (author info)
         JPanel headerPanel = new JPanel();
@@ -233,8 +283,9 @@ public class NostrClient extends JFrame {
 
                 // Enable antialiasing for smoother circles
                 g2d.setRenderingHint(
-                        RenderingHints.KEY_ANTIALIASING,
-                        RenderingHints.VALUE_ANTIALIAS_ON);
+                    RenderingHints.KEY_ANTIALIASING,
+                    RenderingHints.VALUE_ANTIALIAS_ON
+                );
 
                 // Draw avatar circle
                 g2d.setColor(new Color(200, 200, 220));
@@ -248,9 +299,11 @@ public class NostrClient extends JFrame {
                 int textWidth = fm.stringWidth(text);
                 int textHeight = fm.getHeight();
 
-                g2d.drawString(text,
-                        (getWidth() - textWidth) / 2,
-                        (getHeight() - textHeight) / 2 + fm.getAscent());
+                g2d.drawString(
+                    text,
+                    (getWidth() - textWidth) / 2,
+                    (getHeight() - textHeight) / 2 + fm.getAscent()
+                );
 
                 g2d.dispose();
             }
@@ -266,7 +319,9 @@ public class NostrClient extends JFrame {
 
         // Author details panel (name and timestamp)
         JPanel authorDetailsPanel = new JPanel();
-        authorDetailsPanel.setLayout(new BoxLayout(authorDetailsPanel, BoxLayout.Y_AXIS));
+        authorDetailsPanel.setLayout(
+            new BoxLayout(authorDetailsPanel, BoxLayout.Y_AXIS)
+        );
         authorDetailsPanel.setBackground(new Color(248, 249, 250));
 
         // Author name
@@ -276,7 +331,9 @@ public class NostrClient extends JFrame {
         authorDetailsPanel.add(authorLabel);
 
         // Timestamp
-        JLabel timestampLabel = new JLabel(formatTimestamp(event.getCreatedAt()));
+        JLabel timestampLabel = new JLabel(
+            formatTimestamp(event.getCreatedAt())
+        );
         timestampLabel.setFont(new Font("SansSerif", Font.ITALIC, 11));
         timestampLabel.setForeground(Color.GRAY);
         timestampLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -295,7 +352,10 @@ public class NostrClient extends JFrame {
         contentText.setFont(new Font("SansSerif", Font.PLAIN, 14));
 
         // Calculate needed rows based on content length (approximate)
-        int rows = Math.max(2, Math.min(6, event.getContent().length() / 50 + 1));
+        int rows = Math.max(
+            2,
+            Math.min(6, event.getContent().length() / 50 + 1)
+        );
         contentText.setRows(rows);
 
         // Add components to main panel
@@ -306,19 +366,16 @@ public class NostrClient extends JFrame {
     }
 
     private String formatTimestamp(long timestamp) {
-        return new java.text.SimpleDateFormat("MMM d, yyyy 'at' h:mm a").format(
-                new java.util.Date(timestamp * 1000));
+        return new java.text.SimpleDateFormat("MMM d, yyyy 'at' h:mm a")
+            .format(new java.util.Date(timestamp * 1000));
     }
 
     public static void main(String[] args) throws Exception {
         Logger.getLogger("org.ngengine.nostr4j").setLevel(Level.FINEST);
 
-     
         SwingUtilities.invokeLater(() -> {
             NostrClient client = new NostrClient("Nostr Feed");
             client.setVisible(true);
-
-
         });
     }
 }

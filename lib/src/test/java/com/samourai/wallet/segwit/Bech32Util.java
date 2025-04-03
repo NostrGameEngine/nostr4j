@@ -1,12 +1,42 @@
+/**
+ * BSD 3-Clause License
+ * 
+ * Copyright (c) 2025, Riccardo Balbo
+ * 
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ * 
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the documentation
+ *    and/or other materials provided with the distribution.
+ * 
+ * 3. Neither the name of the copyright holder nor the names of its
+ *    contributors may be used to endorse or promote products derived from
+ *    this software without specific prior written permission.
+ * 
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 package com.samourai.wallet.segwit;
 
 public class Bech32Util {
+
     private static final String CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
 
     public static Bech32Util instance = new Bech32Util();
 
-    private Bech32Util() {
-    }
+    private Bech32Util() {}
 
     public static Bech32Util getInstance() {
         return instance;
@@ -33,7 +63,9 @@ public class Bech32Util {
     }
 
     public Pair<byte[], byte[]> bech32Decode(String bech) throws Exception {
-        if (!bech.equals(bech.toLowerCase()) && !bech.equals(bech.toUpperCase())) {
+        if (
+            !bech.equals(bech.toLowerCase()) && !bech.equals(bech.toUpperCase())
+        ) {
             throw new Exception("bech32 cannot mix upper and lower case");
         }
 
@@ -45,7 +77,7 @@ public class Bech32Util {
         }
 
         bech = bech.toLowerCase();
-        int pos = bech.lastIndexOf("1");
+        int pos = bech.lastIndexOf('1');
         if (pos < 1) {
             throw new Exception("bech32 missing separator");
         } else if (pos + 7 > bech.length()) {
@@ -81,7 +113,13 @@ public class Bech32Util {
     }
 
     private int polymod(byte[] values) {
-        final int[] GENERATORS = { 0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3 };
+        final int[] GENERATORS = {
+            0x3b6a57b2,
+            0x26508e6d,
+            0x1ea119fa,
+            0x3d4233dd,
+            0x2a1462b3,
+        };
 
         int chk = 1;
 
@@ -134,7 +172,13 @@ public class Bech32Util {
 
         System.arraycopy(expanded, 0, values, 0, expanded.length);
         System.arraycopy(data, 0, values, expanded.length, data.length);
-        System.arraycopy(zeroes, 0, values, expanded.length + data.length, zeroes.length);
+        System.arraycopy(
+            zeroes,
+            0,
+            values,
+            expanded.length + data.length,
+            zeroes.length
+        );
 
         int polymod = polymod(values) ^ 1;
         byte[] ret = new byte[6];

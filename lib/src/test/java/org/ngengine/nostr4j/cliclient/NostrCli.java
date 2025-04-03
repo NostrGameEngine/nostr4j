@@ -1,26 +1,46 @@
+/**
+ * BSD 3-Clause License
+ * 
+ * Copyright (c) 2025, Riccardo Balbo
+ * 
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ * 
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the documentation
+ *    and/or other materials provided with the distribution.
+ * 
+ * 3. Neither the name of the copyright holder nor the names of its
+ *    contributors may be used to endorse or promote products derived from
+ *    this software without specific prior written permission.
+ * 
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 package org.ngengine.nostr4j.cliclient;
 
-import java.util.Date;
-import java.util.logging.ConsoleHandler;
-import java.util.logging.Handler;
-import java.util.logging.Level;
-import java.util.logging.LogRecord;
 import java.util.logging.Logger;
-import java.util.logging.SimpleFormatter;
-
 import org.ngengine.nostr4j.NostrFilter;
 import org.ngengine.nostr4j.NostrPool;
 import org.ngengine.nostr4j.NostrSubscription;
 import org.ngengine.nostr4j.TestLogger;
 
 public class NostrCli {
+
     private static final Logger rootLogger = TestLogger.getRoot();
-    
- 
-    public static void main(String _a[]){
-    
 
-
+    public static void main(String _a[]) {
         // initialize pool
         NostrPool pool = new NostrPool();
         // add relays
@@ -28,30 +48,27 @@ public class NostrCli {
 
         // listen for notices
         pool.addNoticeListener((relay, msg) -> {
-            System.out.println("Notice: " + msg+" from relay: " + relay);
+            System.out.println("Notice: " + msg + " from relay: " + relay);
         });
 
         // initialize subscription
         NostrSubscription sub = pool.subscribe(
-            new NostrFilter()
-            .kind(1)
-            .limit(2)
+            new NostrFilter().kind(1).limit(2)
         );
 
         // append listeners
-        sub.listenClose((s,reason) -> {
+        sub.listenClose((s, reason) -> {
             // System.out.println("Subscription closed: " + s + " reason: " + reason);
             rootLogger.fine("Subscription closed: " + s + " reason: " + reason);
         });
 
         sub.listenEvent((s, event, stored) -> {
-            System.out.println("Event: " + event+" stored: " + stored);
+            System.out.println("Event: " + event + " stored: " + stored);
         });
-        
+
         sub.listenEose(s -> {
             rootLogger.fine("End of stored events: " + s);
         });
-
 
         // start sub
         sub.open();
@@ -60,15 +77,12 @@ public class NostrCli {
         rootLogger.info("started: " + sub);
 
         // sleep for ever
-        while(true){
+        while (true) {
             try {
                 Thread.sleep(Long.MAX_VALUE);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
         }
-
-        
     }
-    
 }

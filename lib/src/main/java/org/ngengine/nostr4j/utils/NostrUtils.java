@@ -1,3 +1,33 @@
+/**
+ * BSD 3-Clause License
+ * 
+ * Copyright (c) 2025, Riccardo Balbo
+ * 
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ * 
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the documentation
+ *    and/or other materials provided with the distribution.
+ * 
+ * 3. Neither the name of the copyright holder nor the names of its
+ *    contributors may be used to endorse or promote products derived from
+ *    this software without specific prior written permission.
+ * 
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 package org.ngengine.nostr4j.utils;
 
 import java.nio.ByteBuffer;
@@ -5,11 +35,13 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.logging.Logger;
-
 import org.ngengine.nostr4j.platform.Platform;
 
 public class NostrUtils {
-    private static final Logger logger = Logger.getLogger(NostrUtils.class.getName());
+
+    private static final Logger logger = Logger.getLogger(
+        NostrUtils.class.getName()
+    );
     private static final char[] HEX_ARRAY = "0123456789abcdef".toCharArray();
     private static volatile Platform platform;
 
@@ -20,12 +52,17 @@ public class NostrUtils {
     public static Platform getPlatform() {
         if (NostrUtils.platform == null) {
             logger.warning("Platform not set, using default JVM platform.");
-            String defaultPlatformClass = "org.ngengine.nostr4j.platform.jvm.JVMAsyncPlatform";
+            String defaultPlatformClass =
+                "org.ngengine.nostr4j.platform.jvm.JVMAsyncPlatform";
             try {
                 Class<?> clazz = Class.forName(defaultPlatformClass);
-                NostrUtils.platform = (Platform) clazz.getDeclaredConstructor().newInstance();
+                NostrUtils.platform =
+                    (Platform) clazz.getDeclaredConstructor().newInstance();
             } catch (Exception e) {
-                throw new RuntimeException("Failed to load default platform: " + defaultPlatformClass, e);
+                throw new RuntimeException(
+                    "Failed to load default platform: " + defaultPlatformClass,
+                    e
+                );
             }
         }
         return NostrUtils.platform;
@@ -55,7 +92,13 @@ public class NostrUtils {
         int len = s.length();
         ByteBuffer buf = ByteBuffer.allocate(len / 2);
         for (int i = 0; i < len; i += 2) {
-            buf.put(i / 2, (byte) ((Character.digit(s.charAt(i), 16) << 4) + Character.digit(s.charAt(i + 1), 16)));
+            buf.put(
+                i / 2,
+                (byte) (
+                    (Character.digit(s.charAt(i), 16) << 4) +
+                    Character.digit(s.charAt(i + 1), 16)
+                )
+            );
         }
         return buf;
     }
@@ -64,7 +107,11 @@ public class NostrUtils {
         int len = s.length();
         byte[] data = new byte[len / 2];
         for (int i = 0; i < len; i += 2) {
-            data[i / 2] = (byte) ((Character.digit(s.charAt(i), 16) << 4) + Character.digit(s.charAt(i + 1), 16));
+            data[i / 2] =
+                (byte) (
+                    (Character.digit(s.charAt(i), 16) << 4) +
+                    Character.digit(s.charAt(i + 1), 16)
+                );
         }
         return data;
     }
@@ -80,7 +127,7 @@ public class NostrUtils {
 
     /**
      * Convert an input object to a long
-     * 
+     *
      * @param input
      * @return
      */
@@ -92,16 +139,19 @@ public class NostrUtils {
                 Long l = Long.parseLong(String.valueOf(input));
                 return l.longValue();
             } catch (NumberFormatException e) {
-                throw new IllegalArgumentException("Input is not a number: " + input);
+                throw new IllegalArgumentException(
+                    "Input is not a number: " + input
+                );
             }
         }
-
     }
 
     public static int safeInt(Object input) {
         long l = safeLong(input);
         if (l < Integer.MIN_VALUE || l > Integer.MAX_VALUE) {
-            throw new IllegalArgumentException("Input is out of range for int: " + l);
+            throw new IllegalArgumentException(
+                "Input is out of range for int: " + l
+            );
         }
         return (int) l;
     }
@@ -114,47 +164,51 @@ public class NostrUtils {
         }
     }
 
-    public static String[] safeStringArray(Object tags){
-        if(tags instanceof Collection){
+    public static String[] safeStringArray(Object tags) {
+        if (tags instanceof Collection) {
             Collection<String> c = (Collection<String>) tags;
             return c.toArray(new String[c.size()]);
-        } else if(tags instanceof String[]){
+        } else if (tags instanceof String[]) {
             return (String[]) tags;
         } else {
-            throw new IllegalArgumentException("Input is not a string array: " + tags);
+            throw new IllegalArgumentException(
+                "Input is not a string array: " + tags
+            );
         }
     }
 
-    public static Collection<String[]> safeCollectionOfStringArray(Object tags){
-        if(tags instanceof Collection&& !(tags instanceof List)){
+    public static Collection<String[]> safeCollectionOfStringArray(
+        Object tags
+    ) {
+        if (tags instanceof Collection && !(tags instanceof List)) {
             tags = new ArrayList<>((Collection<?>) tags);
         }
-             
-        if(tags instanceof List){
+
+        if (tags instanceof List) {
             List<?> c = (List<?>) tags;
-            if(c.isEmpty()){
+            if (c.isEmpty()) {
                 return (Collection<String[]>) c;
             }
-            if(c.get(0) instanceof String[]){
+            if (c.get(0) instanceof String[]) {
                 return (Collection<String[]>) c;
             } else {
                 ArrayList<String[]> list = new ArrayList<>();
-                for(Object o :c){
+                for (Object o : c) {
                     list.add(safeStringArray(o));
                 }
                 return list;
             }
-         }  else if(tags instanceof String[][]){
+        } else if (tags instanceof String[][]) {
             String[][] arr = (String[][]) tags;
             ArrayList<String[]> list = new ArrayList<>();
-            for(String[] o :arr){
+            for (String[] o : arr) {
                 list.add(o);
             }
-            return list;         
-            
+            return list;
         } else {
-            throw new IllegalArgumentException("Input is not a string array: " + tags);
+            throw new IllegalArgumentException(
+                "Input is not a string array: " + tags
+            );
         }
     }
-
 }

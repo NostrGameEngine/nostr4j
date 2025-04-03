@@ -1,24 +1,46 @@
+/**
+ * BSD 3-Clause License
+ * 
+ * Copyright (c) 2025, Riccardo Balbo
+ * 
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ * 
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the documentation
+ *    and/or other materials provided with the distribution.
+ * 
+ * 3. Neither the name of the copyright holder nor the names of its
+ *    contributors may be used to endorse or promote products derived from
+ *    this software without specific prior written permission.
+ * 
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 package org.ngengine.nostr4j;
 
 import java.lang.reflect.InvocationTargetException;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.BiConsumer;
-import java.util.function.Consumer;
 import java.util.logging.Logger;
-
-import org.ngengine.nostr4j.event.NostrEvent;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.event.tracker.EventTracker;
 import org.ngengine.nostr4j.event.tracker.ForwardSlidingWindowEventTracker;
@@ -32,23 +54,28 @@ import org.ngengine.nostr4j.transport.NostrTransport;
 import org.ngengine.nostr4j.utils.NostrUtils;
 import org.ngengine.nostr4j.utils.ScheduledAction;
 
-public class NostrPool implements NostrRelayListener{
-    private static final Logger logger = Logger.getLogger(NostrPool.class.getName());
+public class NostrPool implements NostrRelayListener {
+
+    private static final Logger logger = Logger.getLogger(
+        NostrPool.class.getName()
+    );
     private static final AtomicLong subCounter = new AtomicLong(0);
-    private final Map<String, NostrSubscription> subscriptions = new ConcurrentHashMap<>();
-    private final List<NostrNoticeListener> noticeListener = new CopyOnWriteArrayList<>();
-    private final CopyOnWriteArrayList<NostrRelay> relays = new CopyOnWriteArrayList<>();
-    private final List<ScheduledAction> scheduledActions = new CopyOnWriteArrayList<>();
+    private final Map<String, NostrSubscription> subscriptions =
+        new ConcurrentHashMap<>();
+    private final List<NostrNoticeListener> noticeListener =
+        new CopyOnWriteArrayList<>();
+    private final CopyOnWriteArrayList<NostrRelay> relays =
+        new CopyOnWriteArrayList<>();
+    private final List<ScheduledAction> scheduledActions =
+        new CopyOnWriteArrayList<>();
     private final Class<? extends EventTracker> defaultEventTracker;
     private volatile boolean verifyEvents = true;
-    
-   
-    public NostrPool()  {
-        this( ForwardSlidingWindowEventTracker.class);
+
+    public NostrPool() {
+        this(ForwardSlidingWindowEventTracker.class);
     }
 
-    public NostrPool(
-            Class<? extends EventTracker> defaultEventTracker)  {
+    public NostrPool(Class<? extends EventTracker> defaultEventTracker) {
         this.defaultEventTracker = defaultEventTracker;
     }
 
@@ -72,13 +99,13 @@ public class NostrPool implements NostrRelayListener{
         return send(ev);
     }
 
-    protected AsyncTask<List<NostrMessageAck>> send(NostrMessage message)  {
+    protected AsyncTask<List<NostrMessageAck>> send(NostrMessage message) {
         List<AsyncTask<NostrMessageAck>> promises = new ArrayList<>();
         for (NostrRelay relay : relays) {
             logger.fine("sending message to relay " + relay.getUrl());
             promises.add(relay.sendMessage(message));
         }
-        Platform platform =NostrUtils.getPlatform();
+        Platform platform = NostrUtils.getPlatform();
         return platform.waitAll(promises);
     }
 
@@ -95,22 +122,22 @@ public class NostrPool implements NostrRelayListener{
                 break;
             }
         }
-        if(relay==null){
+        if (relay == null) {
             relay = new NostrRelay(url);
             relay.addListener(this);
             relays.add(relay);
         }
-        if(!relay.isConnected()){
+        if (!relay.isConnected()) {
             relay.connect();
-        }      
-        return relay;   
+        }
+        return relay;
     }
 
     public NostrRelay ensureRelay(NostrRelay relay) {
-        if (!relays.contains(relay)){
+        if (!relays.contains(relay)) {
             relays.add(relay);
             relay.addListener(this);
-        }        
+        }
         if (!relay.isConnected()) {
             relay.connect();
         }
@@ -144,30 +171,47 @@ public class NostrPool implements NostrRelayListener{
         return subscribe(filter, defaultEventTracker);
     }
 
-    public NostrSubscription subscribe(NostrFilter filter, Class<? extends EventTracker> eventTracker) {
+    public NostrSubscription subscribe(
+        NostrFilter filter,
+        Class<? extends EventTracker> eventTracker
+    ) {
         return subscribe(Arrays.asList(filter), eventTracker);
     }
 
-    public NostrSubscription subscribe(Collection<NostrFilter> filters, Class<? extends EventTracker> eventTracker) {
-         String subId = "nostr4j-" + subCounter.getAndIncrement();
+    public NostrSubscription subscribe(
+        Collection<NostrFilter> filters,
+        Class<? extends EventTracker> eventTracker
+    ) {
+        String subId = "nostr4j-" + subCounter.getAndIncrement();
         EventTracker tracker;
         try {
             tracker = eventTracker.getDeclaredConstructor().newInstance();
-        } catch (InstantiationException | IllegalAccessException | IllegalArgumentException | InvocationTargetException
-                | NoSuchMethodException | SecurityException e) {
+        } catch (
+            InstantiationException
+            | IllegalAccessException
+            | IllegalArgumentException
+            | InvocationTargetException
+            | NoSuchMethodException
+            | SecurityException e
+        ) {
             throw new RuntimeException("Unable to create event tracker", e);
         }
-        logger.fine("subscribing to " +subId+" with filter "+ filters);
-        NostrSubscription sub = new NostrSubscription(subId, filters, tracker,
-                (s) -> {
-                    logger.fine("starting subscription " + s);
-                    return this.send(s);
-                },
-                (s, closeMessage) -> {
-                    logger.fine("closing subscription " + s + " reason: " + closeMessage);
-                    subscriptions.remove(subId);
-                    return this.send(s);
-                }
+        logger.fine("subscribing to " + subId + " with filter " + filters);
+        NostrSubscription sub = new NostrSubscription(
+            subId,
+            filters,
+            tracker,
+            s -> {
+                logger.fine("starting subscription " + s);
+                return this.send(s);
+            },
+            (s, closeMessage) -> {
+                logger.fine(
+                    "closing subscription " + s + " reason: " + closeMessage
+                );
+                subscriptions.remove(subId);
+                return this.send(s);
+            }
         );
         tracker.tuneFor(sub);
         subscriptions.put(subId, sub);
@@ -178,27 +222,37 @@ public class NostrPool implements NostrRelayListener{
         return fetch(Arrays.asList(filter));
     }
 
-    public AsyncTask<Collection<SignedNostrEvent>> fetch(Collection<NostrFilter> filters) {
+    public AsyncTask<Collection<SignedNostrEvent>> fetch(
+        Collection<NostrFilter> filters
+    ) {
         return fetch(filters, 1, TimeUnit.MINUTES);
     }
 
-    public AsyncTask<Collection<SignedNostrEvent>> fetch(NostrFilter filter, long timeout, TimeUnit unit) {
+    public AsyncTask<Collection<SignedNostrEvent>> fetch(
+        NostrFilter filter,
+        long timeout,
+        TimeUnit unit
+    ) {
         return fetch(Arrays.asList(filter), timeout, unit);
     }
 
-    public AsyncTask<Collection<SignedNostrEvent>> fetch(Collection<NostrFilter> filters, long timeout, TimeUnit unit) {
+    public AsyncTask<Collection<SignedNostrEvent>> fetch(
+        Collection<NostrFilter> filters,
+        long timeout,
+        TimeUnit unit
+    ) {
         return fetch(filters, timeout, unit, defaultEventTracker);
     }
 
     public AsyncTask<Collection<SignedNostrEvent>> fetch(
-        NostrFilter filter,      
+        NostrFilter filter,
         Class<? extends EventTracker> eventTracker
     ) {
         return fetch(Arrays.asList(filter), eventTracker);
     }
 
     public AsyncTask<Collection<SignedNostrEvent>> fetch(
-        Collection<NostrFilter> filters,      
+        Collection<NostrFilter> filters,
         Class<? extends EventTracker> eventTracker
     ) {
         return fetch(filters, 1, TimeUnit.MINUTES, eventTracker);
@@ -224,37 +278,45 @@ public class NostrPool implements NostrRelayListener{
             List<SignedNostrEvent> events = new ArrayList<>();
             NostrSubscription sub = subscribe(filters, eventTracker);
 
-            scheduledActions.add(new ScheduledAction(
-                platform.getTimestampSeconds() + unit.toSeconds(timeout),
-                () -> {
-                    logger.fine("fetch timeout");
-                    sub.close("timeout");
-                    rej.accept(new Exception("timeout"));
-                }
-            ));
+            scheduledActions.add(
+                new ScheduledAction(
+                    platform.getTimestampSeconds() + unit.toSeconds(timeout),
+                    () -> {
+                        logger.fine("fetch timeout");
+                        sub.close("timeout");
+                        rej.accept(new Exception("timeout"));
+                    }
+                )
+            );
 
-            sub.listenEose((s) -> {
-                logger.fine("fetch eose");
-                s.close("eose");
-            }).listenEvent((s, e, stored) -> {
-                logger.fine("fetch event " + e);
-                events.add(e);
-            }).listenClose((s, reason) -> {
-                logger.fine("fetch close " + reason);
-                res.accept(events);
-            }).open();
+            sub
+                .listenEose(s -> {
+                    logger.fine("fetch eose");
+                    s.close("eose");
+                })
+                .listenEvent((s, e, stored) -> {
+                    logger.fine("fetch event " + e);
+                    events.add(e);
+                })
+                .listenClose((s, reason) -> {
+                    logger.fine("fetch close " + reason);
+                    res.accept(events);
+                })
+                .open();
         });
     }
 
     @Override
-    public void onRelayMessage(NostrRelay relay, List<Object> doc) {    
+    public void onRelayMessage(NostrRelay relay, List<Object> doc) {
         // logger.fine("received message from relay " + relay.getUrl() + " : " + doc);
-        try{
+        try {
             String type = NostrUtils.safeString(doc.get(0));
             if (type.equals("CLOSED")) {
                 // TODO cound relays
                 String subId = NostrUtils.safeString(doc.get(1));
-                String reason = doc.size() > 2 ? NostrUtils.safeString(doc.get(2)) : "";
+                String reason = doc.size() > 2
+                    ? NostrUtils.safeString(doc.get(2))
+                    : "";
                 NostrSubscription sub = subscriptions.get(subId);
                 if (sub != null) {
                     sub.callCloseListeners(reason);
@@ -268,32 +330,37 @@ public class NostrPool implements NostrRelayListener{
                     sub.setEose(true);
                     sub.callEoseListeners();
                 }
-            } else  if (type.equals("NOTICE")) {
+            } else if (type.equals("NOTICE")) {
                 String eventMessage = NostrUtils.safeString(doc.get(1));
-                noticeListener.forEach(listener -> listener.onNotice(relay, eventMessage));
+                noticeListener.forEach(listener ->
+                    listener.onNotice(relay, eventMessage)
+                );
             } else if (type.equals("EVENT")) {
                 String subId = NostrUtils.safeString(doc.get(1));
                 NostrSubscription sub = subscriptions.get(subId);
                 if (sub != null) {
                     // logger.fine("received event for subscription " + subId);
-                    Map<String, Object> eventMap = (Map<String, Object>) doc.get(2);
+                    Map<String, Object> eventMap =
+                        (Map<String, Object>) doc.get(2);
                     SignedNostrEvent e = new SignedNostrEvent(eventMap);
-                    if (verifyEvents&&!e.verify())
-                        throw new Exception("Event signature is invalid");
+                    if (verifyEvents && !e.verify()) throw new Exception(
+                        "Event signature is invalid"
+                    );
                     if (!sub.eventTracker.seen(e)) {
                         // logger.fine("Event not seen " + e.getId());
                         sub.callEventListeners(e, !sub.isEose());
                     } else {
                         logger.fine("Event already seen " + e.getId());
                     }
-                }else{
-                    logger.warning("Received event for unknown subscription " + subId);
+                } else {
+                    logger.warning(
+                        "Received event for unknown subscription " + subId
+                    );
                 }
             }
-        } catch(Throwable t){
+        } catch (Throwable t) {
             t.printStackTrace();
         }
-
     }
 
     public void close() {
@@ -301,18 +368,15 @@ public class NostrPool implements NostrRelayListener{
         for (NostrSubscription sub : subscriptions.values()) {
             sub.close("closed by user");
         }
- 
+
         // close all relays
         for (NostrRelay relay : relays) {
             relay.disconnect("closed by pool");
         }
         relays.clear();
-
-
-
     }
 
-    public void unsubscribeAll(){
+    public void unsubscribeAll() {
         for (NostrSubscription sub : subscriptions.values()) {
             sub.close("closed by user");
         }
@@ -333,6 +397,4 @@ public class NostrPool implements NostrRelayListener{
             relay.sendMessage(sub);
         }
     }
-
-
 }

@@ -1,10 +1,59 @@
+/**
+ * BSD 3-Clause License
+ * 
+ * Copyright (c) 2025, Riccardo Balbo
+ * 
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ * 
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the documentation
+ *    and/or other materials provided with the distribution.
+ * 
+ * 3. Neither the name of the copyright holder nor the names of its
+ *    contributors may be used to endorse or promote products derived from
+ *    this software without specific prior written permission.
+ * 
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 package org.ngengine.nostr4j.platform.jvm;
 
-import java.nio.charset.StandardCharsets;
-
 import com.google.gson.Gson;
-
+import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
+import java.security.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Base64;
+import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
+import java.util.function.Function;
+import javax.crypto.Cipher;
+import javax.crypto.Mac;
+import javax.crypto.NoSuchPaddingException;
+import javax.crypto.spec.ChaCha20ParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
 import org.bouncycastle.jce.ECNamedCurveTable;
+import org.bouncycastle.jce.spec.ECParameterSpec;
 import org.bouncycastle.math.ec.ECPoint;
 import org.ngengine.nostr4j.keypair.NostrPrivateKey;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
@@ -13,79 +62,55 @@ import org.ngengine.nostr4j.platform.NostrExecutor;
 import org.ngengine.nostr4j.platform.Platform;
 import org.ngengine.nostr4j.transport.NostrTransport;
 import org.ngengine.nostr4j.utils.NostrUtils;
-import org.bouncycastle.jce.spec.ECParameterSpec;
-import java.math.BigInteger;
-import java.security.*;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Base64;
-import java.util.List;
-import java.util.concurrent.Callable;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executor;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.BiConsumer;
-import java.util.function.Consumer;
-import java.util.function.Function;
-import java.util.function.Supplier;
-
-import javax.crypto.Cipher;
-import javax.crypto.Mac;
-import javax.crypto.NoSuchPaddingException;
-import javax.crypto.spec.ChaCha20ParameterSpec;
-import javax.crypto.spec.SecretKeySpec;
- 
 
 // thread-safe
-public class JVMAsyncPlatform implements Platform{
+public class JVMAsyncPlatform implements Platform {
     static {
         if (Security.getProvider("BC") == null) {
-            Security.addProvider(new org.bouncycastle.jce.provider.BouncyCastleProvider());
+            Security.addProvider(
+                new org.bouncycastle.jce.provider.BouncyCastleProvider()
+            );
         }
-        
     }
 
-    private static  SecureRandom secureRandom ;
+    private static SecureRandom secureRandom;
     private static final byte EMPTY32[] = new byte[32];
     private static final byte EMPTY0[] = new byte[0];
- 
+
     // used for unit tests
     public static boolean _NO_AUX_RANDOM = false;
     public static boolean _EMPTY_NONCE = false;
-    /// 
-    
+
+    ///
+
     private static class Context {
+
         MessageDigest sha256;
         Gson json;
         ECParameterSpec secp256k1;
 
-        Context() throws NoSuchAlgorithmException, NoSuchPaddingException{
-           sha256 = MessageDigest.getInstance("SHA-256");
-           json = new Gson();
-           secp256k1 = ECNamedCurveTable.getParameterSpec("secp256k1");
-            
-
+        Context() throws NoSuchAlgorithmException, NoSuchPaddingException {
+            sha256 = MessageDigest.getInstance("SHA-256");
+            json = new Gson();
+            secp256k1 = ECNamedCurveTable.getParameterSpec("secp256k1");
         }
     }
 
-    private static final ThreadLocal<Context> context = ThreadLocal.withInitial(() -> {
-        try {
-            return new Context();
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-    });
+    private static final ThreadLocal<Context> context =
+        ThreadLocal.withInitial(() -> {
+            try {
+                return new Context();
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        });
 
     @Override
     public byte[] randomBytes(int n) {
-        if(secureRandom == null){
-           secureRandom = new SecureRandom();
+        if (secureRandom == null) {
+            secureRandom = new SecureRandom();
         }
-        synchronized(secureRandom){   
+        synchronized (secureRandom) {
             byte[] bytes = new byte[n];
             secureRandom.nextBytes(bytes);
             return bytes;
@@ -93,23 +118,21 @@ public class JVMAsyncPlatform implements Platform{
     }
 
     @Override
-    public  byte[] generatePrivateKey() throws Exception {
+    public byte[] generatePrivateKey() throws Exception {
         return Schnorr.generatePrivateKey();
     }
 
     @Override
-    public  byte[] genPubKey(byte[] secKey) throws Exception {
+    public byte[] genPubKey(byte[] secKey) throws Exception {
         return Schnorr.genPubKey(secKey);
     }
- 
-
 
     @Override
     public String sha256(String data) throws NoSuchAlgorithmException {
-        byte[] bytes =data.getBytes(StandardCharsets.UTF_8);
+        byte[] bytes = data.getBytes(StandardCharsets.UTF_8);
         return NostrUtils.bytesToHex(sha256(bytes));
     }
-    
+
     @Override
     public byte[] sha256(byte data[]) throws NoSuchAlgorithmException {
         Context ctx = context.get();
@@ -130,28 +153,31 @@ public class JVMAsyncPlatform implements Platform{
         return ctx.json.fromJson(json, claz);
     }
 
-    
     @Override
     public String sign(String data, NostrPrivateKey privKey) throws Exception {
         byte dataB[] = NostrUtils.hexToByteArray(data);
-        byte priv[]=privKey._array();
-        byte sigB[] = Schnorr.sign(dataB, priv, _NO_AUX_RANDOM?null:randomBytes(32));
-        String sig = NostrUtils.bytesToHex(sigB);        
+        byte priv[] = privKey._array();
+        byte sigB[] = Schnorr.sign(
+            dataB,
+            priv,
+            _NO_AUX_RANDOM ? null : randomBytes(32)
+        );
+        String sig = NostrUtils.bytesToHex(sigB);
         return sig;
     }
 
     @Override
-    public boolean verify(String data, String sign, NostrPublicKey pubKey) throws Exception {
+    public boolean verify(String data, String sign, NostrPublicKey pubKey)
+        throws Exception {
         byte dataB[] = NostrUtils.hexToByteArray(data);
         byte sig[] = NostrUtils.hexToByteArray(sign);
         byte pub[] = pubKey._array();
         return Schnorr.verify(dataB, pub, sig);
     }
 
-
-
     @Override
-    public byte[] secp256k1SharedSecret(byte[] privKey, byte[] pubKey) throws Exception {
+    public byte[] secp256k1SharedSecret(byte[] privKey, byte[] pubKey)
+        throws Exception {
         Context ctx = context.get();
         ECParameterSpec ecSpec = ctx.secp256k1;
         ECPoint point = ecSpec.getCurve().decodePoint(pubKey).normalize();
@@ -160,33 +186,34 @@ public class JVMAsyncPlatform implements Platform{
         return sharedPoint.getEncoded(false);
     }
 
-     @Override
-    public byte[] hmac(byte[] key, byte[] data1, byte[] data2) throws Exception {       
+    @Override
+    public byte[] hmac(byte[] key, byte[] data1, byte[] data2)
+        throws Exception {
         Mac mac = Mac.getInstance("HmacSHA256");
         mac.init(new SecretKeySpec(key, "HmacSHA256"));
         mac.update(data1, 0, data1.length);
-        if(data2 != null) {
+        if (data2 != null) {
             mac.update(data2, 0, data2.length);
-        }        
+        }
         return mac.doFinal();
     }
 
- 
     @Override
     public byte[] hkdf_extract(byte[] salt, byte[] ikm) throws Exception {
         assert NostrUtils.allZeroes(EMPTY32);
-        if (salt == null || salt.length == 0)  salt = EMPTY32;        
+        if (salt == null || salt.length == 0) salt = EMPTY32;
         return hmac(salt, ikm, null);
     }
 
-
     @Override
-    public byte[] hkdf_expand(byte[] prk, byte[] info, int length) throws Exception {
-
+    public byte[] hkdf_expand(byte[] prk, byte[] info, int length)
+        throws Exception {
         int hashLen = 32; // SHA-256 output length
 
         if (length > 255 * hashLen) {
-            throw new IllegalArgumentException("Length should be <= 255*HashLen");
+            throw new IllegalArgumentException(
+                "Length should be <= 255*HashLen"
+            );
         }
 
         int blocks = (int) Math.ceil((double) length / hashLen);
@@ -213,7 +240,13 @@ public class JVMAsyncPlatform implements Platform{
             byte[] combined = new byte[t.length + info.length + counter.length];
             System.arraycopy(t, 0, combined, 0, t.length);
             System.arraycopy(info, 0, combined, t.length, info.length);
-            System.arraycopy(counter, 0, combined, t.length + info.length, counter.length);
+            System.arraycopy(
+                counter,
+                0,
+                combined,
+                t.length + info.length,
+                counter.length
+            );
 
             t = mac.doFinal(combined);
             System.arraycopy(t, 0, okm, hashLen * i, hashLen);
@@ -222,7 +255,6 @@ public class JVMAsyncPlatform implements Platform{
         return Arrays.copyOf(okm, length);
     }
 
-
     @Override
     public String base64encode(byte[] data) throws Exception {
         return Base64.getEncoder().encodeToString(data);
@@ -230,33 +262,40 @@ public class JVMAsyncPlatform implements Platform{
 
     @Override
     public byte[] base64decode(String data) throws Exception {
-        try{
+        try {
             return Base64.getDecoder().decode(data);
-        }catch(Exception e){
-            throw new IllegalArgumentException("invalid base64 "+e.getMessage());
+        } catch (Exception e) {
+            throw new IllegalArgumentException(
+                "invalid base64 " + e.getMessage()
+            );
         }
-
     }
 
     @Override
-    public byte[] chacha20(byte[] key, byte[] nonce, byte[] padded, boolean forEncryption) throws Exception {
+    public byte[] chacha20(
+        byte[] key,
+        byte[] nonce,
+        byte[] padded,
+        boolean forEncryption
+    ) throws Exception {
         if (key.length != 32) {
             throw new IllegalArgumentException("ChaCha20 key must be 32 bytes");
         }
-        if (nonce.length != 12) { 
-            throw new IllegalArgumentException("ChaCha20 nonce must be 12 bytes");
+        if (nonce.length != 12) {
+            throw new IllegalArgumentException(
+                "ChaCha20 nonce must be 12 bytes"
+            );
         }
         Cipher cipher = Cipher.getInstance("ChaCha20");
-        ChaCha20ParameterSpec spec = new ChaCha20ParameterSpec(nonce, 0); 
+        ChaCha20ParameterSpec spec = new ChaCha20ParameterSpec(nonce, 0);
         cipher.init(
-                forEncryption ? Cipher.ENCRYPT_MODE : Cipher.DECRYPT_MODE,
-                new SecretKeySpec(key, "ChaCha20"),
-                spec);
+            forEncryption ? Cipher.ENCRYPT_MODE : Cipher.DECRYPT_MODE,
+            new SecretKeySpec(key, "ChaCha20"),
+            spec
+        );
 
         return cipher.doFinal(padded);
     }
-
-
 
     // private ExecutorService asyncExecutor = Executors.newVirtualThreadPerTaskExecutor();
 
@@ -270,20 +309,23 @@ public class JVMAsyncPlatform implements Platform{
     //     };
     // }
 
-    
- 
     @Override
     public NostrTransport newTransport() {
         return new WebsocketTransport(this);
     }
 
-    public <T> AsyncTask<T> promisify(BiConsumer<Consumer<T>, Consumer<Throwable>> func){
+    public <T> AsyncTask<T> promisify(
+        BiConsumer<Consumer<T>, Consumer<Throwable>> func
+    ) {
         CompletableFuture<T> fut = new CompletableFuture<>();
-        func.accept((r)->{
-            fut.complete(r);
-        }, (err)->{
-            fut.completeExceptionally(err);
-        });
+        func.accept(
+            r -> {
+                fut.complete(r);
+            },
+            err -> {
+                fut.completeExceptionally(err);
+            }
+        );
         return new AsyncTask<T>() {
             @Override
             public T await() throws Exception {
@@ -297,27 +339,27 @@ public class JVMAsyncPlatform implements Platform{
 
             @Override
             public boolean isFailed() {
-                try{
+                try {
                     fut.get();
                     return false;
-                }catch(Throwable e){
+                } catch (Throwable e) {
                     return true;
                 }
             }
 
             @Override
             public boolean isSuccess() {
-                try{
+                try {
                     fut.get();
                     return true;
-                }catch(Throwable e){
+                } catch (Throwable e) {
                     return false;
                 }
             }
 
             @Override
-            public <R> AsyncTask<R> then(Function<T,R> func2) {
-                return promisify((res,rej)->{
+            public <R> AsyncTask<R> then(Function<T, R> func2) {
+                return promisify((res, rej) -> {
                     fut.handle((result, exception) -> {
                         if (exception != null) {
                             rej.accept(exception);
@@ -332,15 +374,11 @@ public class JVMAsyncPlatform implements Platform{
                         return null;
                     });
                 });
-                
-                 
             }
 
-  
-
             @Override
-            public  AsyncTask<T> exceptionally(Consumer<Throwable> func2) {
-                fut.exceptionally(e->{
+            public AsyncTask<T> exceptionally(Consumer<Throwable> func2) {
+                fut.exceptionally(e -> {
                     func2.accept(e);
                     return null;
                 });
@@ -349,9 +387,9 @@ public class JVMAsyncPlatform implements Platform{
         };
     }
 
-    public <T> AsyncTask<List<T>> waitAll(List<AsyncTask<T>> promises){
-        return promisify((res,rej)->{
-            if(promises.size()==0){
+    public <T> AsyncTask<List<T>> waitAll(List<AsyncTask<T>> promises) {
+        return promisify((res, rej) -> {
+            if (promises.size() == 0) {
                 res.accept(new ArrayList<>());
                 return;
             }
@@ -364,24 +402,24 @@ public class JVMAsyncPlatform implements Platform{
                 final int j = i;
                 AsyncTask<T> p = promises.get(i);
                 p
-                .exceptionally((e)->{
-                   rej.accept(e);
-                })
-                .then((r)->{
-                    results.set(j, r);
-                    if(count.decrementAndGet() == 0){
-                        res.accept(results);
-                    }
-                    return null;
-                });
+                    .exceptionally(e -> {
+                        rej.accept(e);
+                    })
+                    .then(r -> {
+                        results.set(j, r);
+                        if (count.decrementAndGet() == 0) {
+                            res.accept(results);
+                        }
+                        return null;
+                    });
             }
         });
-
     }
 
-    private ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
+    private ExecutorService executor =
+        Executors.newVirtualThreadPerTaskExecutor();
 
-    private NostrExecutor newVtExecutor(){
+    private NostrExecutor newVtExecutor() {
         return new NostrExecutor() {
             @Override
             public <T> AsyncTask<T> run(Callable<T> r) {
@@ -397,15 +435,19 @@ public class JVMAsyncPlatform implements Platform{
             }
 
             @Override
-            public <T> AsyncTask<T> runLater(Callable<T> r, long delay, TimeUnit unit){
+            public <T> AsyncTask<T> runLater(
+                Callable<T> r,
+                long delay,
+                TimeUnit unit
+            ) {
                 long delayMs = unit.toMillis(delay);
-                if(delayMs==0){
+                if (delayMs == 0) {
                     return run(r);
                 }
                 return promisify((res, rej) -> {
                     executor.submit(() -> {
                         try {
-                            Thread.sleep(delayMs);        
+                            Thread.sleep(delayMs);
                             res.accept(r.call());
                         } catch (Exception e) {
                             rej.accept(e);
@@ -413,18 +455,15 @@ public class JVMAsyncPlatform implements Platform{
                     });
                 });
             }
-
         };
-
     }
-
 
     @Override
     public NostrExecutor newRelayExecutor() {
         return newVtExecutor();
     }
 
-    public NostrExecutor newSubscriptionExecutor(){
+    public NostrExecutor newSubscriptionExecutor() {
         return newVtExecutor();
     }
 
@@ -434,9 +473,7 @@ public class JVMAsyncPlatform implements Platform{
     }
 
     @Override
-    public long getTimestampSeconds(){
+    public long getTimestampSeconds() {
         return System.currentTimeMillis() / 1000;
     }
- 
-
 }

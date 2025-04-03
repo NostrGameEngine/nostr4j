@@ -1,3 +1,33 @@
+/**
+ * BSD 3-Clause License
+ * 
+ * Copyright (c) 2025, Riccardo Balbo
+ * 
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ * 
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the documentation
+ *    and/or other materials provided with the distribution.
+ * 
+ * 3. Neither the name of the copyright holder nor the names of its
+ *    contributors may be used to endorse or promote products derived from
+ *    this software without specific prior written permission.
+ * 
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 package org.ngengine.nostr4j.keypair;
 
 import java.io.IOException;
@@ -5,7 +35,6 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.Collections;
-
 import org.ngengine.nostr4j.utils.Bech32;
 import org.ngengine.nostr4j.utils.Bech32.Bech32Exception;
 import org.ngengine.nostr4j.utils.ByteBufferList;
@@ -21,10 +50,12 @@ import org.ngengine.nostr4j.utils.NostrUtils;
  * </p>
  */
 public class NostrPublicKey implements NostrKey {
-    private static final byte[] BECH32_PREFIX = "npub".getBytes(StandardCharsets.UTF_8);
+
+    private static final byte[] BECH32_PREFIX =
+        "npub".getBytes(StandardCharsets.UTF_8);
 
     private String bech32;
-    private String hex; 
+    private String hex;
 
     private transient Collection<Byte> readOnlyData;
     private transient ByteBuffer data;
@@ -32,7 +63,7 @@ public class NostrPublicKey implements NostrKey {
 
     /**
      * Creates a new NostrPublicKey from the given byte array.
-     * 
+     *
      * @param data the byte array containing the public key data
      * @return a new NostrPublicKey instance
      */
@@ -49,11 +80,11 @@ public class NostrPublicKey implements NostrKey {
      * This method copies the content of the provided ByteBuffer, use the constructor
      * if you want to directly use the provided ByteBuffer as an internal reference.
      * </p>
-     * 
+     *
      * @param bbf the ByteBuffer containing the public key data
      * @return a new NostrPublicKey instance
      */
-    public static NostrPublicKey fromBytes(ByteBuffer bbf){
+    public static NostrPublicKey fromBytes(ByteBuffer bbf) {
         assert bbf.remaining() > 0 : "ByteBuffer should not be empty";
         ByteBuffer copy = ByteBuffer.allocate(bbf.remaining());
         copy.put(bbf.slice());
@@ -64,7 +95,7 @@ public class NostrPublicKey implements NostrKey {
 
     /**
      * Creates a new NostrPublicKey from the given hex string.
-     * 
+     *
      * @param hex the hex string containing the public key data
      * @return a new NostrPublicKey instance
      */
@@ -73,37 +104,36 @@ public class NostrPublicKey implements NostrKey {
         return key;
     }
 
- 
     /**
      * Creates a new NostrPublicKey from the given Bech32 string.
-     * 
+     *
      * @param bech32 the Bech32 string containing the public key data
      * @return a new NostrPublicKey instance
      * @throws Bech32Exception if the Bech32 string is invalid
      * @deprecated use {@link #fromBech32(String)} instead
      */
     @Deprecated
-    public static NostrPublicKey fromNpub(String bech32) throws Bech32Exception {
+    public static NostrPublicKey fromNpub(String bech32)
+        throws Bech32Exception {
         return fromBech32(bech32);
     }
 
-    
     /**
      * Creates a new NostrPublicKey from the given Bech32 string.
-     * 
+     *
      * @param bech32 the Bech32 string containing the public key data
      * @return a new NostrPublicKey instance
      * @throws Bech32Exception if the Bech32 string is invalid
      */
-    public static NostrPublicKey fromBech32(String bech32) throws Bech32Exception {
-        if(!bech32.startsWith("npub")){
+    public static NostrPublicKey fromBech32(String bech32)
+        throws Bech32Exception {
+        if (!bech32.startsWith("npub")) {
             throw new IllegalArgumentException("Invalid npub key");
         }
         ByteBuffer data = Bech32.bech32Decode(bech32);
         NostrPublicKey key = new NostrPublicKey(data);
         return key;
     }
-
 
     /**
      * Creates a new NostrPublicKey from the given data.
@@ -127,8 +157,7 @@ public class NostrPublicKey implements NostrKey {
     }
 
     public Collection<Byte> asReadOnlyBytes() {
-        if (readOnlyData != null)
-            return readOnlyData;
+        if (readOnlyData != null) return readOnlyData;
         readOnlyData = Collections.unmodifiableList(new ByteBufferList(data));
         assert data.position() == 0 : "Data position must be 0";
         return readOnlyData;
@@ -136,7 +165,7 @@ public class NostrPublicKey implements NostrKey {
 
     @Override
     public String asHex() {
-        if(hex != null) return hex;
+        if (hex != null) return hex;
         hex = NostrUtils.bytesToHex(data);
         assert data.position() == 0 : "Data position must be 0";
         return hex;
@@ -144,8 +173,8 @@ public class NostrPublicKey implements NostrKey {
 
     @Override
     public byte[] _array() {
-        if(this.array==null){
-            this.array=new byte[data.limit()];
+        if (this.array == null) {
+            this.array = new byte[data.limit()];
             data.slice().get(this.array);
         }
         assert data.position() == 0 : "Data position must be 0";
@@ -154,7 +183,7 @@ public class NostrPublicKey implements NostrKey {
 
     @Override
     public String asBech32() throws Bech32Exception {
-        if(bech32 != null)return bech32;
+        if (bech32 != null) return bech32;
         bech32 = Bech32.bech32Encode(BECH32_PREFIX, this.data);
         assert data.position() == 0 : "Data position must be 0";
         return bech32;
@@ -167,31 +196,31 @@ public class NostrPublicKey implements NostrKey {
 
     @Override
     public boolean equals(Object obj) {
-        if(obj == null || !(obj instanceof NostrPublicKey)){
+        if (obj == null || !(obj instanceof NostrPublicKey)) {
             assert data.position() == 0 : "Data position must be 0";
             return false;
         }
-        if(obj == this) {
+        if (obj == this) {
             assert data.position() == 0 : "Data position must be 0";
             return true;
         }
 
         ByteBuffer b1 = this.data;
-        ByteBuffer b2 = ((NostrPublicKey)obj).data;
-        if(b1 == b2){
+        ByteBuffer b2 = ((NostrPublicKey) obj).data;
+        if (b1 == b2) {
             assert data.position() == 0 : "Data position must be 0";
             return true;
         }
-        if(b1 == null || b2 == null){
+        if (b1 == null || b2 == null) {
             assert data.position() == 0 : "Data position must be 0";
             return false;
         }
-        if(b1.limit() != b2.limit()){
+        if (b1.limit() != b2.limit()) {
             assert data.position() == 0 : "Data position must be 0";
             return false;
         }
-        for(int i = 0; i < b1.limit(); i++){
-            if(b1.get(i) != b2.get(i)){
+        for (int i = 0; i < b1.limit(); i++) {
+            if (b1.get(i) != b2.get(i)) {
                 assert data.position() == 0 : "Data position must be 0";
                 return false;
             }
@@ -202,9 +231,8 @@ public class NostrPublicKey implements NostrKey {
 
     @Override
     public NostrPublicKey clone() {
-        return fromBytes(data);        
+        return fromBytes(data);
     }
-
 
     @Override
     public void preload() throws Bech32Exception {
@@ -215,20 +243,21 @@ public class NostrPublicKey implements NostrKey {
         assert data.position() == 0 : "Data position must be 0";
     }
 
-    private void writeObject(java.io.ObjectOutputStream out) throws IOException{
+    private void writeObject(java.io.ObjectOutputStream out)
+        throws IOException {
         out.writeObject(this._array());
         out.writeObject(hex);
         out.writeObject(bech32);
         assert data.position() == 0 : "Data position must be 0";
     }
 
-    private void readObject(java.io.ObjectInputStream in) throws IOException, ClassNotFoundException {
-        byte array[] = (byte[])in.readObject();
+    private void readObject(java.io.ObjectInputStream in)
+        throws IOException, ClassNotFoundException {
+        byte array[] = (byte[]) in.readObject();
         this.array = array;
         data = ByteBuffer.wrap(array);
-        hex = (String)in.readObject();
-        bech32 = (String)in.readObject();
+        hex = (String) in.readObject();
+        bech32 = (String) in.readObject();
         assert data.position() == 0 : "Data position must be 0";
     }
-        
 }

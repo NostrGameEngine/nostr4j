@@ -1,9 +1,34 @@
+/**
+ * BSD 3-Clause License
+ * 
+ * Copyright (c) 2025, Riccardo Balbo
+ * 
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ * 
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the documentation
+ *    and/or other materials provided with the distribution.
+ * 
+ * 3. Neither the name of the copyright holder nor the names of its
+ *    contributors may be used to endorse or promote products derived from
+ *    this software without specific prior written permission.
+ * 
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 package org.ngengine.nostr4j.unit;
-
-import org.junit.Before;
-import org.junit.Test;
-import org.ngengine.nostr4j.platform.AsyncTask;
-import org.ngengine.nostr4j.platform.jvm.JVMAsyncPlatform;
 
 import static org.junit.Assert.*;
 
@@ -14,6 +39,10 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import org.junit.Before;
+import org.junit.Test;
+import org.ngengine.nostr4j.platform.AsyncTask;
+import org.ngengine.nostr4j.platform.jvm.JVMAsyncPlatform;
 
 public class TestAsyncTask {
 
@@ -74,13 +103,17 @@ public class TestAsyncTask {
                 } catch (Exception e) {
                     reject.accept(e);
                 }
-            }).start();
+            })
+                .start();
         });
 
         promiseRef.set(promise);
 
         // Wait for async operation to complete
-        assertTrue("Async operation timed out", latch.await(5, TimeUnit.SECONDS));
+        assertTrue(
+            "Async operation timed out",
+            latch.await(5, TimeUnit.SECONDS)
+        );
 
         // Test the properties
         assertTrue(promiseRef.get().isDone());
@@ -91,21 +124,24 @@ public class TestAsyncTask {
 
     @Test
     public void testSimpleThenChaining() throws Exception {
-        AsyncTask<Integer> promise = platform.promisify((resolve, reject) -> {
-            resolve.accept(5);
-        }).then(value -> ((Integer) value) * 2);
+        AsyncTask<Integer> promise = platform
+            .promisify((resolve, reject) -> {
+                resolve.accept(5);
+            })
+            .then(value -> ((Integer) value) * 2);
 
         assertEquals(Integer.valueOf(10), promise.await());
     }
 
     @Test
     public void testMultipleThenChaining() throws Exception {
-        AsyncTask<Integer> promise = platform.promisify((resolve, reject) -> {
-            resolve.accept(5);
-        })
-                .then(value -> Integer.valueOf(((Integer) value) * 2))
-                .then(value -> value + 3)
-                .then(value -> value * value);
+        AsyncTask<Integer> promise = platform
+            .promisify((resolve, reject) -> {
+                resolve.accept(5);
+            })
+            .then(value -> Integer.valueOf(((Integer) value) * 2))
+            .then(value -> value + 3)
+            .then(value -> value * value);
 
         assertEquals(Integer.valueOf(169), promise.await()); // ((5*2)+3)^2 = 13^2 = 169
     }
@@ -114,22 +150,23 @@ public class TestAsyncTask {
     public void testErrorPropagationInChain() {
         final List<String> executionPath = new ArrayList<>();
 
-        AsyncTask<String> promise = platform.promisify((resolve, reject) -> {
-            executionPath.add("start");
-            resolve.accept("step1");
-        })
-                .then(value -> {
-                    executionPath.add((String) value);
-                    return value + "-step2";
-                })
-                .then(value -> {
-                    executionPath.add(value);
-                    throw new RuntimeException("Error in chain");
-                })
-                .then(value -> {
-                    executionPath.add("This should not execute");
-                    return value + "-step4";
-                });
+        AsyncTask<String> promise = platform
+            .promisify((resolve, reject) -> {
+                executionPath.add("start");
+                resolve.accept("step1");
+            })
+            .then(value -> {
+                executionPath.add((String) value);
+                return value + "-step2";
+            })
+            .then(value -> {
+                executionPath.add(value);
+                throw new RuntimeException("Error in chain");
+            })
+            .then(value -> {
+                executionPath.add("This should not execute");
+                return value + "-step4";
+            });
 
         // Check that the chain executed properly until the exception
         try {
@@ -137,7 +174,9 @@ public class TestAsyncTask {
             fail("Expected exception was not thrown");
         } catch (Exception exception) {
             assertTrue(exception.getCause() instanceof RuntimeException);
-            assertTrue(exception.getCause().getMessage().contains("Error in chain"));
+            assertTrue(
+                exception.getCause().getMessage().contains("Error in chain")
+            );
         }
 
         // Check the execution path
@@ -153,17 +192,21 @@ public class TestAsyncTask {
         AtomicBoolean handlerCalled = new AtomicBoolean(false);
         AtomicReference<Throwable> capturedError = new AtomicReference<>();
 
-        platform.promisify((resolve, reject) -> {
-            reject.accept(new RuntimeException("test error"));
-        })
-                .exceptionally(error -> {
-                    handlerCalled.set(true);
-                    capturedError.set(error);
-                    latch.countDown();
-                });
+        platform
+            .promisify((resolve, reject) -> {
+                reject.accept(new RuntimeException("test error"));
+            })
+            .exceptionally(error -> {
+                handlerCalled.set(true);
+                capturedError.set(error);
+                latch.countDown();
+            });
 
         // Wait for exceptionally to be called with timeout
-        assertTrue("Exceptionally handler was not called", latch.await(5, TimeUnit.SECONDS));
+        assertTrue(
+            "Exceptionally handler was not called",
+            latch.await(5, TimeUnit.SECONDS)
+        );
 
         assertTrue("Handler was not called", handlerCalled.get());
         assertNotNull("Error was not captured", capturedError.get());
@@ -175,17 +218,22 @@ public class TestAsyncTask {
         CountDownLatch latch = new CountDownLatch(1);
         AtomicBoolean handlerCalled = new AtomicBoolean(false);
 
-        platform.promisify((resolve, reject) -> {
-            reject.accept(new RuntimeException("original error"));
-        }).exceptionally(error -> {
-            // Verify we got the right error
-            assertEquals("original error", error.getMessage());
-            handlerCalled.set(true);
-            latch.countDown();
-        });
+        platform
+            .promisify((resolve, reject) -> {
+                reject.accept(new RuntimeException("original error"));
+            })
+            .exceptionally(error -> {
+                // Verify we got the right error
+                assertEquals("original error", error.getMessage());
+                handlerCalled.set(true);
+                latch.countDown();
+            });
 
         // Wait for exceptionally to process with timeout
-        assertTrue("Exceptionally handler was not called", latch.await(5, TimeUnit.SECONDS));
+        assertTrue(
+            "Exceptionally handler was not called",
+            latch.await(5, TimeUnit.SECONDS)
+        );
         assertTrue("Handler was not called", handlerCalled.get());
     }
 
@@ -195,32 +243,36 @@ public class TestAsyncTask {
         AtomicInteger counter = new AtomicInteger(0);
         AtomicReference<Exception> capturedError = new AtomicReference<>();
 
-        AsyncTask<Integer> promise = platform.promisify((resolve, reject) -> {
-            resolve.accept(1);
-        })
-                .then(v -> {
-                    counter.incrementAndGet();
-                    return ((Integer) v) + 1;
-                })
-                .then(v -> {
-                    counter.incrementAndGet();
-                    if (v == 2) {
-                        throw new RuntimeException("Simulated error");
-                    }
-                    return v + 1;
-                })
-                .exceptionally(e -> {
-                    counter.incrementAndGet();
-                    latch.countDown();
-                })
-                .then(v -> {
-                    // This won't be called because the previous step failed
-                    counter.incrementAndGet();
-                    return 100;
-                });
+        AsyncTask<Integer> promise = platform
+            .promisify((resolve, reject) -> {
+                resolve.accept(1);
+            })
+            .then(v -> {
+                counter.incrementAndGet();
+                return ((Integer) v) + 1;
+            })
+            .then(v -> {
+                counter.incrementAndGet();
+                if (v == 2) {
+                    throw new RuntimeException("Simulated error");
+                }
+                return v + 1;
+            })
+            .exceptionally(e -> {
+                counter.incrementAndGet();
+                latch.countDown();
+            })
+            .then(v -> {
+                // This won't be called because the previous step failed
+                counter.incrementAndGet();
+                return 100;
+            });
 
         // Wait for exceptionally to be called
-        assertTrue("Exceptionally handler was not called", latch.await(5, TimeUnit.SECONDS));
+        assertTrue(
+            "Exceptionally handler was not called",
+            latch.await(5, TimeUnit.SECONDS)
+        );
 
         // The value should be null because the chain was broken
         try {
@@ -244,27 +296,36 @@ public class TestAsyncTask {
 
         for (int i = 0; i < promiseCount; i++) {
             final int index = i;
-            AsyncTask<Integer> promise = platform.promisify((resolve, reject) -> {
-                new Thread(() -> {
-                    try {
-                        Thread.sleep(10 * index);
-                        resolve.accept(index);
-                        latch.countDown();
-                    } catch (Exception e) {
-                        reject.accept(e);
-                    }
-                }).start();
-            });
+            AsyncTask<Integer> promise = platform.promisify(
+                (resolve, reject) -> {
+                    new Thread(() -> {
+                        try {
+                            Thread.sleep(10 * index);
+                            resolve.accept(index);
+                            latch.countDown();
+                        } catch (Exception e) {
+                            reject.accept(e);
+                        }
+                    })
+                        .start();
+                }
+            );
             promises.add(promise);
         }
 
         // Wait for all promises to complete
-        assertTrue("Not all promises completed in time", latch.await(5, TimeUnit.SECONDS));
+        assertTrue(
+            "Not all promises completed in time",
+            latch.await(5, TimeUnit.SECONDS)
+        );
 
         // Verify all promises completed successfully
         for (int i = 0; i < promiseCount; i++) {
-            assertEquals("Promise " + i + " returned wrong value",
-                    Integer.valueOf(i), promises.get(i).await());
+            assertEquals(
+                "Promise " + i + " returned wrong value",
+                Integer.valueOf(i),
+                promises.get(i).await()
+            );
         }
     }
 
@@ -283,7 +344,8 @@ public class TestAsyncTask {
                 } catch (Exception e) {
                     reject.accept(e);
                 }
-            }).start();
+            })
+                .start();
         });
 
         AsyncTask<Integer> promise2 = platform.promisify((resolve, reject) -> {
@@ -295,12 +357,19 @@ public class TestAsyncTask {
                 } catch (Exception e) {
                     reject.accept(e);
                 }
-            }).start();
+            })
+                .start();
         });
 
         // Wait for individual promises to resolve
-        assertTrue("Promise 1 didn't complete", promise1Latch.await(5, TimeUnit.SECONDS));
-        assertTrue("Promise 2 didn't complete", promise2Latch.await(5, TimeUnit.SECONDS));
+        assertTrue(
+            "Promise 1 didn't complete",
+            promise1Latch.await(5, TimeUnit.SECONDS)
+        );
+        assertTrue(
+            "Promise 2 didn't complete",
+            promise2Latch.await(5, TimeUnit.SECONDS)
+        );
 
         // Create a promise that depends on both previous promises
         AsyncTask<Integer> combinedPromise = promise1.then(v1 -> {
@@ -313,12 +382,12 @@ public class TestAsyncTask {
         });
 
         // The combined result should be the sum
-        assertEquals("Combined promise returned wrong value",
-                Integer.valueOf(15), combinedPromise.await());
+        assertEquals(
+            "Combined promise returned wrong value",
+            Integer.valueOf(15),
+            combinedPromise.await()
+        );
     }
-
-
-
 
     @Test
     public void testWaitAllSuccess() throws Exception {
@@ -327,17 +396,20 @@ public class TestAsyncTask {
 
         for (int i = 0; i < 5; i++) {
             final int value = i;
-            promises.add(platform.promisify((resolve, reject) -> {
-                new Thread(() -> {
-                    try {
-                        // Different delays to test ordering
-                        Thread.sleep(50 * (5 - value));
-                        resolve.accept(value);
-                    } catch (Exception e) {
-                        reject.accept(e);
-                    }
-                }).start();
-            }));
+            promises.add(
+                platform.promisify((resolve, reject) -> {
+                    new Thread(() -> {
+                        try {
+                            // Different delays to test ordering
+                            Thread.sleep(50 * (5 - value));
+                            resolve.accept(value);
+                        } catch (Exception e) {
+                            reject.accept(e);
+                        }
+                    })
+                        .start();
+                })
+            );
         }
 
         // Wait for all promises to complete
@@ -347,11 +419,19 @@ public class TestAsyncTask {
         List<Integer> results = combinedPromise.await();
 
         // Check size
-        assertEquals("Result list should have same size as input list", 5, results.size());
+        assertEquals(
+            "Result list should have same size as input list",
+            5,
+            results.size()
+        );
 
         // Check each value is in the expected order
         for (int i = 0; i < 5; i++) {
-            assertEquals("Result should match input promise index", Integer.valueOf(i), results.get(i));
+            assertEquals(
+                "Result should match input promise index",
+                Integer.valueOf(i),
+                results.get(i)
+            );
         }
     }
 
@@ -375,26 +455,35 @@ public class TestAsyncTask {
         AtomicBoolean failureHandled = new AtomicBoolean(false);
 
         // Add a successful promise
-        promises.add(platform.promisify((resolve, reject) -> {
-            resolve.accept("success");
-        }));
+        promises.add(
+            platform.promisify((resolve, reject) -> {
+                resolve.accept("success");
+            })
+        );
 
         // Add a failing promise
-        promises.add(platform.promisify((resolve, reject) -> {
-            new Thread(() -> {
-                try {
-                    Thread.sleep(50);
-                    reject.accept(new RuntimeException("Deliberate failure"));
-                } catch (Exception e) {
-                    reject.accept(e);
-                }
-            }).start();
-        }));
+        promises.add(
+            platform.promisify((resolve, reject) -> {
+                new Thread(() -> {
+                    try {
+                        Thread.sleep(50);
+                        reject.accept(
+                            new RuntimeException("Deliberate failure")
+                        );
+                    } catch (Exception e) {
+                        reject.accept(e);
+                    }
+                })
+                    .start();
+            })
+        );
 
         // Add another successful promise
-        promises.add(platform.promisify((resolve, reject) -> {
-            resolve.accept("another success");
-        }));
+        promises.add(
+            platform.promisify((resolve, reject) -> {
+                resolve.accept("another success");
+            })
+        );
 
         // Wait for all promises
         AsyncTask<List<String>> combinedPromise = platform.waitAll(promises);
@@ -406,7 +495,10 @@ public class TestAsyncTask {
         });
 
         // Wait for failure to be handled
-        assertTrue("Failure handler was not called", failureLatch.await(5, TimeUnit.SECONDS));
+        assertTrue(
+            "Failure handler was not called",
+            failureLatch.await(5, TimeUnit.SECONDS)
+        );
         assertTrue("Failure should be handled", failureHandled.get());
 
         // Verify the combined promise fails
@@ -414,8 +506,10 @@ public class TestAsyncTask {
             combinedPromise.await();
             fail("Should have thrown exception");
         } catch (Exception e) {
-            assertTrue("Should contain the right error message",
-                    e.getCause().getMessage().contains("Deliberate failure"));
+            assertTrue(
+                "Should contain the right error message",
+                e.getCause().getMessage().contains("Deliberate failure")
+            );
         }
     }
 
@@ -430,16 +524,19 @@ public class TestAsyncTask {
             final String letter = letters[i];
             final int delay = (letters.length - i) * 50; // E completes first, A last
 
-            promises.add(platform.promisify((resolve, reject) -> {
-                new Thread(() -> {
-                    try {
-                        Thread.sleep(delay);
-                        resolve.accept(letter);
-                    } catch (Exception e) {
-                        reject.accept(e);
-                    }
-                }).start();
-            }));
+            promises.add(
+                platform.promisify((resolve, reject) -> {
+                    new Thread(() -> {
+                        try {
+                            Thread.sleep(delay);
+                            resolve.accept(letter);
+                        } catch (Exception e) {
+                            reject.accept(e);
+                        }
+                    })
+                        .start();
+                })
+            );
         }
 
         // Wait for all promises
@@ -447,8 +544,11 @@ public class TestAsyncTask {
         List<String> results = combinedPromise.await();
 
         // Check results match original order regardless of completion order
-        assertArrayEquals("Results should be in original order",
-                letters, results.toArray(new String[0]));
+        assertArrayEquals(
+            "Results should be in original order",
+            letters,
+            results.toArray(new String[0])
+        );
     }
 
     @Test
@@ -462,29 +562,36 @@ public class TestAsyncTask {
 
         for (int i = 0; i < promiseCount; i++) {
             final int value = i;
-            promises.add(platform.promisify((resolve, reject) -> {
-                new Thread(() -> {
-                    try {
-                        // Random delay between 10-100ms
-                        Thread.sleep(10 + (int) (Math.random() * 90));
-                        resolve.accept(value);
-                    } catch (Exception e) {
-                        reject.accept(e);
-                    }
-                }).start();
-            }));
+            promises.add(
+                platform.promisify((resolve, reject) -> {
+                    new Thread(() -> {
+                        try {
+                            // Random delay between 10-100ms
+                            Thread.sleep(10 + (int) (Math.random() * 90));
+                            resolve.accept(value);
+                        } catch (Exception e) {
+                            reject.accept(e);
+                        }
+                    })
+                        .start();
+                })
+            );
         }
 
         // Use then to capture when all promises complete
-        platform.waitAll(promises).then(results -> {
-            resultRef.set(results);
-            allResolved.countDown();
-            return results;
-        });
+        platform
+            .waitAll(promises)
+            .then(results -> {
+                resultRef.set(results);
+                allResolved.countDown();
+                return results;
+            });
 
         // Wait for completion
-        assertTrue("Not all promises completed in time",
-                allResolved.await(5, TimeUnit.SECONDS));
+        assertTrue(
+            "Not all promises completed in time",
+            allResolved.await(5, TimeUnit.SECONDS)
+        );
 
         // Verify all results are present
         List<Integer> results = resultRef.get();
@@ -492,8 +599,11 @@ public class TestAsyncTask {
 
         // Verify each expected value is in the result at the right position
         for (int i = 0; i < promiseCount; i++) {
-            assertEquals("Value at index " + i + " should match",
-                    Integer.valueOf(i), results.get(i));
+            assertEquals(
+                "Value at index " + i + " should match",
+                Integer.valueOf(i),
+                results.get(i)
+            );
         }
     }
 }

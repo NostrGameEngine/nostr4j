@@ -1,28 +1,52 @@
+/**
+ * BSD 3-Clause License
+ * 
+ * Copyright (c) 2025, Riccardo Balbo
+ * 
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ * 
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the documentation
+ *    and/or other materials provided with the distribution.
+ * 
+ * 3. Neither the name of the copyright holder nor the names of its
+ *    contributors may be used to endorse or promote products derived from
+ *    this software without specific prior written permission.
+ * 
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 package org.ngengine.nostr4j;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicInteger;
-
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.event.UnsignedNostrEvent;
 import org.ngengine.nostr4j.event.tracker.PassthroughEventTracker;
-import org.ngengine.nostr4j.listeners.NostrRelayListener;
-import org.ngengine.nostr4j.platform.NostrExecutor;
-import org.ngengine.nostr4j.platform.Platform;
 import org.ngengine.nostr4j.platform.jvm.JVMThreadedPlatform;
 import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
 import org.ngengine.nostr4j.transport.NostrMessage;
 import org.ngengine.nostr4j.utils.NostrUtils;
 
 public class Benchmarks {
+
     private static final int EVENTS = 200;
 
-    public Collection<List<Object>> generateMessages(String subId) throws Exception {
+    public Collection<List<Object>> generateMessages(String subId)
+        throws Exception {
         Collection<List<Object>> messages = new ArrayList<>();
         String baseContent = "";
         for (int i = 0; i < EVENTS; i++) {
@@ -51,13 +75,16 @@ public class Benchmarks {
     NostrRelay relay;
 
     public Benchmarks(boolean trusted, boolean threaded) throws Exception {
-        if(threaded)NostrUtils.setPlatform(new JVMThreadedPlatform());
+        if (threaded) NostrUtils.setPlatform(new JVMThreadedPlatform());
         pool = new NostrPool();
         pool.setVerifyEvents(!trusted);
         relay = new NostrRelay("wss:/127.0.0.1");
         pool.ensureRelay(relay);
-        NostrSubscription sub = pool.subscribe(new NostrFilter(), PassthroughEventTracker.class);
-        messages = generateMessages(sub.getSubId());      
+        NostrSubscription sub = pool.subscribe(
+            new NostrFilter(),
+            PassthroughEventTracker.class
+        );
+        messages = generateMessages(sub.getSubId());
     }
 
     public String run(int iterations) throws Exception {
@@ -69,31 +96,37 @@ public class Benchmarks {
         }
 
         for (int i = 0; i < iterations; i++) {
-
             long t = System.nanoTime();
             for (List<Object> message : messages) {
                 pool.onRelayMessage(relay, message);
             }
             long iterationSum = System.nanoTime() - t;
-            sum+= iterationSum;
-            if(iterationSum < min){
+            sum += iterationSum;
+            if (iterationSum < min) {
                 min = iterationSum;
             }
         }
-        
-        sum = sum / iterations;
-        return "avg "+ ((double)sum/1000000.) + "ms min " + ((double)min/1000000.) + "ms";
-        
+
+        sum /= iterations;
+        return (
+            "avg " +
+            ((double) sum / 1000000.) +
+            "ms min " +
+            ((double) min / 1000000.) +
+            "ms"
+        );
     }
 
     public static void main(String[] args) throws Exception {
-        System.out.println("Java version: " + System.getProperty("java.version"));
+        System.out.println(
+            "Java version: " + System.getProperty("java.version")
+        );
         Benchmarks benchmark = new Benchmarks(false, false);
         String t;
 
-        benchmark = new Benchmarks(false,false);
+        benchmark = new Benchmarks(false, false);
         t = benchmark.run(6);
-        System.out.println("Time: " + (t) );
+        System.out.println("Time: " + (t));
 
         benchmark = new Benchmarks(false, true);
         t = benchmark.run(6);
@@ -101,6 +134,6 @@ public class Benchmarks {
 
         benchmark = new Benchmarks(true, false);
         t = benchmark.run(6);
-        System.out.println("Time (trusted): " + (t) );
+        System.out.println("Time (trusted): " + (t));
     }
 }
