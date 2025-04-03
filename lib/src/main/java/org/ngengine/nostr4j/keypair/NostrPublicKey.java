@@ -7,9 +7,9 @@ import java.util.Collection;
 import java.util.Collections;
 
 import org.ngengine.nostr4j.utils.Bech32;
+import org.ngengine.nostr4j.utils.Bech32.Bech32Exception;
 import org.ngengine.nostr4j.utils.ByteBufferList;
 import org.ngengine.nostr4j.utils.NostrUtils;
-import org.ngengine.nostr4j.utils.Bech32.Bech32Exception;
 
 /**
  * Represents a Nostr public key.

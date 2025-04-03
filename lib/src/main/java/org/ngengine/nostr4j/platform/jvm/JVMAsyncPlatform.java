@@ -46,9 +46,10 @@ public class JVMAsyncPlatform implements Platform{
         if (Security.getProvider("BC") == null) {
             Security.addProvider(new org.bouncycastle.jce.provider.BouncyCastleProvider());
         }
+        
     }
 
-    private static final SecureRandom secureRandom = new SecureRandom();
+    private static  SecureRandom secureRandom ;
     private static final byte EMPTY32[] = new byte[32];
     private static final byte EMPTY0[] = new byte[0];
  
@@ -81,6 +82,9 @@ public class JVMAsyncPlatform implements Platform{
 
     @Override
     public byte[] randomBytes(int n) {
+        if(secureRandom == null){
+           secureRandom = new SecureRandom();
+        }
         synchronized(secureRandom){   
             byte[] bytes = new byte[n];
             secureRandom.nextBytes(bytes);

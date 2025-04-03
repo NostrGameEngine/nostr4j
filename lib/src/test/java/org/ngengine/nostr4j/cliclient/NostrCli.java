@@ -45,7 +45,7 @@ public class NostrCli {
         });
 
         sub.listenEvent((s, event, stored) -> {
-            System.out.println("!!! Event: " + event+" stored: " + stored);
+            System.out.println("Event: " + event+" stored: " + stored);
         });
         
         sub.listenEose(s -> {

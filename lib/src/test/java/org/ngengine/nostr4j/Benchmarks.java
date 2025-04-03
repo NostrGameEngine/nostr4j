@@ -19,7 +19,7 @@ import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
 import org.ngengine.nostr4j.transport.NostrMessage;
 import org.ngengine.nostr4j.utils.NostrUtils;
 
-public class EventsBenchmark {
+public class Benchmarks {
     private static final int EVENTS = 200;
 
     public Collection<List<Object>> generateMessages(String subId) throws Exception {
@@ -50,7 +50,7 @@ public class EventsBenchmark {
     NostrPool pool;
     NostrRelay relay;
 
-    public EventsBenchmark(boolean trusted, boolean threaded) throws Exception {
+    public Benchmarks(boolean trusted, boolean threaded) throws Exception {
         if(threaded)NostrUtils.setPlatform(new JVMThreadedPlatform());
         pool = new NostrPool();
         pool.setVerifyEvents(!trusted);
@@ -70,13 +70,11 @@ public class EventsBenchmark {
 
         for (int i = 0; i < iterations; i++) {
 
-            // long iterationSum = 0;
-            long t = System.currentTimeMillis();
+            long t = System.nanoTime();
             for (List<Object> message : messages) {
                 pool.onRelayMessage(relay, message);
-                // iterationSum += System.currentTimeMillis() - t;
             }
-            long iterationSum = System.currentTimeMillis() - t;
+            long iterationSum = System.nanoTime() - t;
             sum+= iterationSum;
             if(iterationSum < min){
                 min = iterationSum;
@@ -84,24 +82,25 @@ public class EventsBenchmark {
         }
         
         sum = sum / iterations;
-        return "avg "+ (sum) + "ms - min " + (min) + "ms";
+        return "avg "+ ((double)sum/1000000.) + "ms min " + ((double)min/1000000.) + "ms";
         
     }
 
     public static void main(String[] args) throws Exception {
-        EventsBenchmark benchmark = new EventsBenchmark(false, false);
+        System.out.println("Java version: " + System.getProperty("java.version"));
+        Benchmarks benchmark = new Benchmarks(false, false);
         String t;
 
-        benchmark = new EventsBenchmark(false,false);
-        t = benchmark.run(3);
+        benchmark = new Benchmarks(false,false);
+        t = benchmark.run(6);
         System.out.println("Time: " + (t) );
 
-        benchmark = new EventsBenchmark(false, true);
-        t = benchmark.run(3);
+        benchmark = new Benchmarks(false, true);
+        t = benchmark.run(6);
         System.out.println("Time (threaded): " + (t));
 
-        benchmark = new EventsBenchmark(true, false);
-        t = benchmark.run(3);
+        benchmark = new Benchmarks(true, false);
+        t = benchmark.run(6);
         System.out.println("Time (trusted): " + (t) );
     }
 }

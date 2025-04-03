@@ -1,13 +1,10 @@
 package org.ngengine.nostr4j.event;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-
-import org.ngengine.nostr4j.transport.NostrMessage;
 import org.ngengine.nostr4j.utils.NostrUtils;
 
 public class UnsignedNostrEvent implements NostrEvent {

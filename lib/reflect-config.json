@@ -1,0 +1,59 @@
+[
+    {
+        "name": "org.ngengine.nostr4j.event.tracker.PassthroughEventTracker",
+        "allDeclaredConstructors": true
+    },
+    {
+        "name": "org.ngengine.nostr4j.event.tracker.NaiveEventTracker",
+        "allDeclaredConstructors": true
+    },
+    {
+        "name": "org.ngengine.nostr4j.event.tracker.ForwardSlidingWindowEventTracker",
+        "allDeclaredConstructors": true
+    },
+    {
+        "name": "org.ngengine.nostr4j.platform.jvm.JVMAsyncPlatform",
+        "allDeclaredConstructors": true
+    },
+    {
+        "name": "org.ngengine.nostr4j.platform.jvm.JVMThreadedPlatform",
+        "allDeclaredConstructors": true
+    },
+    {
+        "name": "org.bouncycastle,com.security.registerbouncycastle.BouncyCastleInitializer",
+        "allPublicConstructors": true,
+        "allPublicMethods": true
+    },
+ 
+    {
+        "name": "org.bouncycastle.jce.provider.BouncyCastleProvider",
+        "methods": [
+            {
+                "name": "<init>",
+                "parameterTypes": []
+            }
+        ]
+    },
+    {
+        "name": "org.bouncycastle.crypto.ec.CustomNamedCurves",
+        "methods": [
+            {
+                "name": "configureCurve",
+                "parameterTypes": []
+            }
+        ]
+    },
+    {
+        "name": "org.bouncycastle.jcajce.provider.asymmetric.edec.KeyAgreementSpi$X25519withSHA256HKDF",
+        "allDeclaredConstructors": false,
+        "allDeclaredMethods": false,
+        "allDeclaredFields": false
+    },
+    {
+        "name": "org.bouncycastle.jcajce.provider.asymmetric.edec.KeyAgreementSpi$X448withSHA512HKDF",
+        "allDeclaredConstructors": false,
+        "allDeclaredMethods": false,
+        "allDeclaredFields": false
+    }
+    
+]

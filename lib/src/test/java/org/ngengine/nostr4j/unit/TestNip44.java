@@ -26,7 +26,7 @@ public class TestNip44 {
     @BeforeClass
     public static void loadTestVectors() throws Exception {
         // Load test vectors from JSON file
-        InputStream is = TestNip44.class.getResourceAsStream("/it/rblb/nostr/unit/nip44-vectors.json");
+        InputStream is = TestNip44.class.getResourceAsStream("/org/ngengine/nostr/unit/nip44-vectors.json");
         InputStreamReader reader = new InputStreamReader(is, StandardCharsets.UTF_8);
         testVectors = new Gson().fromJson(reader, JsonObject.class)
                 .getAsJsonObject("v2");

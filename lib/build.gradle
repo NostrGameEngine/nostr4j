@@ -48,3 +48,63 @@ tasks.withType(JavaCompile) {
     sourceCompatibility = '21'
     targetCompatibility = '21'
 }
+
+task runBenchmarks(type: JavaExec) {    
+    group = 'application'
+    description = 'Runs the benchmarks app with production optimizations'
+    mainClass = 'org.ngengine.nostr4j.Benchmarks'
+    classpath = sourceSets.test.runtimeClasspath
+    jvmArgs = [  '-XX:+UseG1GC']
+    dependsOn build 
+}
+
+ task traceBenchmarks(type: JavaExec) {
+    group = 'application'
+    description = 'Runs the benchmarks app with the GraalVM native-image tracing agent'
+    mainClass = 'org.ngengine.nostr4j.Benchmarks'
+    classpath = sourceSets.test.runtimeClasspath
+    jvmArgs = [
+        '-XX:+UseG1GC',
+        '-agentlib:native-image-agent=config-output-dir=' + projectDir + '/src/test/resources/META-INF/native-image/org/ngengine/nostr4j',
+    ]
+    dependsOn build
+}
+
+task buildBenchmarksNative(type: Exec) {
+    group = 'build'
+    description = 'Builds a native image of the Benchmarks app using GraalVM'
+    def graalHome = System.getenv("GRAALVM_HOME")
+    if (graalHome == null) {
+        graalHome = System.getenv("JAVA_HOME")
+        if (graalHome == null) {
+            throw new GradleException("GRAALVM_HOME or JAVA_HOME environment variable must be set")
+        }
+    }
+
+    def nativeImageExecutable = "${graalHome}/bin/native-image"
+    def outputDir = "${buildDir}/native-image"
+    def mainClass = 'org.ngengine.nostr4j.Benchmarks'
+
+    def combinedClasspath = sourceSets.main.runtimeClasspath + sourceSets.test.runtimeClasspath
+
+    commandLine nativeImageExecutable,
+        '-cp', combinedClasspath.asPath,
+        '-H:Name=benchmarks', 
+        '-H:Path=' + outputDir, 
+        "-H:ReflectionConfigurationFiles=${projectDir}/reflect-config.json", 
+        '-H:+UnlockExperimentalVMOptions',
+        '--enable-native-access=ALL-UNNAMED',
+        '--link-at-build-time',     
+        mainClass
+    dependsOn build
+    outputs.upToDateWhen { false }
+}
+
+task runBenchmarksNative(type: Exec) {
+    group = 'application'
+    description = 'Runs the native image of the Benchmarks app'
+    def outputDir = "${buildDir}/native-image"
+    def nativeImageExecutable = "${outputDir}/benchmarks"
+    commandLine nativeImageExecutable
+    dependsOn buildBenchmarksNative
+}

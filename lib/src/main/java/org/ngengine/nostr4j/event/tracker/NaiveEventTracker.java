@@ -7,6 +7,8 @@ import org.ngengine.nostr4j.event.SignedNostrEvent;
 
 public class NaiveEventTracker implements EventTracker {
     public HashSet<String> seenEvents = new HashSet<>();
+    public NaiveEventTracker() {
+    }
 
     @Override
     public boolean seen(SignedNostrEvent event) {

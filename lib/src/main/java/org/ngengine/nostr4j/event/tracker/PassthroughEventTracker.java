@@ -4,6 +4,9 @@ import org.ngengine.nostr4j.NostrSubscription;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 
 public class PassthroughEventTracker implements EventTracker {
+    public PassthroughEventTracker() {
+    }
+    
     @Override
     public boolean seen(SignedNostrEvent event) {
         return false;
