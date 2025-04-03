@@ -3,8 +3,11 @@ package org.ngengine.nostr4j.platform.jvm;
 import java.math.BigInteger;
 import java.security.NoSuchAlgorithmException;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 import org.ngengine.nostr4j.utils.NostrUtils;
 
+// based on https://github.com/tcheeric/nostr-java/blob/main/nostr-java-crypto/src/main/java/nostr/crypto/schnorr/Schnorr.java#L19
 // non thread-safe
 class Point {
     // Curve parameters
@@ -28,7 +31,6 @@ class Point {
 
     // Point coordinates: [0] = x, [1] = y
     private final BigInteger[] coords;
-
     private byte[] cachedBytes;
 
     public Point(BigInteger x, BigInteger y) {
@@ -71,6 +73,7 @@ class Point {
         return add(this, P);
     }
 
+
     public static Point add(Point P1, Point P2) {
         if (P1 != null && P2 != null && P1.isInfinite() && P2.isInfinite()) {
             return infinityPoint();
@@ -90,7 +93,7 @@ class Point {
 
     /**
      * Optimized scalar multiplication.
-     * Converts the point to Jacobian coordinates, uses double-and-add,
+     * Converts the point to Jacobian coordinates, uses wNAF-based multiplication,
      * and then converts the result back to affine.
      */
     public static Point mul(Point P, BigInteger k) {
@@ -98,7 +101,7 @@ class Point {
             return infinityPoint();
         }
         JacobianPoint J = P.toJacobian();
-        JacobianPoint R = JacobianPoint.scalarMul(J, k);
+        JacobianPoint R = JacobianPoint.wNAFScalarMul(J, k);
         return R.toAffine();
     }
 
@@ -151,10 +154,8 @@ class Point {
         if (x.compareTo(p) >= 0) {
             return null;
         }
-
         BigInteger y_sq = x.modPow(BigInteger.valueOf(3L), p).add(BI_SEVEN).mod(p);
         BigInteger y = y_sq.modPow(P_PLUS_ONE_DIV_FOUR, p);
-
         if (y.modPow(BI_TWO, p).compareTo(y_sq) != 0) {
             return null;
         } else {
@@ -172,14 +173,11 @@ class Point {
             return true;
         if (obj == null || getClass() != obj.getClass())
             return false;
-
         Point other = (Point) obj;
-
         if (isInfinite() && other.isInfinite())
             return true;
         if (isInfinite() || other.isInfinite())
             return false;
-
         return getX().equals(other.getX()) && getY().equals(other.getY());
     }
 
@@ -199,7 +197,8 @@ class Point {
         BigInteger t = n.subtract(e).mod(n);
         JacobianPoint JG = G.toJacobian();
         JacobianPoint JP = P.toJacobian();
-        JacobianPoint R = JacobianPoint.doubleScalarMul(JG, s, JP, t);
+        // Use the simultaneous wNAF double-scalar multiplication.
+        JacobianPoint R = JacobianPoint.doubleScalarWNAF(JG, s, JP, t);
         return R.toAffine();
     }
 
@@ -228,8 +227,12 @@ class Point {
         private final BigInteger X;
         private final BigInteger Y;
         private final BigInteger Z;
+        // Window size for wNAF multiplication.
+        private final static int WINDOW_SIZE = 4;
         // Toggle debug output if needed.
         private final static boolean DEBUG = false;
+        // Precomputed table for the fixed base point G.
+        private static final JacobianPoint[] precomputedG = precomputeG();
 
         public JacobianPoint(BigInteger X, BigInteger Y, BigInteger Z) {
             this.X = X;
@@ -268,7 +271,6 @@ class Point {
             long start = System.nanoTime();
             if (isInfinity())
                 return this;
-            // Calculate intermediate values.
             BigInteger Y2 = Y.multiply(Y).mod(p); // Y^2
             BigInteger S = X.multiply(Y2.shiftLeft(2)).mod(p); // S = 4*X*Y^2
             BigInteger M = X.multiply(X).multiply(BI_THREE).mod(p); // M = 3*X^2
@@ -280,6 +282,14 @@ class Point {
                 System.out.println("Jacobian doublePoint took " + (System.nanoTime() - start) + " ns");
             }
             return new JacobianPoint(X3, Y3, Z3);
+        }
+
+        /**
+         * Return the negation of this point.
+         * In Jacobian, -P = (X, -Y mod p, Z).
+         */
+        public JacobianPoint negate() {
+            return new JacobianPoint(X, Y.negate().mod(p), Z);
         }
 
         /**
@@ -326,46 +336,151 @@ class Point {
         }
 
         /**
-         * Scalar multiplication (double-and-add) in Jacobian coordinates.
-         * No inversion is performed until conversion to affine.
+         * Compute the wNAF (windowed non-adjacent form) representation of a scalar.
          */
-        public static JacobianPoint scalarMul(JacobianPoint P, BigInteger k) {
-            long start = System.nanoTime();
-            JacobianPoint R = new JacobianPoint(BigInteger.ZERO, BigInteger.ONE, BigInteger.ZERO); // Infinity.
-            int bitLen = k.bitLength();
-            for (int i = bitLen - 1; i >= 0; i--) {
-                R = R.doublePoint();
-                if (k.testBit(i)) {
-                    R = add(R, P);
+        private static int[] computeWNAF(BigInteger k, int width) {
+            List<Integer> wnaf = new ArrayList<>();
+            BigInteger _k = k;
+            BigInteger twoPowW = BigInteger.valueOf(1 << width);
+            BigInteger twoPowWMinus1 = BigInteger.valueOf(1 << (width - 1));
+            while (_k.compareTo(BigInteger.ZERO) > 0) {
+                if (_k.testBit(0)) {
+                    BigInteger mod = _k.mod(twoPowW);
+                    int digit = mod.intValue();
+                    if (digit >= twoPowWMinus1.intValue()) {
+                        digit = digit - (1 << width);
+                    }
+                    wnaf.add(digit);
+                    _k = _k.subtract(BigInteger.valueOf(digit));
+                } else {
+                    wnaf.add(0);
                 }
+                _k = _k.shiftRight(1);
             }
-            if (DEBUG) {
-                System.out.println("Jacobian scalarMul total took " + (System.nanoTime() - start) + " ns");
+            int[] result = new int[wnaf.size()];
+            for (int i = 0; i < wnaf.size(); i++) {
+                result[i] = wnaf.get(i);
+            }
+            return result;
+        }
+
+        /**
+         * Single-scalar multiplication using the wNAF method.
+         * If the point equals the fixed base point G, use a precomputed table.
+         */
+        public static JacobianPoint wNAFScalarMul(JacobianPoint P, BigInteger k) {
+            // If P equals G, use the precomputed table.
+            if (P.equals(G.toJacobian())) {
+                return wNAFScalarMulPrecomputed(k);
+            }
+            int[] wnaf = computeWNAF(k, WINDOW_SIZE);
+            int tableSize = 1 << (WINDOW_SIZE - 1);
+            JacobianPoint[] table = new JacobianPoint[tableSize];
+            table[0] = P;
+            JacobianPoint twoP = P.doublePoint();
+            for (int i = 1; i < tableSize; i++) {
+                table[i] = add(table[i - 1], twoP);
+            }
+            JacobianPoint R = new JacobianPoint(BigInteger.ZERO, BigInteger.ONE, BigInteger.ZERO); // infinity
+            for (int i = wnaf.length - 1; i >= 0; i--) {
+                R = R.doublePoint();
+                int digit = wnaf[i];
+                if (digit != 0) {
+                    int index = Math.abs(digit) / 2;
+                    if (digit > 0) {
+                        R = add(R, table[index]);
+                    } else {
+                        R = add(R, table[index].negate());
+                    }
+                }
             }
             return R;
         }
 
         /**
-         * Double-scalar multiplication using simultaneous double-and-add.
-         * Computes R = s * P + t * Q.
+         * Single-scalar multiplication using a precomputed table for G.
          */
-        public static JacobianPoint doubleScalarMul(JacobianPoint P, BigInteger s, JacobianPoint Q, BigInteger t) {
-            long start = System.nanoTime();
-            JacobianPoint R = new JacobianPoint(BigInteger.ZERO, BigInteger.ONE, BigInteger.ZERO); // Infinity.
-            int bitLen = Math.max(s.bitLength(), t.bitLength());
-            for (int i = bitLen - 1; i >= 0; i--) {
+        private static JacobianPoint wNAFScalarMulPrecomputed(BigInteger k) {
+            int[] wnaf = computeWNAF(k, WINDOW_SIZE);
+            JacobianPoint R = new JacobianPoint(BigInteger.ZERO, BigInteger.ONE, BigInteger.ZERO); // infinity
+            for (int i = wnaf.length - 1; i >= 0; i--) {
                 R = R.doublePoint();
-                if (s.testBit(i)) {
-                    R = add(R, P);
+                int digit = wnaf[i];
+                if (digit != 0) {
+                    int index = Math.abs(digit) / 2;
+                    if (digit > 0) {
+                        R = add(R, precomputedG[index]);
+                    } else {
+                        R = add(R, precomputedG[index].negate());
+                    }
                 }
-                if (t.testBit(i)) {
-                    R = add(R, Q);
-                }
-            }
-            if (DEBUG) {
-                System.out.println("Jacobian doubleScalarMul total took " + (System.nanoTime() - start) + " ns");
             }
             return R;
+        }
+
+        /**
+         * Double-scalar multiplication using the wNAF method.
+         * Computes R = s * P + t * Q.
+         */
+        public static JacobianPoint doubleScalarWNAF(JacobianPoint P, BigInteger s, JacobianPoint Q, BigInteger t) {
+            int[] wnafS = computeWNAF(s, WINDOW_SIZE);
+            int[] wnafT = computeWNAF(t, WINDOW_SIZE);
+            int len = Math.max(wnafS.length, wnafT.length);
+            int[] wnafS_pad = new int[len];
+            int[] wnafT_pad = new int[len];
+            for (int i = 0; i < len; i++) {
+                wnafS_pad[i] = (i < wnafS.length) ? wnafS[i] : 0;
+                wnafT_pad[i] = (i < wnafT.length) ? wnafT[i] : 0;
+            }
+            int tableSize = 1 << (WINDOW_SIZE - 1);
+            JacobianPoint[] tableP = new JacobianPoint[tableSize];
+            JacobianPoint[] tableQ = new JacobianPoint[tableSize];
+            tableP[0] = P;
+            tableQ[0] = Q;
+            JacobianPoint twoP = P.doublePoint();
+            JacobianPoint twoQ = Q.doublePoint();
+            for (int i = 1; i < tableSize; i++) {
+                tableP[i] = add(tableP[i - 1], twoP);
+                tableQ[i] = add(tableQ[i - 1], twoQ);
+            }
+            JacobianPoint R = new JacobianPoint(BigInteger.ZERO, BigInteger.ONE, BigInteger.ZERO); // infinity
+            for (int i = len - 1; i >= 0; i--) {
+                R = R.doublePoint();
+                int digitS = wnafS_pad[i];
+                int digitT = wnafT_pad[i];
+                if (digitS != 0) {
+                    int index = Math.abs(digitS) / 2;
+                    if (digitS > 0) {
+                        R = add(R, tableP[index]);
+                    } else {
+                        R = add(R, tableP[index].negate());
+                    }
+                }
+                if (digitT != 0) {
+                    int index = Math.abs(digitT) / 2;
+                    if (digitT > 0) {
+                        R = add(R, tableQ[index]);
+                    } else {
+                        R = add(R, tableQ[index].negate());
+                    }
+                }
+            }
+            return R;
+        }
+
+        /**
+         * Precompute the table for the fixed base point G.
+         */
+        private static JacobianPoint[] precomputeG() {
+            int tableSize = 1 << (WINDOW_SIZE - 1);
+            JacobianPoint[] table = new JacobianPoint[tableSize];
+            // Use the Jacobian representation of G.
+            table[0] = G.toJacobian();
+            JacobianPoint twoG = table[0].doublePoint();
+            for (int i = 1; i < tableSize; i++) {
+                table[i] = add(table[i - 1], twoG);
+            }
+            return table;
         }
     }
 }
