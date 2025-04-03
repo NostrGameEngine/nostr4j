@@ -482,5 +482,31 @@ class Point {
             }
             return table;
         }
+
+
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj)
+                return true;
+            if (obj == null || getClass() != obj.getClass())
+                return false;
+            JacobianPoint other = (JacobianPoint) obj;
+            if (this.isInfinity() && other.isInfinity())
+                return true;
+            if (this.isInfinity() || other.isInfinity())
+                return false;
+            return this.X.equals(other.X) && this.Y.equals(other.Y) && this.Z.equals(other.Z);
+        }
+
+        @Override
+        public int hashCode() {
+            if (isInfinity())
+                return 0;
+            int result = X.hashCode();
+            result = 31 * result + Y.hashCode();
+            result = 31 * result + Z.hashCode();
+            return result;
+        }
     }
 }
