@@ -142,7 +142,7 @@ class Schnorr    {
 
         BigInteger e = Util.bigIntFromBytes(Point.taggedHash(TAG_CHALLENGE, challengeBuffer)).mod(Point.getn());
 
-        Point R = Point.add(Point.mul(Point.getG(), s), Point.mul(P, Point.getn().subtract(e)));
+        Point R = Point.schnorrVerify(s, P, e);
         return R != null && R.hasEvenY() && R.getX().compareTo(r) == 0;
     }
 
