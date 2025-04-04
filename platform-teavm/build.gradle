@@ -1,0 +1,141 @@
+
+plugins {
+    id 'java-library'
+    id("com.diffplug.spotless") version "7.0.2"
+    id "war"
+    id "org.teavm" version "0.11.0"
+}
+spotless {
+    java {
+    importOrder()  
+    removeUnusedImports()
+    cleanthat()   
+    prettier(['prettier': '2.8.8', 'prettier-plugin-java': '2.2.0']).config(['parser': 'java', 'tabWidth': 4])  
+    formatAnnotations()  
+
+    def licenseText = file("${rootDir}/LICENSE").text
+    def wrapped = licenseText.readLines().collect { " * " + it }.join("\n")
+    def header = "/**\n" + wrapped + "\n */"
+    licenseHeader(header, "package ")
+  }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    testImplementation libs.junit    
+    implementation teavm.libs.jsoApis
+    implementation project(":lib")
+    testImplementation project(":lib")
+    testImplementation teavm.libs.jsoApis
+
+
+
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+sourceSets {
+    test {
+        resources {
+            srcDirs = ['src/test/resources', 'src/main/resources']            
+        }
+    }
+}
+teavm {
+    all {
+        mainClass = "org.ngengine.nostr4j.platform.teavm.TeaVMModule"
+    }
+    js {
+        addedToWebApp = true
+        targetFileName = "nostr4j.js"
+        sourceMap = true     
+        moduleType = org.teavm.gradle.api.JSModuleType.UMD
+    }
+   
+    // tests{
+    //     js {
+    //         runner =  org.teavm.gradle.api.TeaVMWebTestRunner.CHROME
+    //     }
+    // }
+}
+
+teavm.tests.js {
+    enabled.set(true)
+    runner.set(org.teavm.gradle.api.TeaVMWebTestRunner.CHROME)
+}
+
+task updateJSExportClasses {
+    description 'Updates TeaVMModule.java with automatically discovered public classes from :lib project'
+    
+    doLast {
+        def moduleFile = file("${projectDir}/src/main/java/org/ngengine/nostr4j/platform/teavm/TeaVMModule.java")
+        def exportedClasses = []
+        def packagePrefix = "org.ngengine.nostr4j"
+        
+        project(":lib").sourceSets.main.java.srcDirs.each { sourceDir ->
+            if (sourceDir.exists()) {
+                sourceDir.eachFileRecurse { file ->
+                    if (file.name.endsWith('.java')) {
+                        try {
+                            def fileContent = file.text
+                            def packageName = ""
+                            def className = ""
+                            def isPublicClass = false
+                            def hasPublicConstructor = false
+                            file.eachLine { line ->
+                                // Extract package name
+                                if (line.trim().startsWith("package ")) {
+                                    packageName = line.trim()
+                                        .replace("package ", "")
+                                        .replace(";", "")
+                                        .trim()
+                                }
+                                
+                                // Check if class is public
+                                if (line.contains("public class ") || line.contains("public final class ")) {
+                                    isPublicClass = true
+                                    def parts = line.split("\\s+")
+                                    for (int i = 0; i < parts.length; i++) {
+                                        if (parts[i] == "class" && i+1 < parts.length) {
+                                            className = parts[i+1].split("\\{|implements|extends")[0].trim()
+                                            break
+                                        }
+                                    }
+                                }
+                                
+                                if (className && line.contains("public " + className + "(")) {
+                                    hasPublicConstructor = true                                
+                                }                                                            
+
+                            }
+                            
+                            if (isPublicClass && hasPublicConstructor && packageName.startsWith(packagePrefix) && !className.isEmpty()) {
+                                def fullClassName = packageName + "." + className
+                                exportedClasses.add(fullClassName + ".class")
+                                logger.info("Added class: " + fullClassName)
+                            }
+                        } catch (Exception e) {
+                            logger.warn("Could not examine source file: ${file.name}, reason: ${e.message}")
+                        }
+                    }
+                }
+            }
+        }
+        
+      
+        def classesText = exportedClasses.join(', ')
+        def newAnnotation = "@JSExportClasses({ ${classesText} })"
+        
+        def updatedContent = moduleFile.text.replaceFirst(/@JSExportClasses\(\{[^}]*\}\)/, newAnnotation)
+        moduleFile.text = updatedContent        
+        logger.lifecycle("Updated JSExportClasses with ${exportedClasses.size()} classes from ${packagePrefix} package")
+    }
+}
+compileJava.dependsOn updateJSExportClasses
+updateJSExportClasses.finalizedBy(spotlessApply)

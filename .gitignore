@@ -6,3 +6,5 @@ build
 lib/bin
 gradle
 dist
+platform-teavm/bin
+platform-teavm/js

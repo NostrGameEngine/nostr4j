@@ -10,14 +10,14 @@ plugins {
     id 'java-library'
    id("com.diffplug.spotless") version "7.0.2"
 }
- spotless {
+spotless {
     java {
     importOrder()  
     removeUnusedImports()
     cleanthat()   
     prettier(['prettier': '2.8.8', 'prettier-plugin-java': '2.2.0']).config(['parser': 'java', 'tabWidth': 4])  
     formatAnnotations()  
-    
+
     def licenseText = file("${rootDir}/LICENSE").text
     def wrapped = licenseText.readLines().collect { " * " + it }.join("\n")
     def header = "/**\n" + wrapped + "\n */"
