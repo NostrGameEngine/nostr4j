@@ -32,6 +32,7 @@ package org.ngengine.nostr4j;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.BiFunction;
@@ -68,6 +69,7 @@ public class NostrSubscription extends NostrMessage {
     private boolean eose;
     private final NostrExecutor executor;
     private final Collection<NostrFilter> filters;
+    private final Collection<NostrFilter> filtersRO;
 
     private final Function<NostrSubscription, AsyncTask<List<NostrMessageAck>>> onOpen;
     private final BiFunction<NostrSubscription, NostrSubCloseMessage, AsyncTask<List<NostrMessageAck>>> onClose;
@@ -84,8 +86,13 @@ public class NostrSubscription extends NostrMessage {
         this.eventTracker = eventTracker;
         this.executor = platform.newSubscriptionExecutor();
         this.filters = filters;
+        this.filtersRO = Collections.unmodifiableCollection(filters);
         this.onOpen = onOpen;
         this.onClose = onClose;
+    }
+
+    public Collection<NostrFilter> getFilters() {
+        return this.filtersRO;
     }
 
     public NostrExecutor getExecutor() {

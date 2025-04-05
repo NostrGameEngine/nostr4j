@@ -35,6 +35,7 @@ import java.util.Collections;
 import java.util.LinkedList;
 import java.util.ListIterator;
 import java.util.concurrent.TimeUnit;
+import org.ngengine.nostr4j.NostrFilter;
 import org.ngengine.nostr4j.NostrSubscription;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 
@@ -43,14 +44,14 @@ public class ForwardSlidingWindowEventTracker implements EventTracker {
     protected final LinkedList<SignedNostrEvent.Identifier> seenEvents =
         new LinkedList<SignedNostrEvent.Identifier>();
 
-    protected final int maxTrackedEvents;
+    protected int maxTrackedEvents;
     protected final int minTrackedEvents;
     protected final long trackingWindowS;
     protected final long trackingWindowsMarginS;
     protected long cutOffS = 0;
 
     public ForwardSlidingWindowEventTracker() {
-        this(2100, 21, 60, TimeUnit.MINUTES, 30, TimeUnit.MINUTES);
+        this(Integer.MAX_VALUE, 21, 60, TimeUnit.MINUTES, 30, TimeUnit.MINUTES);
     }
 
     public ForwardSlidingWindowEventTracker(
@@ -188,5 +189,30 @@ public class ForwardSlidingWindowEventTracker implements EventTracker {
     }
 
     @Override
-    public void tuneFor(NostrSubscription sub) {}
+    public void tuneFor(NostrSubscription sub) {
+        int maxLimit = -1;
+        for (NostrFilter filter : sub.getFilters()) {
+            Number limit = filter.getLimit();
+            if (limit != null && limit.intValue() > maxLimit) {
+                maxLimit = limit.intValue();
+            }
+        }
+        if (maxLimit > 0) {
+            maxTrackedEvents = maxLimit * 2;
+        }
+
+        long earlistSinceS = Long.MAX_VALUE;
+        for (NostrFilter filter : sub.getFilters()) {
+            if (filter.getSince() != null) {
+                long since = filter.getSince().getEpochSecond();
+                if (since < earlistSinceS) {
+                    earlistSinceS = since;
+                }
+            }
+        }
+
+        if (earlistSinceS != Long.MAX_VALUE) {
+            cutOffS = Math.max(cutOffS, earlistSinceS);
+        }
+    }
 }
