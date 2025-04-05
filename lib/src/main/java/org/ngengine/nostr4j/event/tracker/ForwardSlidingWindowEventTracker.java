@@ -70,7 +70,7 @@ public class ForwardSlidingWindowEventTracker implements EventTracker {
 
     @Override
     public boolean seen(SignedNostrEvent event) {
-        if (event.getCreatedAt() < cutOffS) {
+        if (event.getCreatedAt().getEpochSecond() < cutOffS) {
             return true;
         }
         SignedNostrEvent.Identifier newEventId = event.getIdentifier();
@@ -146,12 +146,12 @@ public class ForwardSlidingWindowEventTracker implements EventTracker {
         int removed = 0;
         while (it.hasPrevious()) {
             SignedNostrEvent.Identifier seenEventId = it.previous();
-            if (removed < toRemove) {
+            if (cutOffUpdate && seenEventId.createdAt < cutOffS) {
                 it.remove();
                 removed++;
                 continue;
             }
-            if (cutOffUpdate && seenEventId.createdAt < cutOffS) {
+            if (removed < toRemove) {
                 it.remove();
                 removed++;
                 continue;

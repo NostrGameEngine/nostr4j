@@ -31,6 +31,7 @@
 package org.ngengine.nostr4j.event;
 
 import java.nio.ByteBuffer;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -48,10 +49,21 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
 
         public final String id;
         public final long createdAt;
+        public final Instant createdAtInstant;
 
-        Identifier(String id, long createdAt) {
+        Identifier(String id, Instant createdAt) {
             this.id = id;
-            this.createdAt = createdAt;
+            this.createdAt = createdAt.getEpochSecond();
+            this.createdAtInstant = createdAt;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (obj == null || !(obj instanceof Identifier)) return false;
+            if (obj == this) return true;
+
+            Identifier e = (Identifier) obj;
+            return e.id.equals(id);
         }
     }
 
@@ -71,7 +83,7 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
         String pubkey,
         int kind,
         String content,
-        long created_at,
+        Instant created_at,
         String signature,
         Collection<String[]> tags
     ) {
@@ -91,7 +103,7 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
         NostrPublicKey pubkey,
         int kind,
         String content,
-        long created_at,
+        Instant created_at,
         String signature,
         Collection<String[]> tags
     ) {
@@ -106,7 +118,9 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
         this.pubkey = NostrUtils.safeString(map.get("pubkey"));
 
         String id = NostrUtils.safeString(map.get("id"));
-        long createdAt = NostrUtils.safeLong(map.get("created_at"));
+        Instant createdAt = NostrUtils.safeSecondsInstant(
+            map.get("created_at")
+        );
         this.identifier = new Identifier(id, createdAt);
 
         Collection<String[]> tags = NostrUtils.safeCollectionOfStringArray(
@@ -119,8 +133,8 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
     }
 
     @Override
-    public long getCreatedAt() {
-        return this.identifier.createdAt;
+    public Instant getCreatedAt() {
+        return this.identifier.createdAtInstant;
     }
 
     @Override
@@ -196,7 +210,7 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
             pubkey,
             kind,
             content,
-            identifier.createdAt,
+            identifier.createdAtInstant,
             signature,
             listTags()
         );

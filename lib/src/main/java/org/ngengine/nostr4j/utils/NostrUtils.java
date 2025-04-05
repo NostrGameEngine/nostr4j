@@ -31,6 +31,7 @@
 package org.ngengine.nostr4j.utils;
 
 import java.nio.ByteBuffer;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -157,7 +158,7 @@ public class NostrUtils {
     }
 
     public static String safeString(Object input) {
-        if(input==null)return "";
+        if (input == null) return "";
         if (input instanceof String) {
             return (String) input;
         } else {
@@ -214,16 +215,28 @@ public class NostrUtils {
     }
 
     public static boolean safeBool(Object v) {
-        if(v instanceof Boolean) {
+        if (v instanceof Boolean) {
             return (Boolean) v;
         } else if (v instanceof Number) {
             return ((Number) v).intValue() != 0;
         } else if (v instanceof String) {
             return Boolean.parseBoolean((String) v);
         } else {
-            throw new IllegalArgumentException(
-                "Input is not a boolean: " + v
-            );
+            throw new IllegalArgumentException("Input is not a boolean: " + v);
+        }
+    }
+
+    public static Instant safeSecondsInstant(Object object) {
+        if (object instanceof Instant) {
+            return (Instant) object;
+        } else if (object instanceof String) {
+            try {
+                return Instant.parse((String) object);
+            } catch (Exception e) {
+                return Instant.ofEpochSecond(safeLong(object));
+            }
+        } else {
+            return Instant.ofEpochSecond(safeLong(object));
         }
     }
 }

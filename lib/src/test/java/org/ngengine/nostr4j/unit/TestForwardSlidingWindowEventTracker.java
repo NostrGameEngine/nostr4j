@@ -32,6 +32,7 @@ package org.ngengine.nostr4j.unit;
 
 import static org.junit.Assert.*;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
@@ -109,7 +110,7 @@ public class TestForwardSlidingWindowEventTracker {
             id,
             0,
             "",
-            timestampSeconds,
+            Instant.ofEpochSecond(timestampSeconds),
             "",
             new ArrayList<String[]>()
         );

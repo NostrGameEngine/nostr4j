@@ -56,9 +56,12 @@ public class TestAsyncTask {
     @Test
     public void testBasicPromiseResolution() throws Exception {
         // Create a simple resolved promise
-        AsyncTask<String> promise = platform.promisify((resolve, reject) -> {
-            resolve.accept("success");
-        }, platform.newPoolExecutor());
+        AsyncTask<String> promise = platform.promisify(
+            (resolve, reject) -> {
+                resolve.accept("success");
+            },
+            platform.newPoolExecutor()
+        );
 
         // Test the basic properties
         assertTrue(promise.isDone());
@@ -70,9 +73,12 @@ public class TestAsyncTask {
     @Test
     public void testBasicPromiseRejection() {
         // Create a simple rejected promise
-        AsyncTask<String> promise = platform.promisify((resolve, reject) -> {
-            reject.accept(new RuntimeException("failed"));
-        }, platform.newPoolExecutor());
+        AsyncTask<String> promise = platform.promisify(
+            (resolve, reject) -> {
+                reject.accept(new RuntimeException("failed"));
+            },
+            platform.newPoolExecutor()
+        );
 
         // Test the basic properties
         assertTrue(promise.isDone());
@@ -94,18 +100,21 @@ public class TestAsyncTask {
         CountDownLatch latch = new CountDownLatch(1);
         AtomicReference<AsyncTask<String>> promiseRef = new AtomicReference<>();
 
-        AsyncTask<String> promise = platform.promisify((resolve, reject) -> {
-            new Thread(() -> {
-                try {
-                    Thread.sleep(100); // Simulate async operation
-                    resolve.accept("async success");
-                    latch.countDown();
-                } catch (Exception e) {
-                    reject.accept(e);
-                }
-            })
-                .start();
-        }, platform.newPoolExecutor());
+        AsyncTask<String> promise = platform.promisify(
+            (resolve, reject) -> {
+                new Thread(() -> {
+                    try {
+                        Thread.sleep(100); // Simulate async operation
+                        resolve.accept("async success");
+                        latch.countDown();
+                    } catch (Exception e) {
+                        reject.accept(e);
+                    }
+                })
+                    .start();
+            },
+            platform.newPoolExecutor()
+        );
 
         promiseRef.set(promise);
 
@@ -125,10 +134,12 @@ public class TestAsyncTask {
     @Test
     public void testSimpleThenChaining() throws Exception {
         AsyncTask<Integer> promise = platform
-            .promisify((resolve, reject) -> {
-                resolve.accept(5);
-            }, platform
-                        .newPoolExecutor())
+            .promisify(
+                (resolve, reject) -> {
+                    resolve.accept(5);
+                },
+                platform.newPoolExecutor()
+            )
             .then(value -> ((Integer) value) * 2);
 
         assertEquals(Integer.valueOf(10), promise.await());
@@ -137,10 +148,12 @@ public class TestAsyncTask {
     @Test
     public void testMultipleThenChaining() throws Exception {
         AsyncTask<Integer> promise = platform
-            .promisify((resolve, reject) -> {
-                resolve.accept(5);
-            }, platform
-                        .newPoolExecutor())
+            .promisify(
+                (resolve, reject) -> {
+                    resolve.accept(5);
+                },
+                platform.newPoolExecutor()
+            )
             .then(value -> Integer.valueOf(((Integer) value) * 2))
             .then(value -> value + 3)
             .then(value -> value * value);
@@ -153,11 +166,13 @@ public class TestAsyncTask {
         final List<String> executionPath = new ArrayList<>();
 
         AsyncTask<String> promise = platform
-            .promisify((resolve, reject) -> {
-                executionPath.add("start");
-                resolve.accept("step1");
-            }, platform
-                        .newPoolExecutor())
+            .promisify(
+                (resolve, reject) -> {
+                    executionPath.add("start");
+                    resolve.accept("step1");
+                },
+                platform.newPoolExecutor()
+            )
             .then(value -> {
                 executionPath.add((String) value);
                 return value + "-step2";
@@ -196,10 +211,12 @@ public class TestAsyncTask {
         AtomicReference<Throwable> capturedError = new AtomicReference<>();
 
         platform
-            .promisify((resolve, reject) -> {
-                reject.accept(new RuntimeException("test error"));
-            }, platform
-                        .newPoolExecutor())
+            .promisify(
+                (resolve, reject) -> {
+                    reject.accept(new RuntimeException("test error"));
+                },
+                platform.newPoolExecutor()
+            )
             .exceptionally(error -> {
                 handlerCalled.set(true);
                 capturedError.set(error);
@@ -223,10 +240,12 @@ public class TestAsyncTask {
         AtomicBoolean handlerCalled = new AtomicBoolean(false);
 
         platform
-            .promisify((resolve, reject) -> {
-                reject.accept(new RuntimeException("original error"));
-            }, platform
-                        .newPoolExecutor())
+            .promisify(
+                (resolve, reject) -> {
+                    reject.accept(new RuntimeException("original error"));
+                },
+                platform.newPoolExecutor()
+            )
             .exceptionally(error -> {
                 // Verify we got the right error
                 assertEquals("original error", error.getMessage());
@@ -249,10 +268,12 @@ public class TestAsyncTask {
         AtomicReference<Exception> capturedError = new AtomicReference<>();
 
         AsyncTask<Integer> promise = platform
-            .promisify((resolve, reject) -> {
-                resolve.accept(1);
-            }, platform
-                        .newPoolExecutor())
+            .promisify(
+                (resolve, reject) -> {
+                    resolve.accept(1);
+                },
+                platform.newPoolExecutor()
+            )
             .then(v -> {
                 counter.incrementAndGet();
                 return ((Integer) v) + 1;
@@ -314,8 +335,9 @@ public class TestAsyncTask {
                         }
                     })
                         .start();
-                }
-            , platform.newPoolExecutor());
+                },
+                platform.newPoolExecutor()
+            );
             promises.add(promise);
         }
 
@@ -341,31 +363,37 @@ public class TestAsyncTask {
         CountDownLatch promise2Latch = new CountDownLatch(1);
 
         // Create promises that depend on each other
-        AsyncTask<Integer> promise1 = platform.promisify((resolve, reject) -> {
-            new Thread(() -> {
-                try {
-                    Thread.sleep(50);
-                    resolve.accept(5);
-                    promise1Latch.countDown();
-                } catch (Exception e) {
-                    reject.accept(e);
-                }
-            })
-                .start();
-        }, platform.newPoolExecutor());
+        AsyncTask<Integer> promise1 = platform.promisify(
+            (resolve, reject) -> {
+                new Thread(() -> {
+                    try {
+                        Thread.sleep(50);
+                        resolve.accept(5);
+                        promise1Latch.countDown();
+                    } catch (Exception e) {
+                        reject.accept(e);
+                    }
+                })
+                    .start();
+            },
+            platform.newPoolExecutor()
+        );
 
-        AsyncTask<Integer> promise2 = platform.promisify((resolve, reject) -> {
-            new Thread(() -> {
-                try {
-                    Thread.sleep(50);
-                    resolve.accept(10);
-                    promise2Latch.countDown();
-                } catch (Exception e) {
-                    reject.accept(e);
-                }
-            })
-                .start();
-        }, platform.newPoolExecutor());
+        AsyncTask<Integer> promise2 = platform.promisify(
+            (resolve, reject) -> {
+                new Thread(() -> {
+                    try {
+                        Thread.sleep(50);
+                        resolve.accept(10);
+                        promise2Latch.countDown();
+                    } catch (Exception e) {
+                        reject.accept(e);
+                    }
+                })
+                    .start();
+            },
+            platform.newPoolExecutor()
+        );
 
         // Wait for individual promises to resolve
         assertTrue(
@@ -403,18 +431,21 @@ public class TestAsyncTask {
         for (int i = 0; i < 5; i++) {
             final int value = i;
             promises.add(
-                platform.promisify((resolve, reject) -> {
-                    new Thread(() -> {
-                        try {
-                            // Different delays to test ordering
-                            Thread.sleep(50 * (5 - value));
-                            resolve.accept(value);
-                        } catch (Exception e) {
-                            reject.accept(e);
-                        }
-                    })
-                        .start();
-                }, platform.newPoolExecutor())
+                platform.promisify(
+                    (resolve, reject) -> {
+                        new Thread(() -> {
+                            try {
+                                // Different delays to test ordering
+                                Thread.sleep(50 * (5 - value));
+                                resolve.accept(value);
+                            } catch (Exception e) {
+                                reject.accept(e);
+                            }
+                        })
+                            .start();
+                    },
+                    platform.newPoolExecutor()
+                )
             );
         }
 
@@ -462,33 +493,42 @@ public class TestAsyncTask {
 
         // Add a successful promise
         promises.add(
-            platform.promisify((resolve, reject) -> {
-                resolve.accept("success");
-            }, platform.newPoolExecutor())
+            platform.promisify(
+                (resolve, reject) -> {
+                    resolve.accept("success");
+                },
+                platform.newPoolExecutor()
+            )
         );
 
         // Add a failing promise
         promises.add(
-            platform.promisify((resolve, reject) -> {
-                new Thread(() -> {
-                    try {
-                        Thread.sleep(50);
-                        reject.accept(
-                            new RuntimeException("Deliberate failure")
-                        );
-                    } catch (Exception e) {
-                        reject.accept(e);
-                    }
-                })
-                    .start();
-            }, platform.newPoolExecutor())
+            platform.promisify(
+                (resolve, reject) -> {
+                    new Thread(() -> {
+                        try {
+                            Thread.sleep(50);
+                            reject.accept(
+                                new RuntimeException("Deliberate failure")
+                            );
+                        } catch (Exception e) {
+                            reject.accept(e);
+                        }
+                    })
+                        .start();
+                },
+                platform.newPoolExecutor()
+            )
         );
 
         // Add another successful promise
         promises.add(
-            platform.promisify((resolve, reject) -> {
-                resolve.accept("another success");
-            }, platform.newPoolExecutor())
+            platform.promisify(
+                (resolve, reject) -> {
+                    resolve.accept("another success");
+                },
+                platform.newPoolExecutor()
+            )
         );
 
         // Wait for all promises
@@ -531,17 +571,20 @@ public class TestAsyncTask {
             final int delay = (letters.length - i) * 50; // E completes first, A last
 
             promises.add(
-                platform.promisify((resolve, reject) -> {
-                    new Thread(() -> {
-                        try {
-                            Thread.sleep(delay);
-                            resolve.accept(letter);
-                        } catch (Exception e) {
-                            reject.accept(e);
-                        }
-                    })
-                        .start();
-                }, platform.newPoolExecutor())
+                platform.promisify(
+                    (resolve, reject) -> {
+                        new Thread(() -> {
+                            try {
+                                Thread.sleep(delay);
+                                resolve.accept(letter);
+                            } catch (Exception e) {
+                                reject.accept(e);
+                            }
+                        })
+                            .start();
+                    },
+                    platform.newPoolExecutor()
+                )
             );
         }
 
@@ -569,18 +612,21 @@ public class TestAsyncTask {
         for (int i = 0; i < promiseCount; i++) {
             final int value = i;
             promises.add(
-                platform.promisify((resolve, reject) -> {
-                    new Thread(() -> {
-                        try {
-                            // Random delay between 10-100ms
-                            Thread.sleep(10 + (int) (Math.random() * 90));
-                            resolve.accept(value);
-                        } catch (Exception e) {
-                            reject.accept(e);
-                        }
-                    })
-                        .start();
-                }, platform.newPoolExecutor())
+                platform.promisify(
+                    (resolve, reject) -> {
+                        new Thread(() -> {
+                            try {
+                                // Random delay between 10-100ms
+                                Thread.sleep(10 + (int) (Math.random() * 90));
+                                resolve.accept(value);
+                            } catch (Exception e) {
+                                reject.accept(e);
+                            }
+                        })
+                            .start();
+                    },
+                    platform.newPoolExecutor()
+                )
             );
         }
 

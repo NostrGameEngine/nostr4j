@@ -30,13 +30,14 @@
  */
 package org.ngengine.nostr4j.event;
 
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collection;
 import org.ngengine.nostr4j.utils.NostrUtils;
 
 public interface NostrEvent extends Cloneable {
     byte[] BECH32_PREVIX = "note".getBytes();
-    long getCreatedAt();
+    Instant getCreatedAt();
     int getKind();
     String getContent();
     Collection<String[]> listTags();
@@ -47,7 +48,7 @@ public interface NostrEvent extends Cloneable {
             Collection<Object> serial = Arrays.asList(
                 0,
                 pubkey,
-                event.getCreatedAt(),
+                event.getCreatedAt().getEpochSecond(),
                 event.getKind(),
                 event.listTags(),
                 event.getContent()

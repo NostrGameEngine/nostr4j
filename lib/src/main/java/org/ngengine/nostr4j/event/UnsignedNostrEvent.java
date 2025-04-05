@@ -40,7 +40,7 @@ import org.ngengine.nostr4j.utils.NostrUtils;
 
 public class UnsignedNostrEvent implements NostrEvent {
 
-    private long createdAt = System.currentTimeMillis() / 1000;
+    private Instant createdAt = Instant.now();
     private int kind = 1;
     private String content = "";
     private Map<String, String[]> tags = new HashMap<String, String[]>();
@@ -60,14 +60,7 @@ public class UnsignedNostrEvent implements NostrEvent {
     }
 
     public UnsignedNostrEvent setCreatedAt(Instant created_at) {
-        this.createdAt = created_at.getEpochSecond();
-
-        return this;
-    }
-
-    public UnsignedNostrEvent setCreatedAt(long created_at) {
         this.createdAt = created_at;
-
         return this;
     }
 
@@ -100,7 +93,7 @@ public class UnsignedNostrEvent implements NostrEvent {
     public UnsignedNostrEvent fromMap(Map<String, Object> map) {
         this.kind = NostrUtils.safeInt(map.get("kind"));
         this.content = map.get("content").toString();
-        this.createdAt = NostrUtils.safeLong(map.get("created_at"));
+        this.createdAt = NostrUtils.safeSecondsInstant(map.get("created_at"));
         Collection<String[]> tags = NostrUtils.safeCollectionOfStringArray(
             map.getOrDefault("tags", new ArrayList<String[]>())
         );
@@ -121,7 +114,7 @@ public class UnsignedNostrEvent implements NostrEvent {
     }
 
     @Override
-    public long getCreatedAt() {
+    public Instant getCreatedAt() {
         return createdAt;
     }
 
@@ -142,7 +135,7 @@ public class UnsignedNostrEvent implements NostrEvent {
 
         UnsignedNostrEvent e = (UnsignedNostrEvent) obj;
         return (
-            e.getCreatedAt() == getCreatedAt() &&
+            e.getCreatedAt().equals(getCreatedAt()) &&
             e.getKind() == getKind() &&
             e.getContent().equals(getContent()) &&
             e.listTags().equals(listTags())

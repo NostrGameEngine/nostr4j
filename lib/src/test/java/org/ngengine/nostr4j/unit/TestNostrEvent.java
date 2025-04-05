@@ -32,6 +32,7 @@ package org.ngengine.nostr4j.unit;
 
 import static org.junit.Assert.*;
 
+import java.time.Instant;
 import org.junit.Test;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.event.UnsignedNostrEvent;
@@ -61,7 +62,7 @@ public class TestNostrEvent {
         UnsignedNostrEvent event = new UnsignedNostrEvent()
             .setContent("test123")
             .setKind(1)
-            .setCreatedAt(1742147457);
+            .setCreatedAt(Instant.ofEpochSecond(1742147457));
         System.out.println(event.toString());
         SignedNostrEvent signedEvent = signer.sign(event);
         assertTrue(signedEvent.verify());
@@ -90,7 +91,7 @@ public class TestNostrEvent {
         UnsignedNostrEvent event = new UnsignedNostrEvent()
             .setContent("test123")
             .setKind(1)
-            .setCreatedAt(1742147457);
+            .setCreatedAt(Instant.ofEpochSecond(1742147457));
         System.out.println(event.toString());
         SignedNostrEvent signedEvent = signer.sign(event);
         assertTrue(signedEvent.verify());
