@@ -218,17 +218,17 @@ public class NostrPool implements NostrRelayListener {
         return sub;
     }
 
-    public AsyncTask<Collection<SignedNostrEvent>> fetch(NostrFilter filter) {
+    public AsyncTask<List<SignedNostrEvent>> fetch(NostrFilter filter) {
         return fetch(Arrays.asList(filter));
     }
 
-    public AsyncTask<Collection<SignedNostrEvent>> fetch(
+    public AsyncTask<List<SignedNostrEvent>> fetch(
         Collection<NostrFilter> filters
     ) {
         return fetch(filters, 1, TimeUnit.MINUTES);
     }
 
-    public AsyncTask<Collection<SignedNostrEvent>> fetch(
+    public AsyncTask<List<SignedNostrEvent>> fetch(
         NostrFilter filter,
         long timeout,
         TimeUnit unit
@@ -236,29 +236,29 @@ public class NostrPool implements NostrRelayListener {
         return fetch(Arrays.asList(filter), timeout, unit);
     }
 
-    public AsyncTask<Collection<SignedNostrEvent>> fetch(
+    public AsyncTask<List<SignedNostrEvent>> fetch(
         Collection<NostrFilter> filters,
         long timeout,
         TimeUnit unit
     ) {
-        return fetch(filters, timeout, unit, defaultEventTracker);
+        return fetch(filters, timeout, unit, NaiveEventTracker.class);
     }
 
-    public AsyncTask<Collection<SignedNostrEvent>> fetch(
+    public AsyncTask<List<SignedNostrEvent>> fetch(
         NostrFilter filter,
         Class<? extends EventTracker> eventTracker
     ) {
         return fetch(Arrays.asList(filter), eventTracker);
     }
 
-    public AsyncTask<Collection<SignedNostrEvent>> fetch(
+    public AsyncTask<List<SignedNostrEvent>> fetch(
         Collection<NostrFilter> filters,
         Class<? extends EventTracker> eventTracker
     ) {
         return fetch(filters, 1, TimeUnit.MINUTES, eventTracker);
     }
 
-    public AsyncTask<Collection<SignedNostrEvent>> fetch(
+    public AsyncTask<List<SignedNostrEvent>> fetch(
         NostrFilter filters,
         long timeout,
         TimeUnit unit,
@@ -267,13 +267,14 @@ public class NostrPool implements NostrRelayListener {
         return fetch(Arrays.asList(filters), timeout, unit, eventTracker);
     }
 
-    public AsyncTask<Collection<SignedNostrEvent>> fetch(
+    public AsyncTask<List<SignedNostrEvent>> fetch(
         Collection<NostrFilter> filters,
         long timeout,
         TimeUnit unit,
         Class<? extends EventTracker> eventTracker
     ) {
         Platform platform = NostrUtils.getPlatform();
+        NostrSubscription sub = subscribe(filters, eventTracker);
         return platform.promisify((res, rej) -> {
             List<SignedNostrEvent> events = new ArrayList<>();
             NostrSubscription sub = subscribe(filters, eventTracker);
