@@ -124,3 +124,41 @@ task runBenchmarksNative(type: Exec) {
     commandLine nativeImageExecutable
     dependsOn buildBenchmarksNative
 }
+
+task buildNostrClientJar(type: Jar) {
+    group = 'application'
+    description = 'Builds an executable JAR for NostrClient'
+    
+    archiveBaseName = 'nostr-client'
+    archiveClassifier = 'standalone'
+    
+    // Include the compiled classes from both main and test
+    from sourceSets.main.output
+    from sourceSets.test.output
+    
+    // Include all dependencies (creating a fat jar)
+    dependsOn configurations.testRuntimeClasspath
+    from {
+        configurations.testRuntimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+    
+    // Exclude any signature files from the dependencies
+    exclude 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA'
+    
+    // Configure the manifest to make it executable
+    manifest {
+        attributes(
+            'Main-Class': 'org.ngengine.nostr4j.client.NostrClient',
+            'Implementation-Title': 'Nostr Client',
+            'Implementation-Version': project.version
+        )
+    }
+    
+    // Make sure test classes are compiled first
+    dependsOn test.dependsOn
+    
+  
+    
+    // Create a duplicatesStrategy to handle any duplicate files
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}

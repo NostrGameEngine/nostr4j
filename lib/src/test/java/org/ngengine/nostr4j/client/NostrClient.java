@@ -31,196 +31,362 @@
 package org.ngengine.nostr4j.client;
 
 import java.awt.*;
+import java.awt.datatransfer.Clipboard;
+import java.awt.datatransfer.StringSelection;
 import java.awt.event.*;
+import java.net.URL;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.swing.*;
 import javax.swing.border.*;
+import javax.swing.text.html.HTMLEditorKit;
+import javax.swing.text.html.StyleSheet;
+
+import javax.sound.sampled.*;
+import java.io.ByteArrayInputStream;
+import java.util.regex.Pattern;
+
 import org.ngengine.nostr4j.NostrFilter;
 import org.ngengine.nostr4j.NostrPool;
 import org.ngengine.nostr4j.NostrSubscription;
 import org.ngengine.nostr4j.TestLogger;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
+import org.ngengine.nostr4j.keypair.NostrPublicKey;
+import org.ngengine.nostr4j.nip24.Nip24Metadata;
 import org.ngengine.nostr4j.nip50.NostrSearchFilter;
+import org.ngengine.nostr4j.platform.AsyncTask;
 
 public class NostrClient extends JFrame {
 
     private static final long serialVersionUID = 1L;
     private static final Logger rootLogger = TestLogger.getRoot(Level.FINEST);
-
-    // Custom event data structure
-
+    
+    // Metadata cache
+    private static final Map<String, AsyncTask<Nip24Metadata>> metadataCache = new ConcurrentHashMap<>();
+    private static final Map<String, String> nameCache = new ConcurrentHashMap<>();
+    
     // UI Components
-    private JScrollPane scrollPane;
     private JPanel contentPanel;
     private JButton loadMoreButton;
-    private JPanel footerPanel;
-    private List<JPanel> eventPanels = new ArrayList<>();
     private NostrPool pool;
     private JTextField searchBar;
-    private Timer debounceTimer;
+    
+    // Simple theme colors for old-school look
+    private static final Color BACKGROUND_COLOR = new Color(240, 240, 240);
+    private static final Color BORDER_COLOR = Color.GRAY;
+    private static final Color TEXT_COLOR = Color.BLACK;
 
     private long earliestEvent = Long.MAX_VALUE;
 
+    // Audio resources
+    private byte[] newEventSoundData;
+    private byte[] gmSoundData;
+    private boolean soundEnabled = true;
+    private final AudioFormat audioFormat = new AudioFormat(44100, 16, 1, true, false);
     public NostrClient(String title) {
         super(title);
-        // Initialize UI
-        setupUI();
+        setSize(500, 700);
+        setLocationRelativeTo(null);
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        
+        setLayout(new BorderLayout(5, 5));
+        
+        // Search panel with basic components
+        JPanel searchPanel = new JPanel(new BorderLayout(5, 0));
+        searchPanel.setBackground(BACKGROUND_COLOR);
+        searchPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        
+        JLabel searchLabel = new JLabel("Search:");
+        searchBar = new JTextField(20);
+        searchBar.addActionListener(e -> performSearch(searchBar.getText().trim()));
+        
+        searchPanel.add(searchLabel, BorderLayout.WEST);
+        searchPanel.add(searchBar, BorderLayout.CENTER);
+        
+        // Content area - simple scrollable panel
+        contentPanel = new JPanel();
+        contentPanel.setLayout(new BoxLayout(contentPanel, BoxLayout.Y_AXIS));
+        contentPanel.setBackground(BACKGROUND_COLOR);
+        
+        JScrollPane scrollPane = new JScrollPane(contentPanel);
+        scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
+        scrollPane.setBorder(BorderFactory.createLineBorder(BORDER_COLOR));
+        
+        // Load more button
+        loadMoreButton = new JButton("Load More");
+        loadMoreButton.addActionListener(e -> loadMore());
+        
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
+        buttonPanel.setBackground(BACKGROUND_COLOR);
+        buttonPanel.add(loadMoreButton);
 
+        // Add sound toggle to UI
+        JCheckBox soundToggle = new JCheckBox("Sound", true);
+        soundToggle.setBackground(BACKGROUND_COLOR);
+        soundToggle.addActionListener(e -> soundEnabled = soundToggle.isSelected());
+        buttonPanel.add(soundToggle);
+        
+        // Add components to frame
+        add(searchPanel, BorderLayout.NORTH);
+        add(scrollPane, BorderLayout.CENTER);
+        add(buttonPanel, BorderLayout.SOUTH);
+        
+        // Initialize Nostr connection
+        initNostr();
+
+        // Load sound resources
+        initSounds();
+    }
+    
+    private void initNostr() {
         this.pool = new NostrPool();
         this.pool.ensureRelay("wss://nostr.wine");
-        this.pool.addNoticeListener((relay, notice) -> {
-                SwingUtilities.invokeLater(() -> {
-                    JOptionPane.showMessageDialog(
-                        null,
-                        notice,
-                        "Notice",
-                        JOptionPane.INFORMATION_MESSAGE
-                    );
-                });
-            });
-
-        NostrSubscription sub =
-            this.pool.subscribe(
-                    Arrays.asList(new NostrSearchFilter().kind(1).limit(10))
-                );
-
-        sub.listenEvent((s, event, stored) -> {
-            addEventToFeed(event, true);
-        });
-
+        
+        // Simple notice handling
+        this.pool.addNoticeListener((relay, notice) -> 
+            SwingUtilities.invokeLater(() -> 
+                JOptionPane.showMessageDialog(this, notice)));
+        
+        // Subscribe to events
+        NostrSubscription sub = this.pool.subscribe(
+                Arrays.asList(new NostrSearchFilter().kind(1).limit(10)));
+        
+        sub.listenEvent((s, event, stored) -> addEventToFeed(event, true));
         sub.open();
+        
+        
+    }
+
+   
+    private byte[] generateRetroSound(float baseFrequency, int duration, int waveType) {
+        int sampleRate = (int) audioFormat.getSampleRate();
+        int samples = (duration * sampleRate) / 1000;
+        byte[] output = new byte[samples * 2]; // 16-bit samples
+        
+        double period = (double) sampleRate / baseFrequency;
+        double maxAmplitude = 16384.0; // Less than max to avoid distortion
+        
+        for (int i = 0; i < samples; i++) {
+            double time = (double) i / sampleRate;
+            double angle = 2.0 * Math.PI * i / period;
+            
+            // Apply pitch bend for more interesting sound
+            double pitchBend = 1.0 + 0.1 * Math.sin(2.0 * Math.PI * time * 3.0);
+            angle = 2.0 * Math.PI * i / (period / pitchBend);
+            
+            double sample;
+            
+            // Generate different waveforms for variety
+            switch (waveType) {
+                case 0: // Square wave (classic 8-bit sound)
+                    sample = Math.sin(angle) >= 0 ? 1.0 : -1.0;
+                    break;
+                case 1: // Triangle wave (softer retro sound)
+                    sample = 2.0 * Math.abs(angle % (2 * Math.PI) / Math.PI - 1.0) - 1.0;
+                    break;
+                case 2: // Noise (for percussion or effects)
+                    sample = 2.0 * Math.random() - 1.0;
+                    break;
+                default:
+                    sample = Math.sin(angle); // Fallback to sine
+            }
+            
+            // Apply ADSR envelope for better sound shaping
+            double envelope = 1.0;
+            double attackTime = 0.1; // 10% attack
+            double decayTime = 0.2; // 20% decay
+            double sustainLevel = 0.7; // 70% sustain
+            double releaseTime = 0.3; // 30% release
+            
+            double normalizedTime = (double) i / samples;
+            
+            if (normalizedTime < attackTime) {
+                // Attack phase - ramp up
+                envelope = normalizedTime / attackTime;
+            } else if (normalizedTime < attackTime + decayTime) {
+                // Decay phase - ramp down to sustain level
+                double decayProgress = (normalizedTime - attackTime) / decayTime;
+                envelope = 1.0 - (decayProgress * (1.0 - sustainLevel));
+            } else if (normalizedTime < 1.0 - releaseTime) {
+                // Sustain phase - maintain level
+                envelope = sustainLevel;
+            } else {
+                // Release phase - ramp down to zero
+                double releaseProgress = (normalizedTime - (1.0 - releaseTime)) / releaseTime;
+                envelope = sustainLevel * (1.0 - releaseProgress);
+            }
+            
+            short value = (short) (maxAmplitude * sample * envelope);
+            
+            // Write 16-bit sample, little-endian
+            output[i*2] = (byte) (value & 0xFF);
+            output[i*2 + 1] = (byte) ((value >> 8) & 0xFF);
+        }
+        
+        return output;
+    }
+
+    /**
+     * Generates a typical retro notification blip sound
+     */
+    private byte[] generateBeepSound(float frequency, int duration) {
+        // Use square wave for that classic computer beep
+        return generateRetroSound(frequency, duration, 0);
+    }
+
+    /**
+     * Generates a cheerful retro "good morning" sound sequence
+     */
+    private byte[] generateGoodMorningSound() {
+        // Create a happy arcade-style jingle
+        byte[] note1 = generateRetroSound(440, 80, 0);  // A4 - Square wave
+        byte[] note2 = generateRetroSound(523, 80, 1);  // C5 - Triangle wave
+        byte[] note3 = generateRetroSound(659, 100, 0); // E5 - Square wave
+        byte[] note4 = generateRetroSound(880, 150, 1); // A5 - Triangle wave
+        
+        // Create tiny gaps between notes (just 10ms of silence)
+        byte[] gap = new byte[440]; // 10ms of silence at 44.1kHz
+        
+        // Combine all notes with gaps
+        byte[] combined = new byte[
+            note1.length + gap.length + 
+            note2.length + gap.length + 
+            note3.length + gap.length + 
+            note4.length
+        ];
+        
+        // Copy all segments into combined array
+        int offset = 0;
+        System.arraycopy(note1, 0, combined, offset, note1.length);
+        offset += note1.length;
+        
+        System.arraycopy(gap, 0, combined, offset, gap.length);
+        offset += gap.length;
+        
+        System.arraycopy(note2, 0, combined, offset, note2.length);
+        offset += note2.length;
+        
+        System.arraycopy(gap, 0, combined, offset, gap.length);
+        offset += gap.length;
+        
+        System.arraycopy(note3, 0, combined, offset, note3.length);
+        offset += note3.length;
+        
+        System.arraycopy(gap, 0, combined, offset, gap.length);
+        offset += gap.length;
+        
+        System.arraycopy(note4, 0, combined, offset, note4.length);
+        
+        return combined;
+    }
+
+    private void initSounds() {
+        try {
+            // Generate notification sound (classic 8-bit style blip)
+            newEventSoundData = generateBeepSound(880, 120); // A5, short blip
+            
+            // Generate GM sound (cheerful retro game-style jingle)
+            gmSoundData = generateGoodMorningSound();
+            
+            System.out.println("Retro sounds initialized successfully");
+        } catch (Exception e) {
+            System.err.println("Could not initialize sounds: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+    
+    private void playSound(byte[] soundData) {
+        if (!soundEnabled || soundData == null) return;
+        
+        try {
+            // Create a new clip each time to avoid concurrency issues
+            Clip clip = AudioSystem.getClip();
+            AudioInputStream ais = new AudioInputStream(
+                new ByteArrayInputStream(soundData),
+                audioFormat,
+                soundData.length / audioFormat.getFrameSize()
+            );
+            
+            clip.open(ais);
+            clip.start();
+            
+            // Auto-close the clip when done playing
+            clip.addLineListener(event -> {
+                if (event.getType() == LineEvent.Type.STOP) {
+                    clip.close();
+                }
+            });
+        } catch (Exception e) {
+            System.err.println("Error playing sound: " + e.getMessage());
+        }
     }
 
     private void loadMore() {
+        loadMoreButton.setEnabled(false);
+        loadMoreButton.setText("Loading...");
+        
         this.pool.fetch(
-                new NostrFilter()
-                    .kind(1)
-                    .until(Instant.ofEpochSecond(earliestEvent))
-                    .limit(3)
-            )
-            .exceptionally(e -> {
-                JOptionPane.showMessageDialog(
-                    this,
-                    "Error loading more events: " + e.getMessage(),
-                    "Error",
-                    JOptionPane.ERROR_MESSAGE
-                );
-            })
-            .then(events -> {
-                for (SignedNostrEvent event : events) {
-                    System.out.println("Loaded more event: " + event);
-                    addEventToFeed(event, false);
-                }
-                return null;
-            });
-    }
-
-    private void setupUI() {
-        // Set window properties
-        setSize(600, 800);
-        setLocationRelativeTo(null);
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-
-        // Set look and feel to system default
-        try {
-            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-
-        // Create layout
-        setLayout(new BorderLayout());
-
-        // Create search bar
-        searchBar = new JTextField();
-        searchBar.setFont(new Font("SansSerif", Font.PLAIN, 14));
-        searchBar.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
-        searchBar.addKeyListener(
-            new KeyAdapter() {
-                @Override
-                public void keyReleased(KeyEvent e) {
-                    if (debounceTimer != null) {
-                        debounceTimer.stop();
-                    }
-                    debounceTimer =
-                        new Timer(
-                            300,
-                            evt -> performSearch(searchBar.getText().trim())
-                        );
-                    debounceTimer.setRepeats(false);
-                    debounceTimer.start();
-                }
-            }
-        );
-
-        // Create content panel with vertical layout
-        contentPanel = new JPanel();
-        contentPanel.setLayout(new BoxLayout(contentPanel, BoxLayout.Y_AXIS));
-        contentPanel.setBackground(Color.WHITE);
-        contentPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
-
-        // Create footer panel with load more button
-        footerPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
-        footerPanel.setBackground(Color.WHITE);
-
-        loadMoreButton = new JButton("Load More");
-        loadMoreButton.setFont(new Font("SansSerif", Font.BOLD, 14));
-        loadMoreButton.setFocusPainted(false);
-        loadMoreButton.addActionListener(e -> loadMore());
-
-        footerPanel.add(loadMoreButton);
-
-        // Main container to hold content and footer
-        JPanel mainContainer = new JPanel();
-        mainContainer.setLayout(new BoxLayout(mainContainer, BoxLayout.Y_AXIS));
-        mainContainer.setBackground(Color.WHITE);
-        mainContainer.add(contentPanel);
-        mainContainer.add(footerPanel);
-
-        // Create scroll pane
-        scrollPane = new JScrollPane(mainContainer);
-        scrollPane.setVerticalScrollBarPolicy(
-            JScrollPane.VERTICAL_SCROLLBAR_ALWAYS
-        );
-        scrollPane.getVerticalScrollBar().setUnitIncrement(16); // Smoother scrolling
-
-        // Add components to the frame
-        add(searchBar, BorderLayout.NORTH);
-        add(scrollPane, BorderLayout.CENTER);
+                new NostrSearchFilter()
+                        .kind(1)
+                        .search(searchBar.getText()
+                                .trim())
+                        .until(Instant.ofEpochSecond(earliestEvent))
+                        .limit(5))
+                .exceptionally(e -> {
+                    SwingUtilities.invokeLater(() -> {
+                        JOptionPane.showMessageDialog(this, "Error: " + e.getMessage());
+                        loadMoreButton.setText("Load More");
+                        loadMoreButton.setEnabled(true);
+                    });
+                })
+                .then(events -> {
+                    SwingUtilities.invokeLater(() -> {
+                        for (SignedNostrEvent event : events) {
+                            addEventToFeed(event, false);
+                        }
+                        loadMoreButton.setText("Load More");
+                        loadMoreButton.setEnabled(true);
+                    });
+                    return null;
+                });
     }
 
     private void performSearch(String query) {
-        if (query.isEmpty()) {
-            return;
-        }
-
-        // Reset earliestEvent and clear displayed events
-        earliestEvent = Long.MAX_VALUE;
-        eventPanels.clear();
+        if (query.isEmpty()) return;
+        
+        // Clear content
         contentPanel.removeAll();
-
-        // Reinitialize the pool with the new search filter
-        pool.unsubscribeAll();
-        NostrSubscription sub = pool.subscribe(
-            Arrays.asList(
-                new NostrSearchFilter().kind(1).limit(10).search(query)
-            )
-        );
-
-        sub.listenEvent((s, event, stored) -> {
-            addEventToFeed(event, true);
-        });
-
-        sub.open();
-
-        // Refresh UI
+        JLabel searchingLabel = new JLabel("Searching for: " + query);
+        contentPanel.add(searchingLabel);
         contentPanel.revalidate();
         contentPanel.repaint();
+        
+        // Reset tracking
+        earliestEvent = Long.MAX_VALUE;
+        
+        // Perform search
+        pool.unsubscribeAll();
+        NostrSubscription sub = pool.subscribe(
+                Arrays.asList(new NostrSearchFilter().kind(1).limit(10).search(query)));
+        
+        sub.listenEvent((s, event, stored) -> {
+            SwingUtilities.invokeLater(() -> {
+                // Remove searching label on first result
+                if (contentPanel.getComponentCount() == 1 && 
+                        contentPanel.getComponent(0) == searchingLabel) {
+                    contentPanel.removeAll();
+                }
+                addEventToFeed(event, true);
+            });
+        });
+        
+        sub.open();
     }
 
     private void addEventToFeed(SignedNostrEvent event, boolean top) {
@@ -228,153 +394,269 @@ public class NostrClient extends JFrame {
             earliestEvent = event.getCreatedAt();
         }
 
-        // Create panel for this event
+        // Create simple panel for this event
         JPanel eventPanel = createEventPanel(event);
-
+        
         if (top) {
-            // Add to the beginning of the list
-            eventPanels.add(0, eventPanel);
-
-            // Add to the top of the content panel
             contentPanel.add(eventPanel, 0);
-            contentPanel.add(Box.createVerticalStrut(10), 1);
         } else {
-            // Add to the end of the list
-            eventPanels.add(eventPanel);
-
-            // Add to the bottom of the content panel
             contentPanel.add(eventPanel);
-            contentPanel.add(Box.createVerticalStrut(10));
         }
-
-        // Refresh UI
+        
+        // Add separator
+        JSeparator separator = new JSeparator(SwingConstants.HORIZONTAL);
+        if (top) {
+            contentPanel.add(separator, top ? 1 : contentPanel.getComponentCount());
+        } else {
+            contentPanel.add(separator);
+        }
+        
         contentPanel.revalidate();
         contentPanel.repaint();
+        
+        // Play appropriate sound based on content
+        if (isGoodMorningMessage(event.getContent())) {
+            playSound(gmSoundData);
+        } else {
+            playSound(newEventSoundData);
+        }
+    }
+
+    private boolean isGoodMorningMessage(String content) {
+        if (content == null) return false;
+        
+        // Convert to lowercase and trim for easier matching
+        String lowerContent = content.toLowerCase().trim();
+        
+        // Check for common GM variations
+        return lowerContent.contains("gm");
     }
 
     private JPanel createEventPanel(SignedNostrEvent event) {
-        // Main panel with rounded corners and shadow effect
+        // Get pubkey and event ID
+        final String fullPubkey = event.getPubkey().asHex();
+        final String shortPubkey = fullPubkey.substring(0, 8) + "...";
+        final String eventId = event.getId();
+        final String shortEventId = eventId.substring(0, 8) + "...";
+        
+        // Create a simple panel with fixed height
         JPanel panel = new JPanel();
-        panel.setLayout(new BorderLayout());
-        panel.setBackground(new Color(248, 249, 250));
-        panel.setBorder(
-            BorderFactory.createCompoundBorder(
-                new SoftBevelBorder(
-                    BevelBorder.RAISED,
-                    Color.LIGHT_GRAY,
-                    Color.GRAY
-                ),
-                BorderFactory.createEmptyBorder(5, 10, 5, 10)
-            )
-        );
-
-        // Header panel (author info)
-        JPanel headerPanel = new JPanel();
-        headerPanel.setLayout(new BoxLayout(headerPanel, BoxLayout.X_AXIS));
-        headerPanel.setBackground(new Color(248, 249, 250));
-        headerPanel.setBorder(BorderFactory.createEmptyBorder(5, 0, 5, 0));
-
-        // Avatar panel with custom painting
-        JPanel avatarPanel = new JPanel() {
+        panel.setLayout(new BorderLayout(5, 5));
+        panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        panel.setBackground(BACKGROUND_COLOR);
+        
+        // Header with author info
+        JPanel headerPanel = new JPanel(new BorderLayout(5, 0));
+        headerPanel.setBackground(BACKGROUND_COLOR);
+        
+        // Basic author label
+        JLabel authorLabel = new JLabel(shortPubkey);
+        authorLabel.setFont(new Font(Font.MONOSPACED, Font.BOLD, 12));
+        authorLabel.addMouseListener(new MouseAdapter() {
             @Override
-            protected void paintComponent(Graphics g) {
-                super.paintComponent(g);
-                Graphics2D g2d = (Graphics2D) g.create();
-
-                // Enable antialiasing for smoother circles
-                g2d.setRenderingHint(
-                    RenderingHints.KEY_ANTIALIASING,
-                    RenderingHints.VALUE_ANTIALIAS_ON
-                );
-
-                // Draw avatar circle
-                g2d.setColor(new Color(200, 200, 220));
-                g2d.fillOval(0, 0, getWidth(), getHeight());
-
-                // Draw text
-                g2d.setColor(Color.BLACK);
-                g2d.setFont(new Font("SansSerif", Font.BOLD, 14));
-                FontMetrics fm = g2d.getFontMetrics();
-                String text = event.getPubkey().asHex();
-                int textWidth = fm.stringWidth(text);
-                int textHeight = fm.getHeight();
-
-                g2d.drawString(
-                    text,
-                    (getWidth() - textWidth) / 2,
-                    (getHeight() - textHeight) / 2 + fm.getAscent()
-                );
-
-                g2d.dispose();
+            public void mouseClicked(MouseEvent e) {
+                copyToClipboard(fullPubkey);
+                JOptionPane.showMessageDialog(panel, "Pubkey copied!");
             }
-
+        });
+        
+        // Event ID label
+        JPanel idPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        idPanel.setBackground(BACKGROUND_COLOR);
+        
+        JLabel idLabel = new JLabel("ID: " + shortEventId);
+        idLabel.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 10));
+        idLabel.setForeground(Color.DARK_GRAY);
+        idLabel.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        idLabel.setToolTipText("Click to copy event ID");
+        idLabel.addMouseListener(new MouseAdapter() {
             @Override
-            public Dimension getPreferredSize() {
-                return new Dimension(40, 40);
+            public void mouseClicked(MouseEvent e) {
+                copyToClipboard(eventId);
+                JOptionPane.showMessageDialog(panel, "Event ID copied!");
             }
-        };
-        avatarPanel.setMaximumSize(new Dimension(40, 40));
-        headerPanel.add(avatarPanel);
-        headerPanel.add(Box.createHorizontalStrut(10));
-
-        // Author details panel (name and timestamp)
-        JPanel authorDetailsPanel = new JPanel();
-        authorDetailsPanel.setLayout(
-            new BoxLayout(authorDetailsPanel, BoxLayout.Y_AXIS)
-        );
-        authorDetailsPanel.setBackground(new Color(248, 249, 250));
-
-        // Author name
-        JLabel authorLabel = new JLabel("@" + event.getPubkey().asHex());
-        authorLabel.setFont(new Font("SansSerif", Font.BOLD, 14));
-        authorLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
-        authorDetailsPanel.add(authorLabel);
-
+        });
+        
+        idPanel.add(idLabel);
+        
+        JPanel authorInfoPanel = new JPanel(new BorderLayout());
+        authorInfoPanel.setBackground(BACKGROUND_COLOR);
+        authorInfoPanel.add(authorLabel, BorderLayout.NORTH);
+        authorInfoPanel.add(idPanel, BorderLayout.SOUTH);
+        
         // Timestamp
-        JLabel timestampLabel = new JLabel(
-            formatTimestamp(event.getCreatedAt())
-        );
-        timestampLabel.setFont(new Font("SansSerif", Font.ITALIC, 11));
-        timestampLabel.setForeground(Color.GRAY);
-        timestampLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
-        authorDetailsPanel.add(timestampLabel);
-
-        headerPanel.add(authorDetailsPanel);
-        headerPanel.add(Box.createHorizontalGlue()); // Push everything to the left
-
-        // Content text area
-        JTextArea contentText = new JTextArea(event.getContent());
-        contentText.setLineWrap(true);
-        contentText.setWrapStyleWord(true);
-        contentText.setEditable(false);
-        contentText.setBackground(new Color(248, 249, 250));
-        contentText.setBorder(BorderFactory.createEmptyBorder(5, 0, 5, 0));
-        contentText.setFont(new Font("SansSerif", Font.PLAIN, 14));
-
-        // Calculate needed rows based on content length (approximate)
-        int rows = Math.max(
-            2,
-            Math.min(6, event.getContent().length() / 50 + 1)
-        );
-        contentText.setRows(rows);
-
-        // Add components to main panel
+        JLabel timestampLabel = new JLabel(formatTimestamp(event.getCreatedAt()));
+        timestampLabel.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 10));
+        timestampLabel.setHorizontalAlignment(SwingConstants.RIGHT);
+        
+        headerPanel.add(authorInfoPanel, BorderLayout.WEST);
+        headerPanel.add(timestampLabel, BorderLayout.EAST);
+        
+        // Create main content panel that can hold both text and images
+        JPanel contentMainPanel = new JPanel();
+        contentMainPanel.setLayout(new BoxLayout(contentMainPanel, BoxLayout.Y_AXIS));
+        contentMainPanel.setBackground(BACKGROUND_COLOR);
+        
+        // Content with fixed size to prevent layout issues
+        JTextArea contentArea = new JTextArea(event.getContent());
+        contentArea.setEditable(false);
+        contentArea.setLineWrap(true);
+        contentArea.setWrapStyleWord(true);
+        contentArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        contentArea.setRows(4);
+        
+        JScrollPane contentScroll = new JScrollPane(contentArea);
+        contentScroll.setPreferredSize(new Dimension(450, 100));
+        contentScroll.setBorder(BorderFactory.createLineBorder(Color.LIGHT_GRAY));
+        
+        contentMainPanel.add(contentScroll);
+        
+        // Check for image URLs in content
+        String content = event.getContent();
+        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(
+                "(https?://\\S+\\.(jpg|jpeg|png|gif|bmp))", 
+                java.util.regex.Pattern.CASE_INSENSITIVE);
+        java.util.regex.Matcher matcher = pattern.matcher(content);
+        
+        // If image URLs are found, create an image panel
+        if (matcher.find()) {
+            matcher.reset();
+            while (matcher.find()) {
+                String imageUrl = matcher.group(1);
+                JLabel loadingLabel = new JLabel("Loading image: " + imageUrl, JLabel.CENTER);
+                loadingLabel.setFont(new Font(Font.MONOSPACED, Font.ITALIC, 10));
+                
+                JPanel imageContainer = new JPanel(new BorderLayout());
+                imageContainer.setBorder(BorderFactory.createEmptyBorder(5, 0, 0, 0));
+                imageContainer.add(loadingLabel, BorderLayout.CENTER);
+                contentMainPanel.add(imageContainer);
+                
+                // Load the image asynchronously
+                loadImageAsync(imageUrl, imageContainer);
+            }
+        }
+        
+        // Add to main panel
         panel.add(headerPanel, BorderLayout.NORTH);
-        panel.add(contentText, BorderLayout.CENTER);
-
+        panel.add(contentMainPanel, BorderLayout.CENTER);
+        
+        // Load metadata and update author label
+        fetchMetadata(event.getPubkey(), authorLabel);
+        
         return panel;
     }
 
-    private String formatTimestamp(long timestamp) {
-        return new java.text.SimpleDateFormat("MMM d, yyyy 'at' h:mm a")
-            .format(new java.util.Date(timestamp * 1000));
+    private void loadImageAsync(String imageUrl, JPanel container) {
+        SwingWorker<ImageIcon, Void> worker = new SwingWorker<>() {
+            @Override
+            protected ImageIcon doInBackground() throws Exception {
+                try {
+                    URL url = new URL(imageUrl);
+                    return new ImageIcon(url);
+                } catch (Exception e) {
+                    System.out.println("Error loading image: " + e.getMessage());
+                    return null;
+                }
+            }
+            
+            @Override
+            protected void done() {
+                try {
+                    ImageIcon icon = get();
+                    if (icon != null) {
+                        // Remove loading message
+                        container.removeAll();
+                        
+                        // Scale down large images
+                        Image img = icon.getImage();
+                        int maxWidth = 400;
+                        
+                        if (icon.getIconWidth() > maxWidth) {
+                            double ratio = (double) maxWidth / icon.getIconWidth();
+                            int newHeight = (int) (icon.getIconHeight() * ratio);
+                            img = img.getScaledInstance(maxWidth, newHeight, Image.SCALE_SMOOTH);
+                            icon = new ImageIcon(img);
+                        }
+                        
+                        JLabel imageLabel = new JLabel(icon);
+                        imageLabel.setBorder(BorderFactory.createLineBorder(Color.LIGHT_GRAY));
+                        
+                        container.add(imageLabel, BorderLayout.CENTER);
+                        container.revalidate();
+                        container.repaint();
+                    } else {
+                        container.removeAll();
+                        JLabel errorLabel = new JLabel("Image load failed", JLabel.CENTER);
+                        errorLabel.setFont(new Font(Font.MONOSPACED, Font.ITALIC, 10));
+                        errorLabel.setForeground(Color.RED);
+                        container.add(errorLabel, BorderLayout.CENTER);
+                        container.revalidate();
+                        container.repaint();
+                    }
+                } catch (Exception e) {
+                    System.out.println("Error displaying image: " + e.getMessage());
+                }
+            }
+        };
+        
+        worker.execute();
     }
 
-    public static void main(String[] args) throws Exception {
-        Logger.getLogger("org.ngengine.nostr4j").setLevel(Level.FINEST);
+    private void fetchMetadata(NostrPublicKey pubkey, JLabel authorLabel) {
+        String key = pubkey.asHex();
+        
+        // Check cache first
+        if (nameCache.containsKey(key)) {
+            authorLabel.setText(nameCache.get(key));
+            return;
+        }
+        
+        // Fetch metadata
+        AsyncTask<Nip24Metadata> task = metadataCache.computeIfAbsent(
+            key, k -> Nip24Metadata.fetch(this.pool, pubkey));
+            
+        task.then(metadata -> {
+            if (metadata != null) {
+                SwingUtilities.invokeLater(() -> {
+                    String name = metadata.getDisplayName();
+                    if (name == null) name = metadata.getName();
+                    if (name == null || name.isEmpty()) {
+                        name = key.substring(0, 8) + "...";
+                    }
+                    
+                    // Update cache and label
+                    nameCache.put(key, name);
+                    authorLabel.setText(name);
+                });
+            }
+            return null;
+        }).exceptionally(ex -> {
+            System.out.println("Error fetching metadata: " + ex.getMessage());
+        });
+    }
 
+    private void copyToClipboard(String text) {
+        StringSelection stringSelection = new StringSelection(text);
+        Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
+        clipboard.setContents(stringSelection, null);
+    }
+
+    private String formatTimestamp(long timestamp) {
+        // Simple date format for old-school look
+        return new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm")
+                .format(new java.util.Date(timestamp * 1000));
+    }
+
+    public static void main(String[] args) {
+        try {
+            // Set system look and feel for old-school appearance
+            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        
         SwingUtilities.invokeLater(() -> {
-            NostrClient client = new NostrClient("Nostr Feed");
+            NostrClient client = new NostrClient("Simple Nostr Reader");
             client.setVisible(true);
         });
     }
