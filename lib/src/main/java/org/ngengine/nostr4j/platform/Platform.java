@@ -74,8 +74,11 @@ public interface Platform {
     NostrExecutor newSubscriptionExecutor();
 
     <T> AsyncTask<T> promisify(
-        BiConsumer<Consumer<T>, Consumer<Throwable>> func
+        BiConsumer<Consumer<T>, Consumer<Throwable>> func,
+        NostrExecutor executor
     );
+
+    <T> AsyncTask<T> wrapPromise(BiConsumer<Consumer<T>, Consumer<Throwable>> func);
 
     <T> AsyncTask<List<T>> waitAll(List<AsyncTask<T>> promises);
 

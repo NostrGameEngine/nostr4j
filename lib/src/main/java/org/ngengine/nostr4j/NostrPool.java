@@ -44,6 +44,7 @@ import java.util.logging.Logger;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.event.tracker.EventTracker;
 import org.ngengine.nostr4j.event.tracker.ForwardSlidingWindowEventTracker;
+import org.ngengine.nostr4j.event.tracker.NaiveEventTracker;
 import org.ngengine.nostr4j.listeners.NostrNoticeListener;
 import org.ngengine.nostr4j.listeners.NostrRelayListener;
 import org.ngengine.nostr4j.platform.AsyncTask;
@@ -202,15 +203,15 @@ public class NostrPool implements NostrRelayListener {
             filters,
             tracker,
             s -> {
-                logger.fine("starting subscription " + s);
+                logger.fine("starting subscription " + s.getId());
                 return this.send(s);
             },
             (s, closeMessage) -> {
                 logger.fine(
-                    "closing subscription " + s + " reason: " + closeMessage
+                    "closing subscription " + s.getId() + " reason: " + closeMessage
                 );
                 subscriptions.remove(subId);
-                return this.send(s);
+                return this.send(closeMessage);
             }
         );
         tracker.tuneFor(sub);
@@ -277,13 +278,14 @@ public class NostrPool implements NostrRelayListener {
         NostrSubscription sub = subscribe(filters, eventTracker);
         return platform.promisify((res, rej) -> {
             List<SignedNostrEvent> events = new ArrayList<>();
-            NostrSubscription sub = subscribe(filters, eventTracker);
+
+            logger.fine("Initialize fetch of " + filters+" with timeout " + timeout+" "+unit+" for subscription "+sub.getId());
 
             scheduledActions.add(
                 new ScheduledAction(
                     platform.getTimestampSeconds() + unit.toSeconds(timeout),
                     () -> {
-                        logger.fine("fetch timeout");
+                        logger.fine("fetch timeout for subscription " + sub.getId());
                         sub.close("timeout");
                         rej.accept(new Exception("timeout"));
                     }
@@ -292,19 +294,19 @@ public class NostrPool implements NostrRelayListener {
 
             sub
                 .listenEose(s -> {
-                    logger.fine("fetch eose");
+                    logger.fine("fetch eose for subscription " + s.getId());
                     s.close("eose");
                 })
                 .listenEvent((s, e, stored) -> {
-                    logger.fine("fetch event " + e);
+                    logger.fine("fetch event " + e+" for subscription " + s.getId());
                     events.add(e);
                 })
                 .listenClose((s, reason) -> {
-                    logger.fine("fetch close " + reason);
+                    logger.fine("fetch close " + reason+" for subscription " + s.getId());
                     res.accept(events);
                 })
                 .open();
-        });
+        }, sub.getExecutor());
     }
 
     @Override
@@ -320,19 +322,36 @@ public class NostrPool implements NostrRelayListener {
                     : "";
                 NostrSubscription sub = subscriptions.get(subId);
                 if (sub != null) {
+                    logger.fine(
+                        "received closed for subscription " + subId
+                    );
                     sub.callCloseListeners(reason);
                     subscriptions.remove(subId);
+                } else{
+                    logger.fine(
+                        "received closed for unknown subscription " + subId
+                    );
                 }
             } else if (type.equals("EOSE")) {
                 // TODO cound relays
                 String subId = NostrUtils.safeString(doc.get(1));
                 NostrSubscription sub = subscriptions.get(subId);
                 if (sub != null && !sub.isEose()) {
+                    logger.fine(
+                        "received eose for subscription " + subId
+                    );
                     sub.setEose(true);
                     sub.callEoseListeners();
+                } else{
+                    logger.fine(
+                        "received invalid eose for subscription " + subId
+                    );
                 }
             } else if (type.equals("NOTICE")) {
                 String eventMessage = NostrUtils.safeString(doc.get(1));
+                logger.fine(
+                    "Received notice from relay " + relay.getUrl() + ": " + eventMessage
+                );
                 noticeListener.forEach(listener ->
                     listener.onNotice(relay, eventMessage)
                 );
@@ -348,10 +367,10 @@ public class NostrPool implements NostrRelayListener {
                         "Event signature is invalid"
                     );
                     if (!sub.eventTracker.seen(e)) {
-                        // logger.fine("Event not seen " + e.getId());
+                        logger.fine("Event not seen " + e.getId()+" for subscription " + subId);
                         sub.callEventListeners(e, !sub.isEose());
                     } else {
-                        logger.fine("Event already seen " + e.getId());
+                        logger.fine("Event already seen " + e.getId()+" for subscription " + subId);
                     }
                 } else {
                     logger.warning(

@@ -157,6 +157,7 @@ public class NostrUtils {
     }
 
     public static String safeString(Object input) {
+        if(input==null)return "";
         if (input instanceof String) {
             return (String) input;
         } else {
@@ -208,6 +209,20 @@ public class NostrUtils {
         } else {
             throw new IllegalArgumentException(
                 "Input is not a string array: " + tags
+            );
+        }
+    }
+
+    public static boolean safeBool(Object v) {
+        if(v instanceof Boolean) {
+            return (Boolean) v;
+        } else if (v instanceof Number) {
+            return ((Number) v).intValue() != 0;
+        } else if (v instanceof String) {
+            return Boolean.parseBoolean((String) v);
+        } else {
+            throw new IllegalArgumentException(
+                "Input is not a boolean: " + v
             );
         }
     }

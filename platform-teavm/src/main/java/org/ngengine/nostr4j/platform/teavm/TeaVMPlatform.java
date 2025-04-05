@@ -156,8 +156,10 @@ public class TeaVMPlatform implements Platform {
         return System.currentTimeMillis() / 1000;
     }
 
+    @Override
     public <T> AsyncTask<T> promisify(
-        BiConsumer<Consumer<T>, Consumer<Throwable>> func
+        BiConsumer<Consumer<T>, Consumer<Throwable>> func,
+        NostrExecutor executor
     ) {
         TeaVMBinds.TeaVMPromise<T> promise = new TeaVMBinds.TeaVMPromise<>();
 
@@ -210,7 +212,7 @@ public class TeaVMPlatform implements Platform {
                             }
                         })
                         .catchError(rej::accept);
-                });
+                },executor);
             }
 
             @Override
@@ -221,8 +223,13 @@ public class TeaVMPlatform implements Platform {
         };
     }
 
+    @Override
+    public <T> AsyncTask<T> wrapPromise(BiConsumer<Consumer<T>, Consumer<Throwable>> func) {
+        return (AsyncTask<T>) promisify(func, null);
+    }
+
     public <T> AsyncTask<List<T>> waitAll(List<AsyncTask<T>> promises) {
-        return promisify((res, rej) -> {
+        return wrapPromise((res, rej) -> {
             if (promises.isEmpty()) {
                 res.accept(new ArrayList<>());
                 return;
@@ -257,7 +264,7 @@ public class TeaVMPlatform implements Platform {
         return new NostrExecutor() {
             @Override
             public <T> AsyncTask<T> run(Callable<T> r) {
-                return promisify((res, rej) -> {
+                return wrapPromise((res, rej) -> {
                     // Execute on the next event loop cycle
                     getBinds()
                         .setTimeout(
@@ -285,7 +292,7 @@ public class TeaVMPlatform implements Platform {
                     return run(r);
                 }
 
-                return promisify((res, rej) -> {
+                return wrapPromise((res, rej) -> {
                     getBinds()
                         .setTimeout(
                             () -> {

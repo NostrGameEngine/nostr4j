@@ -42,7 +42,7 @@ public class NaiveEventTracker implements EventTracker {
 
     @Override
     public boolean seen(SignedNostrEvent event) {
-        return seenEvents.add(event.getIdentifier().id);
+        return !seenEvents.add(event.getIdentifier().id);
     }
 
     public void clear() {

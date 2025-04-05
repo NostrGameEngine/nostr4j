@@ -99,7 +99,7 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
         this.parsedPublicKey = pubkey;
     }
 
-    public SignedNostrEvent(Map<String, Object> map) throws Exception {
+    public SignedNostrEvent(Map<String, Object> map) {
         this.kind = NostrUtils.safeInt(map.get("kind"));
         this.content = NostrUtils.safeString(map.get("content"));
         this.signature = NostrUtils.safeString(map.get("sig"));

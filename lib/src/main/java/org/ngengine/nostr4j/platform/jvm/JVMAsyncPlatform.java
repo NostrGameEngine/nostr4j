@@ -311,11 +311,13 @@ public class JVMAsyncPlatform implements Platform {
 
     @Override
     public NostrTransport newTransport() {
-        return new WebsocketTransport(this);
+        return new WebsocketTransport(this, newVtExecutor());
     }
 
+    @Override
     public <T> AsyncTask<T> promisify(
-        BiConsumer<Consumer<T>, Consumer<Throwable>> func
+        BiConsumer<Consumer<T>, Consumer<Throwable>> func,
+        NostrExecutor executor
     ) {
         CompletableFuture<T> fut = new CompletableFuture<>();
         func.accept(
@@ -360,20 +362,36 @@ public class JVMAsyncPlatform implements Platform {
             @Override
             public <R> AsyncTask<R> then(Function<T, R> func2) {
                 return promisify((res, rej) -> {
-                    fut.handle((result, exception) -> {
-                        if (exception != null) {
-                            rej.accept(exception);
-                            return null;
-                        }
+                    if(executor!=null&& executor instanceof VtNostrExecutor){                     
+                        fut.handleAsync((result, exception) -> {
+                            if (exception != null) {
+                                rej.accept(exception);
+                                return null;
+                            }
 
-                        try {
-                            res.accept(func2.apply(result));
-                        } catch (Throwable e) {
-                            rej.accept(e);
-                        }
-                        return null;
-                    });
-                });
+                            try {
+                                res.accept(func2.apply(result));
+                            } catch (Throwable e) {
+                                rej.accept(e);
+                            }
+                            return null;
+                        }, ((VtNostrExecutor)executor).executor);
+                    }else{
+                        fut.handle((result, exception) -> {
+                            if (exception != null) {
+                                rej.accept(exception);
+                                return null;
+                            }
+
+                            try {
+                                res.accept(func2.apply(result));
+                            } catch (Throwable e) {
+                                rej.accept(e);
+                            }
+                            return null;
+                        });
+                    }
+                }, executor);
             }
 
             @Override
@@ -387,8 +405,15 @@ public class JVMAsyncPlatform implements Platform {
         };
     }
 
+
+    @Override
+    public <T> AsyncTask<T> wrapPromise(BiConsumer<Consumer<T>, Consumer<Throwable>> func) {
+        return (AsyncTask<T>)promisify(func, null);
+    }
+
+    @Override
     public <T> AsyncTask<List<T>> waitAll(List<AsyncTask<T>> promises) {
-        return promisify((res, rej) -> {
+        return wrapPromise((res, rej) -> {
             if (promises.size() == 0) {
                 res.accept(new ArrayList<>());
                 return;
@@ -419,43 +444,48 @@ public class JVMAsyncPlatform implements Platform {
     private ExecutorService executor =
         Executors.newVirtualThreadPerTaskExecutor();
 
-    private NostrExecutor newVtExecutor() {
-        return new NostrExecutor() {
-            @Override
-            public <T> AsyncTask<T> run(Callable<T> r) {
-                return promisify((res, rej) -> {
-                    executor.submit(() -> {
-                        try {
-                            res.accept(r.call());
-                        } catch (Exception e) {
-                            rej.accept(e);
-                        }
-                    });
+    private class VtNostrExecutor implements NostrExecutor {
+        protected final ExecutorService executor;
+        public VtNostrExecutor(ExecutorService executor){
+            this.executor = executor;
+        }
+        @Override
+        public <T> AsyncTask<T> run(Callable<T> r) {
+            return promisify((res, rej) -> {
+                executor.submit(() -> {
+                    try {
+                        res.accept(r.call());
+                    } catch (Exception e) {
+                        rej.accept(e);
+                    }
                 });
-            }
+            }, this);
+        }
 
-            @Override
-            public <T> AsyncTask<T> runLater(
+        @Override
+        public <T> AsyncTask<T> runLater(
                 Callable<T> r,
                 long delay,
-                TimeUnit unit
-            ) {
-                long delayMs = unit.toMillis(delay);
-                if (delayMs == 0) {
-                    return run(r);
-                }
-                return promisify((res, rej) -> {
-                    executor.submit(() -> {
-                        try {
-                            Thread.sleep(delayMs);
-                            res.accept(r.call());
-                        } catch (Exception e) {
-                            rej.accept(e);
-                        }
-                    });
-                });
+                TimeUnit unit) {
+            long delayMs = unit.toMillis(delay);
+            if (delayMs == 0) {
+                return run(r);
             }
-        };
+            return promisify((res, rej) -> {
+                executor.submit(() -> {
+                    try {
+                        Thread.sleep(delayMs);
+                        res.accept(r.call());
+                    } catch (Exception e) {
+                        rej.accept(e);
+                    }
+                });
+            }, this);
+        }
+    }
+
+    private NostrExecutor newVtExecutor() {
+        return new VtNostrExecutor(executor);
     }
 
     @Override

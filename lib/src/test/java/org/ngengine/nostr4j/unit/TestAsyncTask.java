@@ -58,7 +58,7 @@ public class TestAsyncTask {
         // Create a simple resolved promise
         AsyncTask<String> promise = platform.promisify((resolve, reject) -> {
             resolve.accept("success");
-        });
+        }, platform.newPoolExecutor());
 
         // Test the basic properties
         assertTrue(promise.isDone());
@@ -72,7 +72,7 @@ public class TestAsyncTask {
         // Create a simple rejected promise
         AsyncTask<String> promise = platform.promisify((resolve, reject) -> {
             reject.accept(new RuntimeException("failed"));
-        });
+        }, platform.newPoolExecutor());
 
         // Test the basic properties
         assertTrue(promise.isDone());
@@ -105,7 +105,7 @@ public class TestAsyncTask {
                 }
             })
                 .start();
-        });
+        }, platform.newPoolExecutor());
 
         promiseRef.set(promise);
 
@@ -127,7 +127,8 @@ public class TestAsyncTask {
         AsyncTask<Integer> promise = platform
             .promisify((resolve, reject) -> {
                 resolve.accept(5);
-            })
+            }, platform
+                        .newPoolExecutor())
             .then(value -> ((Integer) value) * 2);
 
         assertEquals(Integer.valueOf(10), promise.await());
@@ -138,7 +139,8 @@ public class TestAsyncTask {
         AsyncTask<Integer> promise = platform
             .promisify((resolve, reject) -> {
                 resolve.accept(5);
-            })
+            }, platform
+                        .newPoolExecutor())
             .then(value -> Integer.valueOf(((Integer) value) * 2))
             .then(value -> value + 3)
             .then(value -> value * value);
@@ -154,7 +156,8 @@ public class TestAsyncTask {
             .promisify((resolve, reject) -> {
                 executionPath.add("start");
                 resolve.accept("step1");
-            })
+            }, platform
+                        .newPoolExecutor())
             .then(value -> {
                 executionPath.add((String) value);
                 return value + "-step2";
@@ -195,7 +198,8 @@ public class TestAsyncTask {
         platform
             .promisify((resolve, reject) -> {
                 reject.accept(new RuntimeException("test error"));
-            })
+            }, platform
+                        .newPoolExecutor())
             .exceptionally(error -> {
                 handlerCalled.set(true);
                 capturedError.set(error);
@@ -221,7 +225,8 @@ public class TestAsyncTask {
         platform
             .promisify((resolve, reject) -> {
                 reject.accept(new RuntimeException("original error"));
-            })
+            }, platform
+                        .newPoolExecutor())
             .exceptionally(error -> {
                 // Verify we got the right error
                 assertEquals("original error", error.getMessage());
@@ -246,7 +251,8 @@ public class TestAsyncTask {
         AsyncTask<Integer> promise = platform
             .promisify((resolve, reject) -> {
                 resolve.accept(1);
-            })
+            }, platform
+                        .newPoolExecutor())
             .then(v -> {
                 counter.incrementAndGet();
                 return ((Integer) v) + 1;
@@ -309,7 +315,7 @@ public class TestAsyncTask {
                     })
                         .start();
                 }
-            );
+            , platform.newPoolExecutor());
             promises.add(promise);
         }
 
@@ -346,7 +352,7 @@ public class TestAsyncTask {
                 }
             })
                 .start();
-        });
+        }, platform.newPoolExecutor());
 
         AsyncTask<Integer> promise2 = platform.promisify((resolve, reject) -> {
             new Thread(() -> {
@@ -359,7 +365,7 @@ public class TestAsyncTask {
                 }
             })
                 .start();
-        });
+        }, platform.newPoolExecutor());
 
         // Wait for individual promises to resolve
         assertTrue(
@@ -408,7 +414,7 @@ public class TestAsyncTask {
                         }
                     })
                         .start();
-                })
+                }, platform.newPoolExecutor())
             );
         }
 
@@ -458,7 +464,7 @@ public class TestAsyncTask {
         promises.add(
             platform.promisify((resolve, reject) -> {
                 resolve.accept("success");
-            })
+            }, platform.newPoolExecutor())
         );
 
         // Add a failing promise
@@ -475,14 +481,14 @@ public class TestAsyncTask {
                     }
                 })
                     .start();
-            })
+            }, platform.newPoolExecutor())
         );
 
         // Add another successful promise
         promises.add(
             platform.promisify((resolve, reject) -> {
                 resolve.accept("another success");
-            })
+            }, platform.newPoolExecutor())
         );
 
         // Wait for all promises
@@ -535,7 +541,7 @@ public class TestAsyncTask {
                         }
                     })
                         .start();
-                })
+                }, platform.newPoolExecutor())
             );
         }
 
@@ -574,7 +580,7 @@ public class TestAsyncTask {
                         }
                     })
                         .start();
-                })
+                }, platform.newPoolExecutor())
             );
         }
 

@@ -30,6 +30,7 @@
  */
 package org.ngengine.nostr4j.event;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -54,6 +55,12 @@ public class UnsignedNostrEvent implements NostrEvent {
 
     public UnsignedNostrEvent setContent(String content) {
         this.content = content;
+
+        return this;
+    }
+
+    public UnsignedNostrEvent setCreatedAt(Instant created_at) {
+        this.createdAt = created_at.getEpochSecond();
 
         return this;
     }

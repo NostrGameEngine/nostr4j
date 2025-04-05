@@ -51,9 +51,9 @@ import org.teavm.jso.JSExportClasses;
         org.ngengine.nostr4j.platform.jvm.WebsocketTransport.class,
         org.ngengine.nostr4j.NostrPool.class,
         org.ngengine.nostr4j.signer.NostrKeyPairSigner.class,
-        org.ngengine.nostr4j.nip01.Nip01MetadataFilter.class,
-        org.ngengine.nostr4j.nip01.Nip01Metadata.class,
-        org.ngengine.nostr4j.nip01.Nip01MetadataListener.class,
+        org.ngengine.nostr4j.nip24.Nip24MetadataFilter.class,
+        org.ngengine.nostr4j.nip24.Nip24Metadata.class,
+        org.ngengine.nostr4j.nip24.Nip24MetadataListener.class,
     }
 )
 public class TeaVMModule {

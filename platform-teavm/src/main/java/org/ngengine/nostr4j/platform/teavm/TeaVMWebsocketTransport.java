@@ -98,7 +98,7 @@ public class TeaVMWebsocketTransport implements NostrTransport {
 
     @Override
     public AsyncTask<Void> ensureConnect(String url) {
-        return this.platform.promisify((res, rej) -> {
+        return this.platform.wrapPromise((res, rej) -> {
                 try {
                     if (this.ws == null) {
                         this.ws = createWebSocket(url);
@@ -147,7 +147,7 @@ public class TeaVMWebsocketTransport implements NostrTransport {
 
     @Override
     public AsyncTask<Void> close(String reason) {
-        return this.platform.promisify((res, rej) -> {
+        return this.platform.wrapPromise((res, rej) -> {
                 try {
                     if (this.ws != null) {
                         final String r = reason != null
@@ -174,7 +174,7 @@ public class TeaVMWebsocketTransport implements NostrTransport {
 
     @Override
     public AsyncTask<Void> send(String message) {
-        return this.platform.promisify((res, rej) -> {
+        return this.platform.wrapPromise((res, rej) -> {
                 try {
                     if (this.ws == null) {
                         rej.accept(new IOException("WebSocket not connected"));
@@ -209,7 +209,7 @@ public class TeaVMWebsocketTransport implements NostrTransport {
     }
 
     public AsyncTask<String> httpGet(String url) {
-        return this.platform.promisify((res, rej) -> {
+        return this.platform.wrapPromise((res, rej) -> {
                 try {
                     XMLHttpRequest xhr = XMLHttpRequest.create();
                     xhr.open("GET", url);

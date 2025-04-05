@@ -88,6 +88,10 @@ public class NostrSubscription extends NostrMessage {
         this.onClose = onClose;
     }
 
+    public NostrExecutor getExecutor() {
+        return this.executor;
+    }
+
     public String getId() {
         return this.subId;
     }

@@ -40,6 +40,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+
 import org.ngengine.nostr4j.NostrRelay.QueuedMessage;
 import org.ngengine.nostr4j.NostrSubscription.NostrSubCloseMessage;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
@@ -110,6 +111,10 @@ public class NostrRelay implements TransportListener {
         }
     }
 
+    public NostrExecutor getExecutor() {
+        return this.executor;
+    }
+
     public void setKeepAliveTime(long time, TimeUnit unit) {
         this.keepAliveTime = unit.toSeconds(time);
     }
@@ -162,7 +167,7 @@ public class NostrRelay implements TransportListener {
             );
             return platform.promisify((res, rej) -> {
                 this.messageQueue.add(new QueuedMessage(message, res, rej));
-            });
+            }, getExecutor());
         }
         return platform.promisify((res, rej) -> {
             try {
@@ -174,7 +179,7 @@ public class NostrRelay implements TransportListener {
                     //    are active on which relay or when the relay was added to the pool etc
                     //    you just subscribe to everything and the relay will automatically ignore duplicates
                     if (
-                        !subTracker.addIfAbsent(
+                        subTracker.addIfAbsent(
                             ((NostrSubscription) message).getSubId()
                         )
                     ) {
@@ -183,13 +188,14 @@ public class NostrRelay implements TransportListener {
                             "Tracking new subscription: " +
                             ((NostrSubscription) message).getSubId()
                         );
-                        return;
                     } else {
                         logger.log(
                             Level.FINE,
                             "Subscription already tracked: " +
                             ((NostrSubscription) message).getSubId()
                         );
+                        new Exception().printStackTrace();
+                        return;
                     }
                 } else if (
                     message instanceof NostrSubscription.NostrSubCloseMessage
@@ -279,7 +285,7 @@ public class NostrRelay implements TransportListener {
             } catch (Throwable e) {
                 rej.accept(e);
             }
-        });
+        }, getExecutor());
     }
 
     public String getUrl() {
@@ -313,20 +319,19 @@ public class NostrRelay implements TransportListener {
 
         logger.log(Level.FINE, "Connection opened: " + this.url);
 
-        for (NostrRelayListener listener : this.listeners) {
-            listener.onRelayConnect(this);
-        }
-
+    
         QueuedMessage messages[] =
             this.messageQueue.toArray(
                     new QueuedMessage[this.messageQueue.size()]
                 );
         this.messageQueue.clear();
-        logger.log(
-            Level.FINE,
-            "Processing queued messages: " + messages.length
-        );
+
+        for (NostrRelayListener listener : this.listeners) {
+            listener.onRelayConnect(this);
+        }
+     
         for (QueuedMessage q : messages) {
+            logger.fine("Sending queued message: " + q.message);
             NostrMessage message = q.message;
             Consumer<NostrMessageAck> res = q.res;
             Consumer<Throwable> rej = q.rej;
