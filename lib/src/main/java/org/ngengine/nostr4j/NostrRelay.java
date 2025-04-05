@@ -40,7 +40,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-
 import org.ngengine.nostr4j.NostrRelay.QueuedMessage;
 import org.ngengine.nostr4j.NostrSubscription.NostrSubCloseMessage;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
@@ -165,127 +164,133 @@ public class NostrRelay implements TransportListener {
                 Level.FINE,
                 "Relay not connected, queueing message: " + message.toString()
             );
-            return platform.promisify((res, rej) -> {
-                this.messageQueue.add(new QueuedMessage(message, res, rej));
-            }, getExecutor());
+            return platform.promisify(
+                (res, rej) -> {
+                    this.messageQueue.add(new QueuedMessage(message, res, rej));
+                },
+                getExecutor()
+            );
         }
-        return platform.promisify((res, rej) -> {
-            try {
-                if (message instanceof NostrSubscription) {
-                    // track sub if not already tracked, otherwise ignore
-                    // this servers two purposes:
-                    // 1. track how many subscriptions are active to decide when to disconnect the relay
-                    // 2. make the code upstream simpler as it won't have to worry about which subscriptions
-                    //    are active on which relay or when the relay was added to the pool etc
-                    //    you just subscribe to everything and the relay will automatically ignore duplicates
-                    if (
-                        subTracker.addIfAbsent(
-                            ((NostrSubscription) message).getSubId()
-                        )
-                    ) {
-                        logger.log(
-                            Level.FINE,
-                            "Tracking new subscription: " +
-                            ((NostrSubscription) message).getSubId()
-                        );
-                    } else {
-                        logger.log(
-                            Level.FINE,
-                            "Subscription already tracked: " +
-                            ((NostrSubscription) message).getSubId()
-                        );
-                        new Exception().printStackTrace();
-                        return;
-                    }
-                } else if (
-                    message instanceof NostrSubscription.NostrSubCloseMessage
-                ) {
-                    subTracker.remove(
-                        (
-                            (NostrSubscription.NostrSubCloseMessage) message
-                        ).getId()
-                    );
-                    logger.log(
-                        Level.FINE,
-                        "Untracking subscription: " +
-                        (
-                            (NostrSubscription.NostrSubCloseMessage) message
-                        ).getId()
-                    );
-                }
-
-                String json = NostrMessage.toJSON(message);
-                String eventId = message instanceof SignedNostrEvent
-                    ? ((SignedNostrEvent) message).getId()
-                    : null;
-                String closeId = message instanceof NostrSubCloseMessage
-                    ? ((NostrSubCloseMessage) message).getId()
-                    : null;
-                logger.log(Level.FINE, "Sending message: " + json);
-                NostrMessageAck result = NostrMessage.ack(
-                    this,
-                    eventId != null ? eventId : closeId,
-                    platform.getTimestampSeconds(),
-                    (rr, msg) -> {
-                        if (eventId != null) {
-                            this.waitingEventsAck.remove(eventId);
-                        } else if (closeId != null) {
-                            this.waitingClosesAck.remove(closeId);
-                        }
-                        logger.log(Level.FINE, "Received ack: " + msg);
-                        rr.setMessage(msg);
-                        rr.setSuccess(true);
-                        res.accept(rr);
-                    },
-                    (rr, msg) -> {
-                        if (eventId != null) {
-                            this.waitingEventsAck.remove(eventId);
-                        } else if (closeId != null) {
-                            this.waitingClosesAck.remove(closeId);
-                        }
-                        logger.log(
-                            Level.FINE,
-                            "Received ack (rejected): " + msg
-                        );
-                        rr.setMessage(msg);
-                        rr.setSuccess(false);
-                        res.accept(rr);
-                    }
-                );
-
-                if (eventId != null) {
-                    this.waitingEventsAck.put(eventId, result);
-                } else if (closeId != null) {
-                    this.waitingClosesAck.put(closeId, result);
-                }
-
+        return platform.promisify(
+            (res, rej) -> {
                 try {
-                    this.connector.send(json)
-                        .exceptionally(e -> {
+                    if (message instanceof NostrSubscription) {
+                        // track sub if not already tracked, otherwise ignore
+                        // this servers two purposes:
+                        // 1. track how many subscriptions are active to decide when to disconnect the relay
+                        // 2. make the code upstream simpler as it won't have to worry about which subscriptions
+                        //    are active on which relay or when the relay was added to the pool etc
+                        //    you just subscribe to everything and the relay will automatically ignore duplicates
+                        if (
+                            subTracker.addIfAbsent(
+                                ((NostrSubscription) message).getSubId()
+                            )
+                        ) {
                             logger.log(
                                 Level.FINE,
-                                "Error sending message: " + e.getMessage()
+                                "Tracking new subscription: " +
+                                ((NostrSubscription) message).getSubId()
                             );
-                            result.callFailureCallback(e.getMessage());
-                        })
-                        .then(vo -> {
-                            logger.log(Level.FINE, "Message sent: " + json);
-                            if (eventId == null && closeId == null) {
-                                result.callSuccessCallback("ok");
+                        } else {
+                            logger.log(
+                                Level.FINE,
+                                "Subscription already tracked: " +
+                                ((NostrSubscription) message).getSubId()
+                            );
+                            new Exception().printStackTrace();
+                            return;
+                        }
+                    } else if (
+                        message instanceof NostrSubscription.NostrSubCloseMessage
+                    ) {
+                        subTracker.remove(
+                            (
+                                (NostrSubscription.NostrSubCloseMessage) message
+                            ).getId()
+                        );
+                        logger.log(
+                            Level.FINE,
+                            "Untracking subscription: " +
+                            (
+                                (NostrSubscription.NostrSubCloseMessage) message
+                            ).getId()
+                        );
+                    }
+
+                    String json = NostrMessage.toJSON(message);
+                    String eventId = message instanceof SignedNostrEvent
+                        ? ((SignedNostrEvent) message).getId()
+                        : null;
+                    String closeId = message instanceof NostrSubCloseMessage
+                        ? ((NostrSubCloseMessage) message).getId()
+                        : null;
+                    logger.log(Level.FINE, "Sending message: " + json);
+                    NostrMessageAck result = NostrMessage.ack(
+                        this,
+                        eventId != null ? eventId : closeId,
+                        platform.getTimestampSeconds(),
+                        (rr, msg) -> {
+                            if (eventId != null) {
+                                this.waitingEventsAck.remove(eventId);
+                            } else if (closeId != null) {
+                                this.waitingClosesAck.remove(closeId);
                             }
-                            return null;
-                        });
-                } catch (Throwable e) {
-                    logger.log(
-                        Level.FINE,
-                        "Error sending message (0): " + e.getMessage()
+                            logger.log(Level.FINE, "Received ack: " + msg);
+                            rr.setMessage(msg);
+                            rr.setSuccess(true);
+                            res.accept(rr);
+                        },
+                        (rr, msg) -> {
+                            if (eventId != null) {
+                                this.waitingEventsAck.remove(eventId);
+                            } else if (closeId != null) {
+                                this.waitingClosesAck.remove(closeId);
+                            }
+                            logger.log(
+                                Level.FINE,
+                                "Received ack (rejected): " + msg
+                            );
+                            rr.setMessage(msg);
+                            rr.setSuccess(false);
+                            res.accept(rr);
+                        }
                     );
-                    result.callFailureCallback(e.getMessage());
+
+                    if (eventId != null) {
+                        this.waitingEventsAck.put(eventId, result);
+                    } else if (closeId != null) {
+                        this.waitingClosesAck.put(closeId, result);
+                    }
+
+                    try {
+                        this.connector.send(json)
+                            .exceptionally(e -> {
+                                logger.log(
+                                    Level.FINE,
+                                    "Error sending message: " + e.getMessage()
+                                );
+                                result.callFailureCallback(e.getMessage());
+                            })
+                            .then(vo -> {
+                                logger.log(Level.FINE, "Message sent: " + json);
+                                if (eventId == null && closeId == null) {
+                                    result.callSuccessCallback("ok");
+                                }
+                                return null;
+                            });
+                    } catch (Throwable e) {
+                        logger.log(
+                            Level.FINE,
+                            "Error sending message (0): " + e.getMessage()
+                        );
+                        result.callFailureCallback(e.getMessage());
+                    }
+                } catch (Throwable e) {
+                    rej.accept(e);
                 }
-            } catch (Throwable e) {
-                rej.accept(e);
-            }
-        }, getExecutor());
+            },
+            getExecutor()
+        );
     }
 
     public String getUrl() {
@@ -319,7 +324,6 @@ public class NostrRelay implements TransportListener {
 
         logger.log(Level.FINE, "Connection opened: " + this.url);
 
-    
         QueuedMessage messages[] =
             this.messageQueue.toArray(
                     new QueuedMessage[this.messageQueue.size()]
@@ -329,7 +333,7 @@ public class NostrRelay implements TransportListener {
         for (NostrRelayListener listener : this.listeners) {
             listener.onRelayConnect(this);
         }
-     
+
         for (QueuedMessage q : messages) {
             logger.fine("Sending queued message: " + q.message);
             NostrMessage message = q.message;

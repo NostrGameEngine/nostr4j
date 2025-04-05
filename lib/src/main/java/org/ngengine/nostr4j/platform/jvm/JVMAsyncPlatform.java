@@ -361,37 +361,46 @@ public class JVMAsyncPlatform implements Platform {
 
             @Override
             public <R> AsyncTask<R> then(Function<T, R> func2) {
-                return promisify((res, rej) -> {
-                    if(executor!=null&& executor instanceof VtNostrExecutor){                     
-                        fut.handleAsync((result, exception) -> {
-                            if (exception != null) {
-                                rej.accept(exception);
-                                return null;
-                            }
+                return promisify(
+                    (res, rej) -> {
+                        if (
+                            executor != null &&
+                            executor instanceof VtNostrExecutor
+                        ) {
+                            fut.handleAsync(
+                                (result, exception) -> {
+                                    if (exception != null) {
+                                        rej.accept(exception);
+                                        return null;
+                                    }
 
-                            try {
-                                res.accept(func2.apply(result));
-                            } catch (Throwable e) {
-                                rej.accept(e);
-                            }
-                            return null;
-                        }, ((VtNostrExecutor)executor).executor);
-                    }else{
-                        fut.handle((result, exception) -> {
-                            if (exception != null) {
-                                rej.accept(exception);
-                                return null;
-                            }
+                                    try {
+                                        res.accept(func2.apply(result));
+                                    } catch (Throwable e) {
+                                        rej.accept(e);
+                                    }
+                                    return null;
+                                },
+                                ((VtNostrExecutor) executor).executor
+                            );
+                        } else {
+                            fut.handle((result, exception) -> {
+                                if (exception != null) {
+                                    rej.accept(exception);
+                                    return null;
+                                }
 
-                            try {
-                                res.accept(func2.apply(result));
-                            } catch (Throwable e) {
-                                rej.accept(e);
-                            }
-                            return null;
-                        });
-                    }
-                }, executor);
+                                try {
+                                    res.accept(func2.apply(result));
+                                } catch (Throwable e) {
+                                    rej.accept(e);
+                                }
+                                return null;
+                            });
+                        }
+                    },
+                    executor
+                );
             }
 
             @Override
@@ -405,10 +414,11 @@ public class JVMAsyncPlatform implements Platform {
         };
     }
 
-
     @Override
-    public <T> AsyncTask<T> wrapPromise(BiConsumer<Consumer<T>, Consumer<Throwable>> func) {
-        return (AsyncTask<T>)promisify(func, null);
+    public <T> AsyncTask<T> wrapPromise(
+        BiConsumer<Consumer<T>, Consumer<Throwable>> func
+    ) {
+        return (AsyncTask<T>) promisify(func, null);
     }
 
     @Override
@@ -445,42 +455,52 @@ public class JVMAsyncPlatform implements Platform {
         Executors.newVirtualThreadPerTaskExecutor();
 
     private class VtNostrExecutor implements NostrExecutor {
+
         protected final ExecutorService executor;
-        public VtNostrExecutor(ExecutorService executor){
+
+        public VtNostrExecutor(ExecutorService executor) {
             this.executor = executor;
         }
+
         @Override
         public <T> AsyncTask<T> run(Callable<T> r) {
-            return promisify((res, rej) -> {
-                executor.submit(() -> {
-                    try {
-                        res.accept(r.call());
-                    } catch (Exception e) {
-                        rej.accept(e);
-                    }
-                });
-            }, this);
+            return promisify(
+                (res, rej) -> {
+                    executor.submit(() -> {
+                        try {
+                            res.accept(r.call());
+                        } catch (Exception e) {
+                            rej.accept(e);
+                        }
+                    });
+                },
+                this
+            );
         }
 
         @Override
         public <T> AsyncTask<T> runLater(
-                Callable<T> r,
-                long delay,
-                TimeUnit unit) {
+            Callable<T> r,
+            long delay,
+            TimeUnit unit
+        ) {
             long delayMs = unit.toMillis(delay);
             if (delayMs == 0) {
                 return run(r);
             }
-            return promisify((res, rej) -> {
-                executor.submit(() -> {
-                    try {
-                        Thread.sleep(delayMs);
-                        res.accept(r.call());
-                    } catch (Exception e) {
-                        rej.accept(e);
-                    }
-                });
-            }, this);
+            return promisify(
+                (res, rej) -> {
+                    executor.submit(() -> {
+                        try {
+                            Thread.sleep(delayMs);
+                            res.accept(r.call());
+                        } catch (Exception e) {
+                            rej.accept(e);
+                        }
+                    });
+                },
+                this
+            );
         }
     }
 

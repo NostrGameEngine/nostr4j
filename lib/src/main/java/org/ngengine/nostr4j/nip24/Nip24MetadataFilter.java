@@ -45,6 +45,4 @@ public class Nip24MetadataFilter extends NostrFilter {
     public Nip24MetadataFilter() {
         this(null);
     }
-
-   
 }

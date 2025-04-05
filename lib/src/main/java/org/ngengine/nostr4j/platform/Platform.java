@@ -78,7 +78,9 @@ public interface Platform {
         NostrExecutor executor
     );
 
-    <T> AsyncTask<T> wrapPromise(BiConsumer<Consumer<T>, Consumer<Throwable>> func);
+    <T> AsyncTask<T> wrapPromise(
+        BiConsumer<Consumer<T>, Consumer<Throwable>> func
+    );
 
     <T> AsyncTask<List<T>> waitAll(List<AsyncTask<T>> promises);
 

@@ -32,17 +32,12 @@ package org.ngengine.nostr4j.nip24;
 
 import java.time.Instant;
 import java.util.Calendar;
-import java.util.Collection;
-import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Consumer;
 import java.util.logging.Logger;
-
 import org.ngengine.nostr4j.NostrPool;
-import org.ngengine.nostr4j.NostrSubscription;
 import org.ngengine.nostr4j.event.NostrEvent;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.event.UnsignedNostrEvent;
@@ -53,24 +48,27 @@ import org.ngengine.nostr4j.signer.NostrSigner;
 import org.ngengine.nostr4j.transport.NostrMessageAck;
 import org.ngengine.nostr4j.utils.NostrUtils;
 
-public class Nip24Metadata  {
+public class Nip24Metadata {
+
     private static final Logger logger = Logger.getLogger(
         Nip24Metadata.class.getName()
     );
-    
+
     public final Map<String, Object> metadata;
     private final NostrEvent sourceEvent;
 
     public Nip24Metadata(NostrEvent source) throws Exception {
-        this.sourceEvent=source;
+        this.sourceEvent = source;
         Platform platform = NostrUtils.getPlatform();
         String content = sourceEvent.getContent();
         Map<String, Object> meta = platform.fromJSON(content, Map.class);
-        if(meta==null)throw new IllegalArgumentException("Invalid metadata");
-        this.metadata = meta;         
+        if (meta == null) throw new IllegalArgumentException(
+            "Invalid metadata"
+        );
+        this.metadata = meta;
     }
 
-    public UnsignedNostrEvent toUpdateEvent() throws Exception{
+    public UnsignedNostrEvent toUpdateEvent() throws Exception {
         UnsignedNostrEvent event = new UnsignedNostrEvent();
         event.setKind(0);
         event.setCreatedAt(Instant.now());
@@ -78,18 +76,16 @@ public class Nip24Metadata  {
         return event;
     }
 
-    public NostrEvent getSourceEvent(){
+    public NostrEvent getSourceEvent() {
         return sourceEvent;
     }
 
-
-    public String getDisplayName(){
+    public String getDisplayName() {
         String v = NostrUtils.safeString(metadata.get("display_name"));
-        if(v.isEmpty()){
-            v= NostrUtils.safeString(metadata.get("displayName"));
+        if (v.isEmpty()) {
+            v = NostrUtils.safeString(metadata.get("displayName"));
         }
-        if (v.isEmpty())
-            return null;
+        if (v.isEmpty()) return null;
         return NostrUtils.safeString(v);
     }
 
@@ -97,35 +93,32 @@ public class Nip24Metadata  {
         metadata.put("display_name", name);
     }
 
-    public String getName(){
+    public String getName() {
         String v = NostrUtils.safeString(metadata.get("name"));
         if (v.isEmpty()) {
-            v=NostrUtils.safeString(metadata.get("username"));
+            v = NostrUtils.safeString(metadata.get("username"));
         }
-        if(v.isEmpty())return null;
+        if (v.isEmpty()) return null;
         return NostrUtils.safeString(v);
     }
 
-    public void setName(String name){
+    public void setName(String name) {
         metadata.put("name", name);
     }
 
     public String getAbout() {
         Object v = metadata.get("about");
-        if (v == null)
-            return null;
+        if (v == null) return null;
         return NostrUtils.safeString(v);
     }
 
     public void setAbout(String about) {
         metadata.put("about", about);
     }
-    
 
     public String getPicture() {
         Object v = metadata.get("picture");
-        if (v == null)
-            return null;
+        if (v == null) return null;
         return NostrUtils.safeString(v);
     }
 
@@ -135,8 +128,7 @@ public class Nip24Metadata  {
 
     public String getWebsite() {
         Object v = metadata.get("website");
-        if (v == null)
-            return null;
+        if (v == null) return null;
         return NostrUtils.safeString(v);
     }
 
@@ -146,8 +138,7 @@ public class Nip24Metadata  {
 
     public String getBanner() {
         Object v = metadata.get("banner");
-        if (v == null)
-            return null;
+        if (v == null) return null;
         return NostrUtils.safeString(v);
     }
 
@@ -157,11 +148,9 @@ public class Nip24Metadata  {
 
     public boolean isBot() {
         Object v = metadata.get("bot");
-        if (v == null)
-            return false;
+        if (v == null) return false;
         return NostrUtils.safeBool(v);
     }
-
 
     public void setBot(boolean bot) {
         metadata.put("bot", bot);
@@ -171,42 +160,43 @@ public class Nip24Metadata  {
      * use getName() instead
      */
     @Deprecated
-    public String getUsername(){
+    public String getUsername() {
         Object v = metadata.get("username");
-        if (v == null)
-            return null;
+        if (v == null) return null;
         return NostrUtils.safeString(v);
     }
 
-    public Date getBirthday(){
-        Map<String,Object> birthday = (Map<String,Object>)metadata.get("birthday");
-        if(birthday==null)return null;
+    public Date getBirthday() {
+        Map<String, Object> birthday = (Map<String, Object>) metadata.get(
+            "birthday"
+        );
+        if (birthday == null) return null;
         int year = NostrUtils.safeInt(birthday.get("year"));
         int month = NostrUtils.safeInt(birthday.get("month"));
         int day = NostrUtils.safeInt(birthday.get("day"));
-        if(year==0||month==0||day==0)return null;
+        if (year == 0 || month == 0 || day == 0) return null;
         Calendar cal = Calendar.getInstance();
         cal.set(Calendar.YEAR, year);
-        cal.set(Calendar.MONTH, month-1);
+        cal.set(Calendar.MONTH, month - 1);
         cal.set(Calendar.DAY_OF_MONTH, day);
         return cal.getTime();
     }
 
-    public void setBirthday(Date birthday){
-        if(birthday==null){
+    public void setBirthday(Date birthday) {
+        if (birthday == null) {
             metadata.remove("birthday");
             return;
         }
         Calendar cal = Calendar.getInstance();
         cal.setTime(birthday);
-        Map<String,Object> b =  new HashMap<>();
+        Map<String, Object> b = new HashMap<>();
         b.put("year", cal.get(Calendar.YEAR));
-        b.put("month", cal.get(Calendar.MONTH)+1);
+        b.put("month", cal.get(Calendar.MONTH) + 1);
         b.put("day", cal.get(Calendar.DAY_OF_MONTH));
         metadata.put("birthday", b);
     }
 
-    public void setBirthday(int year, int month, int day){
+    public void setBirthday(int year, int month, int day) {
         Map<String, Object> b = new HashMap<>();
         b.put("year", year);
         b.put("month", month);
@@ -214,47 +204,50 @@ public class Nip24Metadata  {
         metadata.put("birthday", b);
     }
 
-    public static Nip24Metadata fromEvent( NostrEvent event) throws Exception{
+    public static Nip24Metadata fromEvent(NostrEvent event) throws Exception {
         return new Nip24Metadata(event);
     }
 
-    public static AsyncTask<List<Nip24Metadata>> fetchAll(
-            NostrPool pool) {
-        return pool.fetch(new Nip24MetadataFilter(null)).then(evs -> {
-            return evs.stream().map(e -> {
-                try {
-                    return new Nip24Metadata(e);
-                } catch (Exception ex) {
-                    throw new RuntimeException(ex);
-                }
-            }).toList();
-        });
+    public static AsyncTask<List<Nip24Metadata>> fetchAll(NostrPool pool) {
+        return pool
+            .fetch(new Nip24MetadataFilter(null))
+            .then(evs -> {
+                return evs
+                    .stream()
+                    .map(e -> {
+                        try {
+                            return new Nip24Metadata(e);
+                        } catch (Exception ex) {
+                            throw new RuntimeException(ex);
+                        }
+                    })
+                    .toList();
+            });
     }
 
     public static AsyncTask<Nip24Metadata> fetch(
-            NostrPool pool,
-            NostrPublicKey pubkey) {
-        return pool.fetch(new Nip24MetadataFilter(pubkey)).then(
-            evs->{
-                SignedNostrEvent event = (SignedNostrEvent)evs.get(0);
+        NostrPool pool,
+        NostrPublicKey pubkey
+    ) {
+        return pool
+            .fetch(new Nip24MetadataFilter(pubkey))
+            .then(evs -> {
+                SignedNostrEvent event = (SignedNostrEvent) evs.get(0);
                 try {
                     return new Nip24Metadata(event);
                 } catch (Exception e) {
                     throw new RuntimeException(e);
                 }
-            }        
-        );
+            });
     }
 
-
     public static AsyncTask<List<NostrMessageAck>> update(
-            NostrPool pool,
-            NostrSigner signer,
-            Nip24Metadata newMetadata
+        NostrPool pool,
+        NostrSigner signer,
+        Nip24Metadata newMetadata
     ) throws Exception {
         UnsignedNostrEvent event = newMetadata.toUpdateEvent();
         SignedNostrEvent signed = signer.sign(event);
         return pool.send(signed);
     }
-
 }
