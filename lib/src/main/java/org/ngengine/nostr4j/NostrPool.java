@@ -182,7 +182,7 @@ public class NostrPool implements NostrRelayListener {
         Collection<NostrFilter> filters,
         Class<? extends EventTracker> eventTracker
     ) {
-        String subId = "nostr4j-" + subCounter.getAndIncrement();
+        String subId = "nostr4j-" + subCounter.incrementAndGet();
         EventTracker tracker;
         try {
             tracker = eventTracker.getDeclaredConstructor().newInstance();
