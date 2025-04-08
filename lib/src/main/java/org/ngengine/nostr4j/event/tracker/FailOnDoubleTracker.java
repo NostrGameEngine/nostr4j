@@ -28,12 +28,55 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package org.ngengine.nostr4j.listeners;
+package org.ngengine.nostr4j.event.tracker;
 
-import java.util.List;
-import org.ngengine.nostr4j.NostrRelay;
+import java.util.HashMap;
+import org.ngengine.nostr4j.NostrSubscription;
+import org.ngengine.nostr4j.event.SignedNostrEvent;
 
-public interface NostrRelayListener {
-    void onRelayConnect(NostrRelay relay);
-    void onRelayMessage(NostrRelay relay, List<Object> message);
+public class FailOnDoubleTracker implements EventTracker {
+
+    public HashMap<String, StackTraceElement[]> seenEvents = new HashMap<>();
+
+    public FailOnDoubleTracker() {}
+
+    @Override
+    public boolean seen(SignedNostrEvent event) {
+        if (
+            seenEvents.putIfAbsent(
+                event.getIdentifier().id,
+                new Exception().getStackTrace()
+            ) ==
+            null
+        ) {
+            return false;
+        } else {
+            throw new RuntimeException(
+                "Events was already seen: " +
+                event.getIdentifier().id +
+                "\n" +
+                "First seen stacktrace: " +
+                stackTraceToString(seenEvents.get(event.getIdentifier().id)) +
+                "\n" +
+                "Event: " +
+                event.toString()
+            );
+        }
+    }
+
+    private String stackTraceToString(StackTraceElement[] trace) {
+        StringBuilder sb = new StringBuilder();
+
+        for (StackTraceElement traceElement : trace) sb.append(
+            "\n\tat " + traceElement
+        );
+        return sb.toString();
+    }
+
+    public void clear() {
+        seenEvents.clear();
+    }
+
+    @Override
+    public void tuneFor(NostrSubscription sub) {}
 }

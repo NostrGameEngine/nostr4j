@@ -54,10 +54,12 @@ import javax.swing.plaf.basic.BasicScrollBarUI;
 import javax.swing.text.SimpleAttributeSet;
 import javax.swing.text.StyleConstants;
 import javax.swing.text.StyledDocument;
+import org.ngengine.nostr4j.NostrFilter;
 import org.ngengine.nostr4j.NostrPool;
 import org.ngengine.nostr4j.NostrSubscription;
 import org.ngengine.nostr4j.TestLogger;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
+import org.ngengine.nostr4j.event.tracker.FailOnDoubleTracker;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.nip24.Nip24Metadata;
 import org.ngengine.nostr4j.nip50.NostrSearchFilter;
@@ -189,24 +191,23 @@ public class NostrClient extends JFrame {
         contentPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
         JPanel contentContainerPanel = new JPanel(new BorderLayout());
-        contentContainerPanel.add(
-            contentPanel,
-            BorderLayout.CENTER
-        );
-        
+        contentContainerPanel.add(contentPanel, BorderLayout.CENTER);
 
         // Custom scrollpane with 90s style
         JScrollPane scrollPane = new JScrollPane(contentContainerPanel);
         scrollPane.setVerticalScrollBarPolicy(
-                JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+            JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED
+        );
         scrollPane.setHorizontalScrollBarPolicy(
-                JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED // Enable horizontal scrolling
+            JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED // Enable horizontal scrolling
         );
         scrollPane.setBorder(createBevelBorder(PANEL_COLOR, 4));
         scrollPane.getViewport().setBackground(PANEL_COLOR);
 
         // Custom vertical scrollbar UI
-        scrollPane.getVerticalScrollBar().setUI(
+        scrollPane
+            .getVerticalScrollBar()
+            .setUI(
                 new BasicScrollBarUI() {
                     @Override
                     protected void configureScrollBarColors() {
@@ -231,10 +232,13 @@ public class NostrClient extends JFrame {
                         button.setMaximumSize(new Dimension(0, 0));
                         return button;
                     }
-                });
+                }
+            );
 
         // Custom horizontal scrollbar UI
-        scrollPane.getHorizontalScrollBar().setUI(
+        scrollPane
+            .getHorizontalScrollBar()
+            .setUI(
                 new BasicScrollBarUI() {
                     @Override
                     protected void configureScrollBarColors() {
@@ -259,7 +263,8 @@ public class NostrClient extends JFrame {
                         button.setMaximumSize(new Dimension(0, 0));
                         return button;
                     }
-                });
+                }
+            );
 
         // Create footer with load more button
         JPanel footerPanel = new JPanel(
@@ -654,7 +659,7 @@ public class NostrClient extends JFrame {
         this.pool.ensureRelay("wss://nostr.wine");
 
         // Show notice in a cyber dialog
-        this.pool.addNoticeListener((relay, notice) ->
+        this.pool.addNoticeListener((relay, notice, ex) ->
                 SwingUtilities.invokeLater(() ->
                     showCyberMessageBox("SYSTEM NOTICE", notice)
                 )
@@ -663,10 +668,11 @@ public class NostrClient extends JFrame {
         // Subscribe to events
         NostrSubscription sub =
             this.pool.subscribe(
-                    Arrays.asList(new NostrSearchFilter().kind(1).limit(10))
+                    Arrays.asList(new NostrFilter().kind(1).limit(10)),
+                    FailOnDoubleTracker.class
                 );
 
-        sub.listenEvent((s, event, stored) -> addEventToFeed(event, true));
+        sub.listenEvent((event, stored) -> addEventToFeed(event, true));
         sub.open();
     }
 
@@ -889,9 +895,10 @@ public class NostrClient extends JFrame {
                     .kind(1)
                     .search(searchBar.getText().trim())
                     .until(Instant.ofEpochSecond(earliestEvent))
-                    .limit(5)
+                    .limit(5),
+                FailOnDoubleTracker.class
             )
-            .exceptionally(e -> {
+            .catchException(e -> {
                 SwingUtilities.invokeLater(() -> {
                     showCyberMessageBox("ERROR", e.getMessage());
                     loadMoreButton.setText("LOAD MORE");
@@ -940,7 +947,7 @@ public class NostrClient extends JFrame {
             )
         );
 
-        sub.listenEvent((s, event, stored) -> {
+        sub.listenEvent((event, stored) -> {
             SwingUtilities.invokeLater(() -> {
                 // Remove searching label on first result
                 if (
@@ -1101,8 +1108,6 @@ public class NostrClient extends JFrame {
                         "PUBKEY COPIED TO SYSTEM BUFFER"
                     );
                 }
-
-           
             }
         );
 
@@ -1136,7 +1141,7 @@ public class NostrClient extends JFrame {
 
         // Timestamp with futuristic style
         JLabel timestampLabel = new JLabel(
-          formatTimestamp(event.getCreatedAt().getEpochSecond())
+            formatTimestamp(event.getCreatedAt().getEpochSecond())
         );
         timestampLabel.setFont(new Font("Courier New", Font.BOLD, 11));
         timestampLabel.setForeground(NEON_PINK);
@@ -1175,7 +1180,9 @@ public class NostrClient extends JFrame {
         contentScroll.getViewport().setOpaque(false);
 
         // Custom vertical scrollbar UI
-        contentScroll.getVerticalScrollBar().setUI(
+        contentScroll
+            .getVerticalScrollBar()
+            .setUI(
                 new BasicScrollBarUI() {
                     @Override
                     protected void configureScrollBarColors() {
@@ -1200,10 +1207,13 @@ public class NostrClient extends JFrame {
                         button.setMaximumSize(new Dimension(0, 0));
                         return button;
                     }
-                });
+                }
+            );
 
         // Custom horizontal scrollbar UI
-        contentScroll.getHorizontalScrollBar().setUI(
+        contentScroll
+            .getHorizontalScrollBar()
+            .setUI(
                 new BasicScrollBarUI() {
                     @Override
                     protected void configureScrollBarColors() {
@@ -1228,7 +1238,8 @@ public class NostrClient extends JFrame {
                         button.setMaximumSize(new Dimension(0, 0));
                         return button;
                     }
-                });
+                }
+            );
         contentMainPanel.add(contentScroll);
 
         // Check for image URLs in content
@@ -1378,35 +1389,34 @@ public class NostrClient extends JFrame {
             authorLabel.setText("_" + nameCache.get(key) + "_");
             return;
         }
-
         // Fetch metadata
-        AsyncTask<Nip24Metadata> task = metadataCache.computeIfAbsent(
-            key,
-            k -> Nip24Metadata.fetch(this.pool, pubkey)
-        );
+        // AsyncTask<Nip24Metadata> task = metadataCache.computeIfAbsent(
+        //     key,
+        //     k -> Nip24Metadata.fetch(this.pool, pubkey)
+        // );
 
-        task
-            .then(metadata -> {
-                if (metadata != null) {
-                    SwingUtilities.invokeLater(() -> {
-                        String name = metadata.getDisplayName();
-                        if (name == null) name = metadata.getName();
-                        if (name == null || name.isEmpty()) {
-                            name = key.substring(0, 8) + "...";
-                        }
+        // task
+        //     .then(metadata -> {
+        //         if (metadata != null) {
+        //             SwingUtilities.invokeLater(() -> {
+        //                 String name = metadata.getDisplayName();
+        //                 if (name == null) name = metadata.getName();
+        //                 if (name == null || name.isEmpty()) {
+        //                     name = key.substring(0, 8) + "...";
+        //                 }
 
-                        // Update cache and label with cyber style
-                        nameCache.put(key, name);
-                        authorLabel.setText("_" + name + "_");
-                    });
-                }
-                return null;
-            })
-            .exceptionally(ex -> {
-                System.out.println(
-                    "Error fetching metadata: " + ex.getMessage()
-                );
-            });
+        //                 // Update cache and label with cyber style
+        //                 nameCache.put(key, name);
+        //                 authorLabel.setText("_" + name + "_");
+        //             });
+        //         }
+        //         return null;
+        //     })
+        //     .exceptionally(ex -> {
+        //         System.out.println(
+        //             "Error fetching metadata: " + ex.getMessage()
+        //         );
+        //     });
     }
 
     private void copyToClipboard(String text) {

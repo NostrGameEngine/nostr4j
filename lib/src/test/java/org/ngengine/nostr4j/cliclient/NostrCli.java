@@ -30,48 +30,56 @@
  */
 package org.ngengine.nostr4j.cliclient;
 
+import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.NostrFilter;
 import org.ngengine.nostr4j.NostrPool;
 import org.ngengine.nostr4j.NostrSubscription;
 import org.ngengine.nostr4j.TestLogger;
+import org.ngengine.nostr4j.event.tracker.FailOnDoubleTracker;
 
 public class NostrCli {
 
-    private static final Logger rootLogger = TestLogger.getRoot();
+    private static final Logger rootLogger = TestLogger.getRoot(Level.FINEST);
 
-    public static void main(String _a[]) {
+    public static void main(String _a[]) throws Exception {
         // initialize pool
         NostrPool pool = new NostrPool();
         // add relays
-        pool.ensureRelay("wss://nostr.rblb.it");
+        pool.ensureRelay("ws://127.0.0.1:8087");
 
         // listen for notices
-        pool.addNoticeListener((relay, msg) -> {
-            System.out.println("Notice: " + msg + " from relay: " + relay);
+        pool.addNoticeListener((relay, msg, error) -> {
+            if (error != null) {
+                System.out.println("Error: " + msg + " from relay: " + relay);
+            } else {
+                System.out.println("Notice: " + msg + " from relay: " + relay);
+            }
         });
 
         // initialize subscription
         NostrSubscription sub = pool.subscribe(
-            new NostrFilter().kind(1).limit(2)
+            new NostrFilter().kind(1).limit(3),
+            FailOnDoubleTracker.class
         );
 
+        
         // append listeners
-        sub.listenClose((s, reason) -> {
-            // System.out.println("Subscription closed: " + s + " reason: " + reason);
-            rootLogger.fine("Subscription closed: " + s + " reason: " + reason);
+        sub.listenClose(reason -> {
+            System.out.println("Subscription closed: reason: " + reason);
+        
         });
 
-        sub.listenEvent((s, event, stored) -> {
+        sub.listenEvent((event, stored) -> {
             System.out.println("Event: " + event + " stored: " + stored);
         });
 
-        sub.listenEose(s -> {
-            rootLogger.fine("End of stored events: " + s);
+        sub.listenEose(all -> {
+            System.out.println("Eose: " + all);
         });
 
         // start sub
-        sub.open();
+        sub.open().await();
 
         // System.out.println("started: " + sub);
         rootLogger.info("started: " + sub);

@@ -97,7 +97,7 @@ public class TeaVMWebsocketTransport implements NostrTransport {
     }
 
     @Override
-    public AsyncTask<Void> ensureConnect(String url) {
+    public AsyncTask<Void> connect(String url) {
         return this.platform.wrapPromise((res, rej) -> {
                 try {
                     if (this.ws == null) {
@@ -244,5 +244,14 @@ public class TeaVMWebsocketTransport implements NostrTransport {
                     rej.accept(e);
                 }
             });
+    }
+
+    @Override
+    public boolean isConnected() {
+        if (this.ws == null) {
+            return false;
+        }
+        int state = this.ws.getReadyState();
+        return state == 1; // WebSocket.OPEN
     }
 }

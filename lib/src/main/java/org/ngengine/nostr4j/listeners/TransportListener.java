@@ -36,4 +36,6 @@ public interface TransportListener {
     void onConnectionMessage(String msg);
 
     void onConnectionClosedByClient(String reason);
+
+    void onConnectionError(Throwable e);
 }

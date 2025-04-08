@@ -35,6 +35,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.function.Supplier;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.platform.Platform;
 
@@ -238,5 +239,26 @@ public class NostrUtils {
         } else {
             return Instant.ofEpochSecond(safeLong(object));
         }
+    }
+
+    /**
+     * Wrapper to exploit assert to toggle on/off debug code
+     * usage:
+     *  assert dbg(()->{
+     *     // heavy debug code
+     *  });
+     */
+    public static boolean dbg(Runnable r) {
+        Supplier<Boolean> s = () -> {
+            try {
+                r.run();
+                return true;
+            } catch (Exception e) {
+                e.printStackTrace();
+                return false;
+            }
+        };
+        assert s.get() : "Debug statement failed";
+        return true;
     }
 }

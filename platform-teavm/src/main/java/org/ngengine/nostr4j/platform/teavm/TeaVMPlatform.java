@@ -33,7 +33,9 @@ package org.ngengine.nostr4j.platform.teavm;
 import java.nio.charset.StandardCharsets;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.Queue;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -216,7 +218,7 @@ public class TeaVMPlatform implements Platform {
             }
 
             @Override
-            public AsyncTask<T> exceptionally(Consumer<Throwable> func2) {
+            public AsyncTask<T> catchException(Consumer<Throwable> func2) {
                 promise.catchError(func2);
                 return this;
             }
@@ -228,7 +230,7 @@ public class TeaVMPlatform implements Platform {
         return (AsyncTask<T>) promisify(func, null);
     }
 
-    public <T> AsyncTask<List<T>> waitAll(List<AsyncTask<T>> promises) {
+    public <T> AsyncTask<List<T>> awaitAll(List<AsyncTask<T>> promises) {
         return wrapPromise((res, rej) -> {
             if (promises.isEmpty()) {
                 res.accept(new ArrayList<>());
@@ -246,7 +248,7 @@ public class TeaVMPlatform implements Platform {
                 final int j = i;
                 AsyncTask<T> p = promises.get(i);
                 p
-                    .exceptionally(e -> {
+                    .catchException(e -> {
                         rej.accept(e);
                     })
                     .then(r -> {
@@ -327,5 +329,10 @@ public class TeaVMPlatform implements Platform {
     @Override
     public NostrTransport newTransport() {
         return new TeaVMWebsocketTransport(this);
+    }
+
+    @Override
+    public <T> Queue<T> newConcurrentQueue(Class<T> claz) {
+        return new LinkedList<T>();
     }
 }

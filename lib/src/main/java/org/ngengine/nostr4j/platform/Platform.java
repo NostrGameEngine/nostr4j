@@ -32,6 +32,7 @@ package org.ngengine.nostr4j.platform;
 
 import java.security.NoSuchAlgorithmException;
 import java.util.List;
+import java.util.Queue;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import org.ngengine.nostr4j.keypair.NostrPrivateKey;
@@ -82,7 +83,9 @@ public interface Platform {
         BiConsumer<Consumer<T>, Consumer<Throwable>> func
     );
 
-    <T> AsyncTask<List<T>> waitAll(List<AsyncTask<T>> promises);
+    <T> AsyncTask<List<T>> awaitAll(List<AsyncTask<T>> promises);
 
     long getTimestampSeconds();
+
+    <T> Queue<T> newConcurrentQueue(Class<T> claz);
 }

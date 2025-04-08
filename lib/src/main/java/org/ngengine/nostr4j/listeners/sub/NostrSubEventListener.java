@@ -30,13 +30,8 @@
  */
 package org.ngengine.nostr4j.listeners.sub;
 
-import org.ngengine.nostr4j.NostrSubscription;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 
 public interface NostrSubEventListener extends NostrSubListener {
-    void onSubEvent(
-        NostrSubscription sub,
-        SignedNostrEvent event,
-        boolean stored
-    );
+    void onSubEvent(SignedNostrEvent event, boolean stored);
 }

@@ -30,8 +30,8 @@
  */
 package org.ngengine.nostr4j.listeners.sub;
 
-import org.ngengine.nostr4j.NostrSubscription;
+import java.util.List;
 
 public interface NostrSubCloseListener extends NostrSubListener {
-    void onSubClose(NostrSubscription sub, String reason);
+    void onSubClose(List<String> reasons);
 }

@@ -13,3 +13,4 @@ plugins {
 
 rootProject.name = 'nostr4j'
 include('lib')
+// include('platform-teavm')

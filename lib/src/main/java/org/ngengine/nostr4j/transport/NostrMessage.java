@@ -95,6 +95,14 @@ public abstract class NostrMessage extends NostrMessageFragment {
         return message.toSerial();
     }
 
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) return true;
+        if (obj == null || getClass() != obj.getClass()) return false;
+        NostrMessage that = (NostrMessage) obj;
+        return toSerial().equals(that.toSerial());
+    }
+
     public static NostrMessageAck ack(
         NostrRelay relay,
         String id,

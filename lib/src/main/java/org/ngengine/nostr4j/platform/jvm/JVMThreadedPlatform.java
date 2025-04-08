@@ -53,7 +53,7 @@ public class JVMThreadedPlatform extends JVMAsyncPlatform {
 
         @Override
         public <T> AsyncTask<T> run(Callable<T> r) {
-            return promisify(
+            return wrapPromise(
                 (res, rej) -> {
                     executor.submit(() -> {
                         try {
@@ -62,8 +62,7 @@ public class JVMThreadedPlatform extends JVMAsyncPlatform {
                             rej.accept(e);
                         }
                     });
-                },
-                this
+                }
             );
         }
 
@@ -73,7 +72,7 @@ public class JVMThreadedPlatform extends JVMAsyncPlatform {
             long delay,
             TimeUnit unit
         ) {
-            return promisify(
+            return wrapPromise(
                 (res, rej) -> {
                     executor.schedule(
                         () -> {
@@ -86,8 +85,7 @@ public class JVMThreadedPlatform extends JVMAsyncPlatform {
                         delay,
                         unit
                     );
-                },
-                this
+                }
             );
         }
     }

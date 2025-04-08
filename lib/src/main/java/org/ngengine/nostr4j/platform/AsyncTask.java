@@ -30,8 +30,10 @@
  */
 package org.ngengine.nostr4j.platform;
 
+import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import org.ngengine.nostr4j.utils.NostrUtils;
 
 public interface AsyncTask<T> {
     boolean isDone();
@@ -39,5 +41,10 @@ public interface AsyncTask<T> {
     boolean isSuccess();
     T await() throws Exception;
     <R> AsyncTask<R> then(Function<T, R> func2);
-    AsyncTask<T> exceptionally(Consumer<Throwable> func2);
+    AsyncTask<T> catchException(Consumer<Throwable> func2);
+
+    static <T> AsyncTask<List<T>> awaitAll(List<AsyncTask<T>> tasks) {
+        Platform platform = NostrUtils.getPlatform();
+        return platform.awaitAll(tasks);
+    }
 }

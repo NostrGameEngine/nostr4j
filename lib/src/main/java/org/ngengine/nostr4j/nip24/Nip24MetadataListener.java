@@ -31,7 +31,6 @@
 package org.ngengine.nostr4j.nip24;
 
 import java.util.function.Consumer;
-import org.ngengine.nostr4j.NostrSubscription;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.listeners.sub.NostrSubEventListener;
@@ -58,11 +57,7 @@ public class Nip24MetadataListener implements NostrSubEventListener {
     }
 
     @Override
-    public void onSubEvent(
-        NostrSubscription sub,
-        SignedNostrEvent event,
-        boolean stored
-    ) {
+    public void onSubEvent(SignedNostrEvent event, boolean stored) {
         try {
             if (
                 event.getKind() != 0 ||

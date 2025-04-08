@@ -36,7 +36,7 @@ import org.ngengine.nostr4j.platform.AsyncTask;
 public interface NostrTransport {
     AsyncTask<Void> close(String reason);
 
-    AsyncTask<Void> ensureConnect(String url);
+    AsyncTask<Void> connect(String url);
 
     AsyncTask<Void> send(String message);
 
@@ -45,4 +45,6 @@ public interface NostrTransport {
     void removeListener(TransportListener listener);
 
     AsyncTask<String> httpGet(String url);
+
+    boolean isConnected();
 }

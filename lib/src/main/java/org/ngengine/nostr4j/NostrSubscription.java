@@ -66,13 +66,13 @@ public class NostrSubscription extends NostrMessage {
     private final Collection<NostrSubCloseListener> onCloseListeners =
         new CopyOnWriteArrayList<>();
 
-    private boolean eose;
     private final NostrExecutor executor;
     private final Collection<NostrFilter> filters;
     private final Collection<NostrFilter> filtersRO;
 
     private final Function<NostrSubscription, AsyncTask<List<NostrMessageAck>>> onOpen;
     private final BiFunction<NostrSubscription, NostrSubCloseMessage, AsyncTask<List<NostrMessageAck>>> onClose;
+    private final List<String> closeReasons = new ArrayList<>();
 
     protected NostrSubscription(
         String subId,
@@ -91,6 +91,10 @@ public class NostrSubscription extends NostrMessage {
         this.onClose = onClose;
     }
 
+    protected void registerClosure(String reason) {
+        closeReasons.add(reason);
+    }
+
     public Collection<NostrFilter> getFilters() {
         return this.filtersRO;
     }
@@ -107,10 +111,11 @@ public class NostrSubscription extends NostrMessage {
         return this.onOpen.apply(this);
     }
 
-    public AsyncTask<List<NostrMessageAck>> close(String reason) {
+    public AsyncTask<List<NostrMessageAck>> close() {
         AsyncTask<List<NostrMessageAck>> out =
-            this.onClose.apply(this, getCloseMessage(reason));
-        callCloseListeners(reason);
+            this.onClose.apply(this, getCloseMessage());
+        registerClosure("closed by client");
+        callCloseListeners();
         return out;
     }
 
@@ -118,36 +123,42 @@ public class NostrSubscription extends NostrMessage {
         return subId;
     }
 
-    protected void setEose(boolean v) {
-        this.eose = true;
-    }
-
-    public boolean isEose() {
-        return this.eose;
-    }
-
     public NostrSubscription listenEvent(NostrSubEventListener listener) {
-        return listen(listener);
+        assert listener != null;
+        assert onEventListeners.contains(listener) == false;
+        onEventListeners.add((NostrSubEventListener) listener);
+        return this;
     }
 
     public NostrSubscription listenEose(NostrSubEoseListener listener) {
-        return listen(listener);
+        assert listener != null;
+        assert onEoseListeners.contains(listener) == false;
+        onEoseListeners.add(listener);
+        return this;
     }
 
     public NostrSubscription listenClose(NostrSubCloseListener listener) {
-        return listen(listener);
+        assert listener != null;
+        assert onCloseListeners.contains(listener) == false;
+        onCloseListeners.add(listener);
+        return this;
     }
 
     public NostrSubscription listen(NostrSubListener listener) {
+        assert listener != null;
         if (listener instanceof NostrSubEoseListener) {
+            assert onEoseListeners.contains(listener) == false;
             onEoseListeners.add((NostrSubEoseListener) listener);
         }
         if (listener instanceof NostrSubEventListener) {
+            assert onEventListeners.contains(listener) == false;
             onEventListeners.add((NostrSubEventListener) listener);
         }
         if (listener instanceof NostrSubCloseListener) {
+            assert onCloseListeners.contains(listener) == false;
             onCloseListeners.add((NostrSubCloseListener) listener);
         }
+
         return this;
     }
 
@@ -164,14 +175,14 @@ public class NostrSubscription extends NostrMessage {
         return this;
     }
 
-    protected void callEoseListeners() {
+    protected void callEoseListeners(boolean everyWhere) {
         if (onEoseListeners.isEmpty()) return;
         for (NostrSubEoseListener listener : onEoseListeners) {
             this.executor.run(() -> {
-                    listener.onSubEose(this);
+                    listener.onSubEose(everyWhere);
                     return null;
                 })
-                .exceptionally(ex -> {
+                .catchException(ex -> {
                     logger.warning(
                         "Error calling EOSE listener: " + listener + " " + ex
                     );
@@ -183,27 +194,27 @@ public class NostrSubscription extends NostrMessage {
         if (onEventListeners.isEmpty()) return;
         for (NostrSubEventListener listener : onEventListeners) {
             this.executor.run(() -> {
-                    listener.onSubEvent(this, event, stored);
+                    listener.onSubEvent(event, stored);
                     return null;
                 })
-                .exceptionally(ex -> {
+                .catchException(ex -> {
                     logger.warning(
-                        "Error calling EOSE listener: " + listener + " " + ex
+                        "Error calling Event listener: " + listener + " " + ex
                     );
                 });
         }
     }
 
-    protected void callCloseListeners(String reason) {
+    protected void callCloseListeners() {
         if (onCloseListeners.isEmpty()) return;
         for (NostrSubCloseListener listener : onCloseListeners) {
             this.executor.run(() -> {
-                    listener.onSubClose(this, reason);
+                    listener.onSubClose(closeReasons);
                     return null;
                 })
-                .exceptionally(ex -> {
+                .catchException(ex -> {
                     logger.warning(
-                        "Error calling EOSE listener: " + listener + " " + ex
+                        "Error calling Close listener: " + listener + " " + ex
                     );
                 });
         }
@@ -228,19 +239,13 @@ public class NostrSubscription extends NostrMessage {
 
         private transient List<Object> fragments;
         private final String id;
-        private final String message;
 
-        public NostrSubCloseMessage(String id, String message) {
+        public NostrSubCloseMessage(String id) {
             this.id = id;
-            this.message = message;
         }
 
         public String getId() {
             return id;
-        }
-
-        public String getMessage() {
-            return message;
         }
 
         @Override
@@ -251,14 +256,13 @@ public class NostrSubscription extends NostrMessage {
         @Override
         public Collection<Object> getFragments() {
             if (fragments != null) return fragments;
-            fragments = new ArrayList<>(2);
+            fragments = new ArrayList<>(1);
             fragments.add(id);
-            fragments.add(message);
             return fragments;
         }
     }
 
-    private NostrSubCloseMessage getCloseMessage(String reason) {
-        return new NostrSubCloseMessage(getId(), reason);
+    private NostrSubCloseMessage getCloseMessage() {
+        return new NostrSubCloseMessage(getId());
     }
 }

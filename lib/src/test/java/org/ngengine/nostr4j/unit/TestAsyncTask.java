@@ -62,7 +62,11 @@ public class TestAsyncTask {
             },
             platform.newPoolExecutor()
         );
-
+        try {
+            promise.await();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
         // Test the basic properties
         assertTrue(promise.isDone());
         assertTrue(promise.isSuccess());
@@ -79,6 +83,12 @@ public class TestAsyncTask {
             },
             platform.newPoolExecutor()
         );
+
+        try {
+            promise.await();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
 
         // Test the basic properties
         assertTrue(promise.isDone());
@@ -217,7 +227,7 @@ public class TestAsyncTask {
                 },
                 platform.newPoolExecutor()
             )
-            .exceptionally(error -> {
+            .catchException(error -> {
                 handlerCalled.set(true);
                 capturedError.set(error);
                 latch.countDown();
@@ -246,7 +256,7 @@ public class TestAsyncTask {
                 },
                 platform.newPoolExecutor()
             )
-            .exceptionally(error -> {
+            .catchException(error -> {
                 // Verify we got the right error
                 assertEquals("original error", error.getMessage());
                 handlerCalled.set(true);
@@ -285,7 +295,7 @@ public class TestAsyncTask {
                 }
                 return v + 1;
             })
-            .exceptionally(e -> {
+            .catchException(e -> {
                 counter.incrementAndGet();
                 latch.countDown();
             })
@@ -450,7 +460,7 @@ public class TestAsyncTask {
         }
 
         // Wait for all promises to complete
-        AsyncTask<List<Integer>> combinedPromise = platform.waitAll(promises);
+        AsyncTask<List<Integer>> combinedPromise = platform.awaitAll(promises);
 
         // Verify the result
         List<Integer> results = combinedPromise.await();
@@ -476,7 +486,7 @@ public class TestAsyncTask {
     public void testWaitAllEmptyList() throws Exception {
         // Test with an empty list
         List<AsyncTask<String>> emptyList = new ArrayList<>();
-        AsyncTask<List<String>> emptyPromise = platform.waitAll(emptyList);
+        AsyncTask<List<String>> emptyPromise = platform.awaitAll(emptyList);
 
         // Should resolve immediately with empty list
         List<String> result = emptyPromise.await();
@@ -532,10 +542,10 @@ public class TestAsyncTask {
         );
 
         // Wait for all promises
-        AsyncTask<List<String>> combinedPromise = platform.waitAll(promises);
+        AsyncTask<List<String>> combinedPromise = platform.awaitAll(promises);
 
         // Add error handler
-        combinedPromise.exceptionally(error -> {
+        combinedPromise.catchException(error -> {
             failureHandled.set(true);
             failureLatch.countDown();
         });
@@ -589,7 +599,7 @@ public class TestAsyncTask {
         }
 
         // Wait for all promises
-        AsyncTask<List<String>> combinedPromise = platform.waitAll(promises);
+        AsyncTask<List<String>> combinedPromise = platform.awaitAll(promises);
         List<String> results = combinedPromise.await();
 
         // Check results match original order regardless of completion order
@@ -632,7 +642,7 @@ public class TestAsyncTask {
 
         // Use then to capture when all promises complete
         platform
-            .waitAll(promises)
+            .awaitAll(promises)
             .then(results -> {
                 resultRef.set(results);
                 allResolved.countDown();

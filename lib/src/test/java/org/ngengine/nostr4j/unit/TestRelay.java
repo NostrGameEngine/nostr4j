@@ -34,6 +34,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -42,7 +43,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.Before;
 import org.junit.Test;
 import org.ngengine.nostr4j.NostrRelay;
-import org.ngengine.nostr4j.listeners.NostrRelayListener;
+import org.ngengine.nostr4j.NostrRelayLifecycleManager;
+import org.ngengine.nostr4j.listeners.NostrRelayComponent;
+import org.ngengine.nostr4j.platform.AsyncTask;
+import org.ngengine.nostr4j.transport.NostrMessage;
 
 public class TestRelay {
 
@@ -53,6 +57,7 @@ public class TestRelay {
     @Before
     public void setUp() {
         relay = new NostrRelay(TEST_RELAY_URL);
+        relay.addComponent(new NostrRelayLifecycleManager());
     }
 
     @Test
@@ -60,20 +65,64 @@ public class TestRelay {
         final CountDownLatch connectionLatch = new CountDownLatch(1);
         final AtomicBoolean connected = new AtomicBoolean(false);
 
-        relay.addListener(
-            new NostrRelayListener() {
+        relay.addComponent(
+            new NostrRelayComponent() {
                 @Override
-                public void onRelayConnect(NostrRelay relay) {
+                public boolean onRelayConnect(NostrRelay relay) {
                     connected.set(true);
                     connectionLatch.countDown();
+                    return true;
                 }
 
                 @Override
-                public void onRelayMessage(
+                public boolean onRelayMessage(
                     NostrRelay relay,
                     List<Object> message
                 ) {
-                    // Not needed for this test
+                    return true;
+                }
+
+                @Override
+                public boolean onRelayConnectRequest(NostrRelay relay) {
+                    return true;
+                }
+
+                @Override
+                public boolean onRelayError(NostrRelay relay, Throwable error) {
+                    return true;
+                }
+
+                @Override
+                public boolean onRelayLoop(
+                    NostrRelay relay,
+                    Instant nowInstant
+                ) {
+                    return true;
+                }
+
+                @Override
+                public boolean onRelayDisconnect(
+                    NostrRelay relay,
+                    String reason,
+                    boolean byClient
+                ) {
+                    return true;
+                }
+
+                @Override
+                public boolean onRelaySend(
+                    NostrRelay relay,
+                    NostrMessage message
+                ) {
+                    return true;
+                }
+
+                @Override
+                public boolean onRelayDisconnectRequest(
+                    NostrRelay relay,
+                    String reason
+                ) {
+                    return true;
                 }
             }
         );
@@ -93,20 +142,64 @@ public class TestRelay {
         final CountDownLatch connectLatch = new CountDownLatch(1);
         final AtomicInteger connectionEvents = new AtomicInteger(0);
 
-        relay.addListener(
-            new NostrRelayListener() {
+        relay.addComponent(
+            new NostrRelayComponent() {
                 @Override
-                public void onRelayConnect(NostrRelay relay) {
+                public boolean onRelayConnect(NostrRelay relay) {
                     connectionEvents.incrementAndGet();
                     connectLatch.countDown();
+                    return true;
                 }
 
                 @Override
-                public void onRelayMessage(
+                public boolean onRelayMessage(
                     NostrRelay relay,
                     List<Object> message
                 ) {
-                    // Not needed for this test
+                    return true;
+                }
+
+                @Override
+                public boolean onRelayConnectRequest(NostrRelay relay) {
+                    return true;
+                }
+
+                @Override
+                public boolean onRelayError(NostrRelay relay, Throwable error) {
+                    return true;
+                }
+
+                @Override
+                public boolean onRelayLoop(
+                    NostrRelay relay,
+                    Instant nowInstant
+                ) {
+                    return true;
+                }
+
+                @Override
+                public boolean onRelayDisconnect(
+                    NostrRelay relay,
+                    String reason,
+                    boolean byClient
+                ) {
+                    return true;
+                }
+
+                @Override
+                public boolean onRelaySend(
+                    NostrRelay relay,
+                    NostrMessage message
+                ) {
+                    return true;
+                }
+
+                @Override
+                public boolean onRelayDisconnectRequest(
+                    NostrRelay relay,
+                    String reason
+                ) {
+                    return true;
                 }
             }
         );
@@ -138,8 +231,11 @@ public class TestRelay {
         assertEquals(60, relay.getAckTimeout(TimeUnit.SECONDS));
         assertEquals(1, relay.getAckTimeout(TimeUnit.MINUTES));
 
-        relay.setKeepAliveTime(45, TimeUnit.SECONDS);
-        assertEquals(45, relay.getKeepAliveTime(TimeUnit.SECONDS));
+        NostrRelayLifecycleManager lf = relay.getComponent(
+            NostrRelayLifecycleManager.class
+        );
+        lf.setKeepAliveTime(45, TimeUnit.SECONDS);
+        assertEquals(45, lf.getKeepAliveTime(TimeUnit.SECONDS));
     }
 
     @Test
@@ -171,19 +267,66 @@ public class TestRelay {
             latches[i] = new CountDownLatch(1);
 
             final int index = i;
-            relays[i].addListener(
-                    new NostrRelayListener() {
+            relays[i].addComponent(
+                    new NostrRelayComponent() {
                         @Override
-                        public void onRelayConnect(NostrRelay relay) {
+                        public boolean onRelayConnect(NostrRelay relay) {
                             latches[index].countDown();
+                            return true;
                         }
 
                         @Override
-                        public void onRelayMessage(
+                        public boolean onRelayMessage(
                             NostrRelay relay,
                             List<Object> message
                         ) {
-                            // Not needed for this test
+                            return true;
+                        }
+
+                        @Override
+                        public boolean onRelayConnectRequest(NostrRelay relay) {
+                            return true;
+                        }
+
+                        @Override
+                        public boolean onRelayError(
+                            NostrRelay relay,
+                            Throwable error
+                        ) {
+                            return true;
+                        }
+
+                        @Override
+                        public boolean onRelayLoop(
+                            NostrRelay relay,
+                            Instant nowInstant
+                        ) {
+                            return true;
+                        }
+
+                        @Override
+                        public boolean onRelayDisconnect(
+                            NostrRelay relay,
+                            String reason,
+                            boolean byClient
+                        ) {
+                            return true;
+                        }
+
+                        @Override
+                        public boolean onRelaySend(
+                            NostrRelay relay,
+                            NostrMessage message
+                        ) {
+                            return true;
+                        }
+
+                        @Override
+                        public boolean onRelayDisconnectRequest(
+                            NostrRelay relay,
+                            String reason
+                        ) {
+                            return true;
                         }
                     }
                 );
@@ -225,19 +368,60 @@ public class TestRelay {
 
     @Test
     public void testListenerManagement() {
-        NostrRelayListener listener = new NostrRelayListener() {
+        NostrRelayComponent listener = new NostrRelayComponent() {
             @Override
-            public void onRelayConnect(NostrRelay relay) {}
+            public boolean onRelayConnect(NostrRelay relay) {
+                return true;
+            }
 
             @Override
-            public void onRelayMessage(
+            public boolean onRelayMessage(
                 NostrRelay relay,
                 List<Object> message
-            ) {}
+            ) {
+                return true;
+            }
+
+            @Override
+            public boolean onRelayConnectRequest(NostrRelay relay) {
+                return true;
+            }
+
+            @Override
+            public boolean onRelayError(NostrRelay relay, Throwable error) {
+                return true;
+            }
+
+            @Override
+            public boolean onRelayLoop(NostrRelay relay, Instant nowInstant) {
+                return true;
+            }
+
+            @Override
+            public boolean onRelayDisconnect(
+                NostrRelay relay,
+                String reason,
+                boolean byClient
+            ) {
+                return true;
+            }
+
+            @Override
+            public boolean onRelaySend(NostrRelay relay, NostrMessage message) {
+                return true;
+            }
+
+            @Override
+            public boolean onRelayDisconnectRequest(
+                NostrRelay relay,
+                String reason
+            ) {
+                return true;
+            }
         };
 
-        relay.addListener(listener);
-        relay.removeListener(listener);
+        relay.addComponent(listener);
+        relay.removeComponent(listener);
         // No assertion needed - just verifying no exceptions are thrown
     }
 }

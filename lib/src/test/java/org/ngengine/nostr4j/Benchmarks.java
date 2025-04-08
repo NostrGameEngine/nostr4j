@@ -78,7 +78,7 @@ public class Benchmarks {
         if (threaded) NostrUtils.setPlatform(new JVMThreadedPlatform());
         pool = new NostrPool();
         pool.setVerifyEvents(!trusted);
-        relay = new NostrRelay("wss:/127.0.0.1");
+        relay = new NostrRelay("wss://127.0.0.1");
         pool.ensureRelay(relay);
         NostrSubscription sub = pool.subscribe(
             new NostrFilter(),

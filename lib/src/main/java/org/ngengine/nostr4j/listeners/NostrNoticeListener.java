@@ -33,5 +33,5 @@ package org.ngengine.nostr4j.listeners;
 import org.ngengine.nostr4j.NostrRelay;
 
 public interface NostrNoticeListener {
-    void onNotice(NostrRelay relay, String message);
+    void onNotice(NostrRelay relay, String message, Throwable e);
 }

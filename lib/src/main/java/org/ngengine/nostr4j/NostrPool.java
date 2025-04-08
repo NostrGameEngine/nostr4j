@@ -30,7 +30,10 @@
  */
 package org.ngengine.nostr4j;
 
+import static org.ngengine.nostr4j.utils.NostrUtils.dbg;
+
 import java.lang.reflect.InvocationTargetException;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -39,6 +42,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
@@ -46,7 +50,7 @@ import org.ngengine.nostr4j.event.tracker.EventTracker;
 import org.ngengine.nostr4j.event.tracker.ForwardSlidingWindowEventTracker;
 import org.ngengine.nostr4j.event.tracker.NaiveEventTracker;
 import org.ngengine.nostr4j.listeners.NostrNoticeListener;
-import org.ngengine.nostr4j.listeners.NostrRelayListener;
+import org.ngengine.nostr4j.listeners.NostrRelayComponent;
 import org.ngengine.nostr4j.platform.AsyncTask;
 import org.ngengine.nostr4j.platform.Platform;
 import org.ngengine.nostr4j.transport.NostrMessage;
@@ -55,7 +59,7 @@ import org.ngengine.nostr4j.transport.NostrTransport;
 import org.ngengine.nostr4j.utils.NostrUtils;
 import org.ngengine.nostr4j.utils.ScheduledAction;
 
-public class NostrPool implements NostrRelayListener {
+public class NostrPool implements NostrRelayComponent {
 
     private static final Logger logger = Logger.getLogger(
         NostrPool.class.getName()
@@ -97,17 +101,23 @@ public class NostrPool implements NostrRelayListener {
     }
 
     public AsyncTask<List<NostrMessageAck>> send(SignedNostrEvent ev) {
-        return send(ev);
+        return sendMessage(ev);
     }
 
-    protected AsyncTask<List<NostrMessageAck>> send(NostrMessage message) {
+    protected AsyncTask<List<NostrMessageAck>> sendMessage(
+        NostrMessage message
+    ) {
         List<AsyncTask<NostrMessageAck>> promises = new ArrayList<>();
         for (NostrRelay relay : relays) {
-            logger.fine("sending message to relay " + relay.getUrl());
+            assert dbg(() -> {
+                logger.finer(
+                    "sending message to relay " + relay.getUrl() + " " + message
+                );
+            });
             promises.add(relay.sendMessage(message));
         }
         Platform platform = NostrUtils.getPlatform();
-        return platform.waitAll(promises);
+        return platform.awaitAll(promises);
     }
 
     public NostrRelay ensureRelay(String url) {
@@ -116,6 +126,7 @@ public class NostrPool implements NostrRelayListener {
     }
 
     public NostrRelay ensureRelay(String url, NostrTransport transport) {
+
         NostrRelay relay = null;
         for (NostrRelay r : relays) {
             if (r.getUrl().equals(url)) {
@@ -125,30 +136,41 @@ public class NostrPool implements NostrRelayListener {
         }
         if (relay == null) {
             relay = new NostrRelay(url);
-            relay.addListener(this);
+            if (relay.getComponent(NostrRelaySubManager.class) == null) {
+                relay.addComponent(new NostrRelaySubManager());
+            }
+            if (relay.getComponent(NostrRelayLifecycleManager.class) == null) {
+                relay.addComponent(new NostrRelayLifecycleManager());
+            }
+            relay.addComponent(this);
+
             relays.add(relay);
         }
+
         if (!relay.isConnected()) {
             relay.connect();
         }
         return relay;
     }
 
-    public NostrRelay ensureRelay(NostrRelay relay) {
+    public AsyncTask<NostrRelay> ensureRelay(NostrRelay relay) {
         if (!relays.contains(relay)) {
             relays.add(relay);
-            relay.addListener(this);
+            if (relay.getComponent(NostrRelaySubManager.class) == null) {
+                relay.addComponent(new NostrRelaySubManager());
+            }
+            if (relay.getComponent(NostrRelayLifecycleManager.class) == null) {
+                relay.addComponent(new NostrRelayLifecycleManager());
+            }
+            relay.addComponent(this);
         }
-        if (!relay.isConnected()) {
-            relay.connect();
-        }
-        return relay;
+        return relay.connect();
     }
 
     public void disconnectRelay(String url) {
         for (NostrRelay relay : relays) {
             if (relay.getUrl().equals(url)) {
-                relay.removeListener(this);
+                relay.removeComponent(this);
                 relay.disconnect("Removed by user");
                 relays.remove(relay);
                 break;
@@ -158,7 +180,7 @@ public class NostrPool implements NostrRelayListener {
 
     public void disconnectRelay(NostrRelay relay) {
         if (relays.contains(relay)) {
-            relay.removeListener(this);
+            relay.removeComponent(this);
             relay.disconnect("Removed by user");
             relays.remove(relay);
         }
@@ -197,24 +219,32 @@ public class NostrPool implements NostrRelayListener {
         ) {
             throw new RuntimeException("Unable to create event tracker", e);
         }
-        logger.fine("subscribing to " + subId + " with filter " + filters);
+
+        assert dbg(() -> {
+            logger.fine("subscribing to " + subId + " with filter " + filters);
+        });
         NostrSubscription sub = new NostrSubscription(
             subId,
             filters,
             tracker,
             s -> {
-                logger.fine("starting subscription " + s.getId());
-                return this.send(s);
+                assert dbg(() -> {
+                    logger.fine("opening subscription " + s.getId());
+                });
+                return this.sendMessage(s);
             },
             (s, closeMessage) -> {
-                logger.fine(
-                    "closing subscription " +
-                    s.getId() +
-                    " reason: " +
-                    closeMessage
-                );
+                assert dbg(() -> {
+                    logger.fine(
+                        "closing subscription " +
+                        s.getId() +
+                        " reason: " +
+                        closeMessage
+                    );
+                });
+
                 subscriptions.remove(subId);
-                return this.send(closeMessage);
+                return this.sendMessage(closeMessage);
             }
         );
         tracker.tuneFor(sub);
@@ -279,114 +309,186 @@ public class NostrPool implements NostrRelayListener {
     ) {
         Platform platform = NostrUtils.getPlatform();
         NostrSubscription sub = subscribe(filters, eventTracker);
-        return platform.promisify(
+        return platform.wrapPromise(
             (res, rej) -> {
                 List<SignedNostrEvent> events = new ArrayList<>();
 
-                logger.fine(
-                    "Initialize fetch of " +
-                    filters +
-                    " with timeout " +
-                    timeout +
-                    " " +
-                    unit +
-                    " for subscription " +
-                    sub.getId()
-                );
+                assert dbg(() -> {
+                    logger.fine(
+                        "Initialize fetch of " +
+                        filters +
+                        " with timeout " +
+                        timeout +
+                        " " +
+                        unit +
+                        " for subscription " +
+                        sub.getId()
+                    );
+                });
 
-                scheduledActions.add(
-                    new ScheduledAction(
-                        platform.getTimestampSeconds() +
-                        unit.toSeconds(timeout),
-                        () -> {
-                            logger.fine(
-                                "fetch timeout for subscription " + sub.getId()
-                            );
-                            sub.close("timeout");
-                            rej.accept(new Exception("timeout"));
-                        }
-                    )
-                );
-
-                sub
-                    .listenEose(s -> {
-                        logger.fine("fetch eose for subscription " + s.getId());
-                        s.close("eose");
-                    })
-                    .listenEvent((s, e, stored) -> {
-                        logger.fine(
-                            "fetch event " +
-                            e +
-                            " for subscription " +
-                            s.getId()
+                AtomicBoolean ended = new AtomicBoolean(false);
+                ScheduledAction scheduled = new ScheduledAction(
+                    platform.getTimestampSeconds() +
+                    unit.toSeconds(timeout),
+                    () -> {
+                        if(ended.get()) return;
+                        logger.warning(
+                            "fetch timeout for fetch " + sub.getId()
                         );
+                        sub.close();
+                        rej.accept(new Exception("timeout"));
+                    }
+                );
+                
+                scheduledActions.add(scheduled);
+                sub
+                    .listenEose(all -> {
+                     
+                     
+                        if (all) {
+                                    assert dbg(() -> {
+                                        logger.fine(
+                                                "fetch eose for fetch " + sub.getId()+" with received events: " + events);
+                                    });
+                            res.accept(events);
+                            ended.set(true);
+                            scheduledActions.remove(scheduled);
+                            sub.close();
+                        }
+                    })
+                    .listenEvent((e, stored) -> {
+                        assert dbg(() -> {
+                            logger.finer(
+                                "fetch event " +
+                                e +
+                                " for subscription " +
+                                sub.getId()
+                            );
+                        });
+
                         events.add(e);
                     })
-                    .listenClose((s, reason) -> {
-                        logger.fine(
-                            "fetch close " +
-                            reason +
-                            " for subscription " +
-                            s.getId()
-                        );
-                        res.accept(events);
+                    .listenClose(reason -> {
+                        assert dbg(() -> {
+                            logger.fine(
+                                "fetch close " +
+                                reason +
+                                " for subscription " +
+                                sub.getId()
+                            );
+                        });
+
                     })
                     .open();
-            },
-            sub.getExecutor()
+            }
         );
     }
 
     @Override
-    public void onRelayMessage(NostrRelay relay, List<Object> doc) {
-        // logger.fine("received message from relay " + relay.getUrl() + " : " + doc);
+    public boolean onRelayMessage(NostrRelay relay, List<Object> doc) {
+        assert dbg(() -> {
+            logger.finer(
+                "received message from relay " + relay.getUrl() + " : " + doc
+            );
+        });
+
         try {
             String type = NostrUtils.safeString(doc.get(0));
             if (type.equals("CLOSED")) {
-                // TODO cound relays
+                
                 String subId = NostrUtils.safeString(doc.get(1));
                 String reason = doc.size() > 2
                     ? NostrUtils.safeString(doc.get(2))
                     : "";
                 NostrSubscription sub = subscriptions.get(subId);
                 if (sub != null) {
-                    logger.fine("received closed for subscription " + subId);
-                    sub.callCloseListeners(reason);
-                    subscriptions.remove(subId);
-                } else {
+                    // register that the subscription was closed for a reason
+                    sub.registerClosure(reason);
+
+                    // check if it is closed in every relay
+                    boolean isClosedEverywhere = true;
+                    for (NostrRelay r : relays) {
+                        NostrRelaySubManager m = r.getComponent(
+                            NostrRelaySubManager.class
+                        );
+                        if (m != null && m.isActive(sub)) {
+                            isClosedEverywhere = false;
+                            break;
+                        }
+                    }
+
                     logger.fine(
+                        "received closed for subscription " +
+                        subId +
+                        " from " +
+                        relay.getUrl() +
+                        " for reason: " +
+                        reason +
+                        " isClosedEverywhere: " +
+                        isClosedEverywhere
+                    );
+
+                    // if so, call the close listeners
+                    if (isClosedEverywhere) {
+                        sub.callCloseListeners();
+                        subscriptions.remove(subId);
+                    }
+                } else {
+                    logger.warning(
                         "received closed for unknown subscription " + subId
                     );
                 }
             } else if (type.equals("EOSE")) {
-                // TODO cound relays
                 String subId = NostrUtils.safeString(doc.get(1));
                 NostrSubscription sub = subscriptions.get(subId);
-                if (sub != null && !sub.isEose()) {
-                    logger.fine("received eose for subscription " + subId);
-                    sub.setEose(true);
-                    sub.callEoseListeners();
-                } else {
+                if (sub != null) {
+                    // check if it is eosed in every relay
+                    boolean isEOSEEverywhere = true;
+                    for (NostrRelay r : relays) {
+                        NostrRelaySubManager m = r.getComponent(
+                            NostrRelaySubManager.class
+                        );
+                        if (m != null && m.isActive(sub) && !m.isEose(sub)) {
+                            isEOSEEverywhere = false;
+                            break;
+                        }
+                    }
                     logger.fine(
+                        "received eose for subscription " +
+                        subId +
+                        " from " +
+                        relay.getUrl() +
+                        " isEOSEEverywhere: " +
+                        isEOSEEverywhere
+                    );
+
+                    sub.callEoseListeners(isEOSEEverywhere);
+                } else {
+                    logger.warning(
                         "received invalid eose for subscription " + subId
                     );
                 }
             } else if (type.equals("NOTICE")) {
                 String eventMessage = NostrUtils.safeString(doc.get(1));
-                logger.fine(
+                logger.info(
                     "Received notice from relay " +
                     relay.getUrl() +
                     ": " +
                     eventMessage
                 );
                 noticeListener.forEach(listener ->
-                    listener.onNotice(relay, eventMessage)
+                    listener.onNotice(relay, eventMessage, null)
                 );
             } else if (type.equals("EVENT")) {
+
                 String subId = NostrUtils.safeString(doc.get(1));
                 NostrSubscription sub = subscriptions.get(subId);
                 if (sub != null) {
-                    // logger.fine("received event for subscription " + subId);
+                    assert dbg(() -> {
+                        logger.finer(
+                            "received event for subscription " + subId
+                        );
+                    });
                     Map<String, Object> eventMap =
                         (Map<String, Object>) doc.get(2);
                     SignedNostrEvent e = new SignedNostrEvent(eventMap);
@@ -394,36 +496,59 @@ public class NostrPool implements NostrRelayListener {
                         "Event signature is invalid"
                     );
                     if (!sub.eventTracker.seen(e)) {
-                        logger.fine(
-                            "Event not seen " +
-                            e.getId() +
-                            " for subscription " +
-                            subId
+                        assert dbg(() -> {
+                            logger.finest(
+                                "Event not seen " +
+                                e.getId() +
+                                " for subscription " +
+                                subId
+                            );
+                        });
+
+                        boolean stored = false;
+
+                        // check if current relay reached EOSE
+                        NostrRelaySubManager m = relay.getComponent(
+                            NostrRelaySubManager.class
                         );
-                        sub.callEventListeners(e, !sub.isEose());
+                        if (m != null && m.isActive(sub) && !m.isEose(sub)) {
+                            stored = true;
+                        }
+                        final boolean storedFinal = stored;
+                        // syncher.then((n)->{
+                            sub.callEventListeners(e, storedFinal);
+                        //     return null;
+                        // });
+                        
                     } else {
-                        logger.fine(
-                            "Event already seen " +
-                            e.getId() +
-                            " for subscription " +
-                            subId
-                        );
+                        assert dbg(() -> {
+                            logger.finest(
+                                "Event already seen " +
+                                e.getId() +
+                                " for subscription " +
+                                subId
+                            );
+                        });
                     }
                 } else {
                     logger.warning(
-                        "Received event for unknown subscription " + subId
+                        "Received event for unknown subscription " +
+                        subId +
+                        " " +
+                        doc
                     );
                 }
             }
         } catch (Throwable t) {
             t.printStackTrace();
         }
+        return true;
     }
 
     public void close() {
         // close all subs
         for (NostrSubscription sub : subscriptions.values()) {
-            sub.close("closed by user");
+            sub.close();
         }
 
         // close all relays
@@ -435,7 +560,7 @@ public class NostrPool implements NostrRelayListener {
 
     public void unsubscribeAll() {
         for (NostrSubscription sub : subscriptions.values()) {
-            sub.close("closed by user");
+            sub.close();
         }
     }
 
@@ -448,10 +573,48 @@ public class NostrPool implements NostrRelayListener {
     }
 
     @Override
-    public void onRelayConnect(NostrRelay relay) {
+    public boolean onRelayConnect(NostrRelay relay) {
         // subscribe the relay to everything
         for (NostrSubscription sub : subscriptions.values()) {
             relay.sendMessage(sub);
         }
+        return true;
+    }
+
+    @Override
+    public boolean onRelayError(NostrRelay relay, Throwable error) {
+        noticeListener.forEach(listener ->
+            listener.onNotice(relay, error.getMessage(), error)
+        );
+        return true;
+    }
+
+    @Override
+    public boolean onRelayConnectRequest(NostrRelay relay) {
+        return true;
+    }
+
+    @Override
+    public boolean onRelayLoop(NostrRelay relay, Instant nowInstant) {
+        return true;
+    }
+
+    @Override
+    public boolean onRelayDisconnect(
+        NostrRelay relay,
+        String reason,
+        boolean byClient
+    ) {
+        return true;
+    }
+
+    @Override
+    public boolean onRelaySend(NostrRelay relay, NostrMessage message) {
+        return true;
+    }
+
+    @Override
+    public boolean onRelayDisconnectRequest(NostrRelay relay, String reason) {
+        return true;
     }
 }
