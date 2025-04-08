@@ -35,7 +35,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.ngengine.nostr4j.listeners.NostrRelayComponent;
-import org.ngengine.nostr4j.platform.AsyncTask;
 import org.ngengine.nostr4j.transport.NostrMessage;
 import org.ngengine.nostr4j.utils.NostrUtils;
 

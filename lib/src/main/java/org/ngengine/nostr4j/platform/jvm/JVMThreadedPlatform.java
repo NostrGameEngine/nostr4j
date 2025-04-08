@@ -53,17 +53,15 @@ public class JVMThreadedPlatform extends JVMAsyncPlatform {
 
         @Override
         public <T> AsyncTask<T> run(Callable<T> r) {
-            return wrapPromise(
-                (res, rej) -> {
-                    executor.submit(() -> {
-                        try {
-                            res.accept(r.call());
-                        } catch (Exception e) {
-                            rej.accept(e);
-                        }
-                    });
-                }
-            );
+            return wrapPromise((res, rej) -> {
+                executor.submit(() -> {
+                    try {
+                        res.accept(r.call());
+                    } catch (Exception e) {
+                        rej.accept(e);
+                    }
+                });
+            });
         }
 
         @Override
@@ -72,21 +70,19 @@ public class JVMThreadedPlatform extends JVMAsyncPlatform {
             long delay,
             TimeUnit unit
         ) {
-            return wrapPromise(
-                (res, rej) -> {
-                    executor.schedule(
-                        () -> {
-                            try {
-                                res.accept(r.call());
-                            } catch (Exception e) {
-                                rej.accept(e);
-                            }
-                        },
-                        delay,
-                        unit
-                    );
-                }
-            );
+            return wrapPromise((res, rej) -> {
+                executor.schedule(
+                    () -> {
+                        try {
+                            res.accept(r.call());
+                        } catch (Exception e) {
+                            rej.accept(e);
+                        }
+                    },
+                    delay,
+                    unit
+                );
+            });
         }
     }
 

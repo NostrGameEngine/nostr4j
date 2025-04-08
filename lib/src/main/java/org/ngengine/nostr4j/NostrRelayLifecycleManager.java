@@ -38,7 +38,6 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.listeners.NostrRelayComponent;
-import org.ngengine.nostr4j.platform.AsyncTask;
 import org.ngengine.nostr4j.transport.NostrMessage;
 import org.ngengine.nostr4j.utils.NostrUtils;
 

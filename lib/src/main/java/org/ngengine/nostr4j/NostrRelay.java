@@ -108,8 +108,6 @@ public class NostrRelay implements TransportListener {
     protected final Queue<QueuedMessage> messageQueue;
     protected final Queue<Runnable> connectCallbacks;
 
-
-
     public NostrRelay(String url) {
         try {
             Platform platform = NostrUtils.getPlatform();
@@ -132,28 +130,34 @@ public class NostrRelay implements TransportListener {
         boolean enqueue
     ) {
         Platform platform = NostrUtils.getPlatform();
-        if(!enqueue){
+        if (!enqueue) {
             return platform.promisify(runnable, platform.newRelayExecutor());
-        }else {
+        } else {
             synchronized (queue) {
                 if (queue.get() == null) {
-                    queue.set(platform.promisify(runnable, platform.newRelayExecutor()));
+                    queue.set(
+                        platform.promisify(
+                            runnable,
+                            platform.newRelayExecutor()
+                        )
+                    );
                 }
                 AsyncTask<T> q = queue.get();
-                AsyncTask<T> nq = q.then((n)->{
+                AsyncTask<T> nq = q.then(n -> {
                     try {
                         return platform.wrapPromise(runnable).await();
                     } catch (Exception e) {
-                        throw new RuntimeException("Error in runInRelayExecutor", e);
+                        throw new RuntimeException(
+                            "Error in runInRelayExecutor",
+                            e
+                        );
                     }
                 });
-                queue.set(nq);                
+                queue.set(nq);
                 return nq;
             }
         }
     }
-
-    
 
     public void setAutoReconnect(boolean reconnect) {
         this.reconnectOnDrop = reconnect;
@@ -192,119 +196,128 @@ public class NostrRelay implements TransportListener {
     public boolean isConnected() {
         return (
             this.connected ||
-            (!this.disconnectedByClient && this.reconnectOnDrop && this.firstConnection)
+            (
+                !this.disconnectedByClient &&
+                this.reconnectOnDrop &&
+                this.firstConnection
+            )
         );
     }
 
     public AsyncTask<NostrMessageAck> sendMessage(NostrMessage message) {
-        return runInRelayExecutor((res, rej) -> {
-            try {
-                if (!this.connected) {
-                    assert dbg(() -> {
-                        logger.finer(
-                            "Relay not connected, queueing message: " +
-                            message.toString()
-                        );
-                    });
-
-                    QueuedMessage q = new QueuedMessage(message, res, rej);
-                    assert !this.messageQueue.contains(
-                            q
-                        ) : "Duplicate message in queue: " +
-                    q.message.toString();
-                    this.messageQueue.add(q);
-
-                    return;
-                }
-
-                Platform platform = NostrUtils.getPlatform();
-
-                String eventId = message instanceof SignedNostrEvent
-                    ? ((SignedNostrEvent) message).getId()
-                    : null;
-
-                NostrMessageAck result = NostrMessage.ack(
-                    this,
-                    eventId != null ? eventId : null,
-                    platform.getTimestampSeconds(),
-                    (rr, msg) -> {
-                        if (eventId != null) {
-                            this.waitingEventsAck.remove(eventId);
-                        }
+        return runInRelayExecutor(
+            (res, rej) -> {
+                try {
+                    if (!this.connected) {
                         assert dbg(() -> {
-                            logger.finest("ack: " + msg + " " + eventId);
-                        });
-                        rr.setMessage(msg);
-                        rr.setSuccess(true);
-                        res.accept(rr);
-                    },
-                    (rr, msg) -> {
-                        if (eventId != null) {
-                            this.waitingEventsAck.remove(eventId);
-                        }
-                        assert dbg(() -> {
-                            logger.finest(
-                                "ack (rejected): " + msg + " " + eventId
+                            logger.finer(
+                                "Relay not connected, queueing message: " +
+                                message.toString()
                             );
                         });
-                        rr.setMessage(msg);
-                        rr.setSuccess(false);
-                        res.accept(rr);
-                    }
-                );
 
-                for (NostrRelayComponent listener : this.listeners) {
-                    try {
-                        if (!listener.onRelaySend(this, message)) {
-                            result.callSuccessCallback(
-                                "message ignored by component"
+                        QueuedMessage q = new QueuedMessage(message, res, rej);
+                        assert !this.messageQueue.contains(
+                                q
+                            ) : "Duplicate message in queue: " +
+                        q.message.toString();
+                        this.messageQueue.add(q);
+
+                        return;
+                    }
+
+                    Platform platform = NostrUtils.getPlatform();
+
+                    String eventId = message instanceof SignedNostrEvent
+                        ? ((SignedNostrEvent) message).getId()
+                        : null;
+
+                    NostrMessageAck result = NostrMessage.ack(
+                        this,
+                        eventId != null ? eventId : null,
+                        platform.getTimestampSeconds(),
+                        (rr, msg) -> {
+                            if (eventId != null) {
+                                this.waitingEventsAck.remove(eventId);
+                            }
+                            assert dbg(() -> {
+                                logger.finest("ack: " + msg + " " + eventId);
+                            });
+                            rr.setMessage(msg);
+                            rr.setSuccess(true);
+                            res.accept(rr);
+                        },
+                        (rr, msg) -> {
+                            if (eventId != null) {
+                                this.waitingEventsAck.remove(eventId);
+                            }
+                            assert dbg(() -> {
+                                logger.finest(
+                                    "ack (rejected): " + msg + " " + eventId
+                                );
+                            });
+                            rr.setMessage(msg);
+                            rr.setSuccess(false);
+                            res.accept(rr);
+                        }
+                    );
+
+                    for (NostrRelayComponent listener : this.listeners) {
+                        try {
+                            if (!listener.onRelaySend(this, message)) {
+                                result.callSuccessCallback(
+                                    "message ignored by component"
+                                );
+                                return;
+                            }
+                        } catch (Throwable e) {
+                            result.callFailureCallback(
+                                "message cancelled by component" +
+                                e.getMessage()
                             );
                             return;
                         }
-                    } catch (Throwable e) {
-                        result.callFailureCallback(
-                            "message cancelled by component" + e.getMessage()
-                        );
-                        return;
                     }
-                }
 
-                if (eventId != null) {
-                    this.waitingEventsAck.put(eventId, result);
-                }
+                    if (eventId != null) {
+                        this.waitingEventsAck.put(eventId, result);
+                    }
 
-                try {
-                    String json = NostrMessage.toJSON(message);
-                    this.connector.send(json)
-                        .catchException(e -> {
-                            assert dbg(() -> {
-                                logger.warning(
-                                    "Error sending message: " + e.getMessage()
-                                );
+                    try {
+                        String json = NostrMessage.toJSON(message);
+                        this.connector.send(json)
+                            .catchException(e -> {
+                                assert dbg(() -> {
+                                    logger.warning(
+                                        "Error sending message: " +
+                                        e.getMessage()
+                                    );
+                                });
+                                result.callFailureCallback(e.getMessage());
+                            })
+                            .then(vo -> {
+                                assert dbg(() -> {
+                                    logger.finest("Message sent: " + json);
+                                });
+                                if (eventId == null) {
+                                    result.callSuccessCallback("ok");
+                                }
+                                return null;
                             });
-                            result.callFailureCallback(e.getMessage());
-                        })
-                        .then(vo -> {
-                            assert dbg(() -> {
-                                logger.finest("Message sent: " + json);
-                            });
-                            if (eventId == null) {
-                                result.callSuccessCallback("ok");
-                            }
-                            return null;
+                    } catch (Throwable e) {
+                        assert dbg(() -> {
+                            logger.warning(
+                                "Error sending message (0): " + e.getMessage()
+                            );
                         });
+                        result.callFailureCallback(e.getMessage());
+                    }
                 } catch (Throwable e) {
-                    assert dbg(() -> {
-                        logger.warning(
-                            "Error sending message (0): " + e.getMessage()
-                        );
-                    });
-                    result.callFailureCallback(e.getMessage());
+                    rej.accept(e);
                 }
-            } catch (Throwable e) {
-                rej.accept(e);
-            }
-        }, !fast);
+            },
+            !fast
+        );
     }
 
     public String getUrl() {
@@ -312,43 +325,48 @@ public class NostrRelay implements TransportListener {
     }
 
     public AsyncTask<NostrRelay> connect() {
-
         if (!this.connected && !this.connecting) {
             this.connecting = true;
 
-            return runInRelayExecutor((res, rej) -> {
-                this.disconnectedByClient = false;
-                logger.fine("Connecting to relay: " + this.url);
-                for (NostrRelayComponent listener : this.listeners) {
-                    try {
-                        if (!listener.onRelayConnectRequest(this)) {
-                            logger.finer(
-                                "Connection ignored by component: " + this.url
+            return runInRelayExecutor(
+                (res, rej) -> {
+                    this.disconnectedByClient = false;
+                    logger.fine("Connecting to relay: " + this.url);
+                    for (NostrRelayComponent listener : this.listeners) {
+                        try {
+                            if (!listener.onRelayConnectRequest(this)) {
+                                logger.finer(
+                                    "Connection ignored by component: " +
+                                    this.url
+                                );
+                                res.accept(this);
+                                return;
+                            }
+                        } catch (Throwable e) {
+                            rej.accept(
+                                new Exception(
+                                    "Connection cancelled by component: " +
+                                    e.getMessage()
+                                )
                             );
-                            res.accept(this);
                             return;
                         }
-                    } catch (Throwable e) {
-                        rej.accept(
-                            new Exception(
-                                "Connection cancelled by component: " +
-                                e.getMessage()
-                            )
-                        );
-                        return;
                     }
-                }
 
-                connectCallbacks.add(() -> {
-                    res.accept(this);
-                });
-                this.connector.connect(url)
-                    .catchException(e -> {
-                        this.onConnectionClosedByServer("failed to connect");
-                        rej.accept(e);
+                    connectCallbacks.add(() -> {
+                        res.accept(this);
                     });
-                this.loop();
-            }, !fast);
+                    this.connector.connect(url)
+                        .catchException(e -> {
+                            this.onConnectionClosedByServer(
+                                    "failed to connect"
+                                );
+                            rej.accept(e);
+                        });
+                    this.loop();
+                },
+                !fast
+            );
         } else {
             Platform platform = NostrUtils.getPlatform();
             return platform.wrapPromise((res, rej) -> {
@@ -361,299 +379,17 @@ public class NostrRelay implements TransportListener {
         this.connected = false;
         this.disconnectedByClient = true;
         this.connector.close(reason);
-        return runInRelayExecutor((res, rej) -> {
-            logger.fine(
-                "Disconnecting from relay: " + this.url + " reason: " + reason
-            );
-            for (NostrRelayComponent listener : this.listeners) {
-                try {
-                    if (!listener.onRelayDisconnectRequest(this, reason)) {
-                        logger.finer(
-                            "Disconnect ignored by component: " + this.url
-                        );
-                        res.accept(this);
-                        return;
-                    }
-                } catch (Throwable e) {
-                    rej.accept(
-                        new Exception(
-                            "Disconnect cancelled by component: " +
-                            e.getMessage()
-                        )
-                    );
-                    return;
-                }
-            }
-            res.accept(this);
-        }, !fast);
-    }
-
-    @Override
-    public void onConnectionOpen() {
-        runInRelayExecutor((res, rej) -> {
-            try {
-                logger.fine("Connection opened: " + this.url);
+        return runInRelayExecutor(
+            (res, rej) -> {
+                logger.fine(
+                    "Disconnecting from relay: " +
+                    this.url +
+                    " reason: " +
+                    reason
+                );
                 for (NostrRelayComponent listener : this.listeners) {
                     try {
-                        if (!listener.onRelayConnect(this)) {
-                            logger.finer(
-                                "Connection ignored by component: " + this.url
-                            );
-                            res.accept(this);
-                            return;
-                        }
-                    } catch (Throwable e) {
-                        rej.accept(
-                            new Exception(
-                                "Connection cancelled by component: " +
-                                e.getMessage()
-                            )
-                        );
-                        return;
-                    }
-                }
-
-                this.connected = true;
-                this.connecting = false;
-                this.firstConnection = true;
-
-                {
-                    Iterator<Runnable> it = this.connectCallbacks.iterator();
-                    while (it.hasNext()) {
-                        Runnable callback = it.next();
-                        it.remove();
-                        try {
-                            callback.run();
-                        } catch (Throwable e) {
-                            assert dbg(() -> {
-                                e.printStackTrace(); // TODO: remove me
-                                logger.warning(
-                                    "Error in connect callback: " +
-                                    e.getMessage()
-                                );
-                            });
-                        }
-                    }
-                }
-
-                {
-                    Iterator<QueuedMessage> it = this.messageQueue.iterator();
-
-                    while (it.hasNext()) {
-                        QueuedMessage q = it.next();
-                        it.remove();
-                        assert dbg(() -> {
-                            logger.finer(
-                                "Sending queued message: " + q.message
-                            );
-                        });
-
-                        NostrMessage message = q.message;
-                        Consumer<NostrMessageAck> rs = q.res;
-                        Consumer<Throwable> rj = q.rej;
-                        try {
-                            this.sendMessage(message)
-                                .catchException(t -> {
-                                    rj.accept(t);
-                                })
-                                .then(v -> {
-                                    rs.accept(v);
-                                    return null;
-                                });
-                        } catch (Throwable e) {
-                            rej.accept(e);
-                        }
-                    }
-                }
-                res.accept(this);
-            } catch (Throwable e) {
-                assert dbg(() -> {
-                    e.printStackTrace(); // TODO: remove me
-                    logger.warning(
-                        "Error in connect callback: " + e.getMessage()
-                    );
-                });
-                rej.accept(e);
-            }
-        }, !fast);
-    }
-
-    boolean fast = true;
-
-    boolean fastEvents = false;
-
-    @Override
-    public void onConnectionMessage(String msg) {
-        try {
-            Platform platform = NostrUtils.getPlatform();
-
-            AsyncTask<NostrRelay> syncher = fastEvents? runInRelayExecutor((res, rej) -> {
-                res.accept(this);
-            },true):platform.wrapPromise((res, rej) -> {
-                res.accept(this);
-            });
-
-            runInRelayExecutor((res, rej) -> {
-                try {
-                    assert dbg(() -> {
-                        logger.finest("Received message: " + msg);
-                    });
-                    List<Object> data = platform.fromJSON(msg, List.class);
-                    String prefix = NostrUtils.safeString(data.get(0));
-
-                    // handle acks
-                    switch (prefix) {
-                        case "OK":
-                            {
-                                String eventId = NostrUtils.safeString(data.get(1));
-                                boolean success = (Boolean) data.get(2);
-                                String eventMessage = data.size() > 3
-                                    ? NostrUtils.safeString(data.get(3))
-                                    : "";
-                                NostrMessageAck ack =
-                                    this.waitingEventsAck.get(eventId);
-                                if (ack != null) {
-                                    assert dbg(() -> {
-                                        logger.finest(
-                                            "Received ack for event: " +
-                                            eventId +
-                                            " success: " +
-                                            success +
-                                            " message: " +
-                                            eventMessage
-                                        );
-                                    });
-                                    ack.setSuccess(success);
-                                    ack.setMessage(eventMessage);
-                                    if (success) {
-                                        ack.callSuccessCallback(eventMessage);
-                                    } else {
-                                        ack.callFailureCallback(eventMessage);
-                                    }
-                                } else {
-                                    assert dbg(() -> {
-                                        logger.warning(
-                                            "Received ack for unknown event: " +
-                                            eventId
-                                        );
-                                    });
-                                }
-                                break;
-                            }
-                    }
-
-                    // syncher.await();
-
-                    // propagate event to listeners
-                    for (NostrRelayComponent listener : this.listeners) {
-                        try {
-                            if (!listener.onRelayMessage(this, data)) {
-                                assert dbg(() -> {
-                                    logger.finest(
-                                        "Message ignored by component: " + this.url
-                                    );
-                                });
-                                res.accept(this);
-                                return;
-                            }
-                        } catch (Throwable e) {
-                            rej.accept(
-                                new Exception(
-                                    "Message cancelled by component: " +
-                                    e.getMessage()
-                                )
-                            );
-                            return;
-                        }
-                    }
-
-                    res.accept(this);
-                } catch (Exception e) {
-                    rej.accept(e);
-                    assert dbg(() -> {
-                        logger.warning(
-                            "Error processing message: " + e.getMessage()
-                        );
-                    });
-                }
-            },!fastEvents);
-        } catch (Exception e) {
-            logger.severe(
-                "Error in onConnectionMessage: " + e.getMessage()
-            );
-        }
-    }
-
-    @Override
-    public void onConnectionClosedByServer(String reason) {
-        logger.finer(
-            "Connection closed by server: " + this.url + " reason: " + reason
-        );
-        boolean wasConnected = this.connected;
-        this.connecting = false;
-        this.connected = false;
-
-        try {
-            runInRelayExecutor((res, rej) -> {
-                if (wasConnected) {
-                    for (NostrRelayComponent listener : this.listeners) {
-                        try {
-                            if (!listener.onRelayDisconnect(this, reason, false)) {
-                                logger.finer(
-                                    "Disconnect ignored by component: " + this.url
-                                );
-                                res.accept(this);
-                                return;
-                            }
-                        } catch (Throwable e) {
-                            rej.accept(
-                                new Exception(
-                                    "Disconnect cancelled by component: " +
-                                    e.getMessage()
-                                )
-                            );
-                            return;
-                        }
-                    }
-                }
-
-                if (this.reconnectOnDrop && !this.disconnectedByClient) {
-                    long now = Instant.now().getEpochSecond();
-                    long delay = reconnectionBackoff.getNextAttemptTime(
-                        now,
-                        TimeUnit.SECONDS
-                    );
-                    this.executor.runLater(
-                            () -> {
-                                this.connect();
-                                return null;
-                            },
-                            delay,
-                            TimeUnit.SECONDS
-                        );
-                }
-
-                res.accept(this);
-            }, !fast);
-        } catch (Exception e) {
-            logger.severe(
-                "Error in onConnectionClosedByServer: " + e.getMessage()
-            );
-        }
-    }
-
-    @Override
-    public void onConnectionClosedByClient(String reason) {
-        this.connected = false;
-        this.connecting = false;
-        logger.finer(
-            "Connection closed by client: " + this.url + " reason: " + reason
-        );
-        try {
-            runInRelayExecutor((res, rej) -> {
-                for (NostrRelayComponent listener : this.listeners) {
-                    try {
-                        if (!listener.onRelayDisconnect(this, reason, true)) {
+                        if (!listener.onRelayDisconnectRequest(this, reason)) {
                             logger.finer(
                                 "Disconnect ignored by component: " + this.url
                             );
@@ -670,12 +406,335 @@ public class NostrRelay implements TransportListener {
                         return;
                     }
                 }
-            }, !fast);
+                res.accept(this);
+            },
+            !fast
+        );
+    }
+
+    @Override
+    public void onConnectionOpen() {
+        runInRelayExecutor(
+            (res, rej) -> {
+                try {
+                    logger.fine("Connection opened: " + this.url);
+                    for (NostrRelayComponent listener : this.listeners) {
+                        try {
+                            if (!listener.onRelayConnect(this)) {
+                                logger.finer(
+                                    "Connection ignored by component: " +
+                                    this.url
+                                );
+                                res.accept(this);
+                                return;
+                            }
+                        } catch (Throwable e) {
+                            rej.accept(
+                                new Exception(
+                                    "Connection cancelled by component: " +
+                                    e.getMessage()
+                                )
+                            );
+                            return;
+                        }
+                    }
+
+                    this.connected = true;
+                    this.connecting = false;
+                    this.firstConnection = true;
+
+                    {
+                        Iterator<Runnable> it =
+                            this.connectCallbacks.iterator();
+                        while (it.hasNext()) {
+                            Runnable callback = it.next();
+                            it.remove();
+                            try {
+                                callback.run();
+                            } catch (Throwable e) {
+                                assert dbg(() -> {
+                                    e.printStackTrace(); // TODO: remove me
+                                    logger.warning(
+                                        "Error in connect callback: " +
+                                        e.getMessage()
+                                    );
+                                });
+                            }
+                        }
+                    }
+
+                    {
+                        Iterator<QueuedMessage> it =
+                            this.messageQueue.iterator();
+
+                        while (it.hasNext()) {
+                            QueuedMessage q = it.next();
+                            it.remove();
+                            assert dbg(() -> {
+                                logger.finer(
+                                    "Sending queued message: " + q.message
+                                );
+                            });
+
+                            NostrMessage message = q.message;
+                            Consumer<NostrMessageAck> rs = q.res;
+                            Consumer<Throwable> rj = q.rej;
+                            try {
+                                this.sendMessage(message)
+                                    .catchException(t -> {
+                                        rj.accept(t);
+                                    })
+                                    .then(v -> {
+                                        rs.accept(v);
+                                        return null;
+                                    });
+                            } catch (Throwable e) {
+                                rej.accept(e);
+                            }
+                        }
+                    }
+                    res.accept(this);
+                } catch (Throwable e) {
+                    assert dbg(() -> {
+                        e.printStackTrace(); // TODO: remove me
+                        logger.warning(
+                            "Error in connect callback: " + e.getMessage()
+                        );
+                    });
+                    rej.accept(e);
+                }
+            },
+            !fast
+        );
+    }
+
+    boolean fast = true;
+
+    boolean fastEvents = false;
+
+    @Override
+    public void onConnectionMessage(String msg) {
+        try {
+            Platform platform = NostrUtils.getPlatform();
+
+            AsyncTask<NostrRelay> syncher = fastEvents
+                ? runInRelayExecutor(
+                    (res, rej) -> {
+                        res.accept(this);
+                    },
+                    true
+                )
+                : platform.wrapPromise((res, rej) -> {
+                    res.accept(this);
+                });
+
+            runInRelayExecutor(
+                (res, rej) -> {
+                    try {
+                        assert dbg(() -> {
+                            logger.finest("Received message: " + msg);
+                        });
+                        List<Object> data = platform.fromJSON(msg, List.class);
+                        String prefix = NostrUtils.safeString(data.get(0));
+
+                        // handle acks
+                        switch (prefix) {
+                            case "OK":
+                                {
+                                    String eventId = NostrUtils.safeString(
+                                        data.get(1)
+                                    );
+                                    boolean success = (Boolean) data.get(2);
+                                    String eventMessage = data.size() > 3
+                                        ? NostrUtils.safeString(data.get(3))
+                                        : "";
+                                    NostrMessageAck ack =
+                                        this.waitingEventsAck.get(eventId);
+                                    if (ack != null) {
+                                        assert dbg(() -> {
+                                            logger.finest(
+                                                "Received ack for event: " +
+                                                eventId +
+                                                " success: " +
+                                                success +
+                                                " message: " +
+                                                eventMessage
+                                            );
+                                        });
+                                        ack.setSuccess(success);
+                                        ack.setMessage(eventMessage);
+                                        if (success) {
+                                            ack.callSuccessCallback(
+                                                eventMessage
+                                            );
+                                        } else {
+                                            ack.callFailureCallback(
+                                                eventMessage
+                                            );
+                                        }
+                                    } else {
+                                        assert dbg(() -> {
+                                            logger.warning(
+                                                "Received ack for unknown event: " +
+                                                eventId
+                                            );
+                                        });
+                                    }
+                                    break;
+                                }
+                        }
+
+                        // syncher.await();
+
+                        // propagate event to listeners
+                        for (NostrRelayComponent listener : this.listeners) {
+                            try {
+                                if (!listener.onRelayMessage(this, data)) {
+                                    assert dbg(() -> {
+                                        logger.finest(
+                                            "Message ignored by component: " +
+                                            this.url
+                                        );
+                                    });
+                                    res.accept(this);
+                                    return;
+                                }
+                            } catch (Throwable e) {
+                                rej.accept(
+                                    new Exception(
+                                        "Message cancelled by component: " +
+                                        e.getMessage()
+                                    )
+                                );
+                                return;
+                            }
+                        }
+
+                        res.accept(this);
+                    } catch (Exception e) {
+                        rej.accept(e);
+                        assert dbg(() -> {
+                            logger.warning(
+                                "Error processing message: " + e.getMessage()
+                            );
+                        });
+                    }
+                },
+                !fastEvents
+            );
+        } catch (Exception e) {
+            logger.severe("Error in onConnectionMessage: " + e.getMessage());
+        }
+    }
+
+    @Override
+    public void onConnectionClosedByServer(String reason) {
+        logger.finer(
+            "Connection closed by server: " + this.url + " reason: " + reason
+        );
+        boolean wasConnected = this.connected;
+        this.connecting = false;
+        this.connected = false;
+
+        try {
+            runInRelayExecutor(
+                (res, rej) -> {
+                    if (wasConnected) {
+                        for (NostrRelayComponent listener : this.listeners) {
+                            try {
+                                if (
+                                    !listener.onRelayDisconnect(
+                                        this,
+                                        reason,
+                                        false
+                                    )
+                                ) {
+                                    logger.finer(
+                                        "Disconnect ignored by component: " +
+                                        this.url
+                                    );
+                                    res.accept(this);
+                                    return;
+                                }
+                            } catch (Throwable e) {
+                                rej.accept(
+                                    new Exception(
+                                        "Disconnect cancelled by component: " +
+                                        e.getMessage()
+                                    )
+                                );
+                                return;
+                            }
+                        }
+                    }
+
+                    if (this.reconnectOnDrop && !this.disconnectedByClient) {
+                        long now = Instant.now().getEpochSecond();
+                        long delay = reconnectionBackoff.getNextAttemptTime(
+                            now,
+                            TimeUnit.SECONDS
+                        );
+                        this.executor.runLater(
+                                () -> {
+                                    this.connect();
+                                    return null;
+                                },
+                                delay,
+                                TimeUnit.SECONDS
+                            );
+                    }
+
+                    res.accept(this);
+                },
+                !fast
+            );
+        } catch (Exception e) {
+            logger.severe(
+                "Error in onConnectionClosedByServer: " + e.getMessage()
+            );
+        }
+    }
+
+    @Override
+    public void onConnectionClosedByClient(String reason) {
+        this.connected = false;
+        this.connecting = false;
+        logger.finer(
+            "Connection closed by client: " + this.url + " reason: " + reason
+        );
+        try {
+            runInRelayExecutor(
+                (res, rej) -> {
+                    for (NostrRelayComponent listener : this.listeners) {
+                        try {
+                            if (
+                                !listener.onRelayDisconnect(this, reason, true)
+                            ) {
+                                logger.finer(
+                                    "Disconnect ignored by component: " +
+                                    this.url
+                                );
+                                res.accept(this);
+                                return;
+                            }
+                        } catch (Throwable e) {
+                            rej.accept(
+                                new Exception(
+                                    "Disconnect cancelled by component: " +
+                                    e.getMessage()
+                                )
+                            );
+                            return;
+                        }
+                    }
+                },
+                !fast
+            );
         } catch (Exception e) {
             logger.severe(
                 "Error in onConnectionClosedByClient: " + e.getMessage()
             );
-        } 
+        }
     }
 
     protected void loop() {
@@ -747,32 +806,35 @@ public class NostrRelay implements TransportListener {
     @Override
     public void onConnectionError(Throwable e) {
         try {
-            runInRelayExecutor((res, rej) -> {
-                for (NostrRelayComponent listener : this.listeners) {
-                    try {
-                        if (!listener.onRelayError(this, e)) {
-                            assert dbg(() -> {
-                                logger.finer(
-                                    "Error ignored by component: " + this.url
-                                );
-                            });
-                            res.accept(this);
+            runInRelayExecutor(
+                (res, rej) -> {
+                    for (NostrRelayComponent listener : this.listeners) {
+                        try {
+                            if (!listener.onRelayError(this, e)) {
+                                assert dbg(() -> {
+                                    logger.finer(
+                                        "Error ignored by component: " +
+                                        this.url
+                                    );
+                                });
+                                res.accept(this);
+                                return;
+                            }
+                        } catch (Throwable ex) {
+                            rej.accept(
+                                new Exception(
+                                    "Error cancelled by component: " +
+                                    ex.getMessage()
+                                )
+                            );
                             return;
                         }
-                    } catch (Throwable ex) {
-                        rej.accept(
-                            new Exception(
-                                "Error cancelled by component: " + ex.getMessage()
-                            )
-                        );
-                        return;
                     }
-                }
-            }, !fast);
-        } catch (Exception e1) {
-            logger.severe(
-                "Error in onConnectionError: " + e1.getMessage()
+                },
+                !fast
             );
+        } catch (Exception e1) {
+            logger.severe("Error in onConnectionError: " + e1.getMessage());
         }
     }
 }

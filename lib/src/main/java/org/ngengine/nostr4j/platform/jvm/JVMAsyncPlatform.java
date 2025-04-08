@@ -71,12 +71,14 @@ public class JVMAsyncPlatform implements Platform {
     static {
         if (Security.getProvider("BC") == null) {
             Security.addProvider(
-                    new org.bouncycastle.jce.provider.BouncyCastleProvider());
+                new org.bouncycastle.jce.provider.BouncyCastleProvider()
+            );
         }
     }
 
     private static final Logger logger = Logger.getLogger(
-            JVMAsyncPlatform.class.getName());
+        JVMAsyncPlatform.class.getName()
+    );
     private static SecureRandom secureRandom;
     private static final byte EMPTY32[] = new byte[32];
     private static final byte EMPTY0[] = new byte[0];
@@ -100,13 +102,14 @@ public class JVMAsyncPlatform implements Platform {
         }
     }
 
-    private static final ThreadLocal<Context> context = ThreadLocal.withInitial(() -> {
-        try {
-            return new Context();
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-    });
+    private static final ThreadLocal<Context> context =
+        ThreadLocal.withInitial(() -> {
+            try {
+                return new Context();
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        });
 
     @Override
     public byte[] randomBytes(int n) {
@@ -161,16 +164,17 @@ public class JVMAsyncPlatform implements Platform {
         byte dataB[] = NostrUtils.hexToByteArray(data);
         byte priv[] = privKey._array();
         byte sigB[] = Schnorr.sign(
-                dataB,
-                priv,
-                _NO_AUX_RANDOM ? null : randomBytes(32));
+            dataB,
+            priv,
+            _NO_AUX_RANDOM ? null : randomBytes(32)
+        );
         String sig = NostrUtils.bytesToHex(sigB);
         return sig;
     }
 
     @Override
     public boolean verify(String data, String sign, NostrPublicKey pubKey)
-            throws Exception {
+        throws Exception {
         byte dataB[] = NostrUtils.hexToByteArray(data);
         byte sig[] = NostrUtils.hexToByteArray(sign);
         byte pub[] = pubKey._array();
@@ -179,7 +183,7 @@ public class JVMAsyncPlatform implements Platform {
 
     @Override
     public byte[] secp256k1SharedSecret(byte[] privKey, byte[] pubKey)
-            throws Exception {
+        throws Exception {
         Context ctx = context.get();
         ECParameterSpec ecSpec = ctx.secp256k1;
         ECPoint point = ecSpec.getCurve().decodePoint(pubKey).normalize();
@@ -190,7 +194,7 @@ public class JVMAsyncPlatform implements Platform {
 
     @Override
     public byte[] hmac(byte[] key, byte[] data1, byte[] data2)
-            throws Exception {
+        throws Exception {
         Mac mac = Mac.getInstance("HmacSHA256");
         mac.init(new SecretKeySpec(key, "HmacSHA256"));
         mac.update(data1, 0, data1.length);
@@ -203,19 +207,19 @@ public class JVMAsyncPlatform implements Platform {
     @Override
     public byte[] hkdf_extract(byte[] salt, byte[] ikm) throws Exception {
         assert NostrUtils.allZeroes(EMPTY32);
-        if (salt == null || salt.length == 0)
-            salt = EMPTY32;
+        if (salt == null || salt.length == 0) salt = EMPTY32;
         return hmac(salt, ikm, null);
     }
 
     @Override
     public byte[] hkdf_expand(byte[] prk, byte[] info, int length)
-            throws Exception {
+        throws Exception {
         int hashLen = 32; // SHA-256 output length
 
         if (length > 255 * hashLen) {
             throw new IllegalArgumentException(
-                    "Length should be <= 255*HashLen");
+                "Length should be <= 255*HashLen"
+            );
         }
 
         int blocks = (int) Math.ceil((double) length / hashLen);
@@ -243,11 +247,12 @@ public class JVMAsyncPlatform implements Platform {
             System.arraycopy(t, 0, combined, 0, t.length);
             System.arraycopy(info, 0, combined, t.length, info.length);
             System.arraycopy(
-                    counter,
-                    0,
-                    combined,
-                    t.length + info.length,
-                    counter.length);
+                counter,
+                0,
+                combined,
+                t.length + info.length,
+                counter.length
+            );
 
             t = mac.doFinal(combined);
             System.arraycopy(t, 0, okm, hashLen * i, hashLen);
@@ -267,29 +272,33 @@ public class JVMAsyncPlatform implements Platform {
             return Base64.getDecoder().decode(data);
         } catch (Exception e) {
             throw new IllegalArgumentException(
-                    "invalid base64 " + e.getMessage());
+                "invalid base64 " + e.getMessage()
+            );
         }
     }
 
     @Override
     public byte[] chacha20(
-            byte[] key,
-            byte[] nonce,
-            byte[] padded,
-            boolean forEncryption) throws Exception {
+        byte[] key,
+        byte[] nonce,
+        byte[] padded,
+        boolean forEncryption
+    ) throws Exception {
         if (key.length != 32) {
             throw new IllegalArgumentException("ChaCha20 key must be 32 bytes");
         }
         if (nonce.length != 12) {
             throw new IllegalArgumentException(
-                    "ChaCha20 nonce must be 12 bytes");
+                "ChaCha20 nonce must be 12 bytes"
+            );
         }
         Cipher cipher = Cipher.getInstance("ChaCha20");
         ChaCha20ParameterSpec spec = new ChaCha20ParameterSpec(nonce, 0);
         cipher.init(
-                forEncryption ? Cipher.ENCRYPT_MODE : Cipher.DECRYPT_MODE,
-                new SecretKeySpec(key, "ChaCha20"),
-                spec);
+            forEncryption ? Cipher.ENCRYPT_MODE : Cipher.DECRYPT_MODE,
+            new SecretKeySpec(key, "ChaCha20"),
+            spec
+        );
 
         return cipher.doFinal(padded);
     }
@@ -314,46 +323,45 @@ public class JVMAsyncPlatform implements Platform {
 
     @Override
     public <T> AsyncTask<T> promisify(
-            BiConsumer<Consumer<T>, Consumer<Throwable>> func,
-            NostrExecutor executor) {
+        BiConsumer<Consumer<T>, Consumer<Throwable>> func,
+        NostrExecutor executor
+    ) {
         CompletableFuture<T> fut = new CompletableFuture<>();
         if (executor != null && executor instanceof VtNostrExecutor) {
             ((VtNostrExecutor) executor).executor.submit(() -> {
-                synchronized (fut) {
-                    try {
-                        func.accept(
+                    synchronized (fut) {
+                        try {
+                            func.accept(
                                 r -> {
                                     fut.complete(r);
                                 },
                                 err -> {
                                     fut.completeExceptionally(err);
-                                });
-                    } catch (Throwable e) {
-                        fut.completeExceptionally(e);
+                                }
+                            );
+                        } catch (Throwable e) {
+                            fut.completeExceptionally(e);
+                        }
                     }
-                }
-            });
+                });
         } else {
             func.accept(
-                    r -> {
-                        synchronized (fut) {
-
-                            fut.complete(r);
-                        }
-                    },
-                    err -> {
-                        synchronized (fut) {
-
-                            fut.completeExceptionally(err);
-
-                        }
-                    });
+                r -> {
+                    synchronized (fut) {
+                        fut.complete(r);
+                    }
+                },
+                err -> {
+                    synchronized (fut) {
+                        fut.completeExceptionally(err);
+                    }
+                }
+            );
         }
         return new AsyncTask<T>() {
             @Override
             public T await() throws Exception {
                 synchronized (fut) {
-
                     return fut.get();
                 }
             }
@@ -361,7 +369,6 @@ public class JVMAsyncPlatform implements Platform {
             @Override
             public boolean isDone() {
                 synchronized (fut) {
-
                     return fut.isDone();
                 }
             }
@@ -369,7 +376,6 @@ public class JVMAsyncPlatform implements Platform {
             @Override
             public boolean isFailed() {
                 synchronized (fut) {
-
                     try {
                         fut.get();
                         return false;
@@ -382,7 +388,6 @@ public class JVMAsyncPlatform implements Platform {
             @Override
             public boolean isSuccess() {
                 synchronized (fut) {
-
                     try {
                         fut.get();
                         return true;
@@ -395,28 +400,14 @@ public class JVMAsyncPlatform implements Platform {
             @Override
             public <R> AsyncTask<R> then(Function<T, R> func2) {
                 return promisify(
-                        (res, rej) -> {
-                            synchronized (fut) {
-
-                                if (executor != null &&
-                                        executor instanceof VtNostrExecutor) {
-                                    fut.handleAsync(
-                                            (result, exception) -> {
-                                                if (exception != null) {
-                                                    rej.accept(exception);
-                                                    return null;
-                                                }
-
-                                                try {
-                                                    res.accept(func2.apply(result));
-                                                } catch (Throwable e) {
-                                                    rej.accept(e);
-                                                }
-                                                return null;
-                                            },
-                                            ((VtNostrExecutor) executor).executor);
-                                } else {
-                                    fut.handle((result, exception) -> {
+                    (res, rej) -> {
+                        synchronized (fut) {
+                            if (
+                                executor != null &&
+                                executor instanceof VtNostrExecutor
+                            ) {
+                                fut.handleAsync(
+                                    (result, exception) -> {
                                         if (exception != null) {
                                             rej.accept(exception);
                                             return null;
@@ -428,26 +419,45 @@ public class JVMAsyncPlatform implements Platform {
                                             rej.accept(e);
                                         }
                                         return null;
-                                    });
-                                }
+                                    },
+                                    ((VtNostrExecutor) executor).executor
+                                );
+                            } else {
+                                fut.handle((result, exception) -> {
+                                    if (exception != null) {
+                                        rej.accept(exception);
+                                        return null;
+                                    }
+
+                                    try {
+                                        res.accept(func2.apply(result));
+                                    } catch (Throwable e) {
+                                        rej.accept(e);
+                                    }
+                                    return null;
+                                });
                             }
-                        },
-                        executor);
+                        }
+                    },
+                    executor
+                );
             }
 
             @Override
             public AsyncTask<T> catchException(Consumer<Throwable> func2) {
                 synchronized (fut) {
-
-                    if (executor != null && executor instanceof VtNostrExecutor) {
+                    if (
+                        executor != null && executor instanceof VtNostrExecutor
+                    ) {
                         fut.handleAsync(
-                                (result, exception) -> {
-                                    if (exception != null) {
-                                        func2.accept(exception);
-                                    }
-                                    return null;
-                                },
-                                ((VtNostrExecutor) executor).executor);
+                            (result, exception) -> {
+                                if (exception != null) {
+                                    func2.accept(exception);
+                                }
+                                return null;
+                            },
+                            ((VtNostrExecutor) executor).executor
+                        );
                     } else {
                         fut.handle((result, exception) -> {
                             if (exception != null) {
@@ -464,7 +474,8 @@ public class JVMAsyncPlatform implements Platform {
 
     @Override
     public <T> AsyncTask<T> wrapPromise(
-            BiConsumer<Consumer<T>, Consumer<Throwable>> func) {
+        BiConsumer<Consumer<T>, Consumer<Throwable>> func
+    ) {
         return (AsyncTask<T>) promisify(func, null);
     }
 
@@ -487,23 +498,24 @@ public class JVMAsyncPlatform implements Platform {
                 AsyncTask<T> promise = promises.get(i);
 
                 promise
-                        .catchException(e -> {
-                            e.printStackTrace();
-                            rej.accept(e);
-                        })
-                        .then(result -> {
-                            int remaining = count.decrementAndGet();
-                            results.set(index, result);
-                            if (remaining == 0) {
-                                res.accept(results);
-                            }
-                            return null;
-                        });
+                    .catchException(e -> {
+                        e.printStackTrace();
+                        rej.accept(e);
+                    })
+                    .then(result -> {
+                        int remaining = count.decrementAndGet();
+                        results.set(index, result);
+                        if (remaining == 0) {
+                            res.accept(results);
+                        }
+                        return null;
+                    });
             }
         });
     }
 
-    private ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
+    private ExecutorService executor =
+        Executors.newVirtualThreadPerTaskExecutor();
 
     private class VtNostrExecutor implements NostrExecutor {
 
@@ -515,40 +527,37 @@ public class JVMAsyncPlatform implements Platform {
 
         @Override
         public <T> AsyncTask<T> run(Callable<T> r) {
-            return wrapPromise(
-                    (res, rej) -> {
-                        executor.submit(() -> {
-                            try {
-                                res.accept(r.call());
-                            } catch (Exception e) {
-                                rej.accept(e);
-                            }
-                        });
-                    });
+            return wrapPromise((res, rej) -> {
+                executor.submit(() -> {
+                    try {
+                        res.accept(r.call());
+                    } catch (Exception e) {
+                        rej.accept(e);
+                    }
+                });
+            });
         }
 
         @Override
         public <T> AsyncTask<T> runLater(
-                Callable<T> r,
-                long delay,
-                TimeUnit unit) {
+            Callable<T> r,
+            long delay,
+            TimeUnit unit
+        ) {
             long delayMs = unit.toMillis(delay);
             if (delayMs == 0) {
                 return run(r);
             }
-            return wrapPromise(
-                    (res, rej) -> {
-                        executor.submit(() -> {
-                            try {
-                                Thread.sleep(delayMs);
-                                res.accept(r.call());
-                            } catch (Exception e) {
-                                rej.accept(e);
-                            }
-                        });
+            return wrapPromise((res, rej) -> {
+                executor.submit(() -> {
+                    try {
+                        Thread.sleep(delayMs);
+                        res.accept(r.call());
+                    } catch (Exception e) {
+                        rej.accept(e);
                     }
-
-            );
+                });
+            });
         }
     }
 

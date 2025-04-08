@@ -63,11 +63,9 @@ public class NostrCli {
             FailOnDoubleTracker.class
         );
 
-        
         // append listeners
         sub.listenClose(reason -> {
             System.out.println("Subscription closed: reason: " + reason);
-        
         });
 
         sub.listenEvent((event, stored) -> {

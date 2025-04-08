@@ -126,7 +126,6 @@ public class NostrPool implements NostrRelayComponent {
     }
 
     public NostrRelay ensureRelay(String url, NostrTransport transport) {
-
         NostrRelay relay = null;
         for (NostrRelay r : relays) {
             if (r.getUrl().equals(url)) {
@@ -309,79 +308,75 @@ public class NostrPool implements NostrRelayComponent {
     ) {
         Platform platform = NostrUtils.getPlatform();
         NostrSubscription sub = subscribe(filters, eventTracker);
-        return platform.wrapPromise(
-            (res, rej) -> {
-                List<SignedNostrEvent> events = new ArrayList<>();
+        return platform.wrapPromise((res, rej) -> {
+            List<SignedNostrEvent> events = new ArrayList<>();
 
-                assert dbg(() -> {
-                    logger.fine(
-                        "Initialize fetch of " +
-                        filters +
-                        " with timeout " +
-                        timeout +
-                        " " +
-                        unit +
-                        " for subscription " +
-                        sub.getId()
-                    );
-                });
-
-                AtomicBoolean ended = new AtomicBoolean(false);
-                ScheduledAction scheduled = new ScheduledAction(
-                    platform.getTimestampSeconds() +
-                    unit.toSeconds(timeout),
-                    () -> {
-                        if(ended.get()) return;
-                        logger.warning(
-                            "fetch timeout for fetch " + sub.getId()
-                        );
-                        sub.close();
-                        rej.accept(new Exception("timeout"));
-                    }
+            assert dbg(() -> {
+                logger.fine(
+                    "Initialize fetch of " +
+                    filters +
+                    " with timeout " +
+                    timeout +
+                    " " +
+                    unit +
+                    " for subscription " +
+                    sub.getId()
                 );
-                
-                scheduledActions.add(scheduled);
-                sub
-                    .listenEose(all -> {
-                     
-                     
-                        if (all) {
-                                    assert dbg(() -> {
-                                        logger.fine(
-                                                "fetch eose for fetch " + sub.getId()+" with received events: " + events);
-                                    });
-                            res.accept(events);
-                            ended.set(true);
-                            scheduledActions.remove(scheduled);
-                            sub.close();
-                        }
-                    })
-                    .listenEvent((e, stored) -> {
-                        assert dbg(() -> {
-                            logger.finer(
-                                "fetch event " +
-                                e +
-                                " for subscription " +
-                                sub.getId()
-                            );
-                        });
+            });
 
-                        events.add(e);
-                    })
-                    .listenClose(reason -> {
+            AtomicBoolean ended = new AtomicBoolean(false);
+            ScheduledAction scheduled = new ScheduledAction(
+                platform.getTimestampSeconds() + unit.toSeconds(timeout),
+                () -> {
+                    if (ended.get()) return;
+                    logger.warning("fetch timeout for fetch " + sub.getId());
+                    sub.close();
+                    rej.accept(new Exception("timeout"));
+                }
+            );
+
+            scheduledActions.add(scheduled);
+            sub
+                .listenEose(all -> {
+                    if (all) {
                         assert dbg(() -> {
                             logger.fine(
-                                "fetch close " +
-                                reason +
-                                " for subscription " +
-                                sub.getId()
+                                "fetch eose for fetch " +
+                                sub.getId() +
+                                " with received events: " +
+                                events
                             );
                         });
+                        res.accept(events);
+                        ended.set(true);
+                        scheduledActions.remove(scheduled);
+                        sub.close();
+                    }
+                })
+                .listenEvent((e, stored) -> {
+                    assert dbg(() -> {
+                        logger.finer(
+                            "fetch event " +
+                            e +
+                            " for subscription " +
+                            sub.getId()
+                        );
+                    });
 
-                    })
-                    .open();
-            }
-        );
+                    events.add(e);
+                })
+                .listenClose(reason -> {
+                    assert dbg(() -> {
+                        logger.fine(
+                            "fetch close " +
+                            reason +
+                            " for subscription " +
+                            sub.getId()
+                        );
+                    });
+                })
+                .open();
+        });
     }
 
     @Override
@@ -395,7 +390,6 @@ public class NostrPool implements NostrRelayComponent {
         try {
             String type = NostrUtils.safeString(doc.get(0));
             if (type.equals("CLOSED")) {
-                
                 String subId = NostrUtils.safeString(doc.get(1));
                 String reason = doc.size() > 2
                     ? NostrUtils.safeString(doc.get(2))
@@ -480,7 +474,6 @@ public class NostrPool implements NostrRelayComponent {
                     listener.onNotice(relay, eventMessage, null)
                 );
             } else if (type.equals("EVENT")) {
-
                 String subId = NostrUtils.safeString(doc.get(1));
                 NostrSubscription sub = subscriptions.get(subId);
                 if (sub != null) {
@@ -516,10 +509,10 @@ public class NostrPool implements NostrRelayComponent {
                         }
                         final boolean storedFinal = stored;
                         // syncher.then((n)->{
-                            sub.callEventListeners(e, storedFinal);
+                        sub.callEventListeners(e, storedFinal);
                         //     return null;
                         // });
-                        
+
                     } else {
                         assert dbg(() -> {
                             logger.finest(

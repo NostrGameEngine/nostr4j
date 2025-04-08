@@ -33,7 +33,6 @@ package org.ngengine.nostr4j.listeners;
 import java.time.Instant;
 import java.util.List;
 import org.ngengine.nostr4j.NostrRelay;
-import org.ngengine.nostr4j.platform.AsyncTask;
 import org.ngengine.nostr4j.transport.NostrMessage;
 
 public interface NostrRelayComponent {

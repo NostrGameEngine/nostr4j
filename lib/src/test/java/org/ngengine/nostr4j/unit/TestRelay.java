@@ -45,7 +45,6 @@ import org.junit.Test;
 import org.ngengine.nostr4j.NostrRelay;
 import org.ngengine.nostr4j.NostrRelayLifecycleManager;
 import org.ngengine.nostr4j.listeners.NostrRelayComponent;
-import org.ngengine.nostr4j.platform.AsyncTask;
 import org.ngengine.nostr4j.transport.NostrMessage;
 
 public class TestRelay {
