@@ -247,7 +247,8 @@ public class Nip24Metadata {
         Nip24Metadata newMetadata
     ) throws Exception {
         UnsignedNostrEvent event = newMetadata.toUpdateEvent();
-        SignedNostrEvent signed = signer.sign(event);
-        return pool.send(signed);
+
+        AsyncTask<SignedNostrEvent> signedP = signer.sign(event);
+        return signedP.compose(signed -> pool.send(signed));
     }
 }

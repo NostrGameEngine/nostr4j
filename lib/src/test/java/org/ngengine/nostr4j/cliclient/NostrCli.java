@@ -34,6 +34,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.NostrFilter;
 import org.ngengine.nostr4j.NostrPool;
+import org.ngengine.nostr4j.NostrRelay;
 import org.ngengine.nostr4j.NostrSubscription;
 import org.ngengine.nostr4j.TestLogger;
 import org.ngengine.nostr4j.event.tracker.FailOnDoubleTracker;
@@ -46,7 +47,7 @@ public class NostrCli {
         // initialize pool
         NostrPool pool = new NostrPool();
         // add relays
-        pool.ensureRelay("ws://127.0.0.1:8087");
+        pool.connectRelay(new NostrRelay("ws://127.0.0.1:8087"));
 
         // listen for notices
         pool.addNoticeListener((relay, msg, error) -> {

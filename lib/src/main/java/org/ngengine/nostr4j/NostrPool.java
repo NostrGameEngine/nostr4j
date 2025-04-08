@@ -123,40 +123,8 @@ public class NostrPool implements NostrRelayComponent {
         Platform platform = NostrUtils.getPlatform();
         return platform.awaitAll(promises);
     }
-
-    public NostrRelay ensureRelay(String url) {
-        Platform platform = NostrUtils.getPlatform();
-        return ensureRelay(url, platform.newTransport());
-    }
-
-    public NostrRelay ensureRelay(String url, NostrTransport transport) {
-        NostrRelay relay = null;
-        for (NostrRelay r : relays) {
-            if (r.getUrl().equals(url)) {
-                relay = r;
-                break;
-            }
-        }
-        if (relay == null) {
-            relay = new NostrRelay(url);
-            if (relay.getComponent(NostrRelaySubManager.class) == null) {
-                relay.addComponent(new NostrRelaySubManager());
-            }
-            if (relay.getComponent(NostrRelayLifecycleManager.class) == null) {
-                relay.addComponent(new NostrRelayLifecycleManager());
-            }
-            relay.addComponent(this);
-
-            relays.add(relay);
-        }
-
-        if (!relay.isConnected()) {
-            relay.connect();
-        }
-        return relay;
-    }
-
-    public AsyncTask<NostrRelay> ensureRelay(NostrRelay relay) {
+ 
+    public AsyncTask<NostrRelay> connectRelay(NostrRelay relay) {
         if (!relays.contains(relay)) {
             relays.add(relay);
             if (relay.getComponent(NostrRelaySubManager.class) == null) {
@@ -170,23 +138,13 @@ public class NostrPool implements NostrRelayComponent {
         return relay.connect();
     }
 
-    public void disconnectRelay(String url) {
-        for (NostrRelay relay : relays) {
-            if (relay.getUrl().equals(url)) {
-                relay.removeComponent(this);
-                relay.disconnect("Removed by user");
-                relays.remove(relay);
-                break;
-            }
-        }
-    }
-
-    public void disconnectRelay(NostrRelay relay) {
+     public NostrRelay removeRelay(NostrRelay relay) {
         if (relays.contains(relay)) {
             relay.removeComponent(this);
-            relay.disconnect("Removed by user");
             relays.remove(relay);
+            return relay;
         }
+        return null;
     }
 
     public NostrSubscription subscribe(NostrFilter filter) {

@@ -63,9 +63,9 @@ public class FullBenchmark {
 
         long initStarted = System.currentTimeMillis();
         NostrPool writer = new NostrPool();
-        writer.ensureRelay(new NostrRelay("ws://127.0.0.1:8087"));
+        writer.connectRelay(new NostrRelay("ws://127.0.0.1:8087"));
         NostrPool reader = new NostrPool();
-        reader.ensureRelay(new NostrRelay("ws://127.0.0.1:8087"));
+        reader.connectRelay(new NostrRelay("ws://127.0.0.1:8087"));
 
         assert writer.isVerifyEvents();
         assert reader.isVerifyEvents();
@@ -89,7 +89,7 @@ public class FullBenchmark {
             event.setCreatedAt(Instant.now());
             event.setTag("eventId", i + "");
             signer
-                .signAsync(event)
+                .sign(event)
                 .then(signed -> {
                     sent.add(writer.send(signed));
                     return null;

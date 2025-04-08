@@ -78,13 +78,13 @@ public class TeaVMPlatform implements Platform {
 
     @Override
     public byte[] secp256k1SharedSecret(byte[] privKey, byte[] pubKey)
-        throws Exception {
+            throws Exception {
         return getBinds().secp256k1SharedSecret(privKey, pubKey);
     }
 
     @Override
     public byte[] hmac(byte[] key, byte[] data1, byte[] data2)
-        throws Exception {
+            throws Exception {
         return getBinds().hmac(key, data1, data2);
     }
 
@@ -95,7 +95,7 @@ public class TeaVMPlatform implements Platform {
 
     @Override
     public byte[] hkdf_expand(byte[] prk, byte[] info, int length)
-        throws Exception {
+            throws Exception {
         return getBinds().hkdf_expand(prk, info, length);
     }
 
@@ -111,11 +111,10 @@ public class TeaVMPlatform implements Platform {
 
     @Override
     public byte[] chacha20(
-        byte[] key,
-        byte[] nonce,
-        byte[] data,
-        boolean forEncryption
-    ) throws Exception {
+            byte[] key,
+            byte[] nonce,
+            byte[] data,
+            boolean forEncryption) throws Exception {
         return getBinds().chacha20(key, nonce, data);
     }
 
@@ -141,7 +140,7 @@ public class TeaVMPlatform implements Platform {
 
     @Override
     public boolean verify(String data, String sign, NostrPublicKey pubKey)
-        throws Exception {
+            throws Exception {
         byte dataB[] = NostrUtils.hexToByteArray(data);
         byte sig[] = NostrUtils.hexToByteArray(sign);
         byte pub[] = pubKey._array();
@@ -160,9 +159,8 @@ public class TeaVMPlatform implements Platform {
 
     @Override
     public <T> AsyncTask<T> promisify(
-        BiConsumer<Consumer<T>, Consumer<Throwable>> func,
-        NostrExecutor executor
-    ) {
+            BiConsumer<Consumer<T>, Consumer<Throwable>> func,
+            NostrExecutor executor) {
         TeaVMBinds.TeaVMPromise<T> promise = new TeaVMBinds.TeaVMPromise<>();
 
         func.accept(promise::resolve, promise::reject);
@@ -172,8 +170,7 @@ public class TeaVMPlatform implements Platform {
             public T await() throws Exception {
                 if (!promise.completed) {
                     throw new UnsupportedOperationException(
-                        "Blocking await() is not supported in TeaVM"
-                    );
+                            "Blocking await() is not supported in TeaVM");
                 }
 
                 if (promise.failed) {
@@ -206,21 +203,48 @@ public class TeaVMPlatform implements Platform {
             public <R> AsyncTask<R> then(Function<T, R> func2) {
                 return promisify((res, rej) -> {
                     promise
-                        .then(result -> {
-                            try {
-                                res.accept(func2.apply(result));
-                            } catch (Throwable e) {
-                                rej.accept(e);
-                            }
-                        })
-                        .catchError(rej::accept);
-                },executor);
+                            .then(result -> {
+                                try {
+                                    res.accept(func2.apply(result));
+                                } catch (Throwable e) {
+                                    rej.accept(e);
+                                }
+                            })
+                            .catchError(rej::accept);
+                }, executor);
             }
 
             @Override
             public AsyncTask<T> catchException(Consumer<Throwable> func2) {
                 promise.catchError(func2);
                 return this;
+            }
+
+            @Override
+            public <R> AsyncTask<R> compose(Function<T, AsyncTask<R>> func2) {
+                return promisify((res, rej) -> {
+                    promise
+                            .then(result -> {
+                                try {
+
+                                    try {
+                                        AsyncTask<R> task2 = func2.apply(result);
+                                        task2.catchException(exc -> {
+                                            rej.accept(exc);
+                                        });
+                                        task2.then(r -> {
+                                            res.accept(r);
+                                            return null;
+                                        });
+                                    } catch (Throwable e) {
+                                        rej.accept(e);
+                                    }
+                                } catch (Throwable e) {
+                                    rej.accept(e);
+                                }
+                            })
+                            .catchError(rej::accept);
+                }, executor);
             }
         };
     }
@@ -248,16 +272,16 @@ public class TeaVMPlatform implements Platform {
                 final int j = i;
                 AsyncTask<T> p = promises.get(i);
                 p
-                    .catchException(e -> {
-                        rej.accept(e);
-                    })
-                    .then(r -> {
-                        results.set(j, r);
-                        if (count.decrementAndGet() == 0) {
-                            res.accept(results);
-                        }
-                        return null;
-                    });
+                        .catchException(e -> {
+                            rej.accept(e);
+                        })
+                        .then(r -> {
+                            results.set(j, r);
+                            if (count.decrementAndGet() == 0) {
+                                res.accept(results);
+                            }
+                            return null;
+                        });
             }
         });
     }
@@ -269,25 +293,23 @@ public class TeaVMPlatform implements Platform {
                 return wrapPromise((res, rej) -> {
                     // Execute on the next event loop cycle
                     getBinds()
-                        .setTimeout(
-                            () -> {
-                                try {
-                                    res.accept(r.call());
-                                } catch (Exception e) {
-                                    rej.accept(e);
-                                }
-                            },
-                            0
-                        );
+                            .setTimeout(
+                                    () -> {
+                                        try {
+                                            res.accept(r.call());
+                                        } catch (Exception e) {
+                                            rej.accept(e);
+                                        }
+                                    },
+                                    0);
                 });
             }
 
             @Override
             public <T> AsyncTask<T> runLater(
-                Callable<T> r,
-                long delay,
-                TimeUnit unit
-            ) {
+                    Callable<T> r,
+                    long delay,
+                    TimeUnit unit) {
                 long delayMs = unit.toMillis(delay);
 
                 if (delayMs == 0) {
@@ -296,16 +318,15 @@ public class TeaVMPlatform implements Platform {
 
                 return wrapPromise((res, rej) -> {
                     getBinds()
-                        .setTimeout(
-                            () -> {
-                                try {
-                                    res.accept(r.call());
-                                } catch (Exception e) {
-                                    rej.accept(e);
-                                }
-                            },
-                            (int) delayMs
-                        );
+                            .setTimeout(
+                                    () -> {
+                                        try {
+                                            res.accept(r.call());
+                                        } catch (Exception e) {
+                                            rej.accept(e);
+                                        }
+                                    },
+                                    (int) delayMs);
                 });
             }
         };
@@ -337,7 +358,7 @@ public class TeaVMPlatform implements Platform {
     }
 
     @Override
-    public AsyncTask<String> signAsync(String data, NostrPrivateKey privKey) throws Exception {
+    public AsyncTask<String> signAsync(String data, NostrPrivateKey privKey) {
         return promisify((res, rej) -> {
             try {
                 res.accept(sign(data, privKey));

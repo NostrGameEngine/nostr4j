@@ -67,8 +67,7 @@ public interface Platform {
     boolean verify(String data, String sign, NostrPublicKey pubKey)
         throws Exception;
 
-    AsyncTask<String> signAsync(String data, NostrPrivateKey privKey)
-        throws Exception;
+    AsyncTask<String> signAsync(String data, NostrPrivateKey privKey);
 
     AsyncTask<Boolean> verifyAsync(
         String data,

@@ -37,10 +37,7 @@ import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.platform.AsyncTask;
 
 public interface NostrSigner extends Cloneable, Serializable {
-    SignedNostrEvent sign(UnsignedNostrEvent event) throws Exception;
-
-    AsyncTask<SignedNostrEvent> signAsync(UnsignedNostrEvent event)
-        throws Exception;
+    AsyncTask<SignedNostrEvent> sign(UnsignedNostrEvent event) throws Exception;
 
     String encrypt(String message, NostrPublicKey publicKey) throws Exception;
     String decrypt(String message, NostrPublicKey publicKey) throws Exception;

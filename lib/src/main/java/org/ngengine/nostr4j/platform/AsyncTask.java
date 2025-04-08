@@ -41,6 +41,8 @@ public interface AsyncTask<T> {
     boolean isSuccess();
     T await() throws Exception;
     <R> AsyncTask<R> then(Function<T, R> func2);
+
+    <R> AsyncTask<R> compose(Function<T, AsyncTask<R>> func2);
     AsyncTask<T> catchException(Consumer<Throwable> func2);
 
     static <T> AsyncTask<List<T>> awaitAll(List<AsyncTask<T>> tasks) {

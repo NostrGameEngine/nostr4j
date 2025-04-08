@@ -64,7 +64,7 @@ public class TestNostrEvent {
             .setKind(1)
             .setCreatedAt(Instant.ofEpochSecond(1742147457));
         System.out.println(event.toString());
-        SignedNostrEvent signedEvent = signer.sign(event);
+        SignedNostrEvent signedEvent = signer.sign(event).await();
         assertTrue(signedEvent.verify());
 
         assertEquals(
@@ -93,7 +93,7 @@ public class TestNostrEvent {
             .setKind(1)
             .setCreatedAt(Instant.ofEpochSecond(1742147457));
         System.out.println(event.toString());
-        SignedNostrEvent signedEvent = signer.sign(event);
+        SignedNostrEvent signedEvent = signer.sign(event).await();
         assertTrue(signedEvent.verify());
         assertEquals(
             NostrUtils.bytesToHex(Bech32.bech32Decode(noteId)),

@@ -60,7 +60,7 @@ public class Benchmarks {
             }
             event.setKind(1);
             event.setContent(baseContent.substring(0, EVENTS - i));
-            SignedNostrEvent signed = signer.sign(event);
+            SignedNostrEvent signed = signer.sign(event).await();
             List<Object> message = new ArrayList<>();
             message.addAll(NostrMessage.toSerial(signed));
             message.add(1, subId);
@@ -81,7 +81,7 @@ public class Benchmarks {
         relay = new NostrRelay("ws://127.0.0.1:8087");
         relay.setVerifyEvents(!trusted);
         relay.setAsyncEventsVerification(false);
-        pool.ensureRelay(relay);
+        pool.connectRelay(relay);
         NostrSubscription sub = pool.subscribe(
             new NostrFilter(),
             PassthroughEventTracker.class

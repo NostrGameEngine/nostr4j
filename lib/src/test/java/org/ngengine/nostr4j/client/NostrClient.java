@@ -56,6 +56,7 @@ import javax.swing.text.StyleConstants;
 import javax.swing.text.StyledDocument;
 import org.ngengine.nostr4j.NostrFilter;
 import org.ngengine.nostr4j.NostrPool;
+import org.ngengine.nostr4j.NostrRelay;
 import org.ngengine.nostr4j.NostrSubscription;
 import org.ngengine.nostr4j.TestLogger;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
@@ -656,7 +657,7 @@ public class NostrClient extends JFrame {
 
     private void initNostr() {
         this.pool = new NostrPool();
-        this.pool.ensureRelay("wss://nostr.wine");
+        this.pool.connectRelay(new NostrRelay("wss://nostr.wine"));
 
         // Show notice in a cyber dialog
         this.pool.addNoticeListener((relay, notice, ex) ->

@@ -52,26 +52,7 @@ public class NostrKeyPairSigner implements NostrSigner {
     }
 
     @Override
-    public SignedNostrEvent sign(UnsignedNostrEvent event) throws Exception {
-        String id = NostrEvent.computeEventId(
-            keyPair.getPublicKey().asHex(),
-            event
-        );
-        String sig = NostrUtils.getPlatform().sign(id, keyPair.getPrivateKey());
-        return new SignedNostrEvent(
-            id,
-            keyPair.getPublicKey(),
-            event.getKind(),
-            event.getContent(),
-            event.getCreatedAt(),
-            sig,
-            event.listTags()
-        );
-    }
-
-    @Override
-    public AsyncTask<SignedNostrEvent> signAsync(UnsignedNostrEvent event)
-        throws Exception {
+    public AsyncTask<SignedNostrEvent> sign(UnsignedNostrEvent event) {
         String id = NostrEvent.computeEventId(
             keyPair.getPublicKey().asHex(),
             event
