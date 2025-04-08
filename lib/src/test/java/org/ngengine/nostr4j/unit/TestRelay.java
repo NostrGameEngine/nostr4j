@@ -39,14 +39,19 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.junit.Before;
 import org.junit.Test;
 import org.ngengine.nostr4j.NostrRelay;
 import org.ngengine.nostr4j.NostrRelayLifecycleManager;
+import org.ngengine.nostr4j.TestLogger;
 import org.ngengine.nostr4j.listeners.NostrRelayComponent;
 import org.ngengine.nostr4j.transport.NostrMessage;
 
 public class TestRelay {
+
+    static Logger logger = TestLogger.getRoot(Level.FINEST);
 
     private static final String TEST_RELAY_URL = "wss://nostr.rblb.it";
 
@@ -171,13 +176,15 @@ public class TestRelay {
         );
 
         // Test initial connection
-        relay.connect();
+        relay.connect().await();
+        System.out.println("Connected to relay!");
         boolean connected = connectLatch.await(10, TimeUnit.SECONDS);
         assertTrue("Failed to connect to relay", connected);
         assertEquals("Should receive exactly one connection event", 1, connectionEvents.get());
 
         // Test disconnect
-        relay.disconnect("Test completed");
+        relay.disconnect("Test completed").await();
+        System.out.println("Disconnected from relay!");
 
         // Verify state changes
         assertFalse("Relay should be disconnected", relay.isConnected());
