@@ -140,10 +140,31 @@ public class NostrPool implements NostrRelayComponent {
         return subscribe(Arrays.asList(filter), defaultEventTracker);
     }
 
+    /**
+     * Creates a subscription based on the provided filters.
+     * <p>
+     * This method creates a subscription that will match events against the given filters,
+     * using the default event tracker class for duplicate detection.
+     * </p>
+     *
+     * @param filter A collection of filters that define what events to receive
+     * @return A new subscription instance
+     */
     public NostrSubscription subscribe(Collection<NostrFilter> filter) {
         return subscribe(filter, defaultEventTracker);
     }
 
+    /**
+     * Creates a subscription using the specified filter and event tracker.
+     * <p>
+     * This method allows specifying both the filter for matching events and
+     * a custom event tracker implementation for handling duplicate events.
+     * </p>
+     *
+     * @param filter The filter defining what events to receive
+     * @param eventTracker The event tracker class to use for this subscription
+     * @return A new subscription instance
+     */
     public NostrSubscription subscribe(NostrFilter filter, Class<? extends EventTracker> eventTracker) {
         return subscribe(Arrays.asList(filter), eventTracker);
     }

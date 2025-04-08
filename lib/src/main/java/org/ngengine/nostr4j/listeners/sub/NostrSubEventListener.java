@@ -32,6 +32,38 @@ package org.ngengine.nostr4j.listeners.sub;
 
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 
+/**
+ * A listener interface for receiving events through a Nostr subscription.
+ * <p>
+ * This interface defines the callback method that is invoked when an event
+ * matching the subscription's filter is received from a relay.
+ * </p>
+ * <p>
+ * Example usage:
+ * </p>
+ * <pre>
+ * subscription.listenEvent((event, stored) -> {
+ *     System.out.println("Received event: " + event.getContent());
+ *     if (stored) {
+ *         System.out.println("This is a historical event from the relay's database");
+ *     } else {
+ *         System.out.println("This is a new, real-time event");
+ *     }
+ * });
+ * </pre>
+ */
 public interface NostrSubEventListener extends NostrSubListener {
+    /**
+     * Called when an event matching the subscription's filter is received.
+     * <p>
+     * This method is invoked for each event that matches the subscription's filter
+     * criteria and passes any duplicate detection checks implemented by the
+     * subscription's event tracker.
+     * </p>
+     *
+     * @param event The signed Nostr event that was received
+     * @param stored Whether this event came from the relay's stored history (true)
+     *               or is a new event (false)
+     */
     void onSubEvent(SignedNostrEvent event, boolean stored);
 }

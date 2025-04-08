@@ -51,6 +51,24 @@ import org.ngengine.nostr4j.transport.NostrMessage;
 import org.ngengine.nostr4j.transport.NostrMessageAck;
 import org.ngengine.nostr4j.utils.NostrUtils;
 
+/**
+ * Represents a subscription to a Nostr relay based on specific filter criteria.
+ * <p>
+ * A subscription allows clients to receive events matching specific filters from the relay.
+ * It manages listeners for different types of subscription events (event received, end of stored events,
+ * subscription closed) and tracks event delivery.
+ * </p>
+ * <p>
+ * Example usage:
+ * </p>
+ * <pre>
+ * NostrFilter filter = new NostrFilter().kind(1).limit(10);
+ * NostrSubscription subscription = relaySubManager.createSubscription(filter, new PassthroughEventTracker())
+ *     .listenEvent((event, stored) -> System.out.println("Event: " + event.getContent()))
+ *     .listenEose(everywhere -> System.out.println("End of stored events"));
+ * subscription.open();
+ * </pre>
+ */
 public class NostrSubscription extends NostrMessage {
 
     private static final Logger logger = Logger.getLogger(NostrSubscription.class.getName());
@@ -69,6 +87,15 @@ public class NostrSubscription extends NostrMessage {
     private final BiFunction<NostrSubscription, NostrSubCloseMessage, AsyncTask<List<NostrMessageAck>>> onClose;
     private final List<String> closeReasons = new ArrayList<>();
 
+    /**
+     * Creates a new subscription with the specified parameters.
+     *
+     * @param subId        The subscription identifier
+     * @param filters      The filters that determine which events to receive
+     * @param eventTracker The tracker used to manage event delivery and deduplication
+     * @param onOpen       Function called when the subscription is opened
+     * @param onClose      Function called when the subscription is closed
+     */
     protected NostrSubscription(
         String subId,
         Collection<NostrFilter> filters,
@@ -86,26 +113,60 @@ public class NostrSubscription extends NostrMessage {
         this.onClose = onClose;
     }
 
+    /**
+     * Registers a reason for subscription closure.
+     * <p>
+     * This method records reasons why a subscription was closed, which can be
+     * useful for diagnostics and reporting to subscription listeners.
+     * </p>
+     *
+     * @param reason The reason for closing the subscription
+     */
     protected void registerClosure(String reason) {
         closeReasons.add(reason);
     }
 
+    /**
+     * Gets the filters associated with this subscription.
+     *
+     * @return An unmodifiable collection of filters
+     */
     public Collection<NostrFilter> getFilters() {
         return this.filtersRO;
     }
 
-    public NostrExecutor getExecutor() {
+    /**
+     * Gets the executor for this subscription.
+     *
+     * @return The executor handling subscription tasks
+     */
+    protected NostrExecutor getExecutor() {
         return this.executor;
     }
 
+    /**
+     * Gets the subscription ID.
+     *
+     * @return The subscription ID
+     */
     public String getId() {
         return this.subId;
     }
 
+    /**
+     * Opens the subscription with the relay, starting the event flow.
+     *
+     * @return An async task representing the open operation
+     */
     public AsyncTask<List<NostrMessageAck>> open() {
         return this.onOpen.apply(this);
     }
 
+    /**
+     * Closes the subscription, stopping the event flow.
+     *
+     * @return An async task representing the close operation
+     */
     public AsyncTask<List<NostrMessageAck>> close() {
         AsyncTask<List<NostrMessageAck>> out = this.onClose.apply(this, getCloseMessage());
         registerClosure("closed by client");
@@ -113,10 +174,21 @@ public class NostrSubscription extends NostrMessage {
         return out;
     }
 
+    /**
+     * Gets the subscription ID.
+     *
+     * @return The subscription ID
+     */
     public String getSubId() {
         return subId;
     }
 
+    /**
+     * Adds a listener for events received on this subscription.
+     *
+     * @param listener The event listener to add
+     * @return This subscription for method chaining
+     */
     public NostrSubscription listenEvent(NostrSubEventListener listener) {
         assert listener != null;
         assert onEventListeners.contains(listener) == false;
@@ -124,6 +196,12 @@ public class NostrSubscription extends NostrMessage {
         return this;
     }
 
+    /**
+     * Adds a listener for EOSE (End Of Stored Events) notifications.
+     *
+     * @param listener The EOSE listener to add
+     * @return This subscription for method chaining
+     */
     public NostrSubscription listenEose(NostrSubEoseListener listener) {
         assert listener != null;
         assert onEoseListeners.contains(listener) == false;
@@ -131,6 +209,12 @@ public class NostrSubscription extends NostrMessage {
         return this;
     }
 
+    /**
+     * Adds a listener for subscription close events.
+     *
+     * @param listener The close listener to add
+     * @return This subscription for method chaining
+     */
     public NostrSubscription listenClose(NostrSubCloseListener listener) {
         assert listener != null;
         assert onCloseListeners.contains(listener) == false;
@@ -138,6 +222,12 @@ public class NostrSubscription extends NostrMessage {
         return this;
     }
 
+    /**
+     * Adds a general subscription listener that may implement one or more specific listener interfaces.
+     *
+     * @param listener The listener to add
+     * @return This subscription for method chaining
+     */
     public NostrSubscription listen(NostrSubListener listener) {
         assert listener != null;
         if (listener instanceof NostrSubEoseListener) {
@@ -156,6 +246,12 @@ public class NostrSubscription extends NostrMessage {
         return this;
     }
 
+    /**
+     * Removes a subscription listener.
+     *
+     * @param listener The listener to remove
+     * @return This subscription for method chaining
+     */
     public NostrSubscription stopListening(NostrSubListener listener) {
         if (listener instanceof NostrSubEoseListener) {
             onEoseListeners.remove((NostrSubEoseListener) listener);

@@ -32,6 +32,35 @@ package org.ngengine.nostr4j.listeners.sub;
 
 import java.util.List;
 
+/**
+ * A listener interface for subscription closure events.
+ * <p>
+ * This interface defines a callback method that is invoked when a subscription
+ * is closed, either by the client or by the relay. The listener receives information
+ * about why the subscription was closed.
+ * </p>
+ * <p>
+ * Example usage:
+ * </p>
+ * <pre>
+ * subscription.listenClose(reasons -> {
+ *     System.out.println("Subscription closed for the following reasons:");
+ *     for (String reason : reasons) {
+ *         System.out.println(" - " + reason);
+ *     }
+ * });
+ * </pre>
+ */
 public interface NostrSubCloseListener extends NostrSubListener {
+    /**
+     * Called when a subscription is closed.
+     * <p>
+     * This method is invoked when a subscription is closed, providing a list
+     * of reasons why the closure occurred. Multiple reasons may be provided if
+     * the subscription was closed by multiple relays or had multiple closure events.
+     * </p>
+     *
+     * @param reasons A list of string reasons explaining why the subscription was closed
+     */
     void onSubClose(List<String> reasons);
 }

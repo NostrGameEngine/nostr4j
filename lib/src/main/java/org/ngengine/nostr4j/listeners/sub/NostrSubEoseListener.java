@@ -30,6 +30,38 @@
  */
 package org.ngengine.nostr4j.listeners.sub;
 
+/**
+ * A listener interface for receiving End-of-Stored-Events (EOSE) notifications from Nostr relays.
+ * <p>
+ * This interface defines a callback method that is invoked when a relay signals
+ * that it has finished sending all stored events that match the subscription's filter.
+ * After EOSE is received, any subsequent events for the subscription will be newly
+ * published events rather than historical data.
+ * </p>
+ * <p>
+ * Example usage:
+ * </p>
+ * <pre>
+ * subscription.listenEose(everywhere -> {
+ *     if (everywhere) {
+ *         System.out.println("All relays have sent their stored events");
+ *     } else {
+ *         System.out.println("Some relay has sent its stored events");
+ *     }
+ * });
+ * </pre>
+ */
 public interface NostrSubEoseListener extends NostrSubListener {
+    /**
+     * Called when a relay signals that it has finished sending all stored events.
+     * <p>
+     * This method is invoked when an EOSE (End of Stored Events) message is received
+     * from a relay, indicating that the relay has sent all historical events matching
+     * the subscription's filter. After this point, only new events will be received.
+     * </p>
+     *
+     * @param everyWhere If true, all connected relays have sent EOSE for this subscription.
+     *                   If false, at least one relay has sent EOSE, but not all.
+     */
     void onSubEose(boolean everyWhere);
 }

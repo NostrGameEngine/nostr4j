@@ -72,10 +72,31 @@ public class NostrRelaySubManager implements NostrRelayComponent {
         return true;
     }
 
+    /**
+     * Checks if the given subscription is currently active on this relay.
+     * <p>
+     * A subscription is considered active if it has been sent to the relay
+     * and has not been closed yet.
+     * </p>
+     *
+     * @param sub The subscription to check
+     * @return true if the subscription is active, false otherwise
+     */
     public boolean isActive(NostrSubscription sub) {
         return this.subTracker.containsKey(sub.getSubId());
     }
 
+    /**
+     * Checks if the given subscription has received the EOSE (End of Stored Events)
+     * message from this relay.
+     * <p>
+     * EOSE indicates that the relay has sent all stored events matching the
+     * subscription's filter, and future events will only be from new publications.
+     * </p>
+     *
+     * @param sub The subscription to check
+     * @return true if EOSE has been received for this subscription, false otherwise
+     */
     public boolean isEose(NostrSubscription sub) {
         SubAttachment attachment = this.subTracker.get(sub.getSubId());
         return attachment != null && attachment.eose;

@@ -30,4 +30,28 @@
  */
 package org.ngengine.nostr4j.listeners.sub;
 
+/**
+ * Base marker interface for all Nostr subscription listeners.
+ * <p>
+ * This interface serves as the common parent for all types of subscription listeners
+ * in the Nostr protocol implementation. It doesn't define any methods itself but
+ * provides a common type that can be used to handle any specific listener type.
+ * </p>
+ * <p>
+ * Specific listener interfaces extend this interface to provide specialized
+ * callback methods for different types of subscription events.
+ * </p>
+ * <p>
+ * Example usage:
+ * </p>
+ * <pre>
+ * public void registerListener(NostrSubListener listener) {
+ *     if (listener instanceof NostrSubEventListener) {
+ *         // Handle event listener registration
+ *     } else if (listener instanceof NostrSubCloseListener) {
+ *         // Handle close listener registration
+ *     }
+ * }
+ * </pre>
+ */
 public interface NostrSubListener {}
