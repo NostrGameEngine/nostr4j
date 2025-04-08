@@ -28,21 +28,63 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package org.ngengine.nostr4j.signer;
+package org.ngengine.nostr4j.transport.impl;
 
-import java.io.Serializable;
-import org.ngengine.nostr4j.event.SignedNostrEvent;
-import org.ngengine.nostr4j.event.UnsignedNostrEvent;
-import org.ngengine.nostr4j.keypair.NostrPublicKey;
-import org.ngengine.nostr4j.platform.AsyncTask;
+import java.util.Collection;
+import java.util.List;
+import org.ngengine.nostr4j.transport.NostrMessage;
+import org.ngengine.nostr4j.utils.NostrUtils;
 
-public interface NostrSigner extends Cloneable, Serializable {
-    SignedNostrEvent sign(UnsignedNostrEvent event) throws Exception;
+public class NostrOKMessage extends NostrMessage {
 
-    AsyncTask<SignedNostrEvent> signAsync(UnsignedNostrEvent event)
-        throws Exception;
+    private final String eventId;
+    private final boolean success;
+    private final String message;
 
-    String encrypt(String message, NostrPublicKey publicKey) throws Exception;
-    String decrypt(String message, NostrPublicKey publicKey) throws Exception;
-    NostrPublicKey getPublicKey();
+    public NostrOKMessage(String eventId, boolean success, String message) {
+        this.eventId = eventId;
+        this.success = success;
+        this.message = message;
+    }
+
+    public String getEventId() {
+        return this.eventId;
+    }
+
+    public boolean isSuccess() {
+        return this.success;
+    }
+
+    public String getMessage() {
+        return this.message;
+    }
+
+    public void throwException() throws Throwable {
+        if (!this.success) {
+            throw new Exception(this.message);
+        }
+    }
+
+    @Override
+    protected String getPrefix() {
+        return "OK";
+    }
+
+    @Override
+    protected Collection<Object> getFragments() {
+        return List.of(this.message);
+    }
+
+    public static NostrOKMessage parse(List<Object> data) {
+        String prefix = NostrUtils.safeString(data.get(0));
+        if (data.size() < 3 || !prefix.equals("OK")) {
+            return null;
+        }
+        String eventId = NostrUtils.safeString(data.get(1));
+        boolean success = NostrUtils.safeBool(data.get(2));
+        String message = data.size() > 3
+            ? NostrUtils.safeString(data.get(3))
+            : "";
+        return new NostrOKMessage(eventId, success, message);
+    }
 }

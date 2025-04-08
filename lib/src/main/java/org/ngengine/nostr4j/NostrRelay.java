@@ -53,6 +53,9 @@ import org.ngengine.nostr4j.platform.Platform;
 import org.ngengine.nostr4j.transport.NostrMessage;
 import org.ngengine.nostr4j.transport.NostrMessageAck;
 import org.ngengine.nostr4j.transport.NostrTransport;
+import org.ngengine.nostr4j.transport.impl.NostrClosedMessage;
+import org.ngengine.nostr4j.transport.impl.NostrEOSEMessage;
+import org.ngengine.nostr4j.transport.impl.NostrOKMessage;
 import org.ngengine.nostr4j.utils.ExponentialBackoff;
 import org.ngengine.nostr4j.utils.NostrUtils;
 
@@ -104,9 +107,17 @@ public class NostrRelay implements TransportListener {
     protected volatile boolean connected = false;
     protected volatile boolean connecting = false;
     protected volatile boolean firstConnection = false;
+    protected volatile boolean verifyEvents = true;
+    protected volatile boolean parallelEvents = true;
 
     protected final Queue<QueuedMessage> messageQueue;
     protected final Queue<Runnable> connectCallbacks;
+
+    protected AtomicReference<AsyncTask> queue = new AtomicReference(null);
+
+    boolean fast = true;
+
+    boolean fastEvents = false;
 
     public NostrRelay(String url) {
         try {
@@ -123,7 +134,21 @@ public class NostrRelay implements TransportListener {
         }
     }
 
-    protected AtomicReference<AsyncTask> queue = new AtomicReference(null);
+    public void setVerifyEvents(boolean verify) {
+        this.verifyEvents = verify;
+    }
+
+    public boolean isVerifyEvents() {
+        return this.verifyEvents;
+    }
+
+    public void setAsyncEventsVerification(boolean v) {
+        this.parallelEvents = v;
+    }
+
+    public boolean isAsyncEventsVerification() {
+        return this.parallelEvents;
+    }
 
     protected <T> AsyncTask<T> runInRelayExecutor(
         BiConsumer<Consumer<T>, Consumer<Throwable>> runnable,
@@ -204,6 +229,7 @@ public class NostrRelay implements TransportListener {
         );
     }
 
+    // await for order
     public AsyncTask<NostrMessageAck> sendMessage(NostrMessage message) {
         return runInRelayExecutor(
             (res, rej) -> {
@@ -316,7 +342,7 @@ public class NostrRelay implements TransportListener {
                     rej.accept(e);
                 }
             },
-            !fast
+            false
         );
     }
 
@@ -324,6 +350,7 @@ public class NostrRelay implements TransportListener {
         return url;
     }
 
+    // await for order
     public AsyncTask<NostrRelay> connect() {
         if (!this.connected && !this.connecting) {
             this.connecting = true;
@@ -365,7 +392,7 @@ public class NostrRelay implements TransportListener {
                         });
                     this.loop();
                 },
-                !fast
+                false
             );
         } else {
             Platform platform = NostrUtils.getPlatform();
@@ -374,6 +401,8 @@ public class NostrRelay implements TransportListener {
             });
         }
     }
+
+    // await for order
 
     public AsyncTask<NostrRelay> disconnect(String reason) {
         this.connected = false;
@@ -408,10 +437,11 @@ public class NostrRelay implements TransportListener {
                 }
                 res.accept(this);
             },
-            !fast
+            false
         );
     }
 
+    // await for order
     @Override
     public void onConnectionOpen() {
         runInRelayExecutor(
@@ -504,92 +534,96 @@ public class NostrRelay implements TransportListener {
                     rej.accept(e);
                 }
             },
-            !fast
+            true
         );
     }
 
-    boolean fast = true;
-
-    boolean fastEvents = false;
-
+    //ordered
     @Override
     public void onConnectionMessage(String msg) {
         try {
             Platform platform = NostrUtils.getPlatform();
+            assert dbg(() -> {
+                logger.finest("Received message: " + msg);
+            });
+            List<Object> data = platform.fromJSON(msg, List.class);
+            String prefix = NostrUtils.safeString(data.get(0));
 
-            AsyncTask<NostrRelay> syncher = fastEvents
-                ? runInRelayExecutor(
-                    (res, rej) -> {
-                        res.accept(this);
-                    },
-                    true
+            // syncher.await();
+            NostrMessage rcv = null;
+            if (rcv == null) rcv = SignedNostrEvent.parse(data);
+            if (rcv == null) rcv = NostrClosedMessage.parse(data);
+            if (rcv == null) rcv = NostrEOSEMessage.parse(data);
+            if (rcv == null) rcv = NostrOKMessage.parse(data);
+            if (rcv == null) throw new Exception(
+                "Unknown message type: " + prefix
+            );
+            final NostrMessage message = rcv;
+
+            final AsyncTask<Boolean> asyncVerifyPromise = (
+                    rcv instanceof SignedNostrEvent &&
+                    verifyEvents &&
+                    parallelEvents
                 )
-                : platform.wrapPromise((res, rej) -> {
-                    res.accept(this);
-                });
+                ? (AsyncTask<Boolean>) ((SignedNostrEvent) rcv).verifyAsync()
+                : null;
 
             runInRelayExecutor(
                 (res, rej) -> {
                     try {
-                        assert dbg(() -> {
-                            logger.finest("Received message: " + msg);
-                        });
-                        List<Object> data = platform.fromJSON(msg, List.class);
-                        String prefix = NostrUtils.safeString(data.get(0));
-
                         // handle acks
-                        switch (prefix) {
-                            case "OK":
-                                {
-                                    String eventId = NostrUtils.safeString(
-                                        data.get(1)
+                        if (message instanceof NostrOKMessage) {
+                            NostrOKMessage ok = (NostrOKMessage) message;
+                            String eventId = ok.getEventId();
+                            boolean success = ok.isSuccess();
+                            String eventMessage = ok.getMessage();
+                            NostrMessageAck ack =
+                                this.waitingEventsAck.get(eventId);
+                            if (ack != null) {
+                                assert dbg(() -> {
+                                    logger.finest(
+                                        "Received ack for event: " +
+                                        eventId +
+                                        " success: " +
+                                        success +
+                                        " message: " +
+                                        eventMessage
                                     );
-                                    boolean success = (Boolean) data.get(2);
-                                    String eventMessage = data.size() > 3
-                                        ? NostrUtils.safeString(data.get(3))
-                                        : "";
-                                    NostrMessageAck ack =
-                                        this.waitingEventsAck.get(eventId);
-                                    if (ack != null) {
-                                        assert dbg(() -> {
-                                            logger.finest(
-                                                "Received ack for event: " +
-                                                eventId +
-                                                " success: " +
-                                                success +
-                                                " message: " +
-                                                eventMessage
-                                            );
-                                        });
-                                        ack.setSuccess(success);
-                                        ack.setMessage(eventMessage);
-                                        if (success) {
-                                            ack.callSuccessCallback(
-                                                eventMessage
-                                            );
-                                        } else {
-                                            ack.callFailureCallback(
-                                                eventMessage
-                                            );
-                                        }
-                                    } else {
-                                        assert dbg(() -> {
-                                            logger.warning(
-                                                "Received ack for unknown event: " +
-                                                eventId
-                                            );
-                                        });
-                                    }
-                                    break;
+                                });
+                                ack.setSuccess(success);
+                                ack.setMessage(eventMessage);
+                                if (success) {
+                                    ack.callSuccessCallback(eventMessage);
+                                } else {
+                                    ack.callFailureCallback(eventMessage);
                                 }
+                            } else {
+                                assert dbg(() -> {
+                                    logger.warning(
+                                        "Received ack for unknown event: " +
+                                        eventId
+                                    );
+                                });
+                            }
                         }
 
-                        // syncher.await();
+                        if (asyncVerifyPromise != null) {
+                            asyncVerifyPromise.await();
+                        } else if (
+                            verifyEvents && message instanceof SignedNostrEvent
+                        ) {
+                            SignedNostrEvent event = (SignedNostrEvent) message;
+                            if (!event.verify()) {
+                                throw new Exception(
+                                    "Event verification failed"
+                                );
+                            }
+                        }
 
                         // propagate event to listeners
                         for (NostrRelayComponent listener : this.listeners) {
                             try {
-                                if (!listener.onRelayMessage(this, data)) {
+                                if (!listener.onRelayMessage(this, message)) {
                                     assert dbg(() -> {
                                         logger.finest(
                                             "Message ignored by component: " +
@@ -620,13 +654,14 @@ public class NostrRelay implements TransportListener {
                         });
                     }
                 },
-                !fastEvents
+                true
             );
         } catch (Exception e) {
             logger.severe("Error in onConnectionMessage: " + e.getMessage());
         }
     }
 
+    // await for order
     @Override
     public void onConnectionClosedByServer(String reason) {
         logger.finer(
@@ -686,7 +721,7 @@ public class NostrRelay implements TransportListener {
 
                     res.accept(this);
                 },
-                !fast
+                true
             );
         } catch (Exception e) {
             logger.severe(
@@ -695,6 +730,7 @@ public class NostrRelay implements TransportListener {
         }
     }
 
+    // await for order
     @Override
     public void onConnectionClosedByClient(String reason) {
         this.connected = false;
@@ -728,7 +764,7 @@ public class NostrRelay implements TransportListener {
                         }
                     }
                 },
-                !fast
+                true
             );
         } catch (Exception e) {
             logger.severe(
@@ -803,6 +839,7 @@ public class NostrRelay implements TransportListener {
             );
     }
 
+    // await for order
     @Override
     public void onConnectionError(Throwable e) {
         try {
@@ -831,7 +868,7 @@ public class NostrRelay implements TransportListener {
                         }
                     }
                 },
-                !fast
+                true
             );
         } catch (Exception e1) {
             logger.severe("Error in onConnectionError: " + e1.getMessage());

@@ -33,13 +33,13 @@ package org.ngengine.nostr4j;
 import static org.ngengine.nostr4j.utils.NostrUtils.dbg;
 
 import java.time.Instant;
-import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
+import org.ngengine.nostr4j.event.NostrEvent;
 import org.ngengine.nostr4j.listeners.NostrRelayComponent;
 import org.ngengine.nostr4j.transport.NostrMessage;
-import org.ngengine.nostr4j.utils.NostrUtils;
+import org.ngengine.nostr4j.transport.impl.NostrClosedMessage;
 
 public class NostrRelayLifecycleManager implements NostrRelayComponent {
 
@@ -71,20 +71,13 @@ public class NostrRelayLifecycleManager implements NostrRelayComponent {
     }
 
     @Override
-    public boolean onRelayMessage(NostrRelay relay, List<Object> data) {
-        String prefix = NostrUtils.safeString(data.get(0));
-        switch (prefix) {
-            case "CLOSED":
-                {
-                    String subId = NostrUtils.safeString(data.get(1));
-                    this.subTracker.remove(subId);
-                    break;
-                }
-            case "EVENT":
-                {
-                    this.keepAlive();
-                    break;
-                }
+    public boolean onRelayMessage(NostrRelay relay, NostrMessage rcv) {
+        if (rcv instanceof NostrClosedMessage) {
+            NostrClosedMessage msg = (NostrClosedMessage) rcv;
+            String subId = msg.getSubId();
+            this.subTracker.remove(subId);
+        } else if (rcv instanceof NostrEvent) {
+            this.keepAlive();
         }
         return true;
     }

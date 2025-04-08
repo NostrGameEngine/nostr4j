@@ -32,11 +32,11 @@ package org.ngengine.nostr4j;
 
 import java.time.Instant;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import org.ngengine.nostr4j.listeners.NostrRelayComponent;
 import org.ngengine.nostr4j.transport.NostrMessage;
-import org.ngengine.nostr4j.utils.NostrUtils;
+import org.ngengine.nostr4j.transport.impl.NostrClosedMessage;
+import org.ngengine.nostr4j.transport.impl.NostrEOSEMessage;
 
 public class NostrRelaySubManager implements NostrRelayComponent {
 
@@ -58,25 +58,16 @@ public class NostrRelaySubManager implements NostrRelayComponent {
     }
 
     @Override
-    public boolean onRelayMessage(NostrRelay relay, List<Object> data) {
-        String prefix = NostrUtils.safeString(data.get(0));
-        switch (prefix) {
-            case "CLOSED":
-                {
-                    String subId = NostrUtils.safeString(data.get(1));
-
-                    this.subTracker.remove(subId);
-                    break;
-                }
-            case "EOSE":
-                {
-                    String subId = NostrUtils.safeString(data.get(1));
-                    SubAttachment attachment = this.subTracker.get(subId);
-                    if (attachment != null) {
-                        attachment.eose = true;
-                    }
-                    break;
-                }
+    public boolean onRelayMessage(NostrRelay relay, NostrMessage rcv) {
+        if (rcv instanceof NostrClosedMessage) {
+            String subId = ((NostrClosedMessage) rcv).getSubId();
+            this.subTracker.remove(subId);
+        } else if (rcv instanceof NostrEOSEMessage) {
+            String subId = ((NostrEOSEMessage) rcv).getSubId();
+            SubAttachment attachment = this.subTracker.get(subId);
+            if (attachment != null) {
+                attachment.eose = true;
+            }
         }
         return true;
     }

@@ -335,4 +335,27 @@ public class TeaVMPlatform implements Platform {
     public <T> Queue<T> newConcurrentQueue(Class<T> claz) {
         return new LinkedList<T>();
     }
+
+    @Override
+    public AsyncTask<String> signAsync(String data, NostrPrivateKey privKey) throws Exception {
+        return promisify((res, rej) -> {
+            try {
+                res.accept(sign(data, privKey));
+            } catch (Exception e) {
+                rej.accept(e);
+            }
+        }, null);
+    }
+
+    @Override
+    public AsyncTask<Boolean> verifyAsync(String data, String sign, NostrPublicKey pubKey) {
+        return promisify((res, rej) -> {
+            try {
+                res.accept(verify(data, sign, pubKey));
+            } catch (Exception e) {
+                rej.accept(e);
+            }
+        }, null);
+    }
+
 }

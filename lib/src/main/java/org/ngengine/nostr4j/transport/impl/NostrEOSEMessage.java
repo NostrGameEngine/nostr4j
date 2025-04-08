@@ -28,21 +28,41 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package org.ngengine.nostr4j.signer;
+package org.ngengine.nostr4j.transport.impl;
 
-import java.io.Serializable;
-import org.ngengine.nostr4j.event.SignedNostrEvent;
-import org.ngengine.nostr4j.event.UnsignedNostrEvent;
-import org.ngengine.nostr4j.keypair.NostrPublicKey;
-import org.ngengine.nostr4j.platform.AsyncTask;
+import java.util.Collection;
+import java.util.List;
+import org.ngengine.nostr4j.transport.NostrMessage;
+import org.ngengine.nostr4j.utils.NostrUtils;
 
-public interface NostrSigner extends Cloneable, Serializable {
-    SignedNostrEvent sign(UnsignedNostrEvent event) throws Exception;
+public class NostrEOSEMessage extends NostrMessage {
 
-    AsyncTask<SignedNostrEvent> signAsync(UnsignedNostrEvent event)
-        throws Exception;
+    private final String subId;
 
-    String encrypt(String message, NostrPublicKey publicKey) throws Exception;
-    String decrypt(String message, NostrPublicKey publicKey) throws Exception;
-    NostrPublicKey getPublicKey();
+    public NostrEOSEMessage(String subId) {
+        this.subId = subId;
+    }
+
+    public String getSubId() {
+        return this.subId;
+    }
+
+    @Override
+    protected String getPrefix() {
+        return "EOSE";
+    }
+
+    @Override
+    protected Collection<Object> getFragments() {
+        return List.of(this.subId);
+    }
+
+    public static NostrEOSEMessage parse(List<Object> data) {
+        String prefix = NostrUtils.safeString(data.get(0));
+        if (data.size() < 2 || !prefix.equals("EOSE")) {
+            return null;
+        }
+        String subId = NostrUtils.safeString(data.get(1));
+        return new NostrEOSEMessage(subId);
+    }
 }

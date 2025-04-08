@@ -67,11 +67,20 @@ public interface Platform {
     boolean verify(String data, String sign, NostrPublicKey pubKey)
         throws Exception;
 
+    AsyncTask<String> signAsync(String data, NostrPrivateKey privKey)
+        throws Exception;
+
+    AsyncTask<Boolean> verifyAsync(
+        String data,
+        String sign,
+        NostrPublicKey pubKey
+    );
     byte[] randomBytes(int n);
 
     NostrExecutor newRelayExecutor();
 
     NostrExecutor newPoolExecutor();
+
     NostrExecutor newSubscriptionExecutor();
 
     <T> AsyncTask<T> promisify(

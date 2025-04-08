@@ -46,6 +46,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
+import org.ngengine.nostr4j.event.SignedNostrEvent.ReceivedSignedNostrEvent;
 import org.ngengine.nostr4j.event.tracker.EventTracker;
 import org.ngengine.nostr4j.event.tracker.ForwardSlidingWindowEventTracker;
 import org.ngengine.nostr4j.event.tracker.NaiveEventTracker;
@@ -56,6 +57,9 @@ import org.ngengine.nostr4j.platform.Platform;
 import org.ngengine.nostr4j.transport.NostrMessage;
 import org.ngengine.nostr4j.transport.NostrMessageAck;
 import org.ngengine.nostr4j.transport.NostrTransport;
+import org.ngengine.nostr4j.transport.impl.NostrClosedMessage;
+import org.ngengine.nostr4j.transport.impl.NostrEOSEMessage;
+import org.ngengine.nostr4j.transport.impl.NostrNoticeMessage;
 import org.ngengine.nostr4j.utils.NostrUtils;
 import org.ngengine.nostr4j.utils.ScheduledAction;
 
@@ -380,20 +384,19 @@ public class NostrPool implements NostrRelayComponent {
     }
 
     @Override
-    public boolean onRelayMessage(NostrRelay relay, List<Object> doc) {
+    public boolean onRelayMessage(NostrRelay relay, NostrMessage rcv) {
         assert dbg(() -> {
             logger.finer(
-                "received message from relay " + relay.getUrl() + " : " + doc
+                "received message from relay " + relay.getUrl() + " : " + rcv
             );
         });
 
         try {
-            String type = NostrUtils.safeString(doc.get(0));
-            if (type.equals("CLOSED")) {
-                String subId = NostrUtils.safeString(doc.get(1));
-                String reason = doc.size() > 2
-                    ? NostrUtils.safeString(doc.get(2))
-                    : "";
+            // String type = NostrUtils.safeString(doc.get(0));
+            if (rcv instanceof NostrClosedMessage) {
+                NostrClosedMessage msg = (NostrClosedMessage) rcv;
+                String subId = msg.getSubId();
+                String reason = msg.getReason();
                 NostrSubscription sub = subscriptions.get(subId);
                 if (sub != null) {
                     // register that the subscription was closed for a reason
@@ -432,8 +435,9 @@ public class NostrPool implements NostrRelayComponent {
                         "received closed for unknown subscription " + subId
                     );
                 }
-            } else if (type.equals("EOSE")) {
-                String subId = NostrUtils.safeString(doc.get(1));
+            } else if (rcv instanceof NostrEOSEMessage) {
+                NostrEOSEMessage msg = (NostrEOSEMessage) rcv;
+                String subId = msg.getSubId();
                 NostrSubscription sub = subscriptions.get(subId);
                 if (sub != null) {
                     // check if it is eosed in every relay
@@ -455,15 +459,15 @@ public class NostrPool implements NostrRelayComponent {
                         " isEOSEEverywhere: " +
                         isEOSEEverywhere
                     );
-
                     sub.callEoseListeners(isEOSEEverywhere);
                 } else {
                     logger.warning(
                         "received invalid eose for subscription " + subId
                     );
                 }
-            } else if (type.equals("NOTICE")) {
-                String eventMessage = NostrUtils.safeString(doc.get(1));
+            } else if (rcv instanceof NostrNoticeMessage) {
+                NostrNoticeMessage msg = (NostrNoticeMessage) rcv;
+                String eventMessage = msg.getMessage();
                 logger.info(
                     "Received notice from relay " +
                     relay.getUrl() +
@@ -473,8 +477,9 @@ public class NostrPool implements NostrRelayComponent {
                 noticeListener.forEach(listener ->
                     listener.onNotice(relay, eventMessage, null)
                 );
-            } else if (type.equals("EVENT")) {
-                String subId = NostrUtils.safeString(doc.get(1));
+            } else if (rcv instanceof ReceivedSignedNostrEvent) {
+                ReceivedSignedNostrEvent e = (ReceivedSignedNostrEvent) rcv;
+                String subId = e.getSubId();
                 NostrSubscription sub = subscriptions.get(subId);
                 if (sub != null) {
                     assert dbg(() -> {
@@ -482,12 +487,9 @@ public class NostrPool implements NostrRelayComponent {
                             "received event for subscription " + subId
                         );
                     });
-                    Map<String, Object> eventMap =
-                        (Map<String, Object>) doc.get(2);
-                    SignedNostrEvent e = new SignedNostrEvent(eventMap);
-                    if (verifyEvents && !e.verify()) throw new Exception(
-                        "Event signature is invalid"
-                    );
+                    // if (verifyEvents && !e.verify()) throw new Exception(
+                    //     "Event signature is invalid"
+                    // );
                     if (!sub.eventTracker.seen(e)) {
                         assert dbg(() -> {
                             logger.finest(
@@ -528,7 +530,7 @@ public class NostrPool implements NostrRelayComponent {
                         "Received event for unknown subscription " +
                         subId +
                         " " +
-                        doc
+                        rcv
                     );
                 }
             }

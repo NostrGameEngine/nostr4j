@@ -28,21 +28,48 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package org.ngengine.nostr4j.signer;
+package org.ngengine.nostr4j.transport.impl;
 
-import java.io.Serializable;
-import org.ngengine.nostr4j.event.SignedNostrEvent;
-import org.ngengine.nostr4j.event.UnsignedNostrEvent;
-import org.ngengine.nostr4j.keypair.NostrPublicKey;
-import org.ngengine.nostr4j.platform.AsyncTask;
+import java.util.Collection;
+import java.util.List;
+import org.ngengine.nostr4j.transport.NostrMessage;
+import org.ngengine.nostr4j.utils.NostrUtils;
 
-public interface NostrSigner extends Cloneable, Serializable {
-    SignedNostrEvent sign(UnsignedNostrEvent event) throws Exception;
+public class NostrClosedMessage extends NostrMessage {
 
-    AsyncTask<SignedNostrEvent> signAsync(UnsignedNostrEvent event)
-        throws Exception;
+    private final String subId;
+    private final String reason;
 
-    String encrypt(String message, NostrPublicKey publicKey) throws Exception;
-    String decrypt(String message, NostrPublicKey publicKey) throws Exception;
-    NostrPublicKey getPublicKey();
+    public NostrClosedMessage(String subId, String reason) {
+        this.subId = subId;
+        this.reason = reason;
+    }
+
+    public String getSubId() {
+        return this.subId;
+    }
+
+    public String getReason() {
+        return this.reason;
+    }
+
+    @Override
+    protected String getPrefix() {
+        return "CLOSED";
+    }
+
+    @Override
+    protected Collection<Object> getFragments() {
+        return List.of(this.subId, this.reason);
+    }
+
+    public static NostrClosedMessage parse(List<Object> doc) {
+        String prefix = NostrUtils.safeString(doc.get(0));
+        if (doc.size() < 2 || !prefix.equals("CLOSED")) {
+            return null;
+        }
+        String subId = NostrUtils.safeString(doc.get(1));
+        String reason = doc.size() > 2 ? NostrUtils.safeString(doc.get(2)) : "";
+        return new NostrClosedMessage(subId, reason);
+    }
 }

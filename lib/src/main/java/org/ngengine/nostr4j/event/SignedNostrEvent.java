@@ -37,8 +37,10 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
+import org.ngengine.nostr4j.platform.AsyncTask;
 import org.ngengine.nostr4j.transport.NostrMessage;
 import org.ngengine.nostr4j.utils.Bech32;
 import org.ngengine.nostr4j.utils.NostrUtils;
@@ -227,6 +229,12 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
             .verify(this.identifier.id, this.signature, this.getPubkey());
     }
 
+    public AsyncTask<Boolean> verifyAsync() {
+        return NostrUtils
+            .getPlatform()
+            .verifyAsync(this.identifier.id, this.signature, this.getPubkey());
+    }
+
     public String getIdBech32() {
         try {
             if (bech32Id != null) return bech32Id;
@@ -255,5 +263,47 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
     @Override
     protected Collection<Object> getFragments() {
         return thisFragment;
+    }
+
+    public static class ReceivedSignedNostrEvent extends SignedNostrEvent {
+
+        protected final String subId;
+
+        public ReceivedSignedNostrEvent(
+            String subId,
+            String id,
+            NostrPublicKey pubkey,
+            int kind,
+            String content,
+            Instant created_at,
+            String signature,
+            Collection<String[]> tags
+        ) {
+            super(id, pubkey, kind, content, created_at, signature, tags);
+            this.subId = subId;
+        }
+
+        public ReceivedSignedNostrEvent(String subId, Map<String, Object> map) {
+            super(map);
+            this.subId = subId;
+        }
+
+        public String getSubId() {
+            return subId;
+        }
+    }
+
+    public static ReceivedSignedNostrEvent parse(List<Object> doc) {
+        String prefix = NostrUtils.safeString(doc.get(0));
+        if (!prefix.equals("EVENT") || doc.size() < 3) {
+            return null;
+        }
+        String subId = NostrUtils.safeString(doc.get(1));
+        Map<String, Object> eventMap = (Map<String, Object>) doc.get(2);
+        ReceivedSignedNostrEvent e = new ReceivedSignedNostrEvent(
+            subId,
+            eventMap
+        );
+        return e;
     }
 }

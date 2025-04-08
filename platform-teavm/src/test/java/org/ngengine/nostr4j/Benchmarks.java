@@ -98,13 +98,13 @@ public class Benchmarks {
             long min = Long.MAX_VALUE;
             // warmup
             for (List<Object> message : messages) {
-                pool.onRelayMessage(relay, message);
+                pool.onRelayMessage(relay, SignedNostrEvent.parse(message));
             }
 
             for (int i = 0; i < iterations; i++) {
                 long t = System.nanoTime();
                 for (List<Object> message : messages) {
-                    pool.onRelayMessage(relay, message);
+                    pool.onRelayMessage(relay,  SignedNostrEvent.parse(message));
                 }
                 long iterationSum = System.nanoTime() - t;
                 sum += iterationSum;

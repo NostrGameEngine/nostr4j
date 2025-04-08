@@ -31,7 +31,6 @@
 package org.ngengine.nostr4j.listeners;
 
 import java.time.Instant;
-import java.util.List;
 import org.ngengine.nostr4j.NostrRelay;
 import org.ngengine.nostr4j.transport.NostrMessage;
 
@@ -40,7 +39,7 @@ public interface NostrRelayComponent {
 
     boolean onRelayConnect(NostrRelay relay);
 
-    boolean onRelayMessage(NostrRelay relay, List<Object> message);
+    boolean onRelayMessage(NostrRelay relay, NostrMessage message);
 
     boolean onRelayError(NostrRelay relay, Throwable error);
 

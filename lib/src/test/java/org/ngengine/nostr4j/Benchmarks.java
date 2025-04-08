@@ -77,8 +77,10 @@ public class Benchmarks {
     public Benchmarks(boolean trusted, boolean threaded) throws Exception {
         if (threaded) NostrUtils.setPlatform(new JVMThreadedPlatform());
         pool = new NostrPool();
-        pool.setVerifyEvents(!trusted);
-        relay = new NostrRelay("wss://127.0.0.1");
+
+        relay = new NostrRelay("ws://127.0.0.1:8087");
+        relay.setVerifyEvents(!trusted);
+        relay.setAsyncEventsVerification(false);
         pool.ensureRelay(relay);
         NostrSubscription sub = pool.subscribe(
             new NostrFilter(),
@@ -92,13 +94,13 @@ public class Benchmarks {
         long min = Long.MAX_VALUE;
         // warmup
         for (List<Object> message : messages) {
-            pool.onRelayMessage(relay, message);
+            pool.onRelayMessage(relay, SignedNostrEvent.parse(message));
         }
 
         for (int i = 0; i < iterations; i++) {
             long t = System.nanoTime();
             for (List<Object> message : messages) {
-                pool.onRelayMessage(relay, message);
+                pool.onRelayMessage(relay, SignedNostrEvent.parse(message));
             }
             long iterationSum = System.nanoTime() - t;
             sum += iterationSum;
@@ -117,6 +119,7 @@ public class Benchmarks {
         );
     }
 
+    //TODO: rewrite this as it doesn't work now that the relay is non blocking
     public static void main(String[] args) throws Exception {
         System.out.println(
             "Java version: " + System.getProperty("java.version")

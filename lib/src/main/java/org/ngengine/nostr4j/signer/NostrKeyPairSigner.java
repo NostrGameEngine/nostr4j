@@ -36,6 +36,7 @@ import org.ngengine.nostr4j.event.UnsignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.nip44.Nip44;
+import org.ngengine.nostr4j.platform.AsyncTask;
 import org.ngengine.nostr4j.utils.NostrUtils;
 
 public class NostrKeyPairSigner implements NostrSigner {
@@ -66,6 +67,29 @@ public class NostrKeyPairSigner implements NostrSigner {
             sig,
             event.listTags()
         );
+    }
+
+    @Override
+    public AsyncTask<SignedNostrEvent> signAsync(UnsignedNostrEvent event)
+        throws Exception {
+        String id = NostrEvent.computeEventId(
+            keyPair.getPublicKey().asHex(),
+            event
+        );
+        return NostrUtils
+            .getPlatform()
+            .signAsync(id, keyPair.getPrivateKey())
+            .then(sig -> {
+                return new SignedNostrEvent(
+                    id,
+                    keyPair.getPublicKey(),
+                    event.getKind(),
+                    event.getContent(),
+                    event.getCreatedAt(),
+                    sig,
+                    event.listTags()
+                );
+            });
     }
 
     @Override

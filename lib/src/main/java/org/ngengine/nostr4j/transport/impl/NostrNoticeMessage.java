@@ -28,21 +28,58 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package org.ngengine.nostr4j.signer;
+package org.ngengine.nostr4j.transport.impl;
 
-import java.io.Serializable;
-import org.ngengine.nostr4j.event.SignedNostrEvent;
-import org.ngengine.nostr4j.event.UnsignedNostrEvent;
-import org.ngengine.nostr4j.keypair.NostrPublicKey;
-import org.ngengine.nostr4j.platform.AsyncTask;
+import java.util.Collection;
+import java.util.List;
+import org.ngengine.nostr4j.transport.NostrMessage;
+import org.ngengine.nostr4j.utils.NostrUtils;
 
-public interface NostrSigner extends Cloneable, Serializable {
-    SignedNostrEvent sign(UnsignedNostrEvent event) throws Exception;
+public class NostrNoticeMessage extends NostrMessage {
 
-    AsyncTask<SignedNostrEvent> signAsync(UnsignedNostrEvent event)
-        throws Exception;
+    private final String message;
+    private final Throwable exception;
 
-    String encrypt(String message, NostrPublicKey publicKey) throws Exception;
-    String decrypt(String message, NostrPublicKey publicKey) throws Exception;
-    NostrPublicKey getPublicKey();
+    public NostrNoticeMessage(String message, Throwable exception) {
+        this.message = message;
+        this.exception = exception;
+    }
+
+    public NostrNoticeMessage(String message) {
+        this(message, null);
+    }
+
+    public String getMessage() {
+        return this.message;
+    }
+
+    public Throwable getException() {
+        return this.exception;
+    }
+
+    public void throwException() throws Throwable {
+        if (this.exception != null) {
+            throw this.exception;
+        }
+    }
+
+    @Override
+    protected String getPrefix() {
+        return "NOTICE";
+    }
+
+    @Override
+    protected Collection<Object> getFragments() {
+        return List.of(this.message);
+    }
+
+    public static NostrClosedMessage parse(List<Object> data) {
+        String prefix = NostrUtils.safeString(data.get(0));
+        if (data.size() < 3 || !prefix.equals("NOTICE")) {
+            return null;
+        }
+        String subId = NostrUtils.safeString(data.get(1));
+        String reason = NostrUtils.safeString(data.get(2));
+        return new NostrClosedMessage(subId, reason);
+    }
 }

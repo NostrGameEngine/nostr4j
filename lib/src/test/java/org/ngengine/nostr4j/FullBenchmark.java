@@ -36,7 +36,6 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.event.UnsignedNostrEvent;
 import org.ngengine.nostr4j.event.tracker.NaiveEventTracker;
 import org.ngengine.nostr4j.platform.AsyncTask;
@@ -89,9 +88,14 @@ public class FullBenchmark {
             event.setContent(content.substring(0, i));
             event.setCreatedAt(Instant.now());
             event.setTag("eventId", i + "");
-            SignedNostrEvent signed = signer.sign(event);
+            signer
+                .signAsync(event)
+                .then(signed -> {
+                    sent.add(writer.send(signed));
+                    return null;
+                });
             // System.out.println("Sending "+i+"/"+EVENTS);
-            sent.add(writer.send(signed));
+
             // Thread.sleep(10);
         }
 

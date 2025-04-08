@@ -329,101 +329,85 @@ public class JVMAsyncPlatform implements Platform {
         CompletableFuture<T> fut = new CompletableFuture<>();
         if (executor != null && executor instanceof VtNostrExecutor) {
             ((VtNostrExecutor) executor).executor.submit(() -> {
-                    synchronized (fut) {
-                        try {
-                            func.accept(
-                                r -> {
-                                    fut.complete(r);
-                                },
-                                err -> {
-                                    fut.completeExceptionally(err);
-                                }
-                            );
-                        } catch (Throwable e) {
-                            fut.completeExceptionally(e);
-                        }
+                    // synchronized (fut) {
+                    try {
+                        func.accept(
+                            r -> {
+                                fut.complete(r);
+                            },
+                            err -> {
+                                fut.completeExceptionally(err);
+                            }
+                        );
+                    } catch (Throwable e) {
+                        fut.completeExceptionally(e);
                     }
+                    // }
                 });
         } else {
             func.accept(
                 r -> {
-                    synchronized (fut) {
-                        fut.complete(r);
-                    }
+                    // synchronized (fut) {
+                    fut.complete(r);
+                    // }/
                 },
                 err -> {
-                    synchronized (fut) {
-                        fut.completeExceptionally(err);
-                    }
+                    // synchronized (fut) {
+                    fut.completeExceptionally(err);
+                    // }
                 }
             );
         }
         return new AsyncTask<T>() {
             @Override
             public T await() throws Exception {
-                synchronized (fut) {
-                    return fut.get();
-                }
+                // synchronized (fut) {
+                return fut.get();
+                // }
             }
 
             @Override
             public boolean isDone() {
-                synchronized (fut) {
-                    return fut.isDone();
-                }
+                // synchronized (fut) {
+                return fut.isDone();
+                // }
             }
 
             @Override
             public boolean isFailed() {
-                synchronized (fut) {
-                    try {
-                        fut.get();
-                        return false;
-                    } catch (Throwable e) {
-                        return true;
-                    }
+                // synchronized (fut) {
+                try {
+                    fut.get();
+                    return false;
+                } catch (Throwable e) {
+                    return true;
                 }
+                // }
             }
 
             @Override
             public boolean isSuccess() {
-                synchronized (fut) {
-                    try {
-                        fut.get();
-                        return true;
-                    } catch (Throwable e) {
-                        return false;
-                    }
+                // synchronized (fut) {
+                try {
+                    fut.get();
+                    return true;
+                } catch (Throwable e) {
+                    return false;
                 }
+                // }
             }
 
             @Override
             public <R> AsyncTask<R> then(Function<T, R> func2) {
                 return promisify(
                     (res, rej) -> {
-                        synchronized (fut) {
-                            if (
-                                executor != null &&
-                                executor instanceof VtNostrExecutor
-                            ) {
-                                fut.handleAsync(
-                                    (result, exception) -> {
-                                        if (exception != null) {
-                                            rej.accept(exception);
-                                            return null;
-                                        }
-
-                                        try {
-                                            res.accept(func2.apply(result));
-                                        } catch (Throwable e) {
-                                            rej.accept(e);
-                                        }
-                                        return null;
-                                    },
-                                    ((VtNostrExecutor) executor).executor
-                                );
-                            } else {
-                                fut.handle((result, exception) -> {
+                        // synchronized (fut) {
+                        if (
+                            executor != null &&
+                            executor instanceof VtNostrExecutor
+                        ) {
+                            fut.handleAsync(
+                                (result, exception) -> {
                                     if (exception != null) {
                                         rej.accept(exception);
                                         return null;
@@ -435,9 +419,25 @@ public class JVMAsyncPlatform implements Platform {
                                         rej.accept(e);
                                     }
                                     return null;
-                                });
-                            }
+                                },
+                                ((VtNostrExecutor) executor).executor
+                            );
+                        } else {
+                            fut.handle((result, exception) -> {
+                                if (exception != null) {
+                                    rej.accept(exception);
+                                    return null;
+                                }
+
+                                try {
+                                    res.accept(func2.apply(result));
+                                } catch (Throwable e) {
+                                    rej.accept(e);
+                                }
+                                return null;
+                            });
                         }
+                        // }
                     },
                     executor
                 );
@@ -445,28 +445,26 @@ public class JVMAsyncPlatform implements Platform {
 
             @Override
             public AsyncTask<T> catchException(Consumer<Throwable> func2) {
-                synchronized (fut) {
-                    if (
-                        executor != null && executor instanceof VtNostrExecutor
-                    ) {
-                        fut.handleAsync(
-                            (result, exception) -> {
-                                if (exception != null) {
-                                    func2.accept(exception);
-                                }
-                                return null;
-                            },
-                            ((VtNostrExecutor) executor).executor
-                        );
-                    } else {
-                        fut.handle((result, exception) -> {
+                // synchronized (fut) {
+                if (executor != null && executor instanceof VtNostrExecutor) {
+                    fut.handleAsync(
+                        (result, exception) -> {
                             if (exception != null) {
                                 func2.accept(exception);
                             }
                             return null;
-                        });
-                    }
+                        },
+                        ((VtNostrExecutor) executor).executor
+                    );
+                } else {
+                    fut.handle((result, exception) -> {
+                        if (exception != null) {
+                            func2.accept(exception);
+                        }
+                        return null;
+                    });
                 }
+                // }
                 return this;
             }
         };
@@ -587,5 +585,40 @@ public class JVMAsyncPlatform implements Platform {
     @Override
     public <T> Queue<T> newConcurrentQueue(Class<T> claz) {
         return new ConcurrentLinkedQueue<T>();
+    }
+
+    ExecutorService verifyExecutor = Executors.newSingleThreadExecutor();
+
+    @Override
+    public AsyncTask<String> signAsync(String data, NostrPrivateKey privKey)
+        throws Exception {
+        return wrapPromise((res, rej) -> {
+            CompletableFuture.runAsync(() -> {
+                try {
+                    String sig = sign(data, privKey);
+                    res.accept(sig);
+                } catch (Exception e) {
+                    rej.accept(e);
+                }
+            });
+        });
+    }
+
+    @Override
+    public AsyncTask<Boolean> verifyAsync(
+        String data,
+        String sign,
+        NostrPublicKey pubKey
+    ) {
+        return wrapPromise((res, rej) -> {
+            CompletableFuture.runAsync(() -> {
+                try {
+                    boolean verified = verify(data, sign, pubKey);
+                    res.accept(verified);
+                } catch (Exception e) {
+                    rej.accept(e);
+                }
+            });
+        });
     }
 }
