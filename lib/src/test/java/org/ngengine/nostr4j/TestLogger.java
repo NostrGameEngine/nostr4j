@@ -62,16 +62,14 @@ public class TestLogger {
         // Create a better formatter with a custom format
         SimpleFormatter formatter = new SimpleFormatter() {
             // Format: [Time] [Level] [Class] Message
-            private static final String format =
-                "%1$tF %1$tT.%1$tL [%2$-7s] [%3$s] %4$s%n";
+            private static final String format = "%1$tF %1$tT.%1$tL [%2$-7s] [%3$s] %4$s%n";
 
             @Override
             public synchronized String format(LogRecord record) {
                 String loggerName = record.getLoggerName();
                 // Simplify logger name for readability
                 if (loggerName.startsWith("org.ngengine.nostr4j.")) {
-                    loggerName =
-                        loggerName.substring("org.ngengine.nostr4j.".length());
+                    loggerName = loggerName.substring("org.ngengine.nostr4j.".length());
                 }
 
                 return String.format(

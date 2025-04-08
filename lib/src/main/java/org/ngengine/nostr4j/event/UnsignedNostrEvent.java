@@ -94,9 +94,7 @@ public class UnsignedNostrEvent implements NostrEvent {
         this.kind = NostrUtils.safeInt(map.get("kind"));
         this.content = map.get("content").toString();
         this.createdAt = NostrUtils.safeSecondsInstant(map.get("created_at"));
-        Collection<String[]> tags = NostrUtils.safeCollectionOfStringArray(
-            map.getOrDefault("tags", new ArrayList<String[]>())
-        );
+        Collection<String[]> tags = NostrUtils.safeCollectionOfStringArray(map.getOrDefault("tags", new ArrayList<String[]>()));
         setTags(tags);
         return this;
     }
@@ -144,10 +142,6 @@ public class UnsignedNostrEvent implements NostrEvent {
 
     @Override
     public UnsignedNostrEvent clone() {
-        return new UnsignedNostrEvent()
-            .setKind(kind)
-            .setContent(content)
-            .setTags(listTags())
-            .setCreatedAt(createdAt);
+        return new UnsignedNostrEvent().setKind(kind).setContent(content).setTags(listTags()).setCreatedAt(createdAt);
     }
 }

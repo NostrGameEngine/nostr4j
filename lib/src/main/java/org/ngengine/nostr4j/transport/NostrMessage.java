@@ -79,11 +79,7 @@ public abstract class NostrMessage extends NostrMessageFragment {
         try {
             return toJSON();
         } catch (Exception e) {
-            return (
-                this.getClass().getName() +
-                "@" +
-                Integer.toHexString(this.hashCode())
-            );
+            return (this.getClass().getName() + "@" + Integer.toHexString(this.hashCode()));
         }
     }
 
@@ -110,12 +106,6 @@ public abstract class NostrMessage extends NostrMessageFragment {
         BiConsumer<NostrMessageAck, String> successCallback,
         BiConsumer<NostrMessageAck, String> failureCallback
     ) {
-        return new NostrMessageAck(
-            relay,
-            id,
-            sentAt,
-            successCallback,
-            failureCallback
-        );
+        return new NostrMessageAck(relay, id, sentAt, successCallback, failureCallback);
     }
 }

@@ -45,35 +45,24 @@ public interface Platform {
     String toJSON(Object obj) throws Exception;
     <T> T fromJSON(String json, Class<T> claz) throws Exception;
 
-    byte[] secp256k1SharedSecret(byte[] privKey, byte[] pubKey)
-        throws Exception;
+    byte[] secp256k1SharedSecret(byte[] privKey, byte[] pubKey) throws Exception;
     byte[] hmac(byte[] key, byte[] data1, byte[] data2) throws Exception;
     byte[] hkdf_extract(byte[] salt, byte[] ikm) throws Exception;
     byte[] hkdf_expand(byte[] prk, byte[] info, int length) throws Exception;
     String base64encode(byte[] data) throws Exception;
     byte[] base64decode(String data) throws Exception;
-    byte[] chacha20(
-        byte[] key,
-        byte[] nonce,
-        byte[] data,
-        boolean forEncryption
-    ) throws Exception;
+    byte[] chacha20(byte[] key, byte[] nonce, byte[] data, boolean forEncryption) throws Exception;
 
     NostrTransport newTransport();
 
     String sha256(String data) throws NoSuchAlgorithmException;
     byte[] sha256(byte[] data) throws NoSuchAlgorithmException;
     String sign(String data, NostrPrivateKey privKey) throws Exception;
-    boolean verify(String data, String sign, NostrPublicKey pubKey)
-        throws Exception;
+    boolean verify(String data, String sign, NostrPublicKey pubKey) throws Exception;
 
     AsyncTask<String> signAsync(String data, NostrPrivateKey privKey);
 
-    AsyncTask<Boolean> verifyAsync(
-        String data,
-        String sign,
-        NostrPublicKey pubKey
-    );
+    AsyncTask<Boolean> verifyAsync(String data, String sign, NostrPublicKey pubKey);
     byte[] randomBytes(int n);
 
     NostrExecutor newRelayExecutor();
@@ -82,14 +71,9 @@ public interface Platform {
 
     NostrExecutor newSubscriptionExecutor();
 
-    <T> AsyncTask<T> promisify(
-        BiConsumer<Consumer<T>, Consumer<Throwable>> func,
-        NostrExecutor executor
-    );
+    <T> AsyncTask<T> promisify(BiConsumer<Consumer<T>, Consumer<Throwable>> func, NostrExecutor executor);
 
-    <T> AsyncTask<T> wrapPromise(
-        BiConsumer<Consumer<T>, Consumer<Throwable>> func
-    );
+    <T> AsyncTask<T> wrapPromise(BiConsumer<Consumer<T>, Consumer<Throwable>> func);
 
     <T> AsyncTask<List<T>> awaitAll(List<AsyncTask<T>> promises);
 

@@ -37,8 +37,7 @@ public class NostrKeyPair implements Serializable, Cloneable {
     private NostrPublicKey publicKey;
     private NostrPrivateKey privateKey;
 
-    public NostrKeyPair(NostrPrivateKey privateKey, NostrPublicKey publicKey)
-        throws Exception {
+    public NostrKeyPair(NostrPrivateKey privateKey, NostrPublicKey publicKey) throws Exception {
         this.publicKey = publicKey;
         this.privateKey = privateKey;
     }
@@ -72,14 +71,7 @@ public class NostrKeyPair implements Serializable, Cloneable {
 
     @Override
     public String toString() {
-        return (
-            "KeyPair{" +
-            "publicKey=" +
-            publicKey +
-            ", privateKey=" +
-            privateKey +
-            '}'
-        );
+        return ("KeyPair{" + "publicKey=" + publicKey + ", privateKey=" + privateKey + '}');
     }
 
     @Override
@@ -91,19 +83,10 @@ public class NostrKeyPair implements Serializable, Cloneable {
             return false;
         }
         final NostrKeyPair other = (NostrKeyPair) obj;
-        if (
-            this.publicKey != other.publicKey &&
-            (this.publicKey == null || !this.publicKey.equals(other.publicKey))
-        ) {
+        if (this.publicKey != other.publicKey && (this.publicKey == null || !this.publicKey.equals(other.publicKey))) {
             return false;
         }
-        if (
-            this.privateKey != other.privateKey &&
-            (
-                this.privateKey == null ||
-                !this.privateKey.equals(other.privateKey)
-            )
-        ) {
+        if (this.privateKey != other.privateKey && (this.privateKey == null || !this.privateKey.equals(other.privateKey))) {
             return false;
         }
         return true;

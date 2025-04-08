@@ -48,8 +48,7 @@ class Schnorr {
     private static final String TAG_NONCE = "BIP0340/nonce";
     private static final String TAG_CHALLENGE = "BIP0340/challenge";
 
-    public static byte[] sign(byte[] msg, byte[] secKey, byte[] auxRand)
-        throws Exception {
+    public static byte[] sign(byte[] msg, byte[] secKey, byte[] auxRand) throws Exception {
         if (msg == null || msg.length != 32) {
             throw new Exception("The message must be a 32-byte array.");
         }
@@ -61,15 +60,8 @@ class Schnorr {
         BigInteger secKey0 = Util.bigIntFromBytes(secKey);
 
         // Validate secret key range
-        if (
-            !(
-                ONE.compareTo(secKey0) <= 0 &&
-                secKey0.compareTo(Point.getn().subtract(ONE)) <= 0
-            )
-        ) {
-            throw new Exception(
-                "The secret key must be an integer in the range 1..n-1."
-            );
+        if (!(ONE.compareTo(secKey0) <= 0 && secKey0.compareTo(Point.getn().subtract(ONE)) <= 0)) {
+            throw new Exception("The secret key must be an integer in the range 1..n-1.");
         }
 
         // Compute public key point
@@ -99,33 +91,15 @@ class Schnorr {
         }
 
         // Create buffer for nonce generation (d || P || m)
-        byte[] nonceBuffer = new byte[t.length +
-        pubKeyBytes.length +
-        msg.length];
+        byte[] nonceBuffer = new byte[t.length + pubKeyBytes.length + msg.length];
         System.arraycopy(t, 0, nonceBuffer, 0, t.length);
-        System.arraycopy(
-            pubKeyBytes,
-            0,
-            nonceBuffer,
-            t.length,
-            pubKeyBytes.length
-        );
-        System.arraycopy(
-            msg,
-            0,
-            nonceBuffer,
-            t.length + pubKeyBytes.length,
-            msg.length
-        );
+        System.arraycopy(pubKeyBytes, 0, nonceBuffer, t.length, pubKeyBytes.length);
+        System.arraycopy(msg, 0, nonceBuffer, t.length + pubKeyBytes.length, msg.length);
 
         // Generate nonce k0
-        BigInteger k0 = Util
-            .bigIntFromBytes(Point.taggedHash(TAG_NONCE, nonceBuffer))
-            .mod(Point.getn());
+        BigInteger k0 = Util.bigIntFromBytes(Point.taggedHash(TAG_NONCE, nonceBuffer)).mod(Point.getn());
         if (k0.compareTo(BigInteger.ZERO) == 0) {
-            throw new Exception(
-                "Failure. This happens only with negligible probability."
-            );
+            throw new Exception("Failure. This happens only with negligible probability.");
         }
 
         // Compute R = k0*G
@@ -143,29 +117,13 @@ class Schnorr {
         byte[] rBytes = R.toBytes();
 
         // Create buffer for challenge generation (R || P || m)
-        byte[] challengeBuffer = new byte[rBytes.length +
-        pubKeyBytes.length +
-        msg.length];
+        byte[] challengeBuffer = new byte[rBytes.length + pubKeyBytes.length + msg.length];
         System.arraycopy(rBytes, 0, challengeBuffer, 0, rBytes.length);
-        System.arraycopy(
-            pubKeyBytes,
-            0,
-            challengeBuffer,
-            rBytes.length,
-            pubKeyBytes.length
-        );
-        System.arraycopy(
-            msg,
-            0,
-            challengeBuffer,
-            rBytes.length + pubKeyBytes.length,
-            msg.length
-        );
+        System.arraycopy(pubKeyBytes, 0, challengeBuffer, rBytes.length, pubKeyBytes.length);
+        System.arraycopy(msg, 0, challengeBuffer, rBytes.length + pubKeyBytes.length, msg.length);
 
         // Generate challenge e
-        BigInteger e = Util
-            .bigIntFromBytes(Point.taggedHash(TAG_CHALLENGE, challengeBuffer))
-            .mod(Point.getn());
+        BigInteger e = Util.bigIntFromBytes(Point.taggedHash(TAG_CHALLENGE, challengeBuffer)).mod(Point.getn());
 
         // Compute s = k + e*secKey0 mod n
         BigInteger s = k.add(e.multiply(secKey0)).mod(Point.getn());
@@ -193,41 +151,24 @@ class Schnorr {
      * @return
      * @throws Exception
      */
-    public static boolean verify(byte[] msg, byte[] pubkey, byte[] sig)
-        throws Exception {
-        if (msg.length != 32) throw new Exception(
-            "The message must be a 32-byte array."
-        );
-        if (pubkey.length != 32) throw new Exception(
-            "The public key must be a 32-byte array."
-        );
-        if (sig.length != 64) throw new Exception(
-            "The signature must be a 64-byte array."
-        );
+    public static boolean verify(byte[] msg, byte[] pubkey, byte[] sig) throws Exception {
+        if (msg.length != 32) throw new Exception("The message must be a 32-byte array.");
+        if (pubkey.length != 32) throw new Exception("The public key must be a 32-byte array.");
+        if (sig.length != 64) throw new Exception("The signature must be a 64-byte array.");
 
         Point P = Point.liftX(pubkey);
         if (P == null) return false;
 
         BigInteger r = Util.bigIntFromBytes(sig, 0, 32);
         BigInteger s = Util.bigIntFromBytes(sig, 32, 32);
-        if (
-            r.compareTo(Point.getp()) >= 0 || s.compareTo(Point.getn()) >= 0
-        ) return false;
+        if (r.compareTo(Point.getp()) >= 0 || s.compareTo(Point.getn()) >= 0) return false;
 
         byte[] challengeBuffer = new byte[32 + pubkey.length + msg.length];
         System.arraycopy(sig, 0, challengeBuffer, 0, 32);
         System.arraycopy(pubkey, 0, challengeBuffer, 32, pubkey.length);
-        System.arraycopy(
-            msg,
-            0,
-            challengeBuffer,
-            32 + pubkey.length,
-            msg.length
-        );
+        System.arraycopy(msg, 0, challengeBuffer, 32 + pubkey.length, msg.length);
 
-        BigInteger e = Util
-            .bigIntFromBytes(Point.taggedHash(TAG_CHALLENGE, challengeBuffer))
-            .mod(Point.getn());
+        BigInteger e = Util.bigIntFromBytes(Point.taggedHash(TAG_CHALLENGE, challengeBuffer)).mod(Point.getn());
 
         Point R = Point.schnorrVerify(s, P, e);
         return R != null && R.hasEvenY() && R.getX().compareTo(r) == 0;
@@ -235,12 +176,7 @@ class Schnorr {
 
     public static byte[] genPubKey(byte[] secKey) throws Exception {
         BigInteger x = Util.bigIntFromBytes(secKey);
-        if (
-            !(
-                BigInteger.ONE.compareTo(x) <= 0 &&
-                x.compareTo(Point.getn().subtract(BigInteger.ONE)) <= 0
-            )
-        ) {
+        if (!(BigInteger.ONE.compareTo(x) <= 0 && x.compareTo(Point.getn().subtract(BigInteger.ONE)) <= 0)) {
             return null;
         }
         Point ret = Point.mul(Point.G, x);
@@ -250,13 +186,8 @@ class Schnorr {
     public static byte[] generatePrivateKey() throws Exception {
         Security.addProvider(new BouncyCastleProvider());
         KeyPairGenerator kpg = KeyPairGenerator.getInstance("ECDSA", "BC");
-        kpg.initialize(
-            new ECGenParameterSpec("secp256k1"),
-            SecureRandom.getInstanceStrong()
-        );
+        kpg.initialize(new ECGenParameterSpec("secp256k1"), SecureRandom.getInstanceStrong());
         KeyPair processorKeyPair = kpg.genKeyPair();
-        return Util.bytesFromBigInteger(
-            ((ECPrivateKey) processorKeyPair.getPrivate()).getS()
-        );
+        return Util.bytesFromBigInteger(((ECPrivateKey) processorKeyPair.getPrivate()).getS());
     }
 }

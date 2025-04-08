@@ -45,11 +45,7 @@ public interface NostrRelayComponent {
 
     boolean onRelayLoop(NostrRelay relay, Instant nowInstant);
 
-    boolean onRelayDisconnect(
-        NostrRelay relay,
-        String reason,
-        boolean byClient
-    );
+    boolean onRelayDisconnect(NostrRelay relay, String reason, boolean byClient);
 
     boolean onRelaySend(NostrRelay relay, NostrMessage message);
 

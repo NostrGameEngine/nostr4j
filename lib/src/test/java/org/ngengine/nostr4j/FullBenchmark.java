@@ -73,9 +73,7 @@ public class FullBenchmark {
         NostrKeyPairSigner signer = NostrKeyPairSigner.generate();
         List<String> track = new ArrayList<>();
 
-        System.out.println(
-            "Init time: " + (System.currentTimeMillis() - initStarted) + " ms"
-        );
+        System.out.println("Init time: " + (System.currentTimeMillis() - initStarted) + " ms");
 
         long sendStarted = System.currentTimeMillis();
 
@@ -99,15 +97,10 @@ public class FullBenchmark {
             // Thread.sleep(10);
         }
 
-        System.out.println(
-            "Send time: " + (System.currentTimeMillis() - sendStarted) + " ms"
-        );
+        System.out.println("Send time: " + (System.currentTimeMillis() - sendStarted) + " ms");
 
         long receiveStarted = System.currentTimeMillis();
-        NostrSubscription sub = reader.subscribe(
-            new NostrFilter().kind(1).tag("t", testId),
-            NaiveEventTracker.class
-        );
+        NostrSubscription sub = reader.subscribe(new NostrFilter().kind(1).tag("t", testId), NaiveEventTracker.class);
         sub.listenEvent((event, stored) -> {
             String i = event.getTag("eventId")[1];
             if (track.contains(i)) {
@@ -117,16 +110,8 @@ public class FullBenchmark {
             }
 
             if (read.incrementAndGet() == EVENTS) {
-                System.out.println(
-                    "Receive time: " +
-                    (System.currentTimeMillis() - receiveStarted) +
-                    " ms"
-                );
-                System.out.println(
-                    "Total time: " +
-                    (System.currentTimeMillis() - initStarted) +
-                    " ms"
-                );
+                System.out.println("Receive time: " + (System.currentTimeMillis() - receiveStarted) + " ms");
+                System.out.println("Total time: " + (System.currentTimeMillis() - initStarted) + " ms");
                 sub.close();
             }
         });

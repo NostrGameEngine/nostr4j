@@ -42,13 +42,7 @@ public class FailOnDoubleTracker implements EventTracker {
 
     @Override
     public boolean seen(SignedNostrEvent event) {
-        if (
-            seenEvents.putIfAbsent(
-                event.getIdentifier().id,
-                new Exception().getStackTrace()
-            ) ==
-            null
-        ) {
+        if (seenEvents.putIfAbsent(event.getIdentifier().id, new Exception().getStackTrace()) == null) {
             return false;
         } else {
             throw new RuntimeException(
@@ -67,9 +61,7 @@ public class FailOnDoubleTracker implements EventTracker {
     private String stackTraceToString(StackTraceElement[] trace) {
         StringBuilder sb = new StringBuilder();
 
-        for (StackTraceElement traceElement : trace) sb.append(
-            "\n\tat " + traceElement
-        );
+        for (StackTraceElement traceElement : trace) sb.append("\n\tat " + traceElement);
         return sb.toString();
     }
 

@@ -73,10 +73,7 @@ public class TestRelay {
                 }
 
                 @Override
-                public boolean onRelayMessage(
-                    NostrRelay relay,
-                    NostrMessage message
-                ) {
+                public boolean onRelayMessage(NostrRelay relay, NostrMessage message) {
                     return true;
                 }
 
@@ -91,35 +88,22 @@ public class TestRelay {
                 }
 
                 @Override
-                public boolean onRelayLoop(
-                    NostrRelay relay,
-                    Instant nowInstant
-                ) {
+                public boolean onRelayLoop(NostrRelay relay, Instant nowInstant) {
                     return true;
                 }
 
                 @Override
-                public boolean onRelayDisconnect(
-                    NostrRelay relay,
-                    String reason,
-                    boolean byClient
-                ) {
+                public boolean onRelayDisconnect(NostrRelay relay, String reason, boolean byClient) {
                     return true;
                 }
 
                 @Override
-                public boolean onRelaySend(
-                    NostrRelay relay,
-                    NostrMessage message
-                ) {
+                public boolean onRelaySend(NostrRelay relay, NostrMessage message) {
                     return true;
                 }
 
                 @Override
-                public boolean onRelayDisconnectRequest(
-                    NostrRelay relay,
-                    String reason
-                ) {
+                public boolean onRelayDisconnectRequest(NostrRelay relay, String reason) {
                     return true;
                 }
             }
@@ -150,10 +134,7 @@ public class TestRelay {
                 }
 
                 @Override
-                public boolean onRelayMessage(
-                    NostrRelay relay,
-                    NostrMessage message
-                ) {
+                public boolean onRelayMessage(NostrRelay relay, NostrMessage message) {
                     return true;
                 }
 
@@ -168,35 +149,22 @@ public class TestRelay {
                 }
 
                 @Override
-                public boolean onRelayLoop(
-                    NostrRelay relay,
-                    Instant nowInstant
-                ) {
+                public boolean onRelayLoop(NostrRelay relay, Instant nowInstant) {
                     return true;
                 }
 
                 @Override
-                public boolean onRelayDisconnect(
-                    NostrRelay relay,
-                    String reason,
-                    boolean byClient
-                ) {
+                public boolean onRelayDisconnect(NostrRelay relay, String reason, boolean byClient) {
                     return true;
                 }
 
                 @Override
-                public boolean onRelaySend(
-                    NostrRelay relay,
-                    NostrMessage message
-                ) {
+                public boolean onRelaySend(NostrRelay relay, NostrMessage message) {
                     return true;
                 }
 
                 @Override
-                public boolean onRelayDisconnectRequest(
-                    NostrRelay relay,
-                    String reason
-                ) {
+                public boolean onRelayDisconnectRequest(NostrRelay relay, String reason) {
                     return true;
                 }
             }
@@ -206,11 +174,7 @@ public class TestRelay {
         relay.connect();
         boolean connected = connectLatch.await(10, TimeUnit.SECONDS);
         assertTrue("Failed to connect to relay", connected);
-        assertEquals(
-            "Should receive exactly one connection event",
-            1,
-            connectionEvents.get()
-        );
+        assertEquals("Should receive exactly one connection event", 1, connectionEvents.get());
 
         // Test disconnect
         relay.disconnect("Test completed");
@@ -229,25 +193,17 @@ public class TestRelay {
         assertEquals(60, relay.getAckTimeout(TimeUnit.SECONDS));
         assertEquals(1, relay.getAckTimeout(TimeUnit.MINUTES));
 
-        NostrRelayLifecycleManager lf = relay.getComponent(
-            NostrRelayLifecycleManager.class
-        );
+        NostrRelayLifecycleManager lf = relay.getComponent(NostrRelayLifecycleManager.class);
         lf.setKeepAliveTime(45, TimeUnit.SECONDS);
         assertEquals(45, lf.getKeepAliveTime(TimeUnit.SECONDS));
     }
 
     @Test
     public void testAutoReconnectSettings() {
-        assertTrue(
-            "Auto reconnect should be enabled by default",
-            relay.isAutoReconnect()
-        );
+        assertTrue("Auto reconnect should be enabled by default", relay.isAutoReconnect());
 
         relay.setAutoReconnect(false);
-        assertFalse(
-            "Auto reconnect should be disabled",
-            relay.isAutoReconnect()
-        );
+        assertFalse("Auto reconnect should be disabled", relay.isAutoReconnect());
 
         relay.setAutoReconnect(true);
         assertTrue("Auto reconnect should be enabled", relay.isAutoReconnect());
@@ -274,10 +230,7 @@ public class TestRelay {
                         }
 
                         @Override
-                        public boolean onRelayMessage(
-                            NostrRelay relay,
-                            NostrMessage message
-                        ) {
+                        public boolean onRelayMessage(NostrRelay relay, NostrMessage message) {
                             return true;
                         }
 
@@ -287,43 +240,27 @@ public class TestRelay {
                         }
 
                         @Override
-                        public boolean onRelayError(
-                            NostrRelay relay,
-                            Throwable error
-                        ) {
+                        public boolean onRelayError(NostrRelay relay, Throwable error) {
                             return true;
                         }
 
                         @Override
-                        public boolean onRelayLoop(
-                            NostrRelay relay,
-                            Instant nowInstant
-                        ) {
+                        public boolean onRelayLoop(NostrRelay relay, Instant nowInstant) {
                             return true;
                         }
 
                         @Override
-                        public boolean onRelayDisconnect(
-                            NostrRelay relay,
-                            String reason,
-                            boolean byClient
-                        ) {
+                        public boolean onRelayDisconnect(NostrRelay relay, String reason, boolean byClient) {
                             return true;
                         }
 
                         @Override
-                        public boolean onRelaySend(
-                            NostrRelay relay,
-                            NostrMessage message
-                        ) {
+                        public boolean onRelaySend(NostrRelay relay, NostrMessage message) {
                             return true;
                         }
 
                         @Override
-                        public boolean onRelayDisconnectRequest(
-                            NostrRelay relay,
-                            String reason
-                        ) {
+                        public boolean onRelayDisconnectRequest(NostrRelay relay, String reason) {
                             return true;
                         }
                     }
@@ -373,10 +310,7 @@ public class TestRelay {
             }
 
             @Override
-            public boolean onRelayMessage(
-                NostrRelay relay,
-                NostrMessage message
-            ) {
+            public boolean onRelayMessage(NostrRelay relay, NostrMessage message) {
                 return true;
             }
 
@@ -396,11 +330,7 @@ public class TestRelay {
             }
 
             @Override
-            public boolean onRelayDisconnect(
-                NostrRelay relay,
-                String reason,
-                boolean byClient
-            ) {
+            public boolean onRelayDisconnect(NostrRelay relay, String reason, boolean byClient) {
                 return true;
             }
 
@@ -410,10 +340,7 @@ public class TestRelay {
             }
 
             @Override
-            public boolean onRelayDisconnectRequest(
-                NostrRelay relay,
-                String reason
-            ) {
+            public boolean onRelayDisconnectRequest(NostrRelay relay, String reason) {
                 return true;
             }
         };

@@ -43,12 +43,9 @@ import org.ngengine.nostr4j.transport.impl.NostrClosedMessage;
 
 public class NostrRelayLifecycleManager implements NostrRelayComponent {
 
-    private static final Logger logger = Logger.getLogger(
-        NostrRelayLifecycleManager.class.getName()
-    );
+    private static final Logger logger = Logger.getLogger(NostrRelayLifecycleManager.class.getName());
 
-    protected final CopyOnWriteArrayList<String> subTracker =
-        new CopyOnWriteArrayList<>();
+    protected final CopyOnWriteArrayList<String> subTracker = new CopyOnWriteArrayList<>();
     protected volatile long keepAliveTime = TimeUnit.MINUTES.toSeconds(2);
     protected volatile long lastAction;
 
@@ -95,25 +92,15 @@ public class NostrRelayLifecycleManager implements NostrRelayComponent {
     public boolean onRelayLoop(NostrRelay relay, Instant nowInstant) {
         // disconnect if no active subscriptions and last action is too old
         long now = nowInstant.getEpochSecond();
-        if (
-            this.subTracker.isEmpty() && now - this.lastAction > keepAliveTime
-        ) {
-            logger.fine(
-                "Disconnecting from relay: " +
-                relay.getUrl() +
-                " for inactivity"
-            );
+        if (this.subTracker.isEmpty() && now - this.lastAction > keepAliveTime) {
+            logger.fine("Disconnecting from relay: " + relay.getUrl() + " for inactivity");
             relay.disconnect("timeout");
         }
         return true;
     }
 
     @Override
-    public boolean onRelayDisconnect(
-        NostrRelay relay,
-        String reason,
-        boolean byClient
-    ) {
+    public boolean onRelayDisconnect(NostrRelay relay, String reason, boolean byClient) {
         this.subTracker.clear();
         return true;
     }
@@ -134,27 +121,18 @@ public class NostrRelayLifecycleManager implements NostrRelayComponent {
             // duplicates
             if (subTracker.addIfAbsent(sub.getSubId())) {
                 assert dbg(() -> {
-                    logger.finer(
-                        "Tracking new subscription: " + sub.getSubId()
-                    );
+                    logger.finer("Tracking new subscription: " + sub.getSubId());
                 });
             } else {
                 assert dbg(() -> {
-                    logger.finer(
-                        "Subscription already tracked: " + sub.getSubId()
-                    );
+                    logger.finer("Subscription already tracked: " + sub.getSubId());
                 });
                 return false;
             }
         } else if (message instanceof NostrSubscription.NostrSubCloseMessage) {
-            subTracker.remove(
-                ((NostrSubscription.NostrSubCloseMessage) message).getId()
-            );
+            subTracker.remove(((NostrSubscription.NostrSubCloseMessage) message).getId());
             assert dbg(() -> {
-                logger.finer(
-                    "Untracking subscription: " +
-                    ((NostrSubscription.NostrSubCloseMessage) message).getId()
-                );
+                logger.finer("Untracking subscription: " + ((NostrSubscription.NostrSubCloseMessage) message).getId());
             });
         }
         return true;

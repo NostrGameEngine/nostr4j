@@ -63,9 +63,7 @@ public class Bech32Util {
     }
 
     public Pair<byte[], byte[]> bech32Decode(String bech) throws Exception {
-        if (
-            !bech.equals(bech.toLowerCase()) && !bech.equals(bech.toUpperCase())
-        ) {
+        if (!bech.equals(bech.toLowerCase()) && !bech.equals(bech.toUpperCase())) {
             throw new Exception("bech32 cannot mix upper and lower case");
         }
 
@@ -113,13 +111,7 @@ public class Bech32Util {
     }
 
     private int polymod(byte[] values) {
-        final int[] GENERATORS = {
-            0x3b6a57b2,
-            0x26508e6d,
-            0x1ea119fa,
-            0x3d4233dd,
-            0x2a1462b3,
-        };
+        final int[] GENERATORS = { 0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3 };
 
         int chk = 1;
 
@@ -172,13 +164,7 @@ public class Bech32Util {
 
         System.arraycopy(expanded, 0, values, 0, expanded.length);
         System.arraycopy(data, 0, values, expanded.length, data.length);
-        System.arraycopy(
-            zeroes,
-            0,
-            values,
-            expanded.length + data.length,
-            zeroes.length
-        );
+        System.arraycopy(zeroes, 0, values, expanded.length + data.length, zeroes.length);
 
         int polymod = polymod(values) ^ 1;
         byte[] ret = new byte[6];

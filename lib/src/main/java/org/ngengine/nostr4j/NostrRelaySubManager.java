@@ -92,11 +92,7 @@ public class NostrRelaySubManager implements NostrRelayComponent {
     }
 
     @Override
-    public boolean onRelayDisconnect(
-        NostrRelay relay,
-        String reason,
-        boolean byClient
-    ) {
+    public boolean onRelayDisconnect(NostrRelay relay, String reason, boolean byClient) {
         return true;
     }
 
@@ -106,8 +102,7 @@ public class NostrRelaySubManager implements NostrRelayComponent {
             String subId = ((NostrSubscription) message).getSubId();
             subTracker.computeIfAbsent(subId, k -> new SubAttachment());
         } else if (message instanceof NostrSubscription.NostrSubCloseMessage) {
-            String subId =
-                ((NostrSubscription.NostrSubCloseMessage) message).getId();
+            String subId = ((NostrSubscription.NostrSubCloseMessage) message).getId();
             subTracker.remove(subId);
         }
         return true;

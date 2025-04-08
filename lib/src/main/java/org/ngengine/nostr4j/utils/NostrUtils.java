@@ -41,9 +41,7 @@ import org.ngengine.nostr4j.platform.Platform;
 
 public class NostrUtils {
 
-    private static final Logger logger = Logger.getLogger(
-        NostrUtils.class.getName()
-    );
+    private static final Logger logger = Logger.getLogger(NostrUtils.class.getName());
     private static final char[] HEX_ARRAY = "0123456789abcdef".toCharArray();
     private static volatile Platform platform;
 
@@ -54,17 +52,12 @@ public class NostrUtils {
     public static Platform getPlatform() {
         if (NostrUtils.platform == null) {
             logger.warning("Platform not set, using default JVM platform.");
-            String defaultPlatformClass =
-                "org.ngengine.nostr4j.platform.jvm.JVMAsyncPlatform";
+            String defaultPlatformClass = "org.ngengine.nostr4j.platform.jvm.JVMAsyncPlatform";
             try {
                 Class<?> clazz = Class.forName(defaultPlatformClass);
-                NostrUtils.platform =
-                    (Platform) clazz.getDeclaredConstructor().newInstance();
+                NostrUtils.platform = (Platform) clazz.getDeclaredConstructor().newInstance();
             } catch (Exception e) {
-                throw new RuntimeException(
-                    "Failed to load default platform: " + defaultPlatformClass,
-                    e
-                );
+                throw new RuntimeException("Failed to load default platform: " + defaultPlatformClass, e);
             }
         }
         return NostrUtils.platform;
@@ -94,13 +87,7 @@ public class NostrUtils {
         int len = s.length();
         ByteBuffer buf = ByteBuffer.allocate(len / 2);
         for (int i = 0; i < len; i += 2) {
-            buf.put(
-                i / 2,
-                (byte) (
-                    (Character.digit(s.charAt(i), 16) << 4) +
-                    Character.digit(s.charAt(i + 1), 16)
-                )
-            );
+            buf.put(i / 2, (byte) ((Character.digit(s.charAt(i), 16) << 4) + Character.digit(s.charAt(i + 1), 16)));
         }
         return buf;
     }
@@ -109,11 +96,7 @@ public class NostrUtils {
         int len = s.length();
         byte[] data = new byte[len / 2];
         for (int i = 0; i < len; i += 2) {
-            data[i / 2] =
-                (byte) (
-                    (Character.digit(s.charAt(i), 16) << 4) +
-                    Character.digit(s.charAt(i + 1), 16)
-                );
+            data[i / 2] = (byte) ((Character.digit(s.charAt(i), 16) << 4) + Character.digit(s.charAt(i + 1), 16));
         }
         return data;
     }
@@ -141,9 +124,7 @@ public class NostrUtils {
                 Long l = Long.parseLong(String.valueOf(input));
                 return l.longValue();
             } catch (NumberFormatException e) {
-                throw new IllegalArgumentException(
-                    "Input is not a number: " + input
-                );
+                throw new IllegalArgumentException("Input is not a number: " + input);
             }
         }
     }
@@ -151,9 +132,7 @@ public class NostrUtils {
     public static int safeInt(Object input) {
         long l = safeLong(input);
         if (l < Integer.MIN_VALUE || l > Integer.MAX_VALUE) {
-            throw new IllegalArgumentException(
-                "Input is out of range for int: " + l
-            );
+            throw new IllegalArgumentException("Input is out of range for int: " + l);
         }
         return (int) l;
     }
@@ -174,15 +153,11 @@ public class NostrUtils {
         } else if (tags instanceof String[]) {
             return (String[]) tags;
         } else {
-            throw new IllegalArgumentException(
-                "Input is not a string array: " + tags
-            );
+            throw new IllegalArgumentException("Input is not a string array: " + tags);
         }
     }
 
-    public static Collection<String[]> safeCollectionOfStringArray(
-        Object tags
-    ) {
+    public static Collection<String[]> safeCollectionOfStringArray(Object tags) {
         if (tags instanceof Collection && !(tags instanceof List)) {
             tags = new ArrayList<>((Collection<?>) tags);
         }
@@ -209,9 +184,7 @@ public class NostrUtils {
             }
             return list;
         } else {
-            throw new IllegalArgumentException(
-                "Input is not a string array: " + tags
-            );
+            throw new IllegalArgumentException("Input is not a string array: " + tags);
         }
     }
 

@@ -120,9 +120,7 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
         this.pubkey = NostrUtils.safeString(map.get("pubkey"));
 
         String id = NostrUtils.safeString(map.get("id"));
-        Instant createdAt = NostrUtils.safeSecondsInstant(
-            map.get("created_at")
-        );
+        Instant createdAt = NostrUtils.safeSecondsInstant(map.get("created_at"));
         this.identifier = new Identifier(id, createdAt);
 
         Collection<String[]> tags = NostrUtils.safeCollectionOfStringArray(
@@ -207,15 +205,7 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
 
     @Override
     public SignedNostrEvent clone() {
-        return new SignedNostrEvent(
-            identifier.id,
-            pubkey,
-            kind,
-            content,
-            identifier.createdAtInstant,
-            signature,
-            listTags()
-        );
+        return new SignedNostrEvent(identifier.id, pubkey, kind, content, identifier.createdAtInstant, signature, listTags());
     }
 
     @Override
@@ -224,15 +214,11 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
     }
 
     public boolean verify() throws Exception {
-        return NostrUtils
-            .getPlatform()
-            .verify(this.identifier.id, this.signature, this.getPubkey());
+        return NostrUtils.getPlatform().verify(this.identifier.id, this.signature, this.getPubkey());
     }
 
     public AsyncTask<Boolean> verifyAsync() {
-        return NostrUtils
-            .getPlatform()
-            .verifyAsync(this.identifier.id, this.signature, this.getPubkey());
+        return NostrUtils.getPlatform().verifyAsync(this.identifier.id, this.signature, this.getPubkey());
     }
 
     public String getIdBech32() {
@@ -256,9 +242,7 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
         return "EVENT";
     }
 
-    private final transient Collection<Object> thisFragment = Arrays.asList(
-        this
-    );
+    private final transient Collection<Object> thisFragment = Arrays.asList(this);
 
     @Override
     protected Collection<Object> getFragments() {
@@ -300,10 +284,7 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
         }
         String subId = NostrUtils.safeString(doc.get(1));
         Map<String, Object> eventMap = (Map<String, Object>) doc.get(2);
-        ReceivedSignedNostrEvent e = new ReceivedSignedNostrEvent(
-            subId,
-            eventMap
-        );
+        ReceivedSignedNostrEvent e = new ReceivedSignedNostrEvent(subId, eventMap);
         return e;
     }
 }

@@ -53,18 +53,13 @@ import org.ngengine.nostr4j.utils.NostrUtils;
 
 public class NostrSubscription extends NostrMessage {
 
-    private static final Logger logger = Logger.getLogger(
-        NostrSubscription.class.getName()
-    );
+    private static final Logger logger = Logger.getLogger(NostrSubscription.class.getName());
     protected final EventTracker eventTracker;
     private final String subId;
 
-    private final Collection<NostrSubEoseListener> onEoseListeners =
-        new CopyOnWriteArrayList<>();
-    private final Collection<NostrSubEventListener> onEventListeners =
-        new CopyOnWriteArrayList<>();
-    private final Collection<NostrSubCloseListener> onCloseListeners =
-        new CopyOnWriteArrayList<>();
+    private final Collection<NostrSubEoseListener> onEoseListeners = new CopyOnWriteArrayList<>();
+    private final Collection<NostrSubEventListener> onEventListeners = new CopyOnWriteArrayList<>();
+    private final Collection<NostrSubCloseListener> onCloseListeners = new CopyOnWriteArrayList<>();
 
     private final NostrExecutor executor;
     private final Collection<NostrFilter> filters;
@@ -112,8 +107,7 @@ public class NostrSubscription extends NostrMessage {
     }
 
     public AsyncTask<List<NostrMessageAck>> close() {
-        AsyncTask<List<NostrMessageAck>> out =
-            this.onClose.apply(this, getCloseMessage());
+        AsyncTask<List<NostrMessageAck>> out = this.onClose.apply(this, getCloseMessage());
         registerClosure("closed by client");
         callCloseListeners();
         return out;
@@ -183,9 +177,7 @@ public class NostrSubscription extends NostrMessage {
                     return null;
                 })
                 .catchException(ex -> {
-                    logger.warning(
-                        "Error calling EOSE listener: " + listener + " " + ex
-                    );
+                    logger.warning("Error calling EOSE listener: " + listener + " " + ex);
                 });
         }
     }
@@ -198,9 +190,7 @@ public class NostrSubscription extends NostrMessage {
                     return null;
                 })
                 .catchException(ex -> {
-                    logger.warning(
-                        "Error calling Event listener: " + listener + " " + ex
-                    );
+                    logger.warning("Error calling Event listener: " + listener + " " + ex);
                 });
         }
     }
@@ -213,9 +203,7 @@ public class NostrSubscription extends NostrMessage {
                     return null;
                 })
                 .catchException(ex -> {
-                    logger.warning(
-                        "Error calling Close listener: " + listener + " " + ex
-                    );
+                    logger.warning("Error calling Close listener: " + listener + " " + ex);
                 });
         }
     }

@@ -44,11 +44,7 @@ public abstract class NostrMessageFragment {
             Map<String, Object> map = toMap();
             return platform.toJSON(map);
         } catch (Exception e) {
-            return (
-                this.getClass().getName() +
-                "@" +
-                Integer.toHexString(this.hashCode())
-            );
+            return (this.getClass().getName() + "@" + Integer.toHexString(this.hashCode()));
         }
     }
 }

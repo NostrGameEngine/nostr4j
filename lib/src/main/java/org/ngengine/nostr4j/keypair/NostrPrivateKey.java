@@ -42,8 +42,7 @@ import org.ngengine.nostr4j.utils.NostrUtils;
 
 public class NostrPrivateKey implements NostrKey {
 
-    private static final byte[] BECH32_PREFIX =
-        "nsec".getBytes(StandardCharsets.UTF_8);
+    private static final byte[] BECH32_PREFIX = "nsec".getBytes(StandardCharsets.UTF_8);
 
     private String bech32;
     private String hex;
@@ -106,8 +105,7 @@ public class NostrPrivateKey implements NostrKey {
      * @deprecated use {@link #fromBech32(String)} instead
      */
     @Deprecated
-    public static NostrPrivateKey fromNsec(String bech32)
-        throws Bech32Exception {
+    public static NostrPrivateKey fromNsec(String bech32) throws Bech32Exception {
         return fromBech32(bech32);
     }
 
@@ -118,8 +116,7 @@ public class NostrPrivateKey implements NostrKey {
      * @return a new NostrPrivateKey instance
      * @throws Bech32Exception if the Bech32 string is invalid
      */
-    public static NostrPrivateKey fromBech32(String bech32)
-        throws Bech32Exception {
+    public static NostrPrivateKey fromBech32(String bech32) throws Bech32Exception {
         if (!bech32.startsWith("nsec")) {
             throw new IllegalArgumentException("Invalid npub key");
         }
@@ -253,8 +250,7 @@ public class NostrPrivateKey implements NostrKey {
         return publicKey;
     }
 
-    private void writeObject(java.io.ObjectOutputStream out)
-        throws IOException {
+    private void writeObject(java.io.ObjectOutputStream out) throws IOException {
         out.writeObject(this._array());
         out.writeObject(hex);
         out.writeObject(bech32);
@@ -262,8 +258,7 @@ public class NostrPrivateKey implements NostrKey {
         assert data.position() == 0 : "Data position must be 0";
     }
 
-    private void readObject(java.io.ObjectInputStream in)
-        throws IOException, ClassNotFoundException {
+    private void readObject(java.io.ObjectInputStream in) throws IOException, ClassNotFoundException {
         byte array[] = (byte[]) in.readObject();
         this.array = array;
         data = ByteBuffer.wrap(array);

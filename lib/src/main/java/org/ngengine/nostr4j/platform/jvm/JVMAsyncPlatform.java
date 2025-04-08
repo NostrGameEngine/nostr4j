@@ -70,15 +70,11 @@ import org.ngengine.nostr4j.utils.NostrUtils;
 public class JVMAsyncPlatform implements Platform {
     static {
         if (Security.getProvider("BC") == null) {
-            Security.addProvider(
-                new org.bouncycastle.jce.provider.BouncyCastleProvider()
-            );
+            Security.addProvider(new org.bouncycastle.jce.provider.BouncyCastleProvider());
         }
     }
 
-    private static final Logger logger = Logger.getLogger(
-        JVMAsyncPlatform.class.getName()
-    );
+    private static final Logger logger = Logger.getLogger(JVMAsyncPlatform.class.getName());
     private static SecureRandom secureRandom;
     private static final byte EMPTY32[] = new byte[32];
     private static final byte EMPTY0[] = new byte[0];
@@ -102,14 +98,13 @@ public class JVMAsyncPlatform implements Platform {
         }
     }
 
-    private static final ThreadLocal<Context> context =
-        ThreadLocal.withInitial(() -> {
-            try {
-                return new Context();
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
-        });
+    private static final ThreadLocal<Context> context = ThreadLocal.withInitial(() -> {
+        try {
+            return new Context();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    });
 
     @Override
     public byte[] randomBytes(int n) {
@@ -163,18 +158,13 @@ public class JVMAsyncPlatform implements Platform {
     public String sign(String data, NostrPrivateKey privKey) throws Exception {
         byte dataB[] = NostrUtils.hexToByteArray(data);
         byte priv[] = privKey._array();
-        byte sigB[] = Schnorr.sign(
-            dataB,
-            priv,
-            _NO_AUX_RANDOM ? null : randomBytes(32)
-        );
+        byte sigB[] = Schnorr.sign(dataB, priv, _NO_AUX_RANDOM ? null : randomBytes(32));
         String sig = NostrUtils.bytesToHex(sigB);
         return sig;
     }
 
     @Override
-    public boolean verify(String data, String sign, NostrPublicKey pubKey)
-        throws Exception {
+    public boolean verify(String data, String sign, NostrPublicKey pubKey) throws Exception {
         byte dataB[] = NostrUtils.hexToByteArray(data);
         byte sig[] = NostrUtils.hexToByteArray(sign);
         byte pub[] = pubKey._array();
@@ -182,8 +172,7 @@ public class JVMAsyncPlatform implements Platform {
     }
 
     @Override
-    public byte[] secp256k1SharedSecret(byte[] privKey, byte[] pubKey)
-        throws Exception {
+    public byte[] secp256k1SharedSecret(byte[] privKey, byte[] pubKey) throws Exception {
         Context ctx = context.get();
         ECParameterSpec ecSpec = ctx.secp256k1;
         ECPoint point = ecSpec.getCurve().decodePoint(pubKey).normalize();
@@ -193,8 +182,7 @@ public class JVMAsyncPlatform implements Platform {
     }
 
     @Override
-    public byte[] hmac(byte[] key, byte[] data1, byte[] data2)
-        throws Exception {
+    public byte[] hmac(byte[] key, byte[] data1, byte[] data2) throws Exception {
         Mac mac = Mac.getInstance("HmacSHA256");
         mac.init(new SecretKeySpec(key, "HmacSHA256"));
         mac.update(data1, 0, data1.length);
@@ -212,14 +200,11 @@ public class JVMAsyncPlatform implements Platform {
     }
 
     @Override
-    public byte[] hkdf_expand(byte[] prk, byte[] info, int length)
-        throws Exception {
+    public byte[] hkdf_expand(byte[] prk, byte[] info, int length) throws Exception {
         int hashLen = 32; // SHA-256 output length
 
         if (length > 255 * hashLen) {
-            throw new IllegalArgumentException(
-                "Length should be <= 255*HashLen"
-            );
+            throw new IllegalArgumentException("Length should be <= 255*HashLen");
         }
 
         int blocks = (int) Math.ceil((double) length / hashLen);
@@ -246,13 +231,7 @@ public class JVMAsyncPlatform implements Platform {
             byte[] combined = new byte[t.length + info.length + counter.length];
             System.arraycopy(t, 0, combined, 0, t.length);
             System.arraycopy(info, 0, combined, t.length, info.length);
-            System.arraycopy(
-                counter,
-                0,
-                combined,
-                t.length + info.length,
-                counter.length
-            );
+            System.arraycopy(counter, 0, combined, t.length + info.length, counter.length);
 
             t = mac.doFinal(combined);
             System.arraycopy(t, 0, okm, hashLen * i, hashLen);
@@ -271,34 +250,21 @@ public class JVMAsyncPlatform implements Platform {
         try {
             return Base64.getDecoder().decode(data);
         } catch (Exception e) {
-            throw new IllegalArgumentException(
-                "invalid base64 " + e.getMessage()
-            );
+            throw new IllegalArgumentException("invalid base64 " + e.getMessage());
         }
     }
 
     @Override
-    public byte[] chacha20(
-        byte[] key,
-        byte[] nonce,
-        byte[] padded,
-        boolean forEncryption
-    ) throws Exception {
+    public byte[] chacha20(byte[] key, byte[] nonce, byte[] padded, boolean forEncryption) throws Exception {
         if (key.length != 32) {
             throw new IllegalArgumentException("ChaCha20 key must be 32 bytes");
         }
         if (nonce.length != 12) {
-            throw new IllegalArgumentException(
-                "ChaCha20 nonce must be 12 bytes"
-            );
+            throw new IllegalArgumentException("ChaCha20 nonce must be 12 bytes");
         }
         Cipher cipher = Cipher.getInstance("ChaCha20");
         ChaCha20ParameterSpec spec = new ChaCha20ParameterSpec(nonce, 0);
-        cipher.init(
-            forEncryption ? Cipher.ENCRYPT_MODE : Cipher.DECRYPT_MODE,
-            new SecretKeySpec(key, "ChaCha20"),
-            spec
-        );
+        cipher.init(forEncryption ? Cipher.ENCRYPT_MODE : Cipher.DECRYPT_MODE, new SecretKeySpec(key, "ChaCha20"), spec);
 
         return cipher.doFinal(padded);
     }
@@ -322,10 +288,7 @@ public class JVMAsyncPlatform implements Platform {
     }
 
     @Override
-    public <T> AsyncTask<T> promisify(
-        BiConsumer<Consumer<T>, Consumer<Throwable>> func,
-        NostrExecutor executor
-    ) {
+    public <T> AsyncTask<T> promisify(BiConsumer<Consumer<T>, Consumer<Throwable>> func, NostrExecutor executor) {
         CompletableFuture<T> fut = new CompletableFuture<>();
         if (executor != null && executor instanceof VtNostrExecutor) {
             ((VtNostrExecutor) executor).executor.submit(() -> {
@@ -387,10 +350,7 @@ public class JVMAsyncPlatform implements Platform {
             public <R> AsyncTask<R> then(Function<T, R> func2) {
                 return promisify(
                     (res, rej) -> {
-                        if (
-                            executor != null &&
-                            executor instanceof VtNostrExecutor
-                        ) {
+                        if (executor != null && executor instanceof VtNostrExecutor) {
                             fut.handleAsync(
                                 (result, exception) -> {
                                     if (exception != null) {
@@ -431,10 +391,7 @@ public class JVMAsyncPlatform implements Platform {
             public <R> AsyncTask<R> compose(Function<T, AsyncTask<R>> func2) {
                 return promisify(
                     (res, rej) -> {
-                        if (
-                            executor != null &&
-                            executor instanceof VtNostrExecutor
-                        ) {
+                        if (executor != null && executor instanceof VtNostrExecutor) {
                             fut.handleAsync(
                                 (result, exception) -> {
                                     if (exception != null) {
@@ -443,9 +400,7 @@ public class JVMAsyncPlatform implements Platform {
                                     }
 
                                     try {
-                                        AsyncTask<R> task2 = func2.apply(
-                                            result
-                                        );
+                                        AsyncTask<R> task2 = func2.apply(result);
                                         task2.catchException(exc -> {
                                             rej.accept(exc);
                                         });
@@ -515,9 +470,7 @@ public class JVMAsyncPlatform implements Platform {
     }
 
     @Override
-    public <T> AsyncTask<T> wrapPromise(
-        BiConsumer<Consumer<T>, Consumer<Throwable>> func
-    ) {
+    public <T> AsyncTask<T> wrapPromise(BiConsumer<Consumer<T>, Consumer<Throwable>> func) {
         return (AsyncTask<T>) promisify(func, null);
     }
 
@@ -556,8 +509,7 @@ public class JVMAsyncPlatform implements Platform {
         });
     }
 
-    private ExecutorService executor =
-        Executors.newVirtualThreadPerTaskExecutor();
+    private ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
 
     private class VtNostrExecutor implements NostrExecutor {
 
@@ -581,11 +533,7 @@ public class JVMAsyncPlatform implements Platform {
         }
 
         @Override
-        public <T> AsyncTask<T> runLater(
-            Callable<T> r,
-            long delay,
-            TimeUnit unit
-        ) {
+        public <T> AsyncTask<T> runLater(Callable<T> r, long delay, TimeUnit unit) {
             long delayMs = unit.toMillis(delay);
             if (delayMs == 0) {
                 return run(r);
@@ -646,11 +594,7 @@ public class JVMAsyncPlatform implements Platform {
     }
 
     @Override
-    public AsyncTask<Boolean> verifyAsync(
-        String data,
-        String sign,
-        NostrPublicKey pubKey
-    ) {
+    public AsyncTask<Boolean> verifyAsync(String data, String sign, NostrPublicKey pubKey) {
         return wrapPromise((res, rej) -> {
             CompletableFuture.runAsync(() -> {
                 try {

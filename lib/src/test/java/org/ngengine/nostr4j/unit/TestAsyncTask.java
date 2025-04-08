@@ -129,10 +129,7 @@ public class TestAsyncTask {
         promiseRef.set(promise);
 
         // Wait for async operation to complete
-        assertTrue(
-            "Async operation timed out",
-            latch.await(5, TimeUnit.SECONDS)
-        );
+        assertTrue("Async operation timed out", latch.await(5, TimeUnit.SECONDS));
 
         // Test the properties
         assertTrue(promiseRef.get().isDone());
@@ -202,9 +199,7 @@ public class TestAsyncTask {
             fail("Expected exception was not thrown");
         } catch (Exception exception) {
             assertTrue(exception.getCause() instanceof RuntimeException);
-            assertTrue(
-                exception.getCause().getMessage().contains("Error in chain")
-            );
+            assertTrue(exception.getCause().getMessage().contains("Error in chain"));
         }
 
         // Check the execution path
@@ -234,10 +229,7 @@ public class TestAsyncTask {
             });
 
         // Wait for exceptionally to be called with timeout
-        assertTrue(
-            "Exceptionally handler was not called",
-            latch.await(5, TimeUnit.SECONDS)
-        );
+        assertTrue("Exceptionally handler was not called", latch.await(5, TimeUnit.SECONDS));
 
         assertTrue("Handler was not called", handlerCalled.get());
         assertNotNull("Error was not captured", capturedError.get());
@@ -264,10 +256,7 @@ public class TestAsyncTask {
             });
 
         // Wait for exceptionally to process with timeout
-        assertTrue(
-            "Exceptionally handler was not called",
-            latch.await(5, TimeUnit.SECONDS)
-        );
+        assertTrue("Exceptionally handler was not called", latch.await(5, TimeUnit.SECONDS));
         assertTrue("Handler was not called", handlerCalled.get());
     }
 
@@ -306,10 +295,7 @@ public class TestAsyncTask {
             });
 
         // Wait for exceptionally to be called
-        assertTrue(
-            "Exceptionally handler was not called",
-            latch.await(5, TimeUnit.SECONDS)
-        );
+        assertTrue("Exceptionally handler was not called", latch.await(5, TimeUnit.SECONDS));
 
         // The value should be null because the chain was broken
         try {
@@ -352,18 +338,11 @@ public class TestAsyncTask {
         }
 
         // Wait for all promises to complete
-        assertTrue(
-            "Not all promises completed in time",
-            latch.await(5, TimeUnit.SECONDS)
-        );
+        assertTrue("Not all promises completed in time", latch.await(5, TimeUnit.SECONDS));
 
         // Verify all promises completed successfully
         for (int i = 0; i < promiseCount; i++) {
-            assertEquals(
-                "Promise " + i + " returned wrong value",
-                Integer.valueOf(i),
-                promises.get(i).await()
-            );
+            assertEquals("Promise " + i + " returned wrong value", Integer.valueOf(i), promises.get(i).await());
         }
     }
 
@@ -406,14 +385,8 @@ public class TestAsyncTask {
         );
 
         // Wait for individual promises to resolve
-        assertTrue(
-            "Promise 1 didn't complete",
-            promise1Latch.await(5, TimeUnit.SECONDS)
-        );
-        assertTrue(
-            "Promise 2 didn't complete",
-            promise2Latch.await(5, TimeUnit.SECONDS)
-        );
+        assertTrue("Promise 1 didn't complete", promise1Latch.await(5, TimeUnit.SECONDS));
+        assertTrue("Promise 2 didn't complete", promise2Latch.await(5, TimeUnit.SECONDS));
 
         // Create a promise that depends on both previous promises
         AsyncTask<Integer> combinedPromise = promise1.then(v1 -> {
@@ -426,11 +399,7 @@ public class TestAsyncTask {
         });
 
         // The combined result should be the sum
-        assertEquals(
-            "Combined promise returned wrong value",
-            Integer.valueOf(15),
-            combinedPromise.await()
-        );
+        assertEquals("Combined promise returned wrong value", Integer.valueOf(15), combinedPromise.await());
     }
 
     @Test
@@ -466,19 +435,11 @@ public class TestAsyncTask {
         List<Integer> results = combinedPromise.await();
 
         // Check size
-        assertEquals(
-            "Result list should have same size as input list",
-            5,
-            results.size()
-        );
+        assertEquals("Result list should have same size as input list", 5, results.size());
 
         // Check each value is in the expected order
         for (int i = 0; i < 5; i++) {
-            assertEquals(
-                "Result should match input promise index",
-                Integer.valueOf(i),
-                results.get(i)
-            );
+            assertEquals("Result should match input promise index", Integer.valueOf(i), results.get(i));
         }
     }
 
@@ -518,9 +479,7 @@ public class TestAsyncTask {
                     new Thread(() -> {
                         try {
                             Thread.sleep(50);
-                            reject.accept(
-                                new RuntimeException("Deliberate failure")
-                            );
+                            reject.accept(new RuntimeException("Deliberate failure"));
                         } catch (Exception e) {
                             reject.accept(e);
                         }
@@ -551,10 +510,7 @@ public class TestAsyncTask {
         });
 
         // Wait for failure to be handled
-        assertTrue(
-            "Failure handler was not called",
-            failureLatch.await(5, TimeUnit.SECONDS)
-        );
+        assertTrue("Failure handler was not called", failureLatch.await(5, TimeUnit.SECONDS));
         assertTrue("Failure should be handled", failureHandled.get());
 
         // Verify the combined promise fails
@@ -562,10 +518,7 @@ public class TestAsyncTask {
             combinedPromise.await();
             fail("Should have thrown exception");
         } catch (Exception e) {
-            assertTrue(
-                "Should contain the right error message",
-                e.getCause().getMessage().contains("Deliberate failure")
-            );
+            assertTrue("Should contain the right error message", e.getCause().getMessage().contains("Deliberate failure"));
         }
     }
 
@@ -603,11 +556,7 @@ public class TestAsyncTask {
         List<String> results = combinedPromise.await();
 
         // Check results match original order regardless of completion order
-        assertArrayEquals(
-            "Results should be in original order",
-            letters,
-            results.toArray(new String[0])
-        );
+        assertArrayEquals("Results should be in original order", letters, results.toArray(new String[0]));
     }
 
     @Test
@@ -650,10 +599,7 @@ public class TestAsyncTask {
             });
 
         // Wait for completion
-        assertTrue(
-            "Not all promises completed in time",
-            allResolved.await(5, TimeUnit.SECONDS)
-        );
+        assertTrue("Not all promises completed in time", allResolved.await(5, TimeUnit.SECONDS));
 
         // Verify all results are present
         List<Integer> results = resultRef.get();
@@ -661,11 +607,7 @@ public class TestAsyncTask {
 
         // Verify each expected value is in the result at the right position
         for (int i = 0; i < promiseCount; i++) {
-            assertEquals(
-                "Value at index " + i + " should match",
-                Integer.valueOf(i),
-                results.get(i)
-            );
+            assertEquals("Value at index " + i + " should match", Integer.valueOf(i), results.get(i));
         }
     }
 }

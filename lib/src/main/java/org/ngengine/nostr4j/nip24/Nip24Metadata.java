@@ -50,9 +50,7 @@ import org.ngengine.nostr4j.utils.NostrUtils;
 
 public class Nip24Metadata {
 
-    private static final Logger logger = Logger.getLogger(
-        Nip24Metadata.class.getName()
-    );
+    private static final Logger logger = Logger.getLogger(Nip24Metadata.class.getName());
 
     public final Map<String, Object> metadata;
     private final NostrEvent sourceEvent;
@@ -62,9 +60,7 @@ public class Nip24Metadata {
         Platform platform = NostrUtils.getPlatform();
         String content = sourceEvent.getContent();
         Map<String, Object> meta = platform.fromJSON(content, Map.class);
-        if (meta == null) throw new IllegalArgumentException(
-            "Invalid metadata"
-        );
+        if (meta == null) throw new IllegalArgumentException("Invalid metadata");
         this.metadata = meta;
     }
 
@@ -167,9 +163,7 @@ public class Nip24Metadata {
     }
 
     public Date getBirthday() {
-        Map<String, Object> birthday = (Map<String, Object>) metadata.get(
-            "birthday"
-        );
+        Map<String, Object> birthday = (Map<String, Object>) metadata.get("birthday");
         if (birthday == null) return null;
         int year = NostrUtils.safeInt(birthday.get("year"));
         int month = NostrUtils.safeInt(birthday.get("month"));
@@ -225,10 +219,7 @@ public class Nip24Metadata {
             });
     }
 
-    public static AsyncTask<Nip24Metadata> fetch(
-        NostrPool pool,
-        NostrPublicKey pubkey
-    ) {
+    public static AsyncTask<Nip24Metadata> fetch(NostrPool pool, NostrPublicKey pubkey) {
         return pool
             .fetch(new Nip24MetadataFilter(pubkey))
             .then(evs -> {
@@ -241,11 +232,8 @@ public class Nip24Metadata {
             });
     }
 
-    public static AsyncTask<List<NostrMessageAck>> update(
-        NostrPool pool,
-        NostrSigner signer,
-        Nip24Metadata newMetadata
-    ) throws Exception {
+    public static AsyncTask<List<NostrMessageAck>> update(NostrPool pool, NostrSigner signer, Nip24Metadata newMetadata)
+        throws Exception {
         UnsignedNostrEvent event = newMetadata.toUpdateEvent();
 
         AsyncTask<SignedNostrEvent> signedP = signer.sign(event);

@@ -38,11 +38,7 @@ import java.util.Arrays;
 class Util {
 
     public static byte[] bytesFromInt(int n) {
-        return ByteBuffer
-            .allocate(4)
-            .order(ByteOrder.BIG_ENDIAN)
-            .putInt(n)
-            .array();
+        return ByteBuffer.allocate(4).order(ByteOrder.BIG_ENDIAN).putInt(n).array();
     }
 
     public static byte[] bytesFromBigInteger(BigInteger n) {
@@ -64,11 +60,7 @@ class Util {
         return new BigInteger(1, b);
     }
 
-    public static BigInteger bigIntFromBytes(
-        byte[] bytes,
-        int offset,
-        int length
-    ) {
+    public static BigInteger bigIntFromBytes(byte[] bytes, int offset, int length) {
         if (bytes.length == 0) return BigInteger.ZERO;
 
         // Calculate actual data length by skipping leading zeros
@@ -90,9 +82,7 @@ class Util {
 
     public static byte[] xor(byte[] b0, byte[] b1, byte ret[]) {
         if (b0.length != b1.length) {
-            throw new IllegalArgumentException(
-                "The length of the input arrays must be equal"
-            );
+            throw new IllegalArgumentException("The length of the input arrays must be equal");
         }
         if (ret == null) {
             ret = new byte[b0.length];

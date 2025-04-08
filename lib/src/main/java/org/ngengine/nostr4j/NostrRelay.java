@@ -61,9 +61,7 @@ import org.ngengine.nostr4j.utils.NostrUtils;
 
 public class NostrRelay implements TransportListener {
 
-    private static final Logger logger = Logger.getLogger(
-        NostrRelay.class.getName()
-    );
+    private static final Logger logger = Logger.getLogger(NostrRelay.class.getName());
 
     static class QueuedMessage {
 
@@ -71,11 +69,7 @@ public class NostrRelay implements TransportListener {
         final Consumer<NostrMessageAck> res;
         final Consumer<Throwable> rej;
 
-        QueuedMessage(
-            NostrMessage message,
-            Consumer<NostrMessageAck> res,
-            Consumer<Throwable> rej
-        ) {
+        QueuedMessage(NostrMessage message, Consumer<NostrMessageAck> res, Consumer<Throwable> rej) {
             this.message = message;
             this.res = res;
             this.rej = rej;
@@ -92,14 +86,11 @@ public class NostrRelay implements TransportListener {
 
     protected final NostrTransport connector;
     protected final String url;
-    protected final List<NostrRelayComponent> listeners =
-        new CopyOnWriteArrayList<>();
-    protected final Map<String, NostrMessageAck> waitingEventsAck =
-        new ConcurrentHashMap<>();
+    protected final List<NostrRelayComponent> listeners = new CopyOnWriteArrayList<>();
+    protected final Map<String, NostrMessageAck> waitingEventsAck = new ConcurrentHashMap<>();
     protected final NostrExecutor executor;
 
-    protected final ExponentialBackoff reconnectionBackoff =
-        new ExponentialBackoff();
+    protected final ExponentialBackoff reconnectionBackoff = new ExponentialBackoff();
 
     protected volatile long ackTimeoutS = TimeUnit.MINUTES.toSeconds(21);
     protected volatile boolean reconnectOnDrop = true;
@@ -125,8 +116,7 @@ public class NostrRelay implements TransportListener {
             this.connector = platform.newTransport();
             this.connector.addListener(this);
             this.executor = platform.newRelayExecutor();
-            this.messageQueue =
-                platform.newConcurrentQueue(QueuedMessage.class);
+            this.messageQueue = platform.newConcurrentQueue(QueuedMessage.class);
             this.connectCallbacks = platform.newConcurrentQueue(Runnable.class);
             this.url = url;
         } catch (Exception e) {
@@ -150,32 +140,21 @@ public class NostrRelay implements TransportListener {
         return this.parallelEvents;
     }
 
-    protected <T> AsyncTask<T> runInRelayExecutor(
-        BiConsumer<Consumer<T>, Consumer<Throwable>> runnable,
-        boolean enqueue
-    ) {
+    protected <T> AsyncTask<T> runInRelayExecutor(BiConsumer<Consumer<T>, Consumer<Throwable>> runnable, boolean enqueue) {
         Platform platform = NostrUtils.getPlatform();
         if (!enqueue) {
             return platform.promisify(runnable, platform.newRelayExecutor());
         } else {
             synchronized (queue) {
                 if (queue.get() == null) {
-                    queue.set(
-                        platform.promisify(
-                            runnable,
-                            platform.newRelayExecutor()
-                        )
-                    );
+                    queue.set(platform.promisify(runnable, platform.newRelayExecutor()));
                 }
                 AsyncTask<T> q = queue.get();
                 AsyncTask<T> nq = q.then(n -> {
                     try {
                         return platform.wrapPromise(runnable).await();
                     } catch (Exception e) {
-                        throw new RuntimeException(
-                            "Error in runInRelayExecutor",
-                            e
-                        );
+                        throw new RuntimeException("Error in runInRelayExecutor", e);
                     }
                 });
                 queue.set(nq);
@@ -219,14 +198,7 @@ public class NostrRelay implements TransportListener {
     }
 
     public boolean isConnected() {
-        return (
-            this.connected ||
-            (
-                !this.disconnectedByClient &&
-                this.reconnectOnDrop &&
-                this.firstConnection
-            )
-        );
+        return (this.connected || (!this.disconnectedByClient && this.reconnectOnDrop && this.firstConnection));
     }
 
     // await for order
@@ -236,17 +208,11 @@ public class NostrRelay implements TransportListener {
                 try {
                     if (!this.connected) {
                         assert dbg(() -> {
-                            logger.finer(
-                                "Relay not connected, queueing message: " +
-                                message.toString()
-                            );
+                            logger.finer("Relay not connected, queueing message: " + message.toString());
                         });
 
                         QueuedMessage q = new QueuedMessage(message, res, rej);
-                        assert !this.messageQueue.contains(
-                                q
-                            ) : "Duplicate message in queue: " +
-                        q.message.toString();
+                        assert !this.messageQueue.contains(q) : "Duplicate message in queue: " + q.message.toString();
                         this.messageQueue.add(q);
 
                         return;
@@ -254,9 +220,7 @@ public class NostrRelay implements TransportListener {
 
                     Platform platform = NostrUtils.getPlatform();
 
-                    String eventId = message instanceof SignedNostrEvent
-                        ? ((SignedNostrEvent) message).getId()
-                        : null;
+                    String eventId = message instanceof SignedNostrEvent ? ((SignedNostrEvent) message).getId() : null;
 
                     NostrMessageAck result = NostrMessage.ack(
                         this,
@@ -278,9 +242,7 @@ public class NostrRelay implements TransportListener {
                                 this.waitingEventsAck.remove(eventId);
                             }
                             assert dbg(() -> {
-                                logger.finest(
-                                    "ack (rejected): " + msg + " " + eventId
-                                );
+                                logger.finest("ack (rejected): " + msg + " " + eventId);
                             });
                             rr.setMessage(msg);
                             rr.setSuccess(false);
@@ -291,16 +253,11 @@ public class NostrRelay implements TransportListener {
                     for (NostrRelayComponent listener : this.listeners) {
                         try {
                             if (!listener.onRelaySend(this, message)) {
-                                result.callSuccessCallback(
-                                    "message ignored by component"
-                                );
+                                result.callSuccessCallback("message ignored by component");
                                 return;
                             }
                         } catch (Throwable e) {
-                            result.callFailureCallback(
-                                "message cancelled by component" +
-                                e.getMessage()
-                            );
+                            result.callFailureCallback("message cancelled by component" + e.getMessage());
                             return;
                         }
                     }
@@ -314,10 +271,7 @@ public class NostrRelay implements TransportListener {
                         this.connector.send(json)
                             .catchException(e -> {
                                 assert dbg(() -> {
-                                    logger.warning(
-                                        "Error sending message: " +
-                                        e.getMessage()
-                                    );
+                                    logger.warning("Error sending message: " + e.getMessage());
                                 });
                                 result.callFailureCallback(e.getMessage());
                             })
@@ -332,9 +286,7 @@ public class NostrRelay implements TransportListener {
                             });
                     } catch (Throwable e) {
                         assert dbg(() -> {
-                            logger.warning(
-                                "Error sending message (0): " + e.getMessage()
-                            );
+                            logger.warning("Error sending message (0): " + e.getMessage());
                         });
                         result.callFailureCallback(e.getMessage());
                     }
@@ -362,20 +314,12 @@ public class NostrRelay implements TransportListener {
                     for (NostrRelayComponent listener : this.listeners) {
                         try {
                             if (!listener.onRelayConnectRequest(this)) {
-                                logger.finer(
-                                    "Connection ignored by component: " +
-                                    this.url
-                                );
+                                logger.finer("Connection ignored by component: " + this.url);
                                 res.accept(this);
                                 return;
                             }
                         } catch (Throwable e) {
-                            rej.accept(
-                                new Exception(
-                                    "Connection cancelled by component: " +
-                                    e.getMessage()
-                                )
-                            );
+                            rej.accept(new Exception("Connection cancelled by component: " + e.getMessage()));
                             return;
                         }
                     }
@@ -385,9 +329,7 @@ public class NostrRelay implements TransportListener {
                     });
                     this.connector.connect(url)
                         .catchException(e -> {
-                            this.onConnectionClosedByServer(
-                                    "failed to connect"
-                                );
+                            this.onConnectionClosedByServer("failed to connect");
                             rej.accept(e);
                         });
                     this.loop();
@@ -410,28 +352,16 @@ public class NostrRelay implements TransportListener {
         this.connector.close(reason);
         return runInRelayExecutor(
             (res, rej) -> {
-                logger.fine(
-                    "Disconnecting from relay: " +
-                    this.url +
-                    " reason: " +
-                    reason
-                );
+                logger.fine("Disconnecting from relay: " + this.url + " reason: " + reason);
                 for (NostrRelayComponent listener : this.listeners) {
                     try {
                         if (!listener.onRelayDisconnectRequest(this, reason)) {
-                            logger.finer(
-                                "Disconnect ignored by component: " + this.url
-                            );
+                            logger.finer("Disconnect ignored by component: " + this.url);
                             res.accept(this);
                             return;
                         }
                     } catch (Throwable e) {
-                        rej.accept(
-                            new Exception(
-                                "Disconnect cancelled by component: " +
-                                e.getMessage()
-                            )
-                        );
+                        rej.accept(new Exception("Disconnect cancelled by component: " + e.getMessage()));
                         return;
                     }
                 }
@@ -451,20 +381,12 @@ public class NostrRelay implements TransportListener {
                     for (NostrRelayComponent listener : this.listeners) {
                         try {
                             if (!listener.onRelayConnect(this)) {
-                                logger.finer(
-                                    "Connection ignored by component: " +
-                                    this.url
-                                );
+                                logger.finer("Connection ignored by component: " + this.url);
                                 res.accept(this);
                                 return;
                             }
                         } catch (Throwable e) {
-                            rej.accept(
-                                new Exception(
-                                    "Connection cancelled by component: " +
-                                    e.getMessage()
-                                )
-                            );
+                            rej.accept(new Exception("Connection cancelled by component: " + e.getMessage()));
                             return;
                         }
                     }
@@ -474,8 +396,7 @@ public class NostrRelay implements TransportListener {
                     this.firstConnection = true;
 
                     {
-                        Iterator<Runnable> it =
-                            this.connectCallbacks.iterator();
+                        Iterator<Runnable> it = this.connectCallbacks.iterator();
                         while (it.hasNext()) {
                             Runnable callback = it.next();
                             it.remove();
@@ -484,26 +405,20 @@ public class NostrRelay implements TransportListener {
                             } catch (Throwable e) {
                                 assert dbg(() -> {
                                     e.printStackTrace(); // TODO: remove me
-                                    logger.warning(
-                                        "Error in connect callback: " +
-                                        e.getMessage()
-                                    );
+                                    logger.warning("Error in connect callback: " + e.getMessage());
                                 });
                             }
                         }
                     }
 
                     {
-                        Iterator<QueuedMessage> it =
-                            this.messageQueue.iterator();
+                        Iterator<QueuedMessage> it = this.messageQueue.iterator();
 
                         while (it.hasNext()) {
                             QueuedMessage q = it.next();
                             it.remove();
                             assert dbg(() -> {
-                                logger.finer(
-                                    "Sending queued message: " + q.message
-                                );
+                                logger.finer("Sending queued message: " + q.message);
                             });
 
                             NostrMessage message = q.message;
@@ -527,9 +442,7 @@ public class NostrRelay implements TransportListener {
                 } catch (Throwable e) {
                     assert dbg(() -> {
                         e.printStackTrace(); // TODO: remove me
-                        logger.warning(
-                            "Error in connect callback: " + e.getMessage()
-                        );
+                        logger.warning("Error in connect callback: " + e.getMessage());
                     });
                     rej.accept(e);
                 }
@@ -555,16 +468,10 @@ public class NostrRelay implements TransportListener {
             if (rcv == null) rcv = NostrClosedMessage.parse(data);
             if (rcv == null) rcv = NostrEOSEMessage.parse(data);
             if (rcv == null) rcv = NostrOKMessage.parse(data);
-            if (rcv == null) throw new Exception(
-                "Unknown message type: " + prefix
-            );
+            if (rcv == null) throw new Exception("Unknown message type: " + prefix);
             final NostrMessage message = rcv;
 
-            final AsyncTask<Boolean> asyncVerifyPromise = (
-                    rcv instanceof SignedNostrEvent &&
-                    verifyEvents &&
-                    parallelEvents
-                )
+            final AsyncTask<Boolean> asyncVerifyPromise = (rcv instanceof SignedNostrEvent && verifyEvents && parallelEvents)
                 ? (AsyncTask<Boolean>) ((SignedNostrEvent) rcv).verifyAsync()
                 : null;
 
@@ -577,8 +484,7 @@ public class NostrRelay implements TransportListener {
                             String eventId = ok.getEventId();
                             boolean success = ok.isSuccess();
                             String eventMessage = ok.getMessage();
-                            NostrMessageAck ack =
-                                this.waitingEventsAck.get(eventId);
+                            NostrMessageAck ack = this.waitingEventsAck.get(eventId);
                             if (ack != null) {
                                 assert dbg(() -> {
                                     logger.finest(
@@ -599,24 +505,17 @@ public class NostrRelay implements TransportListener {
                                 }
                             } else {
                                 assert dbg(() -> {
-                                    logger.warning(
-                                        "Received ack for unknown event: " +
-                                        eventId
-                                    );
+                                    logger.warning("Received ack for unknown event: " + eventId);
                                 });
                             }
                         }
 
                         if (asyncVerifyPromise != null) {
                             asyncVerifyPromise.await();
-                        } else if (
-                            verifyEvents && message instanceof SignedNostrEvent
-                        ) {
+                        } else if (verifyEvents && message instanceof SignedNostrEvent) {
                             SignedNostrEvent event = (SignedNostrEvent) message;
                             if (!event.verify()) {
-                                throw new Exception(
-                                    "Event verification failed"
-                                );
+                                throw new Exception("Event verification failed");
                             }
                         }
 
@@ -625,21 +524,13 @@ public class NostrRelay implements TransportListener {
                             try {
                                 if (!listener.onRelayMessage(this, message)) {
                                     assert dbg(() -> {
-                                        logger.finest(
-                                            "Message ignored by component: " +
-                                            this.url
-                                        );
+                                        logger.finest("Message ignored by component: " + this.url);
                                     });
                                     res.accept(this);
                                     return;
                                 }
                             } catch (Throwable e) {
-                                rej.accept(
-                                    new Exception(
-                                        "Message cancelled by component: " +
-                                        e.getMessage()
-                                    )
-                                );
+                                rej.accept(new Exception("Message cancelled by component: " + e.getMessage()));
                                 return;
                             }
                         }
@@ -648,9 +539,7 @@ public class NostrRelay implements TransportListener {
                     } catch (Exception e) {
                         rej.accept(e);
                         assert dbg(() -> {
-                            logger.warning(
-                                "Error processing message: " + e.getMessage()
-                            );
+                            logger.warning("Error processing message: " + e.getMessage());
                         });
                     }
                 },
@@ -664,9 +553,7 @@ public class NostrRelay implements TransportListener {
     // await for order
     @Override
     public void onConnectionClosedByServer(String reason) {
-        logger.finer(
-            "Connection closed by server: " + this.url + " reason: " + reason
-        );
+        logger.finer("Connection closed by server: " + this.url + " reason: " + reason);
         boolean wasConnected = this.connected;
         this.connecting = false;
         this.connected = false;
@@ -677,27 +564,13 @@ public class NostrRelay implements TransportListener {
                     if (wasConnected) {
                         for (NostrRelayComponent listener : this.listeners) {
                             try {
-                                if (
-                                    !listener.onRelayDisconnect(
-                                        this,
-                                        reason,
-                                        false
-                                    )
-                                ) {
-                                    logger.finer(
-                                        "Disconnect ignored by component: " +
-                                        this.url
-                                    );
+                                if (!listener.onRelayDisconnect(this, reason, false)) {
+                                    logger.finer("Disconnect ignored by component: " + this.url);
                                     res.accept(this);
                                     return;
                                 }
                             } catch (Throwable e) {
-                                rej.accept(
-                                    new Exception(
-                                        "Disconnect cancelled by component: " +
-                                        e.getMessage()
-                                    )
-                                );
+                                rej.accept(new Exception("Disconnect cancelled by component: " + e.getMessage()));
                                 return;
                             }
                         }
@@ -705,10 +578,7 @@ public class NostrRelay implements TransportListener {
 
                     if (this.reconnectOnDrop && !this.disconnectedByClient) {
                         long now = Instant.now().getEpochSecond();
-                        long delay = reconnectionBackoff.getNextAttemptTime(
-                            now,
-                            TimeUnit.SECONDS
-                        );
+                        long delay = reconnectionBackoff.getNextAttemptTime(now, TimeUnit.SECONDS);
                         this.executor.runLater(
                                 () -> {
                                     this.connect();
@@ -724,9 +594,7 @@ public class NostrRelay implements TransportListener {
                 true
             );
         } catch (Exception e) {
-            logger.severe(
-                "Error in onConnectionClosedByServer: " + e.getMessage()
-            );
+            logger.severe("Error in onConnectionClosedByServer: " + e.getMessage());
         }
     }
 
@@ -735,31 +603,19 @@ public class NostrRelay implements TransportListener {
     public void onConnectionClosedByClient(String reason) {
         this.connected = false;
         this.connecting = false;
-        logger.finer(
-            "Connection closed by client: " + this.url + " reason: " + reason
-        );
+        logger.finer("Connection closed by client: " + this.url + " reason: " + reason);
         try {
             runInRelayExecutor(
                 (res, rej) -> {
                     for (NostrRelayComponent listener : this.listeners) {
                         try {
-                            if (
-                                !listener.onRelayDisconnect(this, reason, true)
-                            ) {
-                                logger.finer(
-                                    "Disconnect ignored by component: " +
-                                    this.url
-                                );
+                            if (!listener.onRelayDisconnect(this, reason, true)) {
+                                logger.finer("Disconnect ignored by component: " + this.url);
                                 res.accept(this);
                                 return;
                             }
                         } catch (Throwable e) {
-                            rej.accept(
-                                new Exception(
-                                    "Disconnect cancelled by component: " +
-                                    e.getMessage()
-                                )
-                            );
+                            rej.accept(new Exception("Disconnect cancelled by component: " + e.getMessage()));
                             return;
                         }
                     }
@@ -767,9 +623,7 @@ public class NostrRelay implements TransportListener {
                 true
             );
         } catch (Exception e) {
-            logger.severe(
-                "Error in onConnectionClosedByClient: " + e.getMessage()
-            );
+            logger.severe("Error in onConnectionClosedByClient: " + e.getMessage());
         }
     }
 
@@ -802,17 +656,13 @@ public class NostrRelay implements TransportListener {
                 try {
                     if (!listener.onRelayLoop(this, nowInstant)) {
                         assert dbg(() -> {
-                            logger.finest(
-                                "Loop ignored by component: " + this.url
-                            );
+                            logger.finest("Loop ignored by component: " + this.url);
                         });
                         return;
                     }
                 } catch (Throwable e) {
                     assert dbg(() -> {
-                        logger.finest(
-                            "Loop cancelled by component: " + e.getMessage()
-                        );
+                        logger.finest("Loop cancelled by component: " + e.getMessage());
                     });
                     return;
                 }
@@ -820,9 +670,7 @@ public class NostrRelay implements TransportListener {
 
             if (disconnectedByClient) {
                 assert dbg(() -> {
-                    logger.finest(
-                        "Stop loop - disconnected by client: " + this.url
-                    );
+                    logger.finest("Stop loop - disconnected by client: " + this.url);
                 });
                 return;
             }
@@ -849,21 +697,13 @@ public class NostrRelay implements TransportListener {
                         try {
                             if (!listener.onRelayError(this, e)) {
                                 assert dbg(() -> {
-                                    logger.finer(
-                                        "Error ignored by component: " +
-                                        this.url
-                                    );
+                                    logger.finer("Error ignored by component: " + this.url);
                                 });
                                 res.accept(this);
                                 return;
                             }
                         } catch (Throwable ex) {
-                            rej.accept(
-                                new Exception(
-                                    "Error cancelled by component: " +
-                                    ex.getMessage()
-                                )
-                            );
+                            rej.accept(new Exception("Error cancelled by component: " + ex.getMessage()));
                             return;
                         }
                     }

@@ -41,8 +41,7 @@ import org.ngengine.nostr4j.event.SignedNostrEvent;
 
 public class ForwardSlidingWindowEventTracker implements EventTracker {
 
-    protected final LinkedList<SignedNostrEvent.Identifier> seenEvents =
-        new LinkedList<SignedNostrEvent.Identifier>();
+    protected final LinkedList<SignedNostrEvent.Identifier> seenEvents = new LinkedList<SignedNostrEvent.Identifier>();
 
     protected int maxTrackedEvents;
     protected final int minTrackedEvents;
@@ -65,8 +64,7 @@ public class ForwardSlidingWindowEventTracker implements EventTracker {
         this.maxTrackedEvents = maxTrackedEvents;
         this.minTrackedEvents = minTrackedEvents < 0 ? 0 : minTrackedEvents;
         this.trackingWindowS = trackingWindowTimeUnit.toSeconds(trackingWindow);
-        this.trackingWindowsMarginS =
-            trackingWindowMarginTimeUnit.toSeconds(trackingWindowMargin);
+        this.trackingWindowsMarginS = trackingWindowMarginTimeUnit.toSeconds(trackingWindowMargin);
     }
 
     @Override
@@ -75,8 +73,7 @@ public class ForwardSlidingWindowEventTracker implements EventTracker {
             return true;
         }
         SignedNostrEvent.Identifier newEventId = event.getIdentifier();
-        ListIterator<SignedNostrEvent.Identifier> it =
-            seenEvents.listIterator();
+        ListIterator<SignedNostrEvent.Identifier> it = seenEvents.listIterator();
 
         // Check if the event is already seen
         // if it is not, add it to the list (ordered from most recent to oldest)
@@ -127,11 +124,7 @@ public class ForwardSlidingWindowEventTracker implements EventTracker {
         if (t - cutOffS > trackingWindowS) {
             cutOffUpdate = true;
             cutOffS = t - (trackingWindowS - trackingWindowsMarginS);
-            assert cutOffS <=
-            currentTimeSeconds() : "Cut off time is in the future " +
-            cutOffS +
-            " > " +
-            currentTimeSeconds();
+            assert cutOffS <= currentTimeSeconds() : "Cut off time is in the future " + cutOffS + " > " + currentTimeSeconds();
         }
 
         assert checkOrder() : "Events are not in order";
@@ -139,9 +132,7 @@ public class ForwardSlidingWindowEventTracker implements EventTracker {
         toRemove <= seenEvents.size() &&
         toRemove <= maxTrackedEvents : "Invalid number of events to remove";
 
-        ListIterator<SignedNostrEvent.Identifier> it = seenEvents.listIterator(
-            seenEvents.size()
-        );
+        ListIterator<SignedNostrEvent.Identifier> it = seenEvents.listIterator(seenEvents.size());
 
         // remove the oldest events
         int removed = 0;
@@ -166,8 +157,7 @@ public class ForwardSlidingWindowEventTracker implements EventTracker {
         if (toRemove > 0 && seenEvents.size() > 0) {
             cutOffS = Math.max(cutOffS, seenEvents.getLast().createdAt);
         }
-        assert cutOffS <= currentTimeSeconds() ||
-        cutOffS >= seenEvents.getLast().createdAt : "Cut off time is invalid";
+        assert cutOffS <= currentTimeSeconds() || cutOffS >= seenEvents.getLast().createdAt : "Cut off time is invalid";
 
         assert seenEvents.size() <= maxTrackedEvents : "Too many events";
         assert checkOrder() : "Events are not in order";

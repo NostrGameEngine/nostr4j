@@ -59,8 +59,7 @@ public class TestBech32Performance {
         runBenchmark(BENCHMARK_ITERATIONS, true);
     }
 
-    private static void runBenchmark(int iterations, boolean printResults)
-        throws Exception {
+    private static void runBenchmark(int iterations, boolean printResults) throws Exception {
         long bech32UtilEncodeTime = 0;
         long bech32UtilDecodeTime = 0;
 
@@ -73,16 +72,12 @@ public class TestBech32Performance {
 
                 // --------- Original Bech32Util ---------
                 long startDecodeUtil = System.nanoTime();
-                Pair<byte[], byte[]> decodedUtil = Bech32Util
-                    .getInstance()
-                    .bech32Decode(s);
+                Pair<byte[], byte[]> decodedUtil = Bech32Util.getInstance().bech32Decode(s);
                 long endDecodeUtil = System.nanoTime();
                 bech32UtilDecodeTime += (endDecodeUtil - startDecodeUtil);
 
                 long startEncodeUtil = System.nanoTime();
-                Bech32Util
-                    .getInstance()
-                    .bech32Encode(hrp, decodedUtil.getRight());
+                Bech32Util.getInstance().bech32Encode(hrp, decodedUtil.getRight());
                 long endEncodeUtil = System.nanoTime();
                 bech32UtilEncodeTime += (endEncodeUtil - startEncodeUtil);
 
@@ -90,75 +85,43 @@ public class TestBech32Performance {
                 long startDecodeRefactored = System.nanoTime();
                 java.nio.ByteBuffer decodedRefactored = Bech32.bech32Decode(s);
                 long endDecodeRefactored = System.nanoTime();
-                bech32RefactoredDecodeTime +=
-                    (endDecodeRefactored - startDecodeRefactored);
+                bech32RefactoredDecodeTime += (endDecodeRefactored - startDecodeRefactored);
 
                 long startEncodeRefactored = System.nanoTime();
                 Bech32.bech32Encode(hrp, decodedRefactored, new byte[6]);
                 long endEncodeRefactored = System.nanoTime();
-                bech32RefactoredEncodeTime +=
-                    (endEncodeRefactored - startEncodeRefactored);
+                bech32RefactoredEncodeTime += (endEncodeRefactored - startEncodeRefactored);
             }
         }
 
         if (printResults) {
             int totalOps = iterations * VALID.length;
 
-            System.out.println(
-                "---- Results over " + totalOps + " operations ----"
-            );
+            System.out.println("---- Results over " + totalOps + " operations ----");
+
+            System.out.println("Bech32Util (Original) - Decode total time: " + bech32UtilDecodeTime / 1_000_000.0 + " ms");
+            System.out.println("Bech32Util (Original) - Encode total time: " + bech32UtilEncodeTime / 1_000_000.0 + " ms");
 
             System.out.println(
-                "Bech32Util (Original) - Decode total time: " +
-                bech32UtilDecodeTime /
-                1_000_000.0 +
-                " ms"
+                "Bech32 (Refactored)   - Decode total time: " + bech32RefactoredDecodeTime / 1_000_000.0 + " ms"
             );
             System.out.println(
-                "Bech32Util (Original) - Encode total time: " +
-                bech32UtilEncodeTime /
-                1_000_000.0 +
-                " ms"
-            );
-
-            System.out.println(
-                "Bech32 (Refactored)   - Decode total time: " +
-                bech32RefactoredDecodeTime /
-                1_000_000.0 +
-                " ms"
-            );
-            System.out.println(
-                "Bech32 (Refactored)   - Encode total time: " +
-                bech32RefactoredEncodeTime /
-                1_000_000.0 +
-                " ms"
+                "Bech32 (Refactored)   - Encode total time: " + bech32RefactoredEncodeTime / 1_000_000.0 + " ms"
             );
 
             System.out.println();
             System.out.println(
-                "Bech32Util (Original) - Avg Decode time per op: " +
-                bech32UtilDecodeTime /
-                (double) totalOps +
-                " ns"
+                "Bech32Util (Original) - Avg Decode time per op: " + bech32UtilDecodeTime / (double) totalOps + " ns"
             );
             System.out.println(
-                "Bech32Util (Original) - Avg Encode time per op: " +
-                bech32UtilEncodeTime /
-                (double) totalOps +
-                " ns"
+                "Bech32Util (Original) - Avg Encode time per op: " + bech32UtilEncodeTime / (double) totalOps + " ns"
             );
 
             System.out.println(
-                "Bech32 (Refactored)   - Avg Decode time per op: " +
-                bech32RefactoredDecodeTime /
-                (double) totalOps +
-                " ns"
+                "Bech32 (Refactored)   - Avg Decode time per op: " + bech32RefactoredDecodeTime / (double) totalOps + " ns"
             );
             System.out.println(
-                "Bech32 (Refactored)   - Avg Encode time per op: " +
-                bech32RefactoredEncodeTime /
-                (double) totalOps +
-                " ns"
+                "Bech32 (Refactored)   - Avg Encode time per op: " + bech32RefactoredEncodeTime / (double) totalOps + " ns"
             );
         }
     }

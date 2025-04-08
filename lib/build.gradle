@@ -15,7 +15,7 @@ spotless {
     importOrder()  
     removeUnusedImports()
     cleanthat()   
-    prettier(['prettier': '2.8.8', 'prettier-plugin-java': '2.2.0']).config(['parser': 'java', 'tabWidth': 4])  
+    prettier(['prettier': '2.8.8', 'prettier-plugin-java': '2.2.0']).config(['parser': 'java', 'tabWidth': 4,'printWidth': 128])
     formatAnnotations()  
 
     def licenseText = file("${rootDir}/LICENSE").text

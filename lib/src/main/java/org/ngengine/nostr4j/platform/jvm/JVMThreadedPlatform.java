@@ -65,11 +65,7 @@ public class JVMThreadedPlatform extends JVMAsyncPlatform {
         }
 
         @Override
-        public <T> AsyncTask<T> runLater(
-            Callable<T> r,
-            long delay,
-            TimeUnit unit
-        ) {
+        public <T> AsyncTask<T> runLater(Callable<T> r, long delay, TimeUnit unit) {
             return wrapPromise((res, rej) -> {
                 executor.schedule(
                     () -> {

@@ -49,9 +49,7 @@ public class TestBech32 {
         "npub1wpuq4mcuhnxhnrqk85hk29qjz6u93vpzxqy9qpuugpyc302fepkqg8t3a4",
     };
 
-    private static String[] INVALID = {
-        "npub1wpuq4mcuDFxhnrqk85hk29qjz6u93vpzxqy9qpuugpyc302fepkqg8t3a4",
-    };
+    private static String[] INVALID = { "npub1wpuq4mcuDFxhnrqk85hk29qjz6u93vpzxqy9qpuugpyc302fepkqg8t3a4" };
 
     @Test
     public void bech32Checksum() throws Exception {
@@ -64,11 +62,7 @@ public class TestBech32 {
     public void bech32DecodeEncode() throws Exception {
         for (String s : VALID) {
             ByteBuffer decoded = Bech32.bech32Decode(s);
-            String encoded = Bech32.bech32Encode(
-                s.substring(0, s.lastIndexOf('1')).getBytes(),
-                decoded,
-                new byte[6]
-            );
+            String encoded = Bech32.bech32Encode(s.substring(0, s.lastIndexOf('1')).getBytes(), decoded, new byte[6]);
             assertEquals(s.toLowerCase(), encoded.toLowerCase());
             ByteBuffer decoded2 = Bech32.bech32Decode(encoded);
             assertEquals(decoded, decoded2);
@@ -97,11 +91,7 @@ public class TestBech32 {
         for (int i = 0; i < data.length; i++) {
             data[i] = (byte) (Math.random() * 256);
         }
-        String encoded = Bech32.bech32Encode(
-            hrp,
-            ByteBuffer.wrap(data),
-            new byte[6]
-        );
+        String encoded = Bech32.bech32Encode(hrp, ByteBuffer.wrap(data), new byte[6]);
         System.out.println("Encoded: " + encoded);
         ByteBuffer decoded = Bech32.bech32Decode(encoded);
         assertEquals(ByteBuffer.wrap(data), decoded);

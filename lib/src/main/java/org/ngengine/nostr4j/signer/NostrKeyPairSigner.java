@@ -53,10 +53,7 @@ public class NostrKeyPairSigner implements NostrSigner {
 
     @Override
     public AsyncTask<SignedNostrEvent> sign(UnsignedNostrEvent event) {
-        String id = NostrEvent.computeEventId(
-            keyPair.getPublicKey().asHex(),
-            event
-        );
+        String id = NostrEvent.computeEventId(keyPair.getPublicKey().asHex(), event);
         return NostrUtils
             .getPlatform()
             .signAsync(id, keyPair.getPrivateKey())
@@ -74,22 +71,14 @@ public class NostrKeyPairSigner implements NostrSigner {
     }
 
     @Override
-    public String encrypt(String message, NostrPublicKey publicKey)
-        throws Exception {
-        byte[] sharedKey = Nip44.getConversationKey(
-            keyPair.getPrivateKey(),
-            publicKey
-        );
+    public String encrypt(String message, NostrPublicKey publicKey) throws Exception {
+        byte[] sharedKey = Nip44.getConversationKey(keyPair.getPrivateKey(), publicKey);
         return Nip44.encrypt(message, sharedKey);
     }
 
     @Override
-    public String decrypt(String message, NostrPublicKey publicKey)
-        throws Exception {
-        byte[] sharedKey = Nip44.getConversationKey(
-            keyPair.getPrivateKey(),
-            publicKey
-        );
+    public String decrypt(String message, NostrPublicKey publicKey) throws Exception {
+        byte[] sharedKey = Nip44.getConversationKey(keyPair.getPrivateKey(), publicKey);
         return Nip44.decrypt(message, sharedKey);
     }
 
@@ -121,10 +110,7 @@ public class NostrKeyPairSigner implements NostrSigner {
             return false;
         }
         final NostrKeyPairSigner other = (NostrKeyPairSigner) obj;
-        if (
-            this.keyPair != other.keyPair &&
-            (this.keyPair == null || !this.keyPair.equals(other.keyPair))
-        ) {
+        if (this.keyPair != other.keyPair && (this.keyPair == null || !this.keyPair.equals(other.keyPair))) {
             return false;
         }
         return true;

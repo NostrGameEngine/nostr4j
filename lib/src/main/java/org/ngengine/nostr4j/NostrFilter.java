@@ -143,12 +143,10 @@ public class NostrFilter extends NostrMessageFragment {
             kinds = (Collection<Integer>) map.get("kinds");
         }
         if (map.containsKey("since")) {
-            since =
-                Instant.ofEpochSecond(NostrUtils.safeLong(map.get("since")));
+            since = Instant.ofEpochSecond(NostrUtils.safeLong(map.get("since")));
         }
         if (map.containsKey("until")) {
-            until =
-                Instant.ofEpochSecond(NostrUtils.safeLong(map.get("until")));
+            until = Instant.ofEpochSecond(NostrUtils.safeLong(map.get("until")));
         }
         if (map.containsKey("limit")) {
             limit = NostrUtils.safeInt(map.get("limit"));

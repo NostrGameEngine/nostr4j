@@ -82,9 +82,7 @@ public class NostrOKMessage extends NostrMessage {
         }
         String eventId = NostrUtils.safeString(data.get(1));
         boolean success = NostrUtils.safeBool(data.get(2));
-        String message = data.size() > 3
-            ? NostrUtils.safeString(data.get(3))
-            : "";
+        String message = data.size() > 3 ? NostrUtils.safeString(data.get(3)) : "";
         return new NostrOKMessage(eventId, success, message);
     }
 }

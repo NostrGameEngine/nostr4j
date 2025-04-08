@@ -40,10 +40,7 @@ public class Nip24MetadataListener implements NostrSubEventListener {
     private final NostrPublicKey pubkey;
     private Consumer<Nip24Metadata> consumer;
 
-    public Nip24MetadataListener(
-        NostrPublicKey pubkey,
-        Consumer<Nip24Metadata> consumer
-    ) {
+    public Nip24MetadataListener(NostrPublicKey pubkey, Consumer<Nip24Metadata> consumer) {
         this.pubkey = pubkey;
         this.consumer = consumer;
     }
@@ -59,10 +56,7 @@ public class Nip24MetadataListener implements NostrSubEventListener {
     @Override
     public void onSubEvent(SignedNostrEvent event, boolean stored) {
         try {
-            if (
-                event.getKind() != 0 ||
-                (pubkey != null && !pubkey.equals(event.getPubkey()))
-            ) return;
+            if (event.getKind() != 0 || (pubkey != null && !pubkey.equals(event.getPubkey()))) return;
             Nip24Metadata profile = new Nip24Metadata(event);
             if (consumer != null) consumer.accept(profile);
         } catch (Exception e) {

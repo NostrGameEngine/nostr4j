@@ -54,27 +54,21 @@ import org.ngengine.nostr4j.transport.NostrTransport;
 
 public class WebsocketTransport implements NostrTransport, WebSocket.Listener {
 
-    private static final Logger logger = Logger.getLogger(
-        WebsocketTransport.class.getName()
-    );
+    private static final Logger logger = Logger.getLogger(WebsocketTransport.class.getName());
     private static final int DEFAULT_MAX_MESSAGE_SIZE = 65536;
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(10);
     private static final int BUFFER_INITIAL_SIZE = 8192;
 
     private volatile WebSocket openWebSocket;
     private final int maxMessageSize = DEFAULT_MAX_MESSAGE_SIZE;
-    private final StringBuilder messageBuffer = new StringBuilder(
-        BUFFER_INITIAL_SIZE
-    );
+    private final StringBuilder messageBuffer = new StringBuilder(BUFFER_INITIAL_SIZE);
 
-    private final List<TransportListener> listeners =
-        new CopyOnWriteArrayList<>();
+    private final List<TransportListener> listeners = new CopyOnWriteArrayList<>();
     private final JVMAsyncPlatform platform;
     private final HttpClient httpClient;
     private final Executor executor;
 
-    private final AtomicReference<CompletableFuture<?>> queue =
-        new AtomicReference<>(CompletableFuture.completedFuture(null));
+    private final AtomicReference<CompletableFuture<?>> queue = new AtomicReference<>(CompletableFuture.completedFuture(null));
 
     public WebsocketTransport(JVMAsyncPlatform platform, Executor executor) {
         this.platform = platform;
@@ -92,16 +86,13 @@ public class WebsocketTransport implements NostrTransport, WebSocket.Listener {
         return this.openWebSocket != null;
     }
 
-    public <T> AsyncTask<T> enqueue(
-        BiConsumer<Consumer<T>, Consumer<Throwable>> task
-    ) {
+    public <T> AsyncTask<T> enqueue(BiConsumer<Consumer<T>, Consumer<Throwable>> task) {
         return platform.wrapPromise((res, rej) -> {
             synchronized (queue) {
                 queue.getAndUpdate(currentQueue ->
                     currentQueue.thenComposeAsync(
                         r -> {
-                            CompletableFuture<T> future =
-                                new CompletableFuture<>();
+                            CompletableFuture<T> future = new CompletableFuture<>();
                             try {
                                 task.accept(
                                     r0 -> {
@@ -164,9 +155,7 @@ public class WebsocketTransport implements NostrTransport, WebSocket.Listener {
         if (ws != null) {
             enqueue((res, rej) -> {
                 try {
-                    final String r = reason != null
-                        ? reason
-                        : "Closed by client";
+                    final String r = reason != null ? reason : "Closed by client";
                     ws
                         .sendClose(WebSocket.NORMAL_CLOSURE, r)
                         .handle((result, error) -> {
@@ -189,11 +178,7 @@ public class WebsocketTransport implements NostrTransport, WebSocket.Listener {
     }
 
     @Override
-    public CompletionStage<?> onText(
-        WebSocket webSocket,
-        CharSequence data,
-        boolean last
-    ) {
+    public CompletionStage<?> onText(WebSocket webSocket, CharSequence data, boolean last) {
         messageBuffer.append(data);
         if (last) {
             String message = messageBuffer.toString();
@@ -225,11 +210,7 @@ public class WebsocketTransport implements NostrTransport, WebSocket.Listener {
     }
 
     @Override
-    public CompletionStage<?> onClose(
-        WebSocket webSocket,
-        int statusCode,
-        String reason
-    ) {
+    public CompletionStage<?> onClose(WebSocket webSocket, int statusCode, String reason) {
         logger.finest("WebSocket closed: " + statusCode + " " + reason);
         this.openWebSocket = null;
         for (TransportListener listener : listeners) {
@@ -273,9 +254,7 @@ public class WebsocketTransport implements NostrTransport, WebSocket.Listener {
                     if (messageLength <= maxMessageSize) {
                         enqueue((rs0, rj0) -> {
                             assert dbg(() -> {
-                                logger.finest(
-                                    "Sending full message: " + message.length()
-                                );
+                                logger.finest("Sending full message: " + message.length());
                             });
                             ws
                                 .sendText(message, true)
@@ -293,24 +272,15 @@ public class WebsocketTransport implements NostrTransport, WebSocket.Listener {
                     } else {
                         enqueue((rs0, rj0) -> {
                             int position = 0;
-                            CompletableFuture<WebSocket> future =
-                                CompletableFuture.completedFuture(null);
+                            CompletableFuture<WebSocket> future = CompletableFuture.completedFuture(null);
                             while (position < messageLength) {
                                 // send in chunks
                                 int start = position;
-                                int end = Math.min(
-                                    position + maxMessageSize,
-                                    messageLength
-                                );
+                                int end = Math.min(position + maxMessageSize, messageLength);
                                 assert dbg(() -> {
-                                    logger.finest(
-                                        "Sending chunk: " + start + " " + end
-                                    );
+                                    logger.finest("Sending chunk: " + start + " " + end);
                                 });
-                                final String chunk = message.substring(
-                                    start,
-                                    end
-                                );
+                                final String chunk = message.substring(start, end);
                                 final boolean isLast = end >= messageLength;
                                 // chain chunks
                                 future =
@@ -380,9 +350,7 @@ public class WebsocketTransport implements NostrTransport, WebSocket.Listener {
                             if (statusCode >= 200 && statusCode < 300) {
                                 res.accept(response.body());
                             } else {
-                                rej.accept(
-                                    new IOException("HTTP error: " + statusCode)
-                                );
+                                rej.accept(new IOException("HTTP error: " + statusCode));
                             }
                             return null;
                         },

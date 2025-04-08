@@ -56,7 +56,6 @@ import org.ngengine.nostr4j.platform.AsyncTask;
 import org.ngengine.nostr4j.platform.Platform;
 import org.ngengine.nostr4j.transport.NostrMessage;
 import org.ngengine.nostr4j.transport.NostrMessageAck;
-import org.ngengine.nostr4j.transport.NostrTransport;
 import org.ngengine.nostr4j.transport.impl.NostrClosedMessage;
 import org.ngengine.nostr4j.transport.impl.NostrEOSEMessage;
 import org.ngengine.nostr4j.transport.impl.NostrNoticeMessage;
@@ -65,18 +64,12 @@ import org.ngengine.nostr4j.utils.ScheduledAction;
 
 public class NostrPool implements NostrRelayComponent {
 
-    private static final Logger logger = Logger.getLogger(
-        NostrPool.class.getName()
-    );
+    private static final Logger logger = Logger.getLogger(NostrPool.class.getName());
     private static final AtomicLong subCounter = new AtomicLong(0);
-    private final Map<String, NostrSubscription> subscriptions =
-        new ConcurrentHashMap<>();
-    private final List<NostrNoticeListener> noticeListener =
-        new CopyOnWriteArrayList<>();
-    private final CopyOnWriteArrayList<NostrRelay> relays =
-        new CopyOnWriteArrayList<>();
-    private final List<ScheduledAction> scheduledActions =
-        new CopyOnWriteArrayList<>();
+    private final Map<String, NostrSubscription> subscriptions = new ConcurrentHashMap<>();
+    private final List<NostrNoticeListener> noticeListener = new CopyOnWriteArrayList<>();
+    private final CopyOnWriteArrayList<NostrRelay> relays = new CopyOnWriteArrayList<>();
+    private final List<ScheduledAction> scheduledActions = new CopyOnWriteArrayList<>();
     private final Class<? extends EventTracker> defaultEventTracker;
     private volatile boolean verifyEvents = true;
 
@@ -108,22 +101,18 @@ public class NostrPool implements NostrRelayComponent {
         return sendMessage(ev);
     }
 
-    protected AsyncTask<List<NostrMessageAck>> sendMessage(
-        NostrMessage message
-    ) {
+    protected AsyncTask<List<NostrMessageAck>> sendMessage(NostrMessage message) {
         List<AsyncTask<NostrMessageAck>> promises = new ArrayList<>();
         for (NostrRelay relay : relays) {
             assert dbg(() -> {
-                logger.finer(
-                    "sending message to relay " + relay.getUrl() + " " + message
-                );
+                logger.finer("sending message to relay " + relay.getUrl() + " " + message);
             });
             promises.add(relay.sendMessage(message));
         }
         Platform platform = NostrUtils.getPlatform();
         return platform.awaitAll(promises);
     }
- 
+
     public AsyncTask<NostrRelay> connectRelay(NostrRelay relay) {
         if (!relays.contains(relay)) {
             relays.add(relay);
@@ -138,7 +127,7 @@ public class NostrPool implements NostrRelayComponent {
         return relay.connect();
     }
 
-     public NostrRelay removeRelay(NostrRelay relay) {
+    public NostrRelay removeRelay(NostrRelay relay) {
         if (relays.contains(relay)) {
             relay.removeComponent(this);
             relays.remove(relay);
@@ -155,17 +144,11 @@ public class NostrPool implements NostrRelayComponent {
         return subscribe(filter, defaultEventTracker);
     }
 
-    public NostrSubscription subscribe(
-        NostrFilter filter,
-        Class<? extends EventTracker> eventTracker
-    ) {
+    public NostrSubscription subscribe(NostrFilter filter, Class<? extends EventTracker> eventTracker) {
         return subscribe(Arrays.asList(filter), eventTracker);
     }
 
-    public NostrSubscription subscribe(
-        Collection<NostrFilter> filters,
-        Class<? extends EventTracker> eventTracker
-    ) {
+    public NostrSubscription subscribe(Collection<NostrFilter> filters, Class<? extends EventTracker> eventTracker) {
         String subId = "nostr4j-" + subCounter.incrementAndGet();
         EventTracker tracker;
         try {
@@ -196,12 +179,7 @@ public class NostrPool implements NostrRelayComponent {
             },
             (s, closeMessage) -> {
                 assert dbg(() -> {
-                    logger.fine(
-                        "closing subscription " +
-                        s.getId() +
-                        " reason: " +
-                        closeMessage
-                    );
+                    logger.fine("closing subscription " + s.getId() + " reason: " + closeMessage);
                 });
 
                 subscriptions.remove(subId);
@@ -217,32 +195,19 @@ public class NostrPool implements NostrRelayComponent {
         return fetch(Arrays.asList(filter));
     }
 
-    public AsyncTask<List<SignedNostrEvent>> fetch(
-        Collection<NostrFilter> filters
-    ) {
+    public AsyncTask<List<SignedNostrEvent>> fetch(Collection<NostrFilter> filters) {
         return fetch(filters, 1, TimeUnit.MINUTES);
     }
 
-    public AsyncTask<List<SignedNostrEvent>> fetch(
-        NostrFilter filter,
-        long timeout,
-        TimeUnit unit
-    ) {
+    public AsyncTask<List<SignedNostrEvent>> fetch(NostrFilter filter, long timeout, TimeUnit unit) {
         return fetch(Arrays.asList(filter), timeout, unit);
     }
 
-    public AsyncTask<List<SignedNostrEvent>> fetch(
-        Collection<NostrFilter> filters,
-        long timeout,
-        TimeUnit unit
-    ) {
+    public AsyncTask<List<SignedNostrEvent>> fetch(Collection<NostrFilter> filters, long timeout, TimeUnit unit) {
         return fetch(filters, timeout, unit, NaiveEventTracker.class);
     }
 
-    public AsyncTask<List<SignedNostrEvent>> fetch(
-        NostrFilter filter,
-        Class<? extends EventTracker> eventTracker
-    ) {
+    public AsyncTask<List<SignedNostrEvent>> fetch(NostrFilter filter, Class<? extends EventTracker> eventTracker) {
         return fetch(Arrays.asList(filter), eventTracker);
     }
 
@@ -302,12 +267,7 @@ public class NostrPool implements NostrRelayComponent {
                 .listenEose(all -> {
                     if (all) {
                         assert dbg(() -> {
-                            logger.fine(
-                                "fetch eose for fetch " +
-                                sub.getId() +
-                                " with received events: " +
-                                events
-                            );
+                            logger.fine("fetch eose for fetch " + sub.getId() + " with received events: " + events);
                         });
                         res.accept(events);
                         ended.set(true);
@@ -317,24 +277,14 @@ public class NostrPool implements NostrRelayComponent {
                 })
                 .listenEvent((e, stored) -> {
                     assert dbg(() -> {
-                        logger.finer(
-                            "fetch event " +
-                            e +
-                            " for subscription " +
-                            sub.getId()
-                        );
+                        logger.finer("fetch event " + e + " for subscription " + sub.getId());
                     });
 
                     events.add(e);
                 })
                 .listenClose(reason -> {
                     assert dbg(() -> {
-                        logger.fine(
-                            "fetch close " +
-                            reason +
-                            " for subscription " +
-                            sub.getId()
-                        );
+                        logger.fine("fetch close " + reason + " for subscription " + sub.getId());
                     });
                 })
                 .open();
@@ -344,9 +294,7 @@ public class NostrPool implements NostrRelayComponent {
     @Override
     public boolean onRelayMessage(NostrRelay relay, NostrMessage rcv) {
         assert dbg(() -> {
-            logger.finer(
-                "received message from relay " + relay.getUrl() + " : " + rcv
-            );
+            logger.finer("received message from relay " + relay.getUrl() + " : " + rcv);
         });
 
         try {
@@ -363,9 +311,7 @@ public class NostrPool implements NostrRelayComponent {
                     // check if it is closed in every relay
                     boolean isClosedEverywhere = true;
                     for (NostrRelay r : relays) {
-                        NostrRelaySubManager m = r.getComponent(
-                            NostrRelaySubManager.class
-                        );
+                        NostrRelaySubManager m = r.getComponent(NostrRelaySubManager.class);
                         if (m != null && m.isActive(sub)) {
                             isClosedEverywhere = false;
                             break;
@@ -389,9 +335,7 @@ public class NostrPool implements NostrRelayComponent {
                         subscriptions.remove(subId);
                     }
                 } else {
-                    logger.warning(
-                        "received closed for unknown subscription " + subId
-                    );
+                    logger.warning("received closed for unknown subscription " + subId);
                 }
             } else if (rcv instanceof NostrEOSEMessage) {
                 NostrEOSEMessage msg = (NostrEOSEMessage) rcv;
@@ -401,9 +345,7 @@ public class NostrPool implements NostrRelayComponent {
                     // check if it is eosed in every relay
                     boolean isEOSEEverywhere = true;
                     for (NostrRelay r : relays) {
-                        NostrRelaySubManager m = r.getComponent(
-                            NostrRelaySubManager.class
-                        );
+                        NostrRelaySubManager m = r.getComponent(NostrRelaySubManager.class);
                         if (m != null && m.isActive(sub) && !m.isEose(sub)) {
                             isEOSEEverywhere = false;
                             break;
@@ -419,51 +361,33 @@ public class NostrPool implements NostrRelayComponent {
                     );
                     sub.callEoseListeners(isEOSEEverywhere);
                 } else {
-                    logger.warning(
-                        "received invalid eose for subscription " + subId
-                    );
+                    logger.warning("received invalid eose for subscription " + subId);
                 }
             } else if (rcv instanceof NostrNoticeMessage) {
                 NostrNoticeMessage msg = (NostrNoticeMessage) rcv;
                 String eventMessage = msg.getMessage();
-                logger.info(
-                    "Received notice from relay " +
-                    relay.getUrl() +
-                    ": " +
-                    eventMessage
-                );
-                noticeListener.forEach(listener ->
-                    listener.onNotice(relay, eventMessage, null)
-                );
+                logger.info("Received notice from relay " + relay.getUrl() + ": " + eventMessage);
+                noticeListener.forEach(listener -> listener.onNotice(relay, eventMessage, null));
             } else if (rcv instanceof ReceivedSignedNostrEvent) {
                 ReceivedSignedNostrEvent e = (ReceivedSignedNostrEvent) rcv;
                 String subId = e.getSubId();
                 NostrSubscription sub = subscriptions.get(subId);
                 if (sub != null) {
                     assert dbg(() -> {
-                        logger.finer(
-                            "received event for subscription " + subId
-                        );
+                        logger.finer("received event for subscription " + subId);
                     });
                     // if (verifyEvents && !e.verify()) throw new Exception(
                     //     "Event signature is invalid"
                     // );
                     if (!sub.eventTracker.seen(e)) {
                         assert dbg(() -> {
-                            logger.finest(
-                                "Event not seen " +
-                                e.getId() +
-                                " for subscription " +
-                                subId
-                            );
+                            logger.finest("Event not seen " + e.getId() + " for subscription " + subId);
                         });
 
                         boolean stored = false;
 
                         // check if current relay reached EOSE
-                        NostrRelaySubManager m = relay.getComponent(
-                            NostrRelaySubManager.class
-                        );
+                        NostrRelaySubManager m = relay.getComponent(NostrRelaySubManager.class);
                         if (m != null && m.isActive(sub) && !m.isEose(sub)) {
                             stored = true;
                         }
@@ -475,21 +399,11 @@ public class NostrPool implements NostrRelayComponent {
 
                     } else {
                         assert dbg(() -> {
-                            logger.finest(
-                                "Event already seen " +
-                                e.getId() +
-                                " for subscription " +
-                                subId
-                            );
+                            logger.finest("Event already seen " + e.getId() + " for subscription " + subId);
                         });
                     }
                 } else {
-                    logger.warning(
-                        "Received event for unknown subscription " +
-                        subId +
-                        " " +
-                        rcv
-                    );
+                    logger.warning("Received event for unknown subscription " + subId + " " + rcv);
                 }
             }
         } catch (Throwable t) {
@@ -536,9 +450,7 @@ public class NostrPool implements NostrRelayComponent {
 
     @Override
     public boolean onRelayError(NostrRelay relay, Throwable error) {
-        noticeListener.forEach(listener ->
-            listener.onNotice(relay, error.getMessage(), error)
-        );
+        noticeListener.forEach(listener -> listener.onNotice(relay, error.getMessage(), error));
         return true;
     }
 
@@ -553,11 +465,7 @@ public class NostrPool implements NostrRelayComponent {
     }
 
     @Override
-    public boolean onRelayDisconnect(
-        NostrRelay relay,
-        String reason,
-        boolean byClient
-    ) {
+    public boolean onRelayDisconnect(NostrRelay relay, String reason, boolean byClient) {
         return true;
     }
 

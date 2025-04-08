@@ -72,10 +72,8 @@ public class NostrClient extends JFrame {
     private static final Logger rootLogger = TestLogger.getRoot(Level.FINEST);
 
     // Metadata cache
-    private static final Map<String, AsyncTask<Nip24Metadata>> metadataCache =
-        new ConcurrentHashMap<>();
-    private static final Map<String, String> nameCache =
-        new ConcurrentHashMap<>();
+    private static final Map<String, AsyncTask<Nip24Metadata>> metadataCache = new ConcurrentHashMap<>();
+    private static final Map<String, String> nameCache = new ConcurrentHashMap<>();
 
     // UI Components
     private JPanel contentPanel;
@@ -99,13 +97,7 @@ public class NostrClient extends JFrame {
     private byte[] newEventSoundData;
     private byte[] gmSoundData;
     private boolean soundEnabled = true;
-    private final AudioFormat audioFormat = new AudioFormat(
-        44100,
-        16,
-        1,
-        true,
-        false
-    );
+    private final AudioFormat audioFormat = new AudioFormat(44100, 16, 1, true, false);
 
     // Custom title bar components
     private JPanel titleBar;
@@ -196,9 +188,7 @@ public class NostrClient extends JFrame {
 
         // Custom scrollpane with 90s style
         JScrollPane scrollPane = new JScrollPane(contentContainerPanel);
-        scrollPane.setVerticalScrollBarPolicy(
-            JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED
-        );
+        scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
         scrollPane.setHorizontalScrollBarPolicy(
             JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED // Enable horizontal scrolling
         );
@@ -268,9 +258,7 @@ public class NostrClient extends JFrame {
             );
 
         // Create footer with load more button
-        JPanel footerPanel = new JPanel(
-            new FlowLayout(FlowLayout.CENTER, 10, 5)
-        );
+        JPanel footerPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 5));
         footerPanel.setOpaque(false);
 
         loadMoreButton = createCyberButton("LOAD MORE");
@@ -295,8 +283,7 @@ public class NostrClient extends JFrame {
         add(mainPanel, BorderLayout.CENTER);
 
         // Add border to entire frame
-        getRootPane()
-            .setBorder(BorderFactory.createLineBorder(ELECTRIC_BLUE, 2));
+        getRootPane().setBorder(BorderFactory.createLineBorder(ELECTRIC_BLUE, 2));
 
         // Initialize Nostr connection
         initNostr();
@@ -326,17 +313,8 @@ public class NostrClient extends JFrame {
                     g2d.fillRect(0, 0, getWidth(), getHeight());
 
                     // Draw "scanner" line animation
-                    int scannerPos = (int) (
-                        System.currentTimeMillis() / 50 % getWidth()
-                    );
-                    g2d.setColor(
-                        new Color(
-                            ELECTRIC_BLUE.getRed(),
-                            ELECTRIC_BLUE.getGreen(),
-                            ELECTRIC_BLUE.getBlue(),
-                            128
-                        )
-                    );
+                    int scannerPos = (int) (System.currentTimeMillis() / 50 % getWidth());
+                    g2d.setColor(new Color(ELECTRIC_BLUE.getRed(), ELECTRIC_BLUE.getGreen(), ELECTRIC_BLUE.getBlue(), 128));
                     g2d.fillRect(scannerPos, 0, 2, getHeight());
 
                     g2d.dispose();
@@ -368,10 +346,7 @@ public class NostrClient extends JFrame {
                 public void mouseDragged(MouseEvent e) {
                     if (isDragging) {
                         Point currentLocation = getLocation();
-                        setLocation(
-                            currentLocation.x + e.getX() - dragOffset.x,
-                            currentLocation.y + e.getY() - dragOffset.y
-                        );
+                        setLocation(currentLocation.x + e.getX() - dragOffset.x, currentLocation.y + e.getY() - dragOffset.y);
                     }
                 }
             }
@@ -451,9 +426,7 @@ public class NostrClient extends JFrame {
                 BorderFactory.createEmptyBorder(5, 10, 5, 10)
             )
         );
-        searchBar.addActionListener(e ->
-            performSearch(searchBar.getText().trim())
-        );
+        searchBar.addActionListener(e -> performSearch(searchBar.getText().trim()));
 
         // Blinker symbol
         JLabel blinker = new JLabel("▋");
@@ -471,9 +444,7 @@ public class NostrClient extends JFrame {
 
         // Search button with 90s style
         JButton searchButton = createCyberButton("RUN");
-        searchButton.addActionListener(e ->
-            performSearch(searchBar.getText().trim())
-        );
+        searchButton.addActionListener(e -> performSearch(searchBar.getText().trim()));
 
         // Add components
         JPanel inputPanel = new JPanel(new BorderLayout(5, 0));
@@ -497,35 +468,11 @@ public class NostrClient extends JFrame {
                 // Background gradient
                 GradientPaint gradient;
                 if (getModel().isPressed()) {
-                    gradient =
-                        new GradientPaint(
-                            0,
-                            0,
-                            new Color(0, 60, 100),
-                            0,
-                            getHeight(),
-                            new Color(0, 30, 60)
-                        );
+                    gradient = new GradientPaint(0, 0, new Color(0, 60, 100), 0, getHeight(), new Color(0, 30, 60));
                 } else if (getModel().isRollover()) {
-                    gradient =
-                        new GradientPaint(
-                            0,
-                            0,
-                            new Color(0, 80, 120),
-                            0,
-                            getHeight(),
-                            new Color(0, 40, 80)
-                        );
+                    gradient = new GradientPaint(0, 0, new Color(0, 80, 120), 0, getHeight(), new Color(0, 40, 80));
                 } else {
-                    gradient =
-                        new GradientPaint(
-                            0,
-                            0,
-                            new Color(0, 70, 110),
-                            0,
-                            getHeight(),
-                            new Color(0, 30, 70)
-                        );
+                    gradient = new GradientPaint(0, 0, new Color(0, 70, 110), 0, getHeight(), new Color(0, 30, 70));
                 }
 
                 g2d.setPaint(gradient);
@@ -543,8 +490,7 @@ public class NostrClient extends JFrame {
                 Rectangle2D textBounds = fm.getStringBounds(displayText, g2d);
 
                 int textX = (int) (getWidth() - textBounds.getWidth()) / 2;
-                int textY = (int) ((getHeight() - textBounds.getHeight()) / 2) +
-                fm.getAscent();
+                int textY = (int) ((getHeight() - textBounds.getHeight()) / 2) + fm.getAscent();
 
                 g2d.setColor(HIGHLIGHT_COLOR);
                 g2d.drawString(displayText, textX, textY);
@@ -576,25 +522,9 @@ public class NostrClient extends JFrame {
                 // Background gradient based on selection state
                 GradientPaint gradient;
                 if (isSelected()) {
-                    gradient =
-                        new GradientPaint(
-                            0,
-                            0,
-                            new Color(0, 80, 50),
-                            0,
-                            getHeight(),
-                            new Color(0, 40, 30)
-                        );
+                    gradient = new GradientPaint(0, 0, new Color(0, 80, 50), 0, getHeight(), new Color(0, 40, 30));
                 } else {
-                    gradient =
-                        new GradientPaint(
-                            0,
-                            0,
-                            new Color(80, 0, 50),
-                            0,
-                            getHeight(),
-                            new Color(40, 0, 30)
-                        );
+                    gradient = new GradientPaint(0, 0, new Color(80, 0, 50), 0, getHeight(), new Color(40, 0, 30));
                 }
 
                 g2d.setPaint(gradient);
@@ -612,8 +542,7 @@ public class NostrClient extends JFrame {
                 Rectangle2D textBounds = fm.getStringBounds(displayText, g2d);
 
                 int textX = (int) (getWidth() - textBounds.getWidth()) / 2;
-                int textY = (int) ((getHeight() - textBounds.getHeight()) / 2) +
-                fm.getAscent();
+                int textY = (int) ((getHeight() - textBounds.getHeight()) / 2) + fm.getAscent();
 
                 g2d.setColor(isSelected() ? LIME_GREEN : NEON_PINK);
                 g2d.drawString(displayText, textX, textY);
@@ -642,17 +571,9 @@ public class NostrClient extends JFrame {
 
         Border outside = BorderFactory.createMatteBorder(1, 1, 1, 1, darker);
         Border inside = BorderFactory.createMatteBorder(1, 1, 1, 1, brighter);
-        Border center = BorderFactory.createEmptyBorder(
-            thickness - 2,
-            thickness - 2,
-            thickness - 2,
-            thickness - 2
-        );
+        Border center = BorderFactory.createEmptyBorder(thickness - 2, thickness - 2, thickness - 2, thickness - 2);
 
-        return BorderFactory.createCompoundBorder(
-            outside,
-            BorderFactory.createCompoundBorder(center, inside)
-        );
+        return BorderFactory.createCompoundBorder(outside, BorderFactory.createCompoundBorder(center, inside));
     }
 
     private void initNostr() {
@@ -661,17 +582,12 @@ public class NostrClient extends JFrame {
 
         // Show notice in a cyber dialog
         this.pool.addNoticeListener((relay, notice, ex) ->
-                SwingUtilities.invokeLater(() ->
-                    showCyberMessageBox("SYSTEM NOTICE", notice)
-                )
+                SwingUtilities.invokeLater(() -> showCyberMessageBox("SYSTEM NOTICE", notice))
             );
 
         // Subscribe to events
         NostrSubscription sub =
-            this.pool.subscribe(
-                    Arrays.asList(new NostrFilter().kind(1).limit(10)),
-                    FailOnDoubleTracker.class
-                );
+            this.pool.subscribe(Arrays.asList(new NostrFilter().kind(1).limit(10)), FailOnDoubleTracker.class);
 
         sub.listenEvent((event, stored) -> addEventToFeed(event, true));
         sub.open();
@@ -686,28 +602,16 @@ public class NostrClient extends JFrame {
         int[] durations = { 80, 80, 80, 150 };
 
         for (int i = 0; i < frequencies.length; i++) {
-            byte[] note = generateRetroSound(
-                frequencies[i],
-                durations[i],
-                i % 3
-            );
+            byte[] note = generateRetroSound(frequencies[i], durations[i], i % 3);
 
             // Create tiny gap between notes
             byte[] gap = new byte[220];
 
             // Combine into sequence
-            byte[] combined = new byte[sequence.length +
-            note.length +
-            gap.length];
+            byte[] combined = new byte[sequence.length + note.length + gap.length];
             System.arraycopy(sequence, 0, combined, 0, sequence.length);
             System.arraycopy(note, 0, combined, sequence.length, note.length);
-            System.arraycopy(
-                gap,
-                0,
-                combined,
-                sequence.length + note.length,
-                gap.length
-            );
+            System.arraycopy(gap, 0, combined, sequence.length + note.length, gap.length);
 
             sequence = combined;
         }
@@ -716,11 +620,7 @@ public class NostrClient extends JFrame {
         playSound(sequence);
     }
 
-    private byte[] generateRetroSound(
-        float baseFrequency,
-        int duration,
-        int waveType
-    ) {
+    private byte[] generateRetroSound(float baseFrequency, int duration, int waveType) {
         int sampleRate = (int) audioFormat.getSampleRate();
         int samples = (duration * sampleRate) / 1000;
         byte[] output = new byte[samples * 2]; // 16-bit samples
@@ -744,10 +644,7 @@ public class NostrClient extends JFrame {
                     sample = Math.sin(angle) >= 0 ? 1.0 : -1.0;
                     break;
                 case 1: // Triangle wave (softer retro sound)
-                    sample =
-                        2.0 *
-                        Math.abs(angle % (2 * Math.PI) / Math.PI - 1.0) -
-                        1.0;
+                    sample = 2.0 * Math.abs(angle % (2 * Math.PI) / Math.PI - 1.0) - 1.0;
                     break;
                 case 2: // Sawtooth (classic 90s synth sound)
                     sample = (angle % (2 * Math.PI)) / Math.PI - 1.0;
@@ -770,16 +667,14 @@ public class NostrClient extends JFrame {
                 envelope = normalizedTime / attackTime;
             } else if (normalizedTime < attackTime + decayTime) {
                 // Decay phase - ramp down to sustain level
-                double decayProgress =
-                    (normalizedTime - attackTime) / decayTime;
+                double decayProgress = (normalizedTime - attackTime) / decayTime;
                 envelope = 1.0 - (decayProgress * (1.0 - sustainLevel));
             } else if (normalizedTime < 1.0 - releaseTime) {
                 // Sustain phase - maintain level
                 envelope = sustainLevel;
             } else {
                 // Release phase - ramp down to zero
-                double releaseProgress =
-                    (normalizedTime - (1.0 - releaseTime)) / releaseTime;
+                double releaseProgress = (normalizedTime - (1.0 - releaseTime)) / releaseTime;
                 envelope = sustainLevel * (1.0 - releaseProgress);
             }
 
@@ -855,9 +750,7 @@ public class NostrClient extends JFrame {
             // Play startup sound
             generateInitSound();
         } catch (Exception e) {
-            System.err.println(
-                "Could not initialize sounds: " + e.getMessage()
-            );
+            System.err.println("Could not initialize sounds: " + e.getMessage());
         }
     }
 
@@ -942,19 +835,12 @@ public class NostrClient extends JFrame {
 
         // Perform search
         pool.unsubscribeAll();
-        NostrSubscription sub = pool.subscribe(
-            Arrays.asList(
-                new NostrSearchFilter().kind(1).limit(10).search(query)
-            )
-        );
+        NostrSubscription sub = pool.subscribe(Arrays.asList(new NostrSearchFilter().kind(1).limit(10).search(query)));
 
         sub.listenEvent((event, stored) -> {
             SwingUtilities.invokeLater(() -> {
                 // Remove searching label on first result
-                if (
-                    contentPanel.getComponentCount() == 1 &&
-                    contentPanel.getComponent(0) == loadingPanel
-                ) {
+                if (contentPanel.getComponentCount() == 1 && contentPanel.getComponent(0) == loadingPanel) {
                     contentPanel.removeAll();
                 }
                 addEventToFeed(event, true);
@@ -973,9 +859,7 @@ public class NostrClient extends JFrame {
         JPanel eventPanel = createEventPanel(event);
 
         // Set maximum width and alignment
-        eventPanel.setMaximumSize(
-            new Dimension(Short.MAX_VALUE, eventPanel.getMaximumSize().height)
-        );
+        eventPanel.setMaximumSize(new Dimension(Short.MAX_VALUE, eventPanel.getMaximumSize().height));
         eventPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         if (top) {
@@ -994,14 +878,7 @@ public class NostrClient extends JFrame {
                 int y = getHeight() / 2;
 
                 // Main line
-                g2d.setColor(
-                    new Color(
-                        ELECTRIC_BLUE.getRed(),
-                        ELECTRIC_BLUE.getGreen(),
-                        ELECTRIC_BLUE.getBlue(),
-                        80
-                    )
-                );
+                g2d.setColor(new Color(ELECTRIC_BLUE.getRed(), ELECTRIC_BLUE.getGreen(), ELECTRIC_BLUE.getBlue(), 80));
                 g2d.drawLine(0, y, getWidth(), y);
 
                 // Highlight points
@@ -1059,14 +936,7 @@ public class NostrClient extends JFrame {
                 Graphics2D g2d = (Graphics2D) g.create();
 
                 // Background gradient
-                GradientPaint gradient = new GradientPaint(
-                    0,
-                    0,
-                    new Color(30, 30, 60),
-                    0,
-                    getHeight(),
-                    new Color(20, 20, 45)
-                );
+                GradientPaint gradient = new GradientPaint(0, 0, new Color(30, 30, 60), 0, getHeight(), new Color(20, 20, 45));
                 g2d.setPaint(gradient);
                 g2d.fillRect(0, 0, getWidth(), getHeight());
 
@@ -1104,10 +974,7 @@ public class NostrClient extends JFrame {
                 @Override
                 public void mouseClicked(MouseEvent e) {
                     copyToClipboard(fullPubkey);
-                    showCyberMessageBox(
-                        "SYSTEM",
-                        "PUBKEY COPIED TO SYSTEM BUFFER"
-                    );
+                    showCyberMessageBox("SYSTEM", "PUBKEY COPIED TO SYSTEM BUFFER");
                 }
             }
         );
@@ -1125,10 +992,7 @@ public class NostrClient extends JFrame {
                 @Override
                 public void mouseClicked(MouseEvent e) {
                     copyToClipboard(eventId);
-                    showCyberMessageBox(
-                        "SYSTEM",
-                        "EVENT ID COPIED TO SYSTEM BUFFER"
-                    );
+                    showCyberMessageBox("SYSTEM", "EVENT ID COPIED TO SYSTEM BUFFER");
                 }
             }
         );
@@ -1141,9 +1005,7 @@ public class NostrClient extends JFrame {
         authorInfoPanel.add(idPanel, BorderLayout.SOUTH);
 
         // Timestamp with futuristic style
-        JLabel timestampLabel = new JLabel(
-            formatTimestamp(event.getCreatedAt().getEpochSecond())
-        );
+        JLabel timestampLabel = new JLabel(formatTimestamp(event.getCreatedAt().getEpochSecond()));
         timestampLabel.setFont(new Font("Courier New", Font.BOLD, 11));
         timestampLabel.setForeground(NEON_PINK);
         timestampLabel.setHorizontalAlignment(SwingConstants.RIGHT);
@@ -1153,9 +1015,7 @@ public class NostrClient extends JFrame {
 
         // Create main content panel that can hold both text and images
         JPanel contentMainPanel = new JPanel();
-        contentMainPanel.setLayout(
-            new BoxLayout(contentMainPanel, BoxLayout.Y_AXIS)
-        );
+        contentMainPanel.setLayout(new BoxLayout(contentMainPanel, BoxLayout.Y_AXIS));
         contentMainPanel.setOpaque(false);
 
         // Content with cyber styling
@@ -1174,9 +1034,7 @@ public class NostrClient extends JFrame {
 
         JScrollPane contentScroll = new JScrollPane(contentArea);
         contentScroll.setPreferredSize(new Dimension(10, 100));
-        contentScroll.setBorder(
-            BorderFactory.createLineBorder(ELECTRIC_BLUE, 1)
-        );
+        contentScroll.setBorder(BorderFactory.createLineBorder(ELECTRIC_BLUE, 1));
         contentScroll.setOpaque(false);
         contentScroll.getViewport().setOpaque(false);
 
@@ -1245,10 +1103,7 @@ public class NostrClient extends JFrame {
 
         // Check for image URLs in content
         String content = event.getContent();
-        Pattern pattern = Pattern.compile(
-            "(https?://\\S+\\.(jpg|jpeg|png|gif|bmp))",
-            Pattern.CASE_INSENSITIVE
-        );
+        Pattern pattern = Pattern.compile("(https?://\\S+\\.(jpg|jpeg|png|gif|bmp))", Pattern.CASE_INSENSITIVE);
         java.util.regex.Matcher matcher = pattern.matcher(content);
 
         // If image URLs are found, create an image panel
@@ -1260,19 +1115,13 @@ public class NostrClient extends JFrame {
                 // Loading indicator with 90s cyber style
                 JPanel imageContainer = new JPanel(new BorderLayout());
                 imageContainer.setOpaque(false);
-                imageContainer.setBorder(
-                    BorderFactory.createEmptyBorder(5, 0, 0, 0)
-                );
+                imageContainer.setBorder(BorderFactory.createEmptyBorder(5, 0, 0, 0));
 
-                JPanel loadingPanel = new JPanel(
-                    new FlowLayout(FlowLayout.CENTER)
-                );
+                JPanel loadingPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
                 loadingPanel.setOpaque(false);
 
                 JLabel loadingLabel = new JLabel(
-                    "LOADING IMAGE: [" +
-                    imageUrl.substring(0, Math.min(imageUrl.length(), 30)) +
-                    "...]"
+                    "LOADING IMAGE: [" + imageUrl.substring(0, Math.min(imageUrl.length(), 30)) + "...]"
                 );
                 loadingLabel.setFont(new Font("Courier New", Font.ITALIC, 11));
                 loadingLabel.setForeground(ELECTRIC_BLUE);
@@ -1304,9 +1153,7 @@ public class NostrClient extends JFrame {
                     URL url = new URL(imageUrl);
                     return new ImageIcon(url);
                 } catch (Exception e) {
-                    System.out.println(
-                        "Error loading image: " + e.getMessage()
-                    );
+                    System.out.println("Error loading image: " + e.getMessage());
                     return null;
                 }
             }
@@ -1324,17 +1171,9 @@ public class NostrClient extends JFrame {
                         int maxWidth = 400;
 
                         if (icon.getIconWidth() > maxWidth) {
-                            double ratio = (double) maxWidth /
-                            icon.getIconWidth();
-                            int newHeight = (int) (
-                                icon.getIconHeight() * ratio
-                            );
-                            img =
-                                img.getScaledInstance(
-                                    maxWidth,
-                                    newHeight,
-                                    Image.SCALE_SMOOTH
-                                );
+                            double ratio = (double) maxWidth / icon.getIconWidth();
+                            int newHeight = (int) (icon.getIconHeight() * ratio);
+                            img = img.getScaledInstance(maxWidth, newHeight, Image.SCALE_SMOOTH);
                             icon = new ImageIcon(img);
                         }
 
@@ -1342,10 +1181,7 @@ public class NostrClient extends JFrame {
                         JPanel imageWrapper = new JPanel(new BorderLayout());
                         imageWrapper.setBorder(
                             BorderFactory.createCompoundBorder(
-                                BorderFactory.createLineBorder(
-                                    ELECTRIC_BLUE,
-                                    1
-                                ),
+                                BorderFactory.createLineBorder(ELECTRIC_BLUE, 1),
                                 BorderFactory.createEmptyBorder(1, 1, 1, 1)
                             )
                         );
@@ -1359,12 +1195,8 @@ public class NostrClient extends JFrame {
                         container.repaint();
                     } else {
                         container.removeAll();
-                        JLabel errorLabel = new JLabel(
-                            ">> IMAGE LOAD FAILED <<"
-                        );
-                        errorLabel.setFont(
-                            new Font("Courier New", Font.BOLD, 11)
-                        );
+                        JLabel errorLabel = new JLabel(">> IMAGE LOAD FAILED <<");
+                        errorLabel.setFont(new Font("Courier New", Font.BOLD, 11));
                         errorLabel.setForeground(NEON_PINK);
                         errorLabel.setHorizontalAlignment(JLabel.CENTER);
                         container.add(errorLabel, BorderLayout.CENTER);
@@ -1372,9 +1204,7 @@ public class NostrClient extends JFrame {
                         container.repaint();
                     }
                 } catch (Exception e) {
-                    System.out.println(
-                        "Error displaying image: " + e.getMessage()
-                    );
+                    System.out.println("Error displaying image: " + e.getMessage());
                 }
             }
         };
@@ -1444,14 +1274,7 @@ public class NostrClient extends JFrame {
                 Graphics2D g2d = (Graphics2D) g.create();
 
                 // Background gradient
-                GradientPaint gradient = new GradientPaint(
-                    0,
-                    0,
-                    new Color(20, 20, 60),
-                    0,
-                    getHeight(),
-                    new Color(10, 10, 30)
-                );
+                GradientPaint gradient = new GradientPaint(0, 0, new Color(20, 20, 60), 0, getHeight(), new Color(10, 10, 30));
                 g2d.setPaint(gradient);
                 g2d.fillRect(0, 0, getWidth(), getHeight());
 
@@ -1481,9 +1304,7 @@ public class NostrClient extends JFrame {
         // Title bar
         JPanel titlePanel = new JPanel(new BorderLayout());
         titlePanel.setOpaque(false);
-        titlePanel.setBorder(
-            BorderFactory.createMatteBorder(0, 0, 1, 0, ELECTRIC_BLUE)
-        );
+        titlePanel.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, ELECTRIC_BLUE));
 
         JLabel titleLabel = new JLabel(":: " + title + " ::");
         titleLabel.setFont(new Font("Courier New", Font.BOLD, 14));
@@ -1517,10 +1338,7 @@ public class NostrClient extends JFrame {
 
         dialog.setContentPane(panel);
         dialog.pack();
-        dialog.setSize(
-            Math.max(300, dialog.getWidth()),
-            Math.max(150, dialog.getHeight())
-        );
+        dialog.setSize(Math.max(300, dialog.getWidth()), Math.max(150, dialog.getHeight()));
         dialog.setLocationRelativeTo(this);
         dialog.setVisible(true);
     }

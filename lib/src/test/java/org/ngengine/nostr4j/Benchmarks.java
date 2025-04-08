@@ -45,8 +45,7 @@ public class Benchmarks {
 
     private static final int EVENTS = 200;
 
-    public Collection<List<Object>> generateMessages(String subId)
-        throws Exception {
+    public Collection<List<Object>> generateMessages(String subId) throws Exception {
         Collection<List<Object>> messages = new ArrayList<>();
         String baseContent = "";
         for (int i = 0; i < EVENTS; i++) {
@@ -82,10 +81,7 @@ public class Benchmarks {
         relay.setVerifyEvents(!trusted);
         relay.setAsyncEventsVerification(false);
         pool.connectRelay(relay);
-        NostrSubscription sub = pool.subscribe(
-            new NostrFilter(),
-            PassthroughEventTracker.class
-        );
+        NostrSubscription sub = pool.subscribe(new NostrFilter(), PassthroughEventTracker.class);
         messages = generateMessages(sub.getSubId());
     }
 
@@ -110,20 +106,12 @@ public class Benchmarks {
         }
 
         sum /= iterations;
-        return (
-            "avg " +
-            ((double) sum / 1000000.) +
-            "ms min " +
-            ((double) min / 1000000.) +
-            "ms"
-        );
+        return ("avg " + ((double) sum / 1000000.) + "ms min " + ((double) min / 1000000.) + "ms");
     }
 
     //TODO: rewrite this as it doesn't work now that the relay is non blocking
     public static void main(String[] args) throws Exception {
-        System.out.println(
-            "Java version: " + System.getProperty("java.version")
-        );
+        System.out.println("Java version: " + System.getProperty("java.version"));
         Benchmarks benchmark = new Benchmarks(false, false);
         String t;
 
