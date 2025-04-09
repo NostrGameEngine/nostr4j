@@ -112,7 +112,23 @@ public class NostrPool implements NostrRelayComponent {
             promises.add(relay.sendMessage(message));
         }
         Platform platform = NostrUtils.getPlatform();
-        return platform.awaitAll(promises);
+        return platform.awaitAll(promises).compose((acks)->{
+            return platform.wrapPromise(
+                (r, e) -> {
+                    List<String> fails = new ArrayList<>();
+                    boolean atLeastOneSuccess = false;
+                    for(NostrMessageAck ack : acks) {
+                       if(ack.success){
+                            atLeastOneSuccess = true;
+                       }else{
+                            fails.add(ack.message);
+                       }
+                    }
+                    if(atLeastOneSuccess) r.accept(acks);
+                    else e.accept(new Exception("Failed to send message to all relays: " + String.join(", ", fails)));
+                }
+            );
+        });
     }
 
     public AsyncTask<NostrRelay> connectRelay(NostrRelay relay) {
