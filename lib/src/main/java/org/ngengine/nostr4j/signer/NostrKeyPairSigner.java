@@ -37,6 +37,7 @@ import org.ngengine.nostr4j.keypair.NostrKeyPair;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.nip44.Nip44;
 import org.ngengine.nostr4j.platform.AsyncTask;
+import org.ngengine.nostr4j.platform.Platform;
 import org.ngengine.nostr4j.utils.NostrUtils;
 
 public class NostrKeyPairSigner implements NostrSigner {
@@ -71,20 +72,42 @@ public class NostrKeyPairSigner implements NostrSigner {
     }
 
     @Override
-    public String encrypt(String message, NostrPublicKey publicKey) throws Exception {
-        byte[] sharedKey = Nip44.getConversationKey(keyPair.getPrivateKey(), publicKey);
-        return Nip44.encrypt(message, sharedKey);
+    public AsyncTask<String> encrypt(String message, NostrPublicKey publicKey) {
+        Platform platform = NostrUtils.getPlatform();
+        return platform.wrapPromise((res,rej)->{
+            try{
+                byte[] sharedKey = Nip44.getConversationKey(keyPair.getPrivateKey(), publicKey);
+                res.accept(Nip44.encrypt(message, sharedKey));
+            } catch (Exception e){
+                rej.accept(e);
+            }
+        });
     }
 
     @Override
-    public String decrypt(String message, NostrPublicKey publicKey) throws Exception {
-        byte[] sharedKey = Nip44.getConversationKey(keyPair.getPrivateKey(), publicKey);
-        return Nip44.decrypt(message, sharedKey);
+    public AsyncTask<String> decrypt(String message, NostrPublicKey publicKey)  {
+        Platform platform = NostrUtils.getPlatform();
+
+        return platform.wrapPromise((res,rej)->{
+            try{
+                byte[] sharedKey = Nip44.getConversationKey(keyPair.getPrivateKey(), publicKey);
+                res.accept(Nip44.decrypt(message, sharedKey));
+            } catch (Exception e){
+                rej.accept(e);
+            }
+        });
     }
 
     @Override
-    public NostrPublicKey getPublicKey() {
-        return keyPair.getPublicKey();
+    public AsyncTask<NostrPublicKey> getPublicKey() {
+        Platform platform = NostrUtils.getPlatform();
+        return platform.wrapPromise((res, rej) -> {
+            try {
+                res.accept(keyPair.getPublicKey());
+            } catch (Exception e) {
+                rej.accept(e);
+            }
+        });
     }
 
     @Override
@@ -119,4 +142,13 @@ public class NostrKeyPairSigner implements NostrSigner {
     public NostrKeyPair getKeyPair() {
         return keyPair;
     }
+
+    @Override
+    public AsyncTask<NostrSigner> close() {
+        return NostrUtils.getPlatform().wrapPromise((res, rej) -> {
+            res.accept(this);
+        });
+    }
+
+    
 }
