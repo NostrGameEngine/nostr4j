@@ -549,6 +549,11 @@ public class JVMAsyncPlatform implements Platform {
                 });
             });
         }
+
+        @Override
+        public void close() {
+     
+        }
     }
 
     private NostrExecutor newVtExecutor() {
@@ -560,12 +565,14 @@ public class JVMAsyncPlatform implements Platform {
         return newVtExecutor();
     }
 
+    @Override
     public NostrExecutor newSubscriptionExecutor() {
         return newVtExecutor();
     }
 
+
     @Override
-    public NostrExecutor newPoolExecutor() {
+    public NostrExecutor newSignerExecutor() {
         return newVtExecutor();
     }
 

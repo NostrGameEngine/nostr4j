@@ -45,10 +45,10 @@ public class JVMThreadedPlatform extends JVMAsyncPlatform {
 
     private class TNostrExecutor implements NostrExecutor {
 
-        protected final ScheduledExecutorService executor;
+        protected final ScheduledExecutorService executor ;
 
-        public TNostrExecutor(ScheduledExecutorService executor) {
-            this.executor = executor;
+        public TNostrExecutor() {
+            this.executor = Executors.newScheduledThreadPool(1);;
         }
 
         @Override
@@ -80,23 +80,29 @@ public class JVMThreadedPlatform extends JVMAsyncPlatform {
                 );
             });
         }
-    }
 
-    private NostrExecutor newExecutor() {
-        ScheduledExecutorService executor = Executors.newScheduledThreadPool(1);
-        return new TNostrExecutor(executor);
-    }
-
-    public NostrExecutor newRelayExecutor() {
-        return newExecutor();
-    }
-
-    public NostrExecutor newSubscriptionExecutor() {
-        return newExecutor();
+        @Override
+        public void close() {
+            executor.shutdown();
+        }
     }
 
     @Override
-    public NostrExecutor newPoolExecutor() {
-        return newExecutor();
+    public NostrExecutor newRelayExecutor() {
+        return new TNostrExecutor();
     }
+
+    @Override
+
+    public NostrExecutor newSubscriptionExecutor() {
+        return new TNostrExecutor();
+    }
+
+
+    @Override
+    public NostrExecutor newSignerExecutor() {
+        return new TNostrExecutor();
+    }
+
+   
 }

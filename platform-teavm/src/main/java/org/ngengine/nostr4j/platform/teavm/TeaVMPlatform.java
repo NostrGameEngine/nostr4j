@@ -329,6 +329,11 @@ public class TeaVMPlatform implements Platform {
                                     (int) delayMs);
                 });
             }
+
+            @Override
+            public void close() {
+                 
+            }
         };
     }
 
@@ -338,7 +343,7 @@ public class TeaVMPlatform implements Platform {
     }
 
     @Override
-    public NostrExecutor newPoolExecutor() {
+    public NostrExecutor newSignerExecutor() {
         return newJsExecutor();
     }
 

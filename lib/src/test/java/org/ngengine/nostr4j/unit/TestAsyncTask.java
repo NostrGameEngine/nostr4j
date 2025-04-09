@@ -60,7 +60,7 @@ public class TestAsyncTask {
             (resolve, reject) -> {
                 resolve.accept("success");
             },
-            platform.newPoolExecutor()
+            platform.newSignerExecutor()
         );
         try {
             promise.await();
@@ -81,7 +81,7 @@ public class TestAsyncTask {
             (resolve, reject) -> {
                 reject.accept(new RuntimeException("failed"));
             },
-            platform.newPoolExecutor()
+            platform.newSignerExecutor()
         );
 
         try {
@@ -123,7 +123,7 @@ public class TestAsyncTask {
                 })
                     .start();
             },
-            platform.newPoolExecutor()
+            platform.newSignerExecutor()
         );
 
         promiseRef.set(promise);
@@ -145,7 +145,7 @@ public class TestAsyncTask {
                 (resolve, reject) -> {
                     resolve.accept(5);
                 },
-                platform.newPoolExecutor()
+                platform.newSignerExecutor()
             )
             .then(value -> ((Integer) value) * 2);
 
@@ -159,7 +159,7 @@ public class TestAsyncTask {
                 (resolve, reject) -> {
                     resolve.accept(5);
                 },
-                platform.newPoolExecutor()
+                platform.newSignerExecutor()
             )
             .then(value -> Integer.valueOf(((Integer) value) * 2))
             .then(value -> value + 3)
@@ -178,7 +178,7 @@ public class TestAsyncTask {
                     executionPath.add("start");
                     resolve.accept("step1");
                 },
-                platform.newPoolExecutor()
+                platform.newSignerExecutor()
             )
             .then(value -> {
                 executionPath.add((String) value);
@@ -220,7 +220,7 @@ public class TestAsyncTask {
                 (resolve, reject) -> {
                     reject.accept(new RuntimeException("test error"));
                 },
-                platform.newPoolExecutor()
+                platform.newSignerExecutor()
             )
             .catchException(error -> {
                 handlerCalled.set(true);
@@ -246,7 +246,7 @@ public class TestAsyncTask {
                 (resolve, reject) -> {
                     reject.accept(new RuntimeException("original error"));
                 },
-                platform.newPoolExecutor()
+                platform.newSignerExecutor()
             )
             .catchException(error -> {
                 // Verify we got the right error
@@ -271,7 +271,7 @@ public class TestAsyncTask {
                 (resolve, reject) -> {
                     resolve.accept(1);
                 },
-                platform.newPoolExecutor()
+                platform.newSignerExecutor()
             )
             .then(v -> {
                 counter.incrementAndGet();
@@ -332,7 +332,7 @@ public class TestAsyncTask {
                     })
                         .start();
                 },
-                platform.newPoolExecutor()
+                platform.newSignerExecutor()
             );
             promises.add(promise);
         }
@@ -365,7 +365,7 @@ public class TestAsyncTask {
                 })
                     .start();
             },
-            platform.newPoolExecutor()
+            platform.newSignerExecutor()
         );
 
         AsyncTask<Integer> promise2 = platform.promisify(
@@ -381,7 +381,7 @@ public class TestAsyncTask {
                 })
                     .start();
             },
-            platform.newPoolExecutor()
+            platform.newSignerExecutor()
         );
 
         // Wait for individual promises to resolve
@@ -423,7 +423,7 @@ public class TestAsyncTask {
                         })
                             .start();
                     },
-                    platform.newPoolExecutor()
+                    platform.newSignerExecutor()
                 )
             );
         }
@@ -468,7 +468,7 @@ public class TestAsyncTask {
                 (resolve, reject) -> {
                     resolve.accept("success");
                 },
-                platform.newPoolExecutor()
+                platform.newSignerExecutor()
             )
         );
 
@@ -486,7 +486,7 @@ public class TestAsyncTask {
                     })
                         .start();
                 },
-                platform.newPoolExecutor()
+                platform.newSignerExecutor()
             )
         );
 
@@ -496,7 +496,7 @@ public class TestAsyncTask {
                 (resolve, reject) -> {
                     resolve.accept("another success");
                 },
-                platform.newPoolExecutor()
+                platform.newSignerExecutor()
             )
         );
 
@@ -546,7 +546,7 @@ public class TestAsyncTask {
                         })
                             .start();
                     },
-                    platform.newPoolExecutor()
+                    platform.newSignerExecutor()
                 )
             );
         }
@@ -584,7 +584,7 @@ public class TestAsyncTask {
                         })
                             .start();
                     },
-                    platform.newPoolExecutor()
+                    platform.newSignerExecutor()
                 )
             );
         }

@@ -67,9 +67,10 @@ public interface Platform {
 
     NostrExecutor newRelayExecutor();
 
-    NostrExecutor newPoolExecutor();
 
     NostrExecutor newSubscriptionExecutor();
+
+    NostrExecutor newSignerExecutor();
 
     <T> AsyncTask<T> promisify(BiConsumer<Consumer<T>, Consumer<Throwable>> func, NostrExecutor executor);
 

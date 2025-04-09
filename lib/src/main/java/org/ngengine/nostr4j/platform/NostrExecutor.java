@@ -36,4 +36,6 @@ import java.util.concurrent.TimeUnit;
 public interface NostrExecutor {
     <T> AsyncTask<T> runLater(Callable<T> r, long delay, TimeUnit unit);
     <T> AsyncTask<T> run(Callable<T> r);
+
+    void close();
 }
