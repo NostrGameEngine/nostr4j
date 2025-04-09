@@ -37,6 +37,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -69,6 +70,7 @@ public class NostrPool implements NostrRelayComponent {
     private final Map<String, NostrSubscription> subscriptions = new ConcurrentHashMap<>();
     private final List<NostrNoticeListener> noticeListener = new CopyOnWriteArrayList<>();
     private final CopyOnWriteArrayList<NostrRelay> relays = new CopyOnWriteArrayList<>();
+    private final List<NostrRelay> relaysRO = Collections.unmodifiableList(relays);
     private final List<ScheduledAction> scheduledActions = new CopyOnWriteArrayList<>();
     private final Class<? extends EventTracker> defaultEventTracker;
     private volatile boolean verifyEvents = true;
@@ -452,12 +454,8 @@ public class NostrPool implements NostrRelayComponent {
         }
     }
 
-    public List<String> getRelays() {
-        List<String> urls = new ArrayList<>();
-        for (NostrRelay relay : relays) {
-            urls.add(relay.getUrl());
-        }
-        return urls;
+    public List<NostrRelay> getRelays() {
+        return relaysRO;
     }
 
     @Override
