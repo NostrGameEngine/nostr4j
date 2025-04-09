@@ -79,13 +79,15 @@ public class NostrSubscription extends NostrMessage {
     private final Collection<NostrSubEventListener> onEventListeners = new CopyOnWriteArrayList<>();
     private final Collection<NostrSubCloseListener> onCloseListeners = new CopyOnWriteArrayList<>();
 
-    private final NostrExecutor executor;
+    private NostrExecutor exc;
     private final Collection<NostrFilter> filters;
     private final Collection<NostrFilter> filtersRO;
 
     private final Function<NostrSubscription, AsyncTask<List<NostrMessageAck>>> onOpen;
     private final BiFunction<NostrSubscription, NostrSubCloseMessage, AsyncTask<List<NostrMessageAck>>> onClose;
     private final List<String> closeReasons = new ArrayList<>();
+
+    private boolean opened = false;
 
     /**
      * Creates a new subscription with the specified parameters.
@@ -103,10 +105,8 @@ public class NostrSubscription extends NostrMessage {
         Function<NostrSubscription, AsyncTask<List<NostrMessageAck>>> onOpen,
         BiFunction<NostrSubscription, NostrSubCloseMessage, AsyncTask<List<NostrMessageAck>>> onClose
     ) {
-        Platform platform = NostrUtils.getPlatform();
         this.subId = subId;
         this.eventTracker = eventTracker;
-        this.executor = platform.newSubscriptionExecutor();
         this.filters = filters;
         this.filtersRO = Collections.unmodifiableCollection(filters);
         this.onOpen = onOpen;
@@ -141,7 +141,10 @@ public class NostrSubscription extends NostrMessage {
      * @return The executor handling subscription tasks
      */
     protected NostrExecutor getExecutor() {
-        return this.executor;
+        if(this.exc==null){
+            throw new IllegalStateException("Subscription not opened yet");
+        }
+        return this.exc;
     }
 
     /**
@@ -159,7 +162,17 @@ public class NostrSubscription extends NostrMessage {
      * @return An async task representing the open operation
      */
     public AsyncTask<List<NostrMessageAck>> open() {
+        if(opened) {
+            throw new IllegalStateException("Subscription already opened");
+        }
+        Platform platform = NostrUtils.getPlatform();
+        this.exc = platform.newSubscriptionExecutor();
+        opened = true;
         return this.onOpen.apply(this);
+    }
+
+    public boolean isOpened() {
+        return opened;
     }
 
     /**
@@ -168,6 +181,12 @@ public class NostrSubscription extends NostrMessage {
      * @return An async task representing the close operation
      */
     public AsyncTask<List<NostrMessageAck>> close() {
+        Platform platform = NostrUtils.getPlatform();
+        if(!opened)return platform.wrapPromise((res,rej)->{
+            res.accept(Collections.emptyList());
+        });
+        opened= false;
+        this.exc.close();
         AsyncTask<List<NostrMessageAck>> out = this.onClose.apply(this, getCloseMessage());
         registerClosure("closed by client");
         callCloseListeners();
@@ -268,7 +287,7 @@ public class NostrSubscription extends NostrMessage {
     protected void callEoseListeners(boolean everyWhere) {
         if (onEoseListeners.isEmpty()) return;
         for (NostrSubEoseListener listener : onEoseListeners) {
-            this.executor.run(() -> {
+            this.getExecutor().run(() -> {
                     listener.onSubEose(everyWhere);
                     return null;
                 })
@@ -281,7 +300,7 @@ public class NostrSubscription extends NostrMessage {
     protected void callEventListeners(SignedNostrEvent event, boolean stored) {
         if (onEventListeners.isEmpty()) return;
         for (NostrSubEventListener listener : onEventListeners) {
-            this.executor.run(() -> {
+            this.getExecutor().run(() -> {
                     listener.onSubEvent(event, stored);
                     return null;
                 })
@@ -294,7 +313,7 @@ public class NostrSubscription extends NostrMessage {
     protected void callCloseListeners() {
         if (onCloseListeners.isEmpty()) return;
         for (NostrSubCloseListener listener : onCloseListeners) {
-            this.executor.run(() -> {
+            this.getExecutor().run(() -> {
                     listener.onSubClose(closeReasons);
                     return null;
                 })
