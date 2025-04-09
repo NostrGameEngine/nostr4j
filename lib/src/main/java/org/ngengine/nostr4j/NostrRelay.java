@@ -88,7 +88,7 @@ public class NostrRelay implements TransportListener {
     protected final String url;
     protected final List<NostrRelayComponent> listeners = new CopyOnWriteArrayList<>();
     protected final Map<String, NostrMessageAck> waitingEventsAck = new ConcurrentHashMap<>();
-    protected final NostrExecutor executor;
+    protected NostrExecutor executor;
 
     protected final ExponentialBackoff reconnectionBackoff = new ExponentialBackoff();
 
@@ -115,7 +115,6 @@ public class NostrRelay implements TransportListener {
             Platform platform = NostrUtils.getPlatform();
             this.connector = platform.newTransport();
             this.connector.addListener(this);
-            this.executor = platform.newRelayExecutor();
             this.messageQueue = platform.newConcurrentQueue(QueuedMessage.class);
             this.connectCallbacks = platform.newConcurrentQueue(Runnable.class);
             this.url = url;
@@ -311,6 +310,8 @@ public class NostrRelay implements TransportListener {
         Platform platform = NostrUtils.getPlatform();
 
         if (!this.connected && !this.connecting) {
+            this.executor = platform.newRelayExecutor();
+
             this.connecting = true;
             return platform.wrapPromise((res, rej) -> {
                 runInRelayExecutor(
@@ -357,6 +358,7 @@ public class NostrRelay implements TransportListener {
         this.connected = false;
         this.disconnectedByClient = true;
         this.connector.close(reason);
+        NostrExecutor executor = this.executor;
         Platform platform = NostrUtils.getPlatform();
         return platform.wrapPromise((ores, orej) -> {
             runInRelayExecutor(
@@ -376,6 +378,7 @@ public class NostrRelay implements TransportListener {
                             return;
                         }
                     }
+                    executor.close();
                     ores.accept(this);
                     rs0.accept(this);
                 },
