@@ -31,6 +31,8 @@
 package org.ngengine.nostr4j.platform.jvm;
 
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.security.*;
@@ -93,7 +95,10 @@ public class JVMAsyncPlatform implements Platform {
 
         Context() throws NoSuchAlgorithmException, NoSuchPaddingException {
             sha256 = MessageDigest.getInstance("SHA-256");
-            json = new Gson();
+            json =  new GsonBuilder()
+                .disableHtmlEscaping() 
+                .serializeNulls()
+                .create();
             secp256k1 = ECNamedCurveTable.getParameterSpec("secp256k1");
         }
     }
@@ -570,7 +575,7 @@ public class JVMAsyncPlatform implements Platform {
         return newVtExecutor();
     }
 
-
+  
     @Override
     public NostrExecutor newSignerExecutor() {
         return newVtExecutor();
