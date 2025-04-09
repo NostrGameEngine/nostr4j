@@ -435,17 +435,17 @@ public class NostrPool implements NostrRelayComponent {
         return true;
     }
 
-    public void close() {
+    public List<NostrRelay> close() {
         // close all subs
         for (NostrSubscription sub : subscriptions.values()) {
             sub.close();
         }
 
         // close all relays
-        for (NostrRelay relay : relays) {
-            relay.disconnect("closed by pool");
-        }
+        List<NostrRelay> closedRelays = new ArrayList<>();
+        closedRelays.addAll(relays);
         relays.clear();
+        return closedRelays;
     }
 
     public void unsubscribeAll() {
