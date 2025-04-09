@@ -64,8 +64,9 @@ public class UnsignedNostrEvent implements NostrEvent {
         return this;
     }
 
-    public void setTag(String... tag) {
+    public UnsignedNostrEvent setTag(String... tag) {
         tags.put(tag[0], tag);
+        return this;
     }
 
     @Override
