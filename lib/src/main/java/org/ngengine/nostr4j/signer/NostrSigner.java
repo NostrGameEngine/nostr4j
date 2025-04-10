@@ -42,14 +42,14 @@ public interface NostrSigner extends Cloneable, Serializable {
      * @param event the event to sign
      * @return an async task that will be completed with the signed event
      */
-    AsyncTask<SignedNostrEvent> sign(UnsignedNostrEvent event) ;
+    AsyncTask<SignedNostrEvent> sign(UnsignedNostrEvent event);
     /**
-     * Encrypt a message 
+     * Encrypt a message
      * @param message  the message to encrypt
      * @param publicKey the public key of the recipient
      * @return an async task that will be completed with the encrypted message
      */
-    AsyncTask<String> encrypt(String message, NostrPublicKey publicKey) ;
+    AsyncTask<String> encrypt(String message, NostrPublicKey publicKey);
     /**
      * Decrypt a message
      * @param message the message to decrypt
@@ -63,12 +63,11 @@ public interface NostrSigner extends Cloneable, Serializable {
      * @return an async task that will be completed with the public key
      */
 
-     AsyncTask<NostrPublicKey> getPublicKey() ;
+    AsyncTask<NostrPublicKey> getPublicKey();
 
     /**
      * Close the signer and terminate all its resources
      * @return an async task that will be completed when the signer is closed
      */
-     AsyncTask<NostrSigner> close();
- 
+    AsyncTask<NostrSigner> close();
 }

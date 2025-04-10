@@ -45,10 +45,10 @@ public class JVMThreadedPlatform extends JVMAsyncPlatform {
 
     private class TNostrExecutor implements NostrExecutor {
 
-        protected final ScheduledExecutorService executor ;
+        protected final ScheduledExecutorService executor;
 
         public TNostrExecutor() {
-            this.executor = Executors.newScheduledThreadPool(1);;
+            this.executor = Executors.newScheduledThreadPool(1);
         }
 
         @Override
@@ -93,16 +93,12 @@ public class JVMThreadedPlatform extends JVMAsyncPlatform {
     }
 
     @Override
-
     public NostrExecutor newSubscriptionExecutor() {
         return new TNostrExecutor();
     }
-
 
     @Override
     public NostrExecutor newSignerExecutor() {
         return new TNostrExecutor();
     }
-
-   
 }

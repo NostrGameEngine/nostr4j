@@ -1,0 +1,58 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "java",
+            "name": "Current File",
+            "request": "launch",
+            "mainClass": "${file}"
+        },
+        {
+            "type": "java",
+            "name": "Benchmarks",
+            "request": "launch",
+            "mainClass": "org.ngengine.nostr4j.Benchmarks",
+            "projectName": "lib"
+        },
+        {
+            "type": "java",
+            "name": "FullBenchmark",
+            "request": "launch",
+            "mainClass": "org.ngengine.nostr4j.FullBenchmark",
+            "projectName": "lib"
+        },
+        {
+            "type": "java",
+            "name": "TestBech32Performance",
+            "request": "launch",
+            "mainClass": "org.ngengine.nostr4j.TestBech32Performance",
+            "projectName": "lib"
+        },
+        {
+            "type": "java",
+            "name": "Nip46Signer",
+            "request": "launch",
+            "mainClass": "org.ngengine.nostr4j.cliclient.Nip46Signer",
+            "projectName": "lib",
+            "console": "integratedTerminal",
+            "vmArgs": "-ea"
+        },
+        {
+            "type": "java",
+            "name": "NostrCli",
+            "request": "launch",
+            "mainClass": "org.ngengine.nostr4j.cliclient.NostrCli",
+            "projectName": "lib"
+        },
+        {
+            "type": "java",
+            "name": "NostrClient",
+            "request": "launch",
+            "mainClass": "org.ngengine.nostr4j.client.NostrClient",
+            "projectName": "lib"
+        }
+    ]
+}

@@ -74,25 +74,25 @@ public class NostrKeyPairSigner implements NostrSigner {
     @Override
     public AsyncTask<String> encrypt(String message, NostrPublicKey publicKey) {
         Platform platform = NostrUtils.getPlatform();
-        return platform.wrapPromise((res,rej)->{
-            try{
+        return platform.wrapPromise((res, rej) -> {
+            try {
                 byte[] sharedKey = Nip44.getConversationKey(keyPair.getPrivateKey(), publicKey);
                 res.accept(Nip44.encrypt(message, sharedKey));
-            } catch (Exception e){
+            } catch (Exception e) {
                 rej.accept(e);
             }
         });
     }
 
     @Override
-    public AsyncTask<String> decrypt(String message, NostrPublicKey publicKey)  {
+    public AsyncTask<String> decrypt(String message, NostrPublicKey publicKey) {
         Platform platform = NostrUtils.getPlatform();
 
-        return platform.wrapPromise((res,rej)->{
-            try{
+        return platform.wrapPromise((res, rej) -> {
+            try {
                 byte[] sharedKey = Nip44.getConversationKey(keyPair.getPrivateKey(), publicKey);
                 res.accept(Nip44.decrypt(message, sharedKey));
-            } catch (Exception e){
+            } catch (Exception e) {
                 rej.accept(e);
             }
         });
@@ -145,10 +145,10 @@ public class NostrKeyPairSigner implements NostrSigner {
 
     @Override
     public AsyncTask<NostrSigner> close() {
-        return NostrUtils.getPlatform().wrapPromise((res, rej) -> {
-            res.accept(this);
-        });
+        return NostrUtils
+            .getPlatform()
+            .wrapPromise((res, rej) -> {
+                res.accept(this);
+            });
     }
-
-    
 }

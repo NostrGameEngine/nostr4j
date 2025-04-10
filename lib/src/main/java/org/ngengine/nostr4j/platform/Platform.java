@@ -67,7 +67,6 @@ public interface Platform {
 
     NostrExecutor newRelayExecutor();
 
-
     NostrExecutor newSubscriptionExecutor();
 
     NostrExecutor newSignerExecutor();
