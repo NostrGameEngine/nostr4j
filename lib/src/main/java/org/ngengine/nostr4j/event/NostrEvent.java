@@ -32,13 +32,14 @@ package org.ngengine.nostr4j.event;
 
 import static org.ngengine.nostr4j.utils.NostrUtils.dbg;
 
+import java.io.Serializable;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.utils.NostrUtils;
 
-public interface NostrEvent extends Cloneable {
+public interface NostrEvent extends Cloneable, Serializable {
     Instant getCreatedAt();
     int getKind();
     String getContent();

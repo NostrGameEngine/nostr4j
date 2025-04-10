@@ -30,13 +30,13 @@
  */
 package org.ngengine.nostr4j.nip24;
 
+import java.io.Serializable;
 import java.time.Instant;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.logging.Logger;
 import org.ngengine.nostr4j.NostrPool;
 import org.ngengine.nostr4j.event.NostrEvent;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
@@ -48,12 +48,12 @@ import org.ngengine.nostr4j.signer.NostrSigner;
 import org.ngengine.nostr4j.transport.NostrMessageAck;
 import org.ngengine.nostr4j.utils.NostrUtils;
 
-public final class Nip24Metadata {
+public class Nip24Metadata implements Serializable {
 
-    private static final Logger logger = Logger.getLogger(Nip24Metadata.class.getName());
+    private static final long serialVersionUID = 1L;
 
     public final Map<String, Object> metadata;
-    private final NostrEvent sourceEvent;
+    protected final NostrEvent sourceEvent;
 
     public Nip24Metadata(NostrEvent source) throws Exception {
         this.sourceEvent = source;

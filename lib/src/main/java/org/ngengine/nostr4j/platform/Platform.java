@@ -31,6 +31,7 @@
 package org.ngengine.nostr4j.platform;
 
 import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
 import java.util.List;
 import java.util.Queue;
 import java.util.function.BiConsumer;
@@ -80,4 +81,6 @@ public interface Platform {
     long getTimestampSeconds();
 
     <T> Queue<T> newConcurrentQueue(Class<T> claz);
+
+    AsyncTask<String> httpGet(String url, Duration timeout);
 }

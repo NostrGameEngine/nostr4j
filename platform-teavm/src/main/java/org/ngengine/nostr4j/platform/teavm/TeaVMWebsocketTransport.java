@@ -208,43 +208,6 @@ public class TeaVMWebsocketTransport implements NostrTransport {
         this.listeners.remove(listener);
     }
 
-    public AsyncTask<String> httpGet(String url) {
-        return this.platform.wrapPromise((res, rej) -> {
-                try {
-                    XMLHttpRequest xhr = XMLHttpRequest.create();
-                    xhr.open("GET", url);
-
-                    xhr.setOnReadyStateChange(
-                        new ReadyStateChangeHandler() {
-                            @Override
-                            public void stateChanged() {
-                                if (
-                                    xhr.getReadyState() == XMLHttpRequest.DONE
-                                ) {
-                                    int status = xhr.getStatus();
-                                    if (status >= 200 && status < 300) {
-                                        res.accept(xhr.getResponseText());
-                                    } else {
-                                        rej.accept(
-                                            new IOException(
-                                                "HTTP error: " +
-                                                status +
-                                                " " +
-                                                xhr.getStatusText()
-                                            )
-                                        );
-                                    }
-                                }
-                            }
-                        }
-                    );
-
-                    xhr.send();
-                } catch (Exception e) {
-                    rej.accept(e);
-                }
-            });
-    }
 
     @Override
     public boolean isConnected() {

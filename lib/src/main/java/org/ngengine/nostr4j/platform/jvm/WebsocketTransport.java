@@ -35,8 +35,6 @@ import static org.ngengine.nostr4j.utils.NostrUtils.dbg;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.net.http.WebSocket;
 import java.time.Duration;
 import java.util.List;
@@ -324,41 +322,5 @@ public class WebsocketTransport implements NostrTransport, WebSocket.Listener {
     @Override
     public void removeListener(TransportListener listener) {
         listeners.remove(listener);
-    }
-
-    public AsyncTask<String> httpGet(String url) {
-        return platform.wrapPromise((res, rej) -> {
-            try {
-                // Pre-allocate response object for better performance
-                HttpRequest request = HttpRequest
-                    .newBuilder()
-                    .uri(URI.create(url))
-                    .timeout(Duration.ofSeconds(30))
-                    .header("User-Agent", "Nostr4J")
-                    .GET()
-                    .build();
-
-                httpClient
-                    .sendAsync(request, HttpResponse.BodyHandlers.ofString())
-                    .handleAsync(
-                        (response, e) -> {
-                            if (e != null) {
-                                rej.accept(e);
-                                return null;
-                            }
-                            int statusCode = response.statusCode();
-                            if (statusCode >= 200 && statusCode < 300) {
-                                res.accept(response.body());
-                            } else {
-                                rej.accept(new IOException("HTTP error: " + statusCode));
-                            }
-                            return null;
-                        },
-                        executor
-                    );
-            } catch (Exception e) {
-                rej.accept(e);
-            }
-        });
     }
 }

@@ -44,7 +44,5 @@ public interface NostrTransport {
 
     void removeListener(TransportListener listener);
 
-    AsyncTask<String> httpGet(String url);
-
     boolean isConnected();
 }

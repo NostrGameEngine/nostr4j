@@ -30,6 +30,7 @@
  */
 package org.ngengine.nostr4j.event;
 
+import java.io.Serializable;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -51,7 +52,7 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
 
     private static final byte[] BECH32_PREVIX = "note".getBytes(StandardCharsets.UTF_8);
 
-    public static class Identifier {
+    public static class Identifier implements Serializable {
 
         public final String id;
         public final long createdAt;

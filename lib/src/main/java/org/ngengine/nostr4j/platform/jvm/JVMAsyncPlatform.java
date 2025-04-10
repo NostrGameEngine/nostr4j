@@ -32,9 +32,15 @@ package org.ngengine.nostr4j.platform.jvm;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import java.io.IOException;
 import java.math.BigInteger;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.security.*;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
@@ -611,6 +617,52 @@ public class JVMAsyncPlatform implements Platform {
                     rej.accept(e);
                 }
             });
+        });
+    }
+
+    @Override
+    public AsyncTask<String> httpGet(String url, Duration timeout) {
+        HttpClient.Builder b = HttpClient
+            .newBuilder()
+            .connectTimeout(timeout)
+            .followRedirects(HttpClient.Redirect.NORMAL)
+            .executor(executor);
+
+        HttpClient httpClient = b.build();
+        return wrapPromise((res, rej) -> {
+            try {
+                HttpRequest request = HttpRequest
+                    .newBuilder()
+                    .uri(URI.create(url))
+                    .timeout(Duration.ofSeconds(30))
+                    .header(
+                        "User-Agent",
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0 nostr4j/1.0"
+                    )
+                    .GET()
+                    .build();
+
+                httpClient
+                    .sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                    .handleAsync(
+                        (response, e) -> {
+                            if (e != null) {
+                                rej.accept(e);
+                                return null;
+                            }
+                            int statusCode = response.statusCode();
+                            if (statusCode >= 200 && statusCode < 300) {
+                                res.accept(response.body());
+                            } else {
+                                rej.accept(new IOException("HTTP error: " + statusCode));
+                            }
+                            return null;
+                        },
+                        executor
+                    );
+            } catch (Exception e) {
+                rej.accept(e);
+            }
         });
     }
 }

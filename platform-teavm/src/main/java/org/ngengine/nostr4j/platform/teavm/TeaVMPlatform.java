@@ -30,8 +30,10 @@
  */
 package org.ngengine.nostr4j.platform.teavm;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
@@ -50,6 +52,8 @@ import org.ngengine.nostr4j.platform.Platform;
 import org.ngengine.nostr4j.transport.NostrTransport;
 import org.ngengine.nostr4j.utils.NostrUtils;
 import org.teavm.jso.JSBody;
+import org.teavm.jso.ajax.ReadyStateChangeHandler;
+import org.teavm.jso.ajax.XMLHttpRequest;
 
 public class TeaVMPlatform implements Platform {
 
@@ -384,4 +388,42 @@ public class TeaVMPlatform implements Platform {
         }, null);
     }
 
+    @Override
+    public AsyncTask<String> httpGet(String url, Duration timeout) {
+        return wrapPromise((res, rej) -> {
+                try {
+                    XMLHttpRequest xhr = XMLHttpRequest.create();
+                    xhr.open("GET", url);
+
+                    xhr.setOnReadyStateChange(
+                        new ReadyStateChangeHandler() {
+                            @Override
+                            public void stateChanged() {
+                                if (
+                                    xhr.getReadyState() == XMLHttpRequest.DONE
+                                ) {
+                                    int status = xhr.getStatus();
+                                    if (status >= 200 && status < 300) {
+                                        res.accept(xhr.getResponseText());
+                                    } else {
+                                        rej.accept(
+                                            new IOException(
+                                                "HTTP error: " +
+                                                status +
+                                                " " +
+                                                xhr.getStatusText()
+                                            )
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                    );
+
+                    xhr.send();
+                } catch (Exception e) {
+                    rej.accept(e);
+                }
+            });
+    }
 }
