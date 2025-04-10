@@ -30,23 +30,24 @@
  */
 package org.ngengine.nostr4j.transport;
 
+import java.time.Instant;
 import java.util.function.BiConsumer;
 import org.ngengine.nostr4j.NostrRelay;
 
 public class NostrMessageAck {
 
-    public final long sentAt;
-    public boolean success;
-    public String message;
-    public final String id;
-    protected final NostrRelay relay;
-    protected final BiConsumer<NostrMessageAck, String> successCallback;
-    protected final BiConsumer<NostrMessageAck, String> failureCallback;
+    private final String id;
+    private final Instant sentAt;
+    private boolean success;
+    private String message;
+    private final NostrRelay relay;
+    private final BiConsumer<NostrMessageAck, String> successCallback;
+    private final BiConsumer<NostrMessageAck, String> failureCallback;
 
     NostrMessageAck(
         NostrRelay relay,
         String id,
-        long sentAt,
+        Instant sentAt,
         BiConsumer<NostrMessageAck, String> successCallback,
         BiConsumer<NostrMessageAck, String> failureCallback
     ) {
@@ -77,8 +78,28 @@ public class NostrMessageAck {
         this.message = message;
     }
 
-    public NostrRelay get() throws Throwable {
+    public NostrRelay get() throws Exception {
         if (success) return relay;
         throw new Exception(message);
+    }
+
+    public boolean isSuccess() {
+        return success;
+    }
+
+    public String getMessage() {
+        return message;
+    }
+
+    public NostrRelay getRelay() {
+        return relay;
+    }
+
+    public String getId() {
+        return id;
+    }
+
+    public Instant getSentAt() {
+        return sentAt;
     }
 }

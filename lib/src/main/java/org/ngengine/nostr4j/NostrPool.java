@@ -73,7 +73,6 @@ public class NostrPool implements NostrRelayComponent {
     private final List<NostrRelay> relaysRO = Collections.unmodifiableList(relays);
     private final List<ScheduledAction> scheduledActions = new CopyOnWriteArrayList<>();
     private final Class<? extends EventTracker> defaultEventTracker;
-    private volatile boolean verifyEvents = true;
 
     public NostrPool() {
         this(ForwardSlidingWindowEventTracker.class);
@@ -81,14 +80,6 @@ public class NostrPool implements NostrRelayComponent {
 
     public NostrPool(Class<? extends EventTracker> defaultEventTracker) {
         this.defaultEventTracker = defaultEventTracker;
-    }
-
-    public void setVerifyEvents(boolean verifyEvents) {
-        this.verifyEvents = verifyEvents;
-    }
-
-    public boolean isVerifyEvents() {
-        return verifyEvents;
     }
 
     public void addNoticeListener(NostrNoticeListener listener) {
@@ -119,10 +110,10 @@ public class NostrPool implements NostrRelayComponent {
                     List<String> fails = new ArrayList<>();
                     boolean atLeastOneSuccess = false;
                     for (NostrMessageAck ack : acks) {
-                        if (ack.success) {
+                        if (ack.isSuccess()) {
                             atLeastOneSuccess = true;
                         } else {
-                            fails.add(ack.message);
+                            fails.add(ack.getMessage());
                         }
                     }
                     if (atLeastOneSuccess) r.accept(acks); else e.accept(

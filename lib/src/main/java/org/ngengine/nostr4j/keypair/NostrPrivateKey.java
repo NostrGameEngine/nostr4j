@@ -40,7 +40,9 @@ import org.ngengine.nostr4j.utils.Bech32.Bech32Exception;
 import org.ngengine.nostr4j.utils.ByteBufferList;
 import org.ngengine.nostr4j.utils.NostrUtils;
 
-public class NostrPrivateKey implements NostrKey {
+public final class NostrPrivateKey implements NostrKey {
+
+    private static final long serialVersionUID = 1L;
 
     private static final byte[] BECH32_PREFIX = "nsec".getBytes(StandardCharsets.UTF_8);
 
@@ -204,13 +206,13 @@ public class NostrPrivateKey implements NostrKey {
 
         ByteBuffer b1 = this.data;
         ByteBuffer b2 = ((NostrPrivateKey) obj).data;
+
+        if (b1 == null || b2 == null) {
+            return false;
+        }
         if (b1 == b2) {
             assert data.position() == 0 : "Data position must be 0";
             return true;
-        }
-        if (b1 == null || b2 == null) {
-            assert data.position() == 0 : "Data position must be 0";
-            return false;
         }
         if (b1.limit() != b2.limit()) {
             assert data.position() == 0 : "Data position must be 0";
@@ -227,8 +229,20 @@ public class NostrPrivateKey implements NostrKey {
     }
 
     @Override
+    public int hashCode() {
+        if (data == null) return 0;
+        int hashcode = data.hashCode();
+        assert data.position() == 0 : "Data position must be 0";
+        return hashcode;
+    }
+
+    @Override
     public NostrPrivateKey clone() {
-        return fromBytes(data);
+        try {
+            return (NostrPrivateKey) super.clone();
+        } catch (Exception e) {
+            return fromBytes(data);
+        }
     }
 
     @Override

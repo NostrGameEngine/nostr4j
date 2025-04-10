@@ -31,6 +31,7 @@
 package org.ngengine.nostr4j.event;
 
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -43,9 +44,12 @@ import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.platform.AsyncTask;
 import org.ngengine.nostr4j.transport.NostrMessage;
 import org.ngengine.nostr4j.utils.Bech32;
+import org.ngengine.nostr4j.utils.Bech32.Bech32Exception;
 import org.ngengine.nostr4j.utils.NostrUtils;
 
 public class SignedNostrEvent extends NostrMessage implements NostrEvent {
+
+    private static final byte[] BECH32_PREVIX = "note".getBytes(StandardCharsets.UTF_8);
 
     public static class Identifier {
 
@@ -67,6 +71,11 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
             Identifier e = (Identifier) obj;
             return e.id.equals(id);
         }
+
+        @Override
+        public int hashCode() {
+            return id.hashCode();
+        }
     }
 
     private final int kind;
@@ -75,8 +84,8 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
     private final String signature;
     private final String pubkey;
     private final Identifier identifier;
-    private String bech32Id;
 
+    private transient String bech32Id;
     private transient NostrPublicKey parsedPublicKey;
     private transient Collection<String[]> taglist;
 
@@ -200,12 +209,29 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
         if (obj == this) return true;
 
         SignedNostrEvent e = (SignedNostrEvent) obj;
-        return e.identifier.id == identifier.id;
+        return e.identifier.id.equals(identifier.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return identifier.id.hashCode();
     }
 
     @Override
     public SignedNostrEvent clone() {
-        return new SignedNostrEvent(identifier.id, pubkey, kind, content, identifier.createdAtInstant, signature, listTags());
+        try {
+            return (SignedNostrEvent) super.clone();
+        } catch (Exception e) {
+            return new SignedNostrEvent(
+                identifier.id,
+                pubkey,
+                kind,
+                content,
+                identifier.createdAtInstant,
+                signature,
+                listTags()
+            );
+        }
     }
 
     @Override
@@ -227,8 +253,10 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
             String id = getId();
             if (id == null) return null;
             ByteBuffer data = NostrUtils.hexToBytes(id);
-            return Bech32.bech32Encode(BECH32_PREVIX, data);
-        } catch (Exception e) {
+            bech32Id = Bech32.bech32Encode(BECH32_PREVIX, data);
+            assert data.position() == 0 : "Data position must be 0";
+            return bech32Id;
+        } catch (Bech32Exception e) {
             return null;
         }
     }
@@ -274,6 +302,16 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
 
         public String getSubId() {
             return subId;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            return super.equals(obj);
+        }
+
+        @Override
+        public int hashCode() {
+            return super.hashCode();
         }
     }
 

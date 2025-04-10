@@ -30,6 +30,7 @@
  */
 package org.ngengine.nostr4j.transport;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -99,10 +100,15 @@ public abstract class NostrMessage extends NostrMessageFragment {
         return toSerial().equals(that.toSerial());
     }
 
+    @Override
+    public int hashCode() {
+        return toSerial().hashCode();
+    }
+
     public static NostrMessageAck ack(
         NostrRelay relay,
         String id,
-        long sentAt,
+        Instant sentAt,
         BiConsumer<NostrMessageAck, String> successCallback,
         BiConsumer<NostrMessageAck, String> failureCallback
     ) {

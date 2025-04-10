@@ -77,7 +77,9 @@ import org.ngengine.nostr4j.utils.NostrUtils;
  */
 public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
 
-    private final Logger logger = Logger.getLogger(NostrNIP46Signer.class.getName());
+    private static final long serialVersionUID = 1L;
+
+    private static final Logger logger = Logger.getLogger(NostrNIP46Signer.class.getName());
 
     private static class ResponseListener {
 
@@ -128,13 +130,13 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
     private final NostrKeyPairSigner transportSigner;
     private final AtomicLong lastRequestId = new AtomicLong(0);
 
-    private transient NostrPool pool;
-    private transient Map<String, ResponseListener> listeners;
-    private transient NostrSubscription subscription;
-    private transient BiFunction<String, String, Consumer<Throwable>> challengeHandler;
-    private transient Map<String, PendingChallenge> pendingChallenges;
-    private transient NostrExecutor executor;
-    private transient boolean closed = false;
+    private transient volatile NostrPool pool;
+    private transient volatile Map<String, ResponseListener> listeners;
+    private transient volatile NostrSubscription subscription;
+    private transient volatile BiFunction<String, String, Consumer<Throwable>> challengeHandler;
+    private transient volatile Map<String, PendingChallenge> pendingChallenges;
+    private transient volatile NostrExecutor executor;
+    private transient volatile boolean closed = false;
 
     private Set<String> relays = new HashSet<>();
     private NostrPublicKey signerPubkey;
@@ -175,7 +177,7 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
         return connectUrl;
     }
 
-    // internal loop
+    // internal loop (runs in signer executor)
     private void loop() {
         try {
             // cancel all expired pending challenges
@@ -244,15 +246,16 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
                         l.cancel("Closed");
                     }
                 }
-                if (this.executor != null) {
-                    this.executor.close();
-                }
+
                 if (this.pendingChallenges != null) {
                     for (PendingChallenge c : pendingChallenges.values()) {
                         c.close.accept(new Exception("Closed"));
                     }
                 }
                 res.accept(this);
+                if (this.executor != null) {
+                    this.executor.close();
+                }
             } catch (Exception e) {
                 rej.accept(e);
             }
@@ -365,65 +368,82 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
 
     /*
      * Make sure everything is started and
-     * connected. Called internally
+     * connected. Called internally.
+     * Everything enqueued to this will run in the signer executor.
      */
-    private synchronized AsyncTask<List<NostrMessageAck>> check() {
+    private AsyncTask<List<NostrMessageAck>> check() {
         if (closed) throw new RuntimeException("Closed");
-        try {
-            Platform p = NostrUtils.getPlatform();
-            if (this.executor == null) {
-                logger.fine("Creating executor");
-                this.executor = p.newSignerExecutor();
-                this.loop();
-            }
+        Platform p = NostrUtils.getPlatform();
 
-            if (this.listeners == null) {
-                logger.finest("Creating listeners map");
-                this.listeners = new ConcurrentHashMap<>();
-            }
-
-            if (this.pendingChallenges == null) {
-                logger.finest("Creating pending challenges map");
-                this.pendingChallenges = new ConcurrentHashMap<>();
-            }
-
-            if (this.pool == null) {
-                logger.finest("Creating pool");
-                this.pool = new NostrPool();
-            }
-            for (String relay : relays) {
-                if (!this.pool.getRelays().stream().anyMatch(s -> s.getUrl().equals(relay))) {
-                    this.pool.connectRelay(new NostrRelay(relay));
+        if (this.executor == null) { // DCL
+            synchronized (this) {
+                if (this.executor == null) {
+                    logger.fine("Creating executor");
+                    this.executor = p.newSignerExecutor();
+                    this.loop();
                 }
             }
-            if (this.subscription == null) {
-                NostrFilter filter = new NostrFilter()
-                    .kind(24133)
-                    .tag("p", this.transportPubkey.asHex())
-                    .limit(100)
-                    .since(Instant.now().minusSeconds(60));
-                logger.finest("Creating subscription for filter: " + filter);
-                this.subscription = this.pool.subscribe(filter);
-                this.subscription.listen(this);
-            }
+        }
 
-            if (!this.subscription.isOpened()) {
-                logger.finest("Opening subscription: " + this.subscription);
-                return this.subscription.open();
-            } else {
-                assert dbg(() -> logger.finest("Subscription already opened: " + this.subscription));
-            }
-
-            return p.wrapPromise((res, rej) -> {
+        return p.promisify(
+            (res, rej) -> {
                 try {
-                    res.accept(new ArrayList<>());
+                    if (this.listeners == null) {
+                        logger.finest("Creating listeners map");
+                        this.listeners = new ConcurrentHashMap<>();
+                    }
+
+                    if (this.pendingChallenges == null) {
+                        logger.finest("Creating pending challenges map");
+                        this.pendingChallenges = new ConcurrentHashMap<>();
+                    }
+
+                    if (this.pool == null) {
+                        logger.finest("Creating pool");
+                        this.pool = new NostrPool();
+                    }
+                    for (String relay : relays) {
+                        if (!this.pool.getRelays().stream().anyMatch(s -> s.getUrl().equals(relay))) {
+                            this.pool.connectRelay(new NostrRelay(relay));
+                        }
+                    }
+                    if (this.subscription == null) {
+                        NostrFilter filter = new NostrFilter()
+                            .kind(24133)
+                            .tag("p", this.transportPubkey.asHex())
+                            .limit(100)
+                            .since(Instant.now().minusSeconds(60));
+                        logger.finest("Creating subscription for filter: " + filter);
+                        this.subscription = this.pool.subscribe(filter);
+                        this.subscription.listen(this);
+                    }
+
+                    if (!this.subscription.isOpened()) {
+                        logger.finest("Opening subscription: " + this.subscription);
+                        this.subscription.open()
+                            .catchException(exc -> {
+                                rej.accept(exc);
+                            })
+                            .then(all -> {
+                                logger.fine("Subscription opened: " + this.subscription);
+                                res.accept(all);
+                                return null;
+                            });
+                    } else {
+                        assert dbg(() -> logger.finest("Subscription already opened: " + this.subscription));
+                    }
+
+                    try {
+                        res.accept(new ArrayList<>());
+                    } catch (Exception e) {
+                        rej.accept(e);
+                    }
                 } catch (Exception e) {
                     rej.accept(e);
                 }
-            });
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to check connection", e);
-        }
+            },
+            this.executor
+        );
     }
 
     @Override

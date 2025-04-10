@@ -142,7 +142,19 @@ public class UnsignedNostrEvent implements NostrEvent {
     }
 
     @Override
+    public int hashCode() {
+        return toString().hashCode();
+    }
+
+    @Override
     public UnsignedNostrEvent clone() {
-        return new UnsignedNostrEvent().setKind(kind).setContent(content).setTags(listTags()).setCreatedAt(createdAt);
+        try {
+            UnsignedNostrEvent clone = (UnsignedNostrEvent) super.clone();
+            clone.tags = new HashMap<>(this.tags);
+            clone.taglist = null;
+            return clone;
+        } catch (CloneNotSupportedException e) {
+            return new UnsignedNostrEvent().setKind(kind).setContent(content).setTags(listTags()).setCreatedAt(createdAt);
+        }
     }
 }

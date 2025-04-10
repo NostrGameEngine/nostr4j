@@ -55,12 +55,12 @@ import org.ngengine.nostr4j.transport.NostrTransport;
 public class WebsocketTransport implements NostrTransport, WebSocket.Listener {
 
     private static final Logger logger = Logger.getLogger(WebsocketTransport.class.getName());
-    private static final int DEFAULT_MAX_MESSAGE_SIZE = 65536;
+    private static final int DEFAULT_MAX_MESSAGE_SIZE = 65_536;
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(10);
     private static final int BUFFER_INITIAL_SIZE = 8192;
 
     private volatile WebSocket openWebSocket;
-    private final int maxMessageSize = DEFAULT_MAX_MESSAGE_SIZE;
+    private static final int maxMessageSize = DEFAULT_MAX_MESSAGE_SIZE;
     private final StringBuilder messageBuffer = new StringBuilder(BUFFER_INITIAL_SIZE);
 
     private final List<TransportListener> listeners = new CopyOnWriteArrayList<>();

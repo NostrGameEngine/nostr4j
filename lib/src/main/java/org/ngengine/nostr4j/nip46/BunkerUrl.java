@@ -47,7 +47,7 @@ import org.ngengine.nostr4j.keypair.NostrPublicKey;
 public class BunkerUrl implements Serializable, Cloneable {
 
     public final NostrPublicKey pubkey;
-    public String secret;
+    public final String secret;
     public final List<String> relays;
 
     public BunkerUrl(NostrPublicKey pubkey, String secret, List<String> relays) {
@@ -59,11 +59,16 @@ public class BunkerUrl implements Serializable, Cloneable {
     public BunkerUrl(NostrPublicKey pubkey, List<String> relays) {
         this.pubkey = pubkey;
         this.relays = relays;
+        this.secret = null;
     }
 
     @Override
     public BunkerUrl clone() {
-        return new BunkerUrl(pubkey, secret, relays);
+        try {
+            return (BunkerUrl) super.clone();
+        } catch (CloneNotSupportedException e) {
+            return new BunkerUrl(pubkey, secret, relays);
+        }
     }
 
     @Override

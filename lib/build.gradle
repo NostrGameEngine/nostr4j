@@ -6,9 +6,9 @@
  */
 
 plugins {
-    // Apply the java-library plugin for API and implementation separation.
     id 'java-library'
-   id("com.diffplug.spotless") version "7.0.2"
+    id("com.diffplug.spotless") version "7.0.2"
+    id("com.github.spotbugs") version "6.1.7"
 }
 spotless {
     java {
@@ -22,31 +22,37 @@ spotless {
     def wrapped = licenseText.readLines().collect { " * " + it }.join("\n")
     def header = "/**\n" + wrapped + "\n */"
     
-    // Apply the header using licenseHeader()
     licenseHeader(header, "package ")
   }
 }
+
 repositories {
-    // Use Maven Central for resolving dependencies.
     mavenCentral()
 }
 
 dependencies {
-    // Use JUnit test framework.
     testImplementation libs.junit
     
-    // Add JUnit 4 explicitly - if not already included in libs.junit
-    testImplementation 'junit:junit:4.13.2'
-    
+    spotbugsPlugins 'com.h3xstream.findsecbugs:findsecbugs-plugin:1.12.0'    
     implementation 'com.google.code.gson:gson:2.12.1'
     implementation 'org.bouncycastle:bcprov-jdk18on:1.80'
 }
 
-// Apply a specific Java toolchain to ease working on different environments.
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(21)
     }
+}
+
+spotbugs {
+    ignoreFailures = true
+    reportLevel = com.github.spotbugs.snom.Confidence.valueOf("MEDIUM")
+    toolVersion = '4.9.3'
+    excludeFilter = file("${rootDir}/spotbugs-exclude.xml")
+}
+
+spotbugsTest {
+    enabled = false
 }
 
 // Configure test task to use JUnit 4

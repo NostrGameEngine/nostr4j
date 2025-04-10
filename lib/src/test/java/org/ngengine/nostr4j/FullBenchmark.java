@@ -67,8 +67,6 @@ public class FullBenchmark {
         NostrPool reader = new NostrPool();
         reader.connectRelay(new NostrRelay("ws://127.0.0.1:8087"));
 
-        assert writer.isVerifyEvents();
-        assert reader.isVerifyEvents();
         String testId = System.currentTimeMillis() + "-" + Math.random();
         NostrKeyPairSigner signer = NostrKeyPairSigner.generate();
         List<String> track = new ArrayList<>();

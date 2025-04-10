@@ -32,7 +32,8 @@ package org.ngengine.nostr4j.utils;
 
 import java.util.concurrent.TimeUnit;
 
-public class ExponentialBackoff {
+// non thread safe
+public final class ExponentialBackoff {
 
     private final long initialDelay;
     private final long maxDelay;
@@ -40,9 +41,9 @@ public class ExponentialBackoff {
     private final long cooldown;
     private final TimeUnit timeUnit;
 
-    private volatile long currentDelay;
-    private volatile long nextAttemptTimestamp = 0;
-    private volatile long cooldownStartTimestamp = 0;
+    private long currentDelay;
+    private long nextAttemptTimestamp = 0;
+    private long cooldownStartTimestamp = 0;
 
     public ExponentialBackoff() {
         this(1, 2 * 60, 21, TimeUnit.SECONDS, 2.0f);

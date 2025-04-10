@@ -83,8 +83,7 @@ public class Benchmarks {
         public Benchmark(boolean trusted) throws Exception {
             NostrUtils.setPlatform(new TeaVMPlatform());
             pool = new NostrPool();
-            pool.setVerifyEvents(!trusted);
-            relay = new NostrRelay("wss:/127.0.0.1");
+             relay = new NostrRelay("wss:/127.0.0.1");
             pool.connectRelay(relay);
             NostrSubscription sub = pool.subscribe(
                 new NostrFilter(),

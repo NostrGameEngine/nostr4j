@@ -32,7 +32,7 @@ package org.ngengine.nostr4j.keypair;
 
 import java.io.Serializable;
 
-public class NostrKeyPair implements Serializable, Cloneable {
+public final class NostrKeyPair implements Serializable, Cloneable {
 
     private NostrPublicKey publicKey;
     private NostrPrivateKey privateKey;
@@ -90,5 +90,13 @@ public class NostrKeyPair implements Serializable, Cloneable {
             return false;
         }
         return true;
+    }
+
+    @Override
+    public int hashCode() {
+        int hash = 7;
+        hash = 89 * hash + (this.publicKey != null ? this.publicKey.hashCode() : 0);
+        hash = 89 * hash + (this.privateKey != null ? this.privateKey.hashCode() : 0);
+        return hash;
     }
 }

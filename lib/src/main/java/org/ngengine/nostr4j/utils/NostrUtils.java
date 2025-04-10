@@ -50,14 +50,18 @@ public class NostrUtils {
     }
 
     public static Platform getPlatform() {
-        if (NostrUtils.platform == null) {
-            logger.warning("Platform not set, using default JVM platform.");
-            String defaultPlatformClass = "org.ngengine.nostr4j.platform.jvm.JVMAsyncPlatform";
-            try {
-                Class<?> clazz = Class.forName(defaultPlatformClass);
-                NostrUtils.platform = (Platform) clazz.getDeclaredConstructor().newInstance();
-            } catch (Exception e) {
-                throw new RuntimeException("Failed to load default platform: " + defaultPlatformClass, e);
+        if (NostrUtils.platform == null) { // DCL
+            synchronized (NostrUtils.class) {
+                if (NostrUtils.platform == null) {
+                    logger.warning("Platform not set, using default JVM platform.");
+                    String defaultPlatformClass = "org.ngengine.nostr4j.platform.jvm.JVMAsyncPlatform";
+                    try {
+                        Class<?> clazz = Class.forName(defaultPlatformClass);
+                        NostrUtils.platform = (Platform) clazz.getDeclaredConstructor().newInstance();
+                    } catch (Exception e) {
+                        throw new RuntimeException("Failed to load default platform: " + defaultPlatformClass, e);
+                    }
+                }
             }
         }
         return NostrUtils.platform;

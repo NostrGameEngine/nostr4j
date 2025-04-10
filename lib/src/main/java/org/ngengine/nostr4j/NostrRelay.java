@@ -59,11 +59,11 @@ import org.ngengine.nostr4j.transport.impl.NostrOKMessage;
 import org.ngengine.nostr4j.utils.ExponentialBackoff;
 import org.ngengine.nostr4j.utils.NostrUtils;
 
-public class NostrRelay implements TransportListener {
+public final class NostrRelay implements TransportListener {
 
     private static final Logger logger = Logger.getLogger(NostrRelay.class.getName());
 
-    static class QueuedMessage {
+    static final class QueuedMessage {
 
         final NostrMessage message;
         final Consumer<NostrMessageAck> res;
@@ -81,6 +81,11 @@ public class NostrRelay implements TransportListener {
             if (obj == null || getClass() != obj.getClass()) return false;
             QueuedMessage that = (QueuedMessage) obj;
             return message.equals(that.message);
+        }
+
+        @Override
+        public int hashCode() {
+            return message.hashCode();
         }
     }
 
@@ -225,7 +230,7 @@ public class NostrRelay implements TransportListener {
                         NostrMessageAck result = NostrMessage.ack(
                             this,
                             eventId != null ? eventId : null,
-                            platform.getTimestampSeconds(),
+                            Instant.now(),
                             (rr, msg) -> {
                                 if (eventId != null) {
                                     this.waitingEventsAck.remove(eventId);
@@ -393,6 +398,7 @@ public class NostrRelay implements TransportListener {
         runInRelayExecutor(
             (res, rej) -> {
                 try {
+                    reconnectionBackoff.registerSuccess();
                     logger.fine("Connection opened: " + this.url);
                     for (NostrRelayComponent listener : this.listeners) {
                         try {
@@ -527,7 +533,9 @@ public class NostrRelay implements TransportListener {
                         }
 
                         if (asyncVerifyPromise != null) {
-                            asyncVerifyPromise.await();
+                            if (!asyncVerifyPromise.await()) {
+                                throw new Exception("Event verification failed");
+                            }
                         } else if (verifyEvents && message instanceof SignedNostrEvent) {
                             SignedNostrEvent event = (SignedNostrEvent) message;
                             if (!event.verify()) {
@@ -594,6 +602,7 @@ public class NostrRelay implements TransportListener {
 
                     if (this.reconnectOnDrop && !this.disconnectedByClient) {
                         long now = Instant.now().getEpochSecond();
+                        reconnectionBackoff.registerFailure();
                         long delay = reconnectionBackoff.getNextAttemptTime(now, TimeUnit.SECONDS);
                         this.executor.runLater(
                                 () -> {
@@ -657,9 +666,9 @@ public class NostrRelay implements TransportListener {
                 try {
                     Map.Entry<String, NostrMessageAck> entry = it.next();
                     NostrMessageAck ack = entry.getValue();
-                    if (ack.sentAt + ackTimeoutS < now) {
+                    if (ack.getSentAt().getEpochSecond() + ackTimeoutS < now) {
                         assert dbg(() -> {
-                            logger.finest("Event Ack timeout: " + ack.id);
+                            logger.finest("Event Ack timeout: " + ack.getId());
                         });
                         it.remove();
                         ack.callFailureCallback("Event status timeout");

@@ -39,8 +39,6 @@ import java.util.logging.Logger;
 import org.ngengine.nostr4j.utils.NostrUtils;
 
 public interface NostrEvent extends Cloneable {
-    Logger logger = Logger.getLogger(NostrEvent.class.getName());
-    byte[] BECH32_PREVIX = "note".getBytes();
     Instant getCreatedAt();
     int getKind();
     String getContent();
@@ -57,9 +55,15 @@ public interface NostrEvent extends Cloneable {
                 event.listTags(),
                 event.getContent()
             );
-            assert dbg(() -> logger.finest("Serializing event: " + serial));
+            assert dbg(() -> {
+                Logger logger = Logger.getLogger(NostrEvent.class.getName());
+                logger.finest("Serializing event: " + serial);
+            });
             String json = NostrUtils.getPlatform().toJSON(serial);
-            assert dbg(() -> logger.finest("Serialized event: " + json));
+            assert dbg(() -> {
+                Logger logger = Logger.getLogger(NostrEvent.class.getName());
+                logger.finest("Serialized event: " + json);
+            });
             String id = NostrUtils.getPlatform().sha256(json);
             return id;
         } catch (Exception e) {

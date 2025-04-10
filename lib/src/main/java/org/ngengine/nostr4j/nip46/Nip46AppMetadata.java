@@ -81,9 +81,10 @@ public class Nip46AppMetadata implements Cloneable, Serializable {
     public Nip46AppMetadata removePerm(String perm) {
         if (this.perms != null) {
             this.perms.remove(perm);
-        }
-        if (this.perms.isEmpty()) {
-            this.perms = null;
+
+            if (this.perms.isEmpty()) {
+                this.perms = null;
+            }
         }
         return this;
     }
@@ -133,7 +134,11 @@ public class Nip46AppMetadata implements Cloneable, Serializable {
     }
 
     @Override
-    public Nip46AppMetadata clone() throws CloneNotSupportedException {
-        return (Nip46AppMetadata) super.clone();
+    public Nip46AppMetadata clone() {
+        try {
+            return (Nip46AppMetadata) super.clone();
+        } catch (CloneNotSupportedException e) {
+            return new Nip46AppMetadata(name, url, image, perms);
+        }
     }
 }

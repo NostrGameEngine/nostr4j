@@ -49,7 +49,9 @@ import org.ngengine.nostr4j.utils.NostrUtils;
  * to convert the public key to different formats.
  * </p>
  */
-public class NostrPublicKey implements NostrKey {
+public final class NostrPublicKey implements NostrKey {
+
+    private static final long serialVersionUID = 1L;
 
     private static final byte[] BECH32_PREFIX = "npub".getBytes(StandardCharsets.UTF_8);
 
@@ -204,13 +206,13 @@ public class NostrPublicKey implements NostrKey {
 
         ByteBuffer b1 = this.data;
         ByteBuffer b2 = ((NostrPublicKey) obj).data;
+
+        if (b1 == null || b2 == null) {
+            return false;
+        }
         if (b1 == b2) {
             assert data.position() == 0 : "Data position must be 0";
             return true;
-        }
-        if (b1 == null || b2 == null) {
-            assert data.position() == 0 : "Data position must be 0";
-            return false;
         }
         if (b1.limit() != b2.limit()) {
             assert data.position() == 0 : "Data position must be 0";
@@ -224,6 +226,14 @@ public class NostrPublicKey implements NostrKey {
         }
         assert data.position() == 0 : "Data position must be 0";
         return true;
+    }
+
+    @Override
+    public int hashCode() {
+        if (data == null) return 0;
+        int hashcode = data.hashCode();
+        assert data.position() == 0 : "Data position must be 0";
+        return hashcode;
     }
 
     @Override

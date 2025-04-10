@@ -48,7 +48,7 @@ import org.ngengine.nostr4j.signer.NostrSigner;
 import org.ngengine.nostr4j.transport.NostrMessageAck;
 import org.ngengine.nostr4j.utils.NostrUtils;
 
-public class Nip24Metadata {
+public final class Nip24Metadata {
 
     private static final Logger logger = Logger.getLogger(Nip24Metadata.class.getName());
 

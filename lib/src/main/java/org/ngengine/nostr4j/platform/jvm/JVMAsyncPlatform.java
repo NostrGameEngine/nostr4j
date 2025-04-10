@@ -80,13 +80,18 @@ public class JVMAsyncPlatform implements Platform {
     private static final byte EMPTY32[] = new byte[32];
     private static final byte EMPTY0[] = new byte[0];
 
+    static {
+        secureRandom = new SecureRandom();
+    }
+
     // used for unit tests
     public static boolean _NO_AUX_RANDOM = false;
     public static boolean _EMPTY_NONCE = false;
 
     ///
+    ///
 
-    private static class Context {
+    private static final class Context {
 
         MessageDigest sha256;
         Gson json;
@@ -109,9 +114,6 @@ public class JVMAsyncPlatform implements Platform {
 
     @Override
     public byte[] randomBytes(int n) {
-        if (secureRandom == null) {
-            secureRandom = new SecureRandom();
-        }
         synchronized (secureRandom) {
             byte[] bytes = new byte[n];
             secureRandom.nextBytes(bytes);

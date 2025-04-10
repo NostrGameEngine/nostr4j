@@ -139,6 +139,13 @@ public class NostrKeyPairSigner implements NostrSigner {
         return true;
     }
 
+    @Override
+    public int hashCode() {
+        int hash = 7;
+        hash = 89 * hash + (this.keyPair != null ? this.keyPair.hashCode() : 0);
+        return hash;
+    }
+
     public NostrKeyPair getKeyPair() {
         return keyPair;
     }

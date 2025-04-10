@@ -107,8 +107,12 @@ public class NostrconnectUrl implements Serializable, Cloneable {
     }
 
     @Override
-    public NostrconnectUrl clone() throws CloneNotSupportedException {
-        return (NostrconnectUrl) super.clone();
+    public NostrconnectUrl clone() {
+        try {
+            return (NostrconnectUrl) super.clone();
+        } catch (CloneNotSupportedException e) {
+            return new NostrconnectUrl(clientPubKey, relays, secret, metadata);
+        }
     }
 
     public static NostrconnectUrl parse(String url)
