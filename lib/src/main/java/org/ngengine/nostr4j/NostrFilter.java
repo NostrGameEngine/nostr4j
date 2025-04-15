@@ -35,6 +35,8 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
+
+import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.transport.NostrMessageFragment;
 import org.ngengine.nostr4j.utils.NostrUtils;
 
@@ -61,6 +63,13 @@ public class NostrFilter extends NostrMessageFragment {
     public NostrFilter author(String author) {
         if (authors == null) authors = new ArrayList<>();
         authors.add(author);
+        return this;
+    }
+
+    public NostrFilter author(NostrPublicKey author) {
+        if (authors == null)
+            authors = new ArrayList<>();
+        authors.add(author.asHex());
         return this;
     }
 
