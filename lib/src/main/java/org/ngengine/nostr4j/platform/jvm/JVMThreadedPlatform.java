@@ -30,12 +30,15 @@
  */
 package org.ngengine.nostr4j.platform.jvm;
 
+import java.util.Collection;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import org.ngengine.nostr4j.platform.AsyncTask;
 import org.ngengine.nostr4j.platform.NostrExecutor;
+import org.ngengine.nostr4j.transport.NostrTransport;
+import org.ngengine.nostr4j.transport.rtc.RTCTransport;
 
 public class JVMThreadedPlatform extends JVMAsyncPlatform {
 
@@ -101,4 +104,22 @@ public class JVMThreadedPlatform extends JVMAsyncPlatform {
     public NostrExecutor newSignerExecutor() {
         return new TNostrExecutor();
     }
+
+    @Override
+    public NostrExecutor newPoolExecutor() {
+        return new TNostrExecutor();
+    }
+
+
+    @Override
+    public NostrTransport newTransport() {
+        return new WebsocketTransport(this, Executors.newScheduledThreadPool(1));
+    }
+ @Override
+    public RTCTransport newRTCTransport(String connId, Collection<String> stunServers) {
+        JVMRTCTransport transport = new JVMRTCTransport();
+        transport.start(connId, stunServers);
+        return transport;
+    }
+
 }

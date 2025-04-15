@@ -46,7 +46,7 @@ import java.util.function.Consumer;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.listeners.NostrRelayComponent;
-import org.ngengine.nostr4j.listeners.TransportListener;
+import org.ngengine.nostr4j.transport.TransportListener;
 import org.ngengine.nostr4j.platform.AsyncTask;
 import org.ngengine.nostr4j.platform.NostrExecutor;
 import org.ngengine.nostr4j.platform.Platform;
@@ -115,7 +115,7 @@ public final class NostrRelay implements TransportListener {
 
     boolean fastEvents = false;
 
-
+    
     public NostrRelay(String url) {
         this(url, NostrUtils.getPlatform().newRelayExecutor());
     }

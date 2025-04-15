@@ -44,6 +44,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.Collection;
 import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.Callable;
@@ -71,6 +72,7 @@ import org.ngengine.nostr4j.platform.AsyncTask;
 import org.ngengine.nostr4j.platform.NostrExecutor;
 import org.ngengine.nostr4j.platform.Platform;
 import org.ngengine.nostr4j.transport.NostrTransport;
+import org.ngengine.nostr4j.transport.rtc.RTCTransport;
 import org.ngengine.nostr4j.utils.NostrUtils;
 
 // thread-safe
@@ -325,6 +327,7 @@ public class JVMAsyncPlatform implements Platform {
             );
         }
         return new AsyncTask<T>() {
+            private volatile boolean cancelled = false;
             @Override
             public T await() throws Exception {
                 return fut.get();
@@ -475,6 +478,15 @@ public class JVMAsyncPlatform implements Platform {
                 // }
                 return this;
             }
+
+            @Override
+            public void cancel() {
+                if (cancelled) {
+                    return;
+                }
+                cancelled = true;
+                fut.cancel(true);
+            }
         };
     }
 
@@ -578,6 +590,11 @@ public class JVMAsyncPlatform implements Platform {
     }
 
     @Override
+    public NostrExecutor newPoolExecutor() {
+        return newVtExecutor();
+    }
+
+    @Override
     public NostrExecutor newSignerExecutor() {
         return newVtExecutor();
     }
@@ -664,5 +681,12 @@ public class JVMAsyncPlatform implements Platform {
                 rej.accept(e);
             }
         });
+    }
+
+    @Override
+    public RTCTransport newRTCTransport(String connId, Collection<String> stunServers) {
+        JVMRTCTransport transport = new JVMRTCTransport();
+        transport.start(connId, stunServers);
+        return transport;
     }
 }

@@ -28,27 +28,19 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package org.ngengine.nostr4j.platform;
+package org.ngengine.nostr4j.transport.rtc;
 
-import java.util.List;
-import java.util.function.Consumer;
-import java.util.function.Function;
-import org.ngengine.nostr4j.utils.NostrUtils;
+import java.nio.ByteBuffer;
 
-public interface AsyncTask<T> {
+public interface RTCTransportListener {
+    void onLocalRTCIceCandidate(String candidate);
+    void onRTCBinaryMessage(ByteBuffer msg);
 
-    void cancel();
-    boolean isDone();
-    boolean isFailed();
-    boolean isSuccess();
-    T await() throws Exception;
-    <R> AsyncTask<R> then(Function<T, R> func2);
+    void onRTCChannelClosed();
 
-    <R> AsyncTask<R> compose(Function<T, AsyncTask<R>> func2);
-    AsyncTask<T> catchException(Consumer<Throwable> func2);
+    void onRTCChannelError(Throwable e);
 
-    static <T> AsyncTask<List<T>> awaitAll(List<AsyncTask<T>> tasks) {
-        Platform platform = NostrUtils.getPlatform();
-        return platform.awaitAll(tasks);
-    }
+    void onLinkEstablished();
+ 
+    void onLinkLost();
 }

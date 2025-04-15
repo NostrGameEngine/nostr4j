@@ -33,7 +33,7 @@ package org.ngengine.nostr4j.platform.teavm;
 import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
-import org.ngengine.nostr4j.listeners.TransportListener;
+import org.ngengine.nostr4j.transport.TransportListener;
 import org.ngengine.nostr4j.platform.AsyncTask;
 import org.ngengine.nostr4j.transport.NostrTransport;
 import org.teavm.jso.JSBody;

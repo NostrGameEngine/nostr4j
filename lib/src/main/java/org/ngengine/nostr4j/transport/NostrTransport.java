@@ -30,7 +30,6 @@
  */
 package org.ngengine.nostr4j.transport;
 
-import org.ngengine.nostr4j.listeners.TransportListener;
 import org.ngengine.nostr4j.platform.AsyncTask;
 
 public interface NostrTransport {

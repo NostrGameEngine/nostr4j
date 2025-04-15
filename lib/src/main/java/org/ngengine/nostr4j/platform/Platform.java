@@ -32,6 +32,7 @@ package org.ngengine.nostr4j.platform;
 
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
+import java.util.Collection;
 import java.util.List;
 import java.util.Queue;
 import java.util.function.BiConsumer;
@@ -39,6 +40,7 @@ import java.util.function.Consumer;
 import org.ngengine.nostr4j.keypair.NostrPrivateKey;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.transport.NostrTransport;
+import org.ngengine.nostr4j.transport.rtc.RTCTransport;
 
 public interface Platform {
     byte[] generatePrivateKey() throws Exception;
@@ -56,6 +58,8 @@ public interface Platform {
 
     NostrTransport newTransport();
 
+    RTCTransport newRTCTransport(String connId, Collection<String> stunServers);
+
     String sha256(String data) throws NoSuchAlgorithmException;
     byte[] sha256(byte[] data) throws NoSuchAlgorithmException;
     String sign(String data, NostrPrivateKey privKey) throws Exception;
@@ -71,6 +75,8 @@ public interface Platform {
     NostrExecutor newSubscriptionExecutor();
 
     NostrExecutor newSignerExecutor();
+
+    NostrExecutor newPoolExecutor();
 
     <T> AsyncTask<T> promisify(BiConsumer<Consumer<T>, Consumer<Throwable>> func, NostrExecutor executor);
 

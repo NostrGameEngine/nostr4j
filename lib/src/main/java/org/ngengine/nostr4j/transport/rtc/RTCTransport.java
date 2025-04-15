@@ -28,27 +28,32 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package org.ngengine.nostr4j.platform;
+package org.ngengine.nostr4j.transport.rtc;
 
+import java.io.Closeable;
+import java.nio.ByteBuffer;
+import java.util.Collection;
 import java.util.List;
-import java.util.function.Consumer;
-import java.util.function.Function;
-import org.ngengine.nostr4j.utils.NostrUtils;
 
-public interface AsyncTask<T> {
+import org.ngengine.nostr4j.platform.AsyncTask;
+import org.ngengine.nostr4j.rtc.signal.signals.NostrRTCAnswer;
+import org.ngengine.nostr4j.rtc.signal.signals.NostrRTCIceCandidate;
+import org.ngengine.nostr4j.rtc.signal.signals.NostrRTCOffer;
 
-    void cancel();
-    boolean isDone();
-    boolean isFailed();
-    boolean isSuccess();
-    T await() throws Exception;
-    <R> AsyncTask<R> then(Function<T, R> func2);
+public interface RTCTransport extends Closeable{
+    void close();
+    
+    AsyncTask<Void> start(String connId,  Collection<String> stunServers);
+    AsyncTask<String> connectToChannel(String offerOrAnswer) ;
+    AsyncTask<String> initiateChannel();
 
-    <R> AsyncTask<R> compose(Function<T, AsyncTask<R>> func2);
-    AsyncTask<T> catchException(Consumer<Throwable> func2);
+    void addRemoteIceCandidates(Collection<String> candidates) ;
+    
 
-    static <T> AsyncTask<List<T>> awaitAll(List<AsyncTask<T>> tasks) {
-        Platform platform = NostrUtils.getPlatform();
-        return platform.awaitAll(tasks);
-    }
+
+    void addListener(RTCTransportListener listener);
+
+    void removeListener(RTCTransportListener listener);
+
+    AsyncTask<Void> send(ByteBuffer message);
 }

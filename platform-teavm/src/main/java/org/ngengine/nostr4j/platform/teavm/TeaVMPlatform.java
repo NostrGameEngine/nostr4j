@@ -426,4 +426,10 @@ public class TeaVMPlatform implements Platform {
                 }
             });
     }
+
+    @Override
+    public NostrExecutor newPoolExecutor() {
+        return newJsExecutor();
+
+    }
 }

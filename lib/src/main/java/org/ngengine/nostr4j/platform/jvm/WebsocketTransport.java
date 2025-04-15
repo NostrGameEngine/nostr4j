@@ -46,7 +46,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.logging.Logger;
-import org.ngengine.nostr4j.listeners.TransportListener;
+import org.ngengine.nostr4j.transport.TransportListener;
 import org.ngengine.nostr4j.platform.AsyncTask;
 import org.ngengine.nostr4j.transport.NostrTransport;
 
