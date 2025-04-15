@@ -36,6 +36,8 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
+
 import org.ngengine.nostr4j.utils.NostrUtils;
 
 public class UnsignedNostrEvent implements NostrEvent {
@@ -66,6 +68,11 @@ public class UnsignedNostrEvent implements NostrEvent {
 
     public UnsignedNostrEvent setTag(String... tag) {
         tags.put(tag[0], tag);
+        return this;
+    }
+
+    public UnsignedNostrEvent unsetTag(String key) {
+        tags.remove(key);
         return this;
     }
 
@@ -156,5 +163,16 @@ public class UnsignedNostrEvent implements NostrEvent {
         } catch (CloneNotSupportedException e) {
             return new UnsignedNostrEvent().setKind(kind).setContent(content).setTags(listTags()).setCreatedAt(createdAt);
         }
+    }
+
+
+    // nip40 expiration
+    public UnsignedNostrEvent setExpirationTimestamp(Instant expiresAt) {
+        if (expiresAt != null) {
+            setTag("expiration", "expiration", String.valueOf(Objects.requireNonNull(expiresAt).getEpochSecond()));
+        } else {
+            unsetTag("expiration");
+        }
+        return this;
     }
 }

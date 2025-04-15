@@ -89,6 +89,7 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
     private transient String bech32Id;
     private transient NostrPublicKey parsedPublicKey;
     private transient Collection<String[]> taglist;
+    private transient Instant expiresAt;
 
     public SignedNostrEvent(
         String id,
@@ -325,5 +326,21 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
         Map<String, Object> eventMap = (Map<String, Object>) doc.get(2);
         ReceivedSignedNostrEvent e = new ReceivedSignedNostrEvent(subId, eventMap);
         return e;
+    }
+
+
+    // nip40 expiration: override with cache
+    @Override
+    public Instant getExpirationTimestamp() {
+        if (expiresAt != null)
+            return expiresAt;
+        String[] tag = getTag("expiration");
+        if (tag != null && tag.length > 1) {
+            long expires = NostrUtils.safeLong(tag[1]);
+            expiresAt = Instant.ofEpochSecond(expires);
+        } else {
+            expiresAt = Instant.now().plusSeconds(60 * 60 * 24 * 365 * 2100);
+        }
+        return expiresAt;
     }
 }

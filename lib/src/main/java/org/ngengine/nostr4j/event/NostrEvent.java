@@ -71,4 +71,18 @@ public interface NostrEvent extends Cloneable, Serializable {
             return null;
         }
     }
+
+
+    // nip40 expiration
+    default Instant getExpirationTimestamp(){
+        String[] tag = getTag("expiration");
+        Instant expiresAt = null;
+        if (tag != null && tag.length > 1) {
+            long expires = NostrUtils.safeLong(tag[1]);
+            expiresAt = Instant.ofEpochSecond(expires);
+        } else {
+            expiresAt = Instant.now().plusSeconds(60 * 60 * 24 * 365 * 2100);
+        }
+        return expiresAt;
+    }
 }
