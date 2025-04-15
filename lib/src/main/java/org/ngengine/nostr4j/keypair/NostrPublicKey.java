@@ -61,6 +61,7 @@ public final class NostrPublicKey implements NostrKey {
     private transient Collection<Byte> readOnlyData;
     private transient ByteBuffer data;
     private transient byte[] array;
+    private transient Integer hashCode;
 
     /**
      * Creates a new NostrPublicKey from the given byte array.
@@ -230,10 +231,11 @@ public final class NostrPublicKey implements NostrKey {
 
     @Override
     public int hashCode() {
+        if(hashCode!=null) return hashCode;
         if (data == null) return 0;
-        int hashcode = data.hashCode();
+        hashCode = data.hashCode();
         assert data.position() == 0 : "Data position must be 0";
-        return hashcode;
+        return hashCode;
     }
 
     @Override
