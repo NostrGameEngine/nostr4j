@@ -93,7 +93,7 @@ public final class NostrRelay implements TransportListener {
     protected final String url;
     protected final List<NostrRelayComponent> listeners = new CopyOnWriteArrayList<>();
     protected final Map<String, NostrMessageAck> waitingEventsAck = new ConcurrentHashMap<>();
-    protected NostrExecutor executor;
+    protected final NostrExecutor executor;
 
     protected final ExponentialBackoff reconnectionBackoff = new ExponentialBackoff();
 
@@ -115,7 +115,12 @@ public final class NostrRelay implements TransportListener {
 
     boolean fastEvents = false;
 
+
     public NostrRelay(String url) {
+        this(url, NostrUtils.getPlatform().newRelayExecutor());
+    }
+
+    public NostrRelay(String url, NostrExecutor executor) {
         try {
             Platform platform = NostrUtils.getPlatform();
             this.connector = platform.newTransport();
@@ -123,6 +128,7 @@ public final class NostrRelay implements TransportListener {
             this.messageQueue = platform.newConcurrentQueue(QueuedMessage.class);
             this.connectCallbacks = platform.newConcurrentQueue(Runnable.class);
             this.url = url;
+            this.executor = executor;
         } catch (Exception e) {
             throw new RuntimeException("Error creating NostrRelay", e);
         }
@@ -147,11 +153,11 @@ public final class NostrRelay implements TransportListener {
     protected <T> void runInRelayExecutor(BiConsumer<Consumer<T>, Consumer<Throwable>> runnable, boolean enqueue) {
         Platform platform = NostrUtils.getPlatform();
         if (!enqueue) {
-            platform.promisify(runnable, platform.newRelayExecutor());
+            platform.promisify(runnable, executor);
         } else {
             synchronized (queue) {
                 if (queue.get() == null) {
-                    AsyncTask<T> nq = platform.promisify(runnable, platform.newRelayExecutor());
+                    AsyncTask<T> nq = platform.promisify(runnable, executor);
                     queue.set(nq);
                 } else {
                     AsyncTask<T> q = queue.get();
@@ -315,7 +321,6 @@ public final class NostrRelay implements TransportListener {
         Platform platform = NostrUtils.getPlatform();
 
         if (!this.connected && !this.connecting) {
-            this.executor = platform.newRelayExecutor();
 
             this.connecting = true;
             return platform.wrapPromise((res, rej) -> {
