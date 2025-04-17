@@ -32,12 +32,12 @@ package org.ngengine.nostr4j.event;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
-
 import org.ngengine.nostr4j.utils.NostrUtils;
 
 public class UnsignedNostrEvent implements NostrEvent {
@@ -111,10 +111,13 @@ public class UnsignedNostrEvent implements NostrEvent {
     public String toString() {
         StringBuilder sb = new StringBuilder();
         sb.append("UnsignedNostrEvent{");
-        sb.append("createdAt=").append(createdAt);
-        sb.append(", kind=").append(kind);
-        sb.append(", content='").append(content).append('\'');
-        sb.append(", tags=").append(tags);
+        sb.append("\tcreatedAt=").append(createdAt);
+        sb.append(",\n\tkind=").append(kind);
+        sb.append(",\n\tcontent='").append(content).append('\'');
+        sb.append(",\n\ttags=\n");
+        for (String[] tags : listTags()) {
+            sb.append("\t\t").append(Arrays.toString(tags)).append("\n");
+        }
         sb.append('}');
         return sb.toString();
     }
@@ -164,7 +167,6 @@ public class UnsignedNostrEvent implements NostrEvent {
             return new UnsignedNostrEvent().setKind(kind).setContent(content).setTags(listTags()).setCreatedAt(createdAt);
         }
     }
-
 
     // nip40 expiration
     public UnsignedNostrEvent setExpirationTimestamp(Instant expiresAt) {
