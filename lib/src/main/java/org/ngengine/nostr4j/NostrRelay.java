@@ -269,7 +269,7 @@ public final class NostrRelay implements TransportListener {
                                     return;
                                 }
                             } catch (Throwable e) {
-                                result.callFailureCallback("message cancelled by component" + e.getMessage());
+                                result.callFailureCallback("message cancelled by component " + e.getMessage());
                                 rj0.accept(e);
                                 return;
                             }
