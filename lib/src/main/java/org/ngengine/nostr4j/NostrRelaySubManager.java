@@ -33,6 +33,8 @@ package org.ngengine.nostr4j;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
 import org.ngengine.nostr4j.listeners.NostrRelayComponent;
 import org.ngengine.nostr4j.transport.NostrMessage;
 import org.ngengine.nostr4j.transport.impl.NostrClosedMessage;
@@ -45,7 +47,7 @@ public class NostrRelaySubManager implements NostrRelayComponent {
         boolean eose;
     }
 
-    private final Map<String, SubAttachment> subTracker = new HashMap<>();
+    private final Map<String, SubAttachment> subTracker = new ConcurrentHashMap<>();
 
     @Override
     public boolean onRelayConnectRequest(NostrRelay relay) {
