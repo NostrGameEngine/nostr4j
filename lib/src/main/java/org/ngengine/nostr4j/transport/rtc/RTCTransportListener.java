@@ -41,6 +41,6 @@ public interface RTCTransportListener {
     void onRTCChannelError(Throwable e);
 
     void onLinkEstablished();
- 
+
     void onLinkLost();
 }

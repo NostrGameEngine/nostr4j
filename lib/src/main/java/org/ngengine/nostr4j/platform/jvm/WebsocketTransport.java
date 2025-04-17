@@ -45,10 +45,11 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.logging.Level;
 import java.util.logging.Logger;
-import org.ngengine.nostr4j.transport.TransportListener;
 import org.ngengine.nostr4j.platform.AsyncTask;
 import org.ngengine.nostr4j.transport.NostrTransport;
+import org.ngengine.nostr4j.transport.TransportListener;
 
 public class WebsocketTransport implements NostrTransport, WebSocket.Listener {
 
@@ -124,7 +125,7 @@ public class WebsocketTransport implements NostrTransport, WebSocket.Listener {
                     .buildAsync(URI.create(url), this)
                     .handle((r, e) -> {
                         if (e != null) {
-                            logger.warning("WebSocket connection error: " + e);
+                            logger.log(Level.WARNING, "WebSocket connection error", e);
                             rej.accept(e);
                         } else {
                             logger.finest("WebSocket connected: " + url);
@@ -194,7 +195,7 @@ public class WebsocketTransport implements NostrTransport, WebSocket.Listener {
 
     @Override
     public void onOpen(WebSocket webSocket) {
-        logger.finest("WebSocket opened: " + webSocket.getSubprotocol());
+        logger.finest("WebSocket opened");
         assert this.openWebSocket == null : "WebSocket already open";
         this.openWebSocket = webSocket;
         for (TransportListener listener : listeners) {

@@ -33,23 +33,16 @@ package org.ngengine.nostr4j.transport.rtc;
 import java.io.Closeable;
 import java.nio.ByteBuffer;
 import java.util.Collection;
-import java.util.List;
-
 import org.ngengine.nostr4j.platform.AsyncTask;
-import org.ngengine.nostr4j.rtc.signal.signals.NostrRTCAnswer;
-import org.ngengine.nostr4j.rtc.signal.signals.NostrRTCIceCandidate;
-import org.ngengine.nostr4j.rtc.signal.signals.NostrRTCOffer;
 
-public interface RTCTransport extends Closeable{
+public interface RTCTransport extends Closeable {
     void close();
-    
-    AsyncTask<Void> start(String connId,  Collection<String> stunServers);
-    AsyncTask<String> connectToChannel(String offerOrAnswer) ;
+
+    AsyncTask<Void> start(String connId, Collection<String> stunServers);
+    AsyncTask<String> connectToChannel(String offerOrAnswer);
     AsyncTask<String> initiateChannel();
 
-    void addRemoteIceCandidates(Collection<String> candidates) ;
-    
-
+    void addRemoteIceCandidates(Collection<String> candidates);
 
     void addListener(RTCTransportListener listener);
 

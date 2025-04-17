@@ -6,6 +6,21 @@
     "configurations": [
         {
             "type": "java",
+            "name": "Main",
+            "request": "launch",
+            "mainClass": "org.ngengine.nostr4j.rtc.Main",
+            "projectName": "lib"
+        },
+        {
+            "type": "java",
+            "name": "TestNostrRTC",
+            "request": "launch",
+            "mainClass": "org.ngengine.nostr4j.rtc.TestNostrRTC",
+            "projectName": "lib",
+            "console": "integratedTerminal"
+        },
+        {
+            "type": "java",
             "name": "Current File",
             "request": "launch",
             "mainClass": "${file}"

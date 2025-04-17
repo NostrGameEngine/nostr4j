@@ -30,6 +30,8 @@
  */
 package org.ngengine.nostr4j;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.util.Date;
 import java.util.logging.ConsoleHandler;
 import java.util.logging.Handler;
@@ -66,6 +68,14 @@ public class TestLogger {
 
             @Override
             public synchronized String format(LogRecord record) {
+                String thrown = "";
+                if (record.getThrown() != null) {
+                    StringWriter sw = new StringWriter();
+                    PrintWriter pw = new PrintWriter(sw);
+                    record.getThrown().printStackTrace(pw);
+                    pw.close();
+                    thrown = sw.toString();
+                }
                 String loggerName = record.getLoggerName();
                 // Simplify logger name for readability
                 if (loggerName.startsWith("org.ngengine.nostr4j.")) {
@@ -77,7 +87,7 @@ public class TestLogger {
                     new Date(record.getMillis()), // Date/time
                     record.getLevel().getName(), // Log level
                     loggerName, // Logger name (shortened)
-                    formatMessage(record) // The message
+                    formatMessage(record) + thrown // The message
                 );
             }
         };
