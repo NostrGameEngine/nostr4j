@@ -231,7 +231,7 @@ public final class NostrPublicKey implements NostrKey {
 
     @Override
     public int hashCode() {
-        if(hashCode!=null) return hashCode;
+        if (hashCode != null) return hashCode;
         if (data == null) return 0;
         hashCode = data.hashCode();
         assert data.position() == 0 : "Data position must be 0";

@@ -36,7 +36,6 @@ import java.util.function.Function;
 import org.ngengine.nostr4j.utils.NostrUtils;
 
 public interface AsyncTask<T> {
-
     void cancel();
     boolean isDone();
     boolean isFailed();

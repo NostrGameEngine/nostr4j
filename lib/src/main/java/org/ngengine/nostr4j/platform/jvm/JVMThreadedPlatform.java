@@ -110,16 +110,15 @@ public class JVMThreadedPlatform extends JVMAsyncPlatform {
         return new TNostrExecutor();
     }
 
-
     @Override
     public NostrTransport newTransport() {
         return new WebsocketTransport(this, Executors.newScheduledThreadPool(1));
     }
- @Override
+
+    @Override
     public RTCTransport newRTCTransport(String connId, Collection<String> stunServers) {
         JVMRTCTransport transport = new JVMRTCTransport();
         transport.start(connId, stunServers);
         return transport;
     }
-
 }

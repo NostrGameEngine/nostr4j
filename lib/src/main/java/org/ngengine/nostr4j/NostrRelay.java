@@ -46,13 +46,13 @@ import java.util.function.Consumer;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.listeners.NostrRelayComponent;
-import org.ngengine.nostr4j.transport.TransportListener;
 import org.ngengine.nostr4j.platform.AsyncTask;
 import org.ngengine.nostr4j.platform.NostrExecutor;
 import org.ngengine.nostr4j.platform.Platform;
 import org.ngengine.nostr4j.transport.NostrMessage;
 import org.ngengine.nostr4j.transport.NostrMessageAck;
 import org.ngengine.nostr4j.transport.NostrTransport;
+import org.ngengine.nostr4j.transport.TransportListener;
 import org.ngengine.nostr4j.transport.impl.NostrClosedMessage;
 import org.ngengine.nostr4j.transport.impl.NostrEOSEMessage;
 import org.ngengine.nostr4j.transport.impl.NostrOKMessage;
@@ -115,7 +115,6 @@ public final class NostrRelay implements TransportListener {
 
     boolean fastEvents = false;
 
-    
     public NostrRelay(String url) {
         this(url, NostrUtils.getPlatform().newRelayExecutor());
     }
@@ -321,7 +320,6 @@ public final class NostrRelay implements TransportListener {
         Platform platform = NostrUtils.getPlatform();
 
         if (!this.connected && !this.connecting) {
-
             this.connecting = true;
             return platform.wrapPromise((res, rej) -> {
                 runInRelayExecutor(

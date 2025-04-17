@@ -328,6 +328,7 @@ public class JVMAsyncPlatform implements Platform {
         }
         return new AsyncTask<T>() {
             private volatile boolean cancelled = false;
+
             @Override
             public T await() throws Exception {
                 return fut.get();
