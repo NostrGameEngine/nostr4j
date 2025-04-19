@@ -38,8 +38,10 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.NostrFilter;
 import org.ngengine.nostr4j.NostrPool;
@@ -52,26 +54,45 @@ import org.ngengine.nostr4j.listeners.sub.NostrSubEventListener;
 import org.ngengine.nostr4j.platform.AsyncTask;
 import org.ngengine.nostr4j.platform.NostrExecutor;
 import org.ngengine.nostr4j.platform.Platform;
-import org.ngengine.nostr4j.rtc.NostrRTCLocalPeer;
 import org.ngengine.nostr4j.rtc.NostrRTCSettings;
-import org.ngengine.nostr4j.rtc.signal.signals.NostrRTCAnnounce;
-import org.ngengine.nostr4j.rtc.signal.signals.NostrRTCAnswer;
-import org.ngengine.nostr4j.rtc.signal.signals.NostrRTCIceCandidate;
-import org.ngengine.nostr4j.rtc.signal.signals.NostrRTCOffer;
 import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
 import org.ngengine.nostr4j.transport.NostrMessageAck;
 import org.ngengine.nostr4j.utils.NostrUtils;
+import static org.ngengine.nostr4j.utils.NostrUtils.dbg;
 
+/**
+ * Handles peer signaling 
+ */
 public class NostrRTCSignaling implements NostrSubEventListener, Closeable {
+
+    public static interface Listener {
+        enum RemoveReason {
+            EXPIRED,
+            DISCONNECTED,
+            UNKNOWN,
+        }
+
+        void onAddAnnounce(NostrRTCAnnounce announce);
+
+        void onUpdateAnnounce(NostrRTCAnnounce announce);
+
+        void onRemoveAnnounce(NostrRTCAnnounce announce, RemoveReason reason);
+
+        void onReceiveOffer(NostrRTCOffer offer);
+
+        void onReceiveAnswer(NostrRTCAnswer answer);
+
+        void onReceiveCandidates(NostrRTCIceCandidate candidate);
+    }
 
     private static final Logger logger = Logger.getLogger(NostrRTCSignaling.class.getName());
     private final NostrPool pool;
     private final NostrKeyPair roomKeyPair;
     private final NostrRTCLocalPeer localPeer;
     private final NostrKeyPairSigner roomSigner;
-    private final ArrayList<NostrRTCAnnounce> seenAnnounces = new ArrayList<>();
+    private final Queue<NostrRTCAnnounce> seenAnnounces = NostrUtils.getPlatform().newConcurrentQueue(NostrRTCAnnounce.class);
     private final Collection<NostrRTCAnnounce> seenAnnouncesRO = Collections.unmodifiableCollection(seenAnnounces);
-    private final List<NostrRTCSignalingListener> listeners = new CopyOnWriteArrayList<>();
+    private final List<Listener> listeners = new CopyOnWriteArrayList<>();
     private final NostrRTCSettings settings;
     private final NostrExecutor executor;
 
@@ -92,11 +113,11 @@ public class NostrRTCSignaling implements NostrSubEventListener, Closeable {
         return seenAnnouncesRO;
     }
 
-    public void addListener(NostrRTCSignalingListener listener) {
+    public void addListener(Listener listener) {
         listeners.add(listener);
     }
 
-    public void removeListener(NostrRTCSignalingListener listener) {
+    public void removeListener(Listener listener) {
         listeners.remove(listener);
     }
 
@@ -112,20 +133,19 @@ public class NostrRTCSignaling implements NostrSubEventListener, Closeable {
                         {
                             NostrRTCAnnounce ann = seenAnnounces
                                 .stream()
-                                .filter(a -> a.getPeerInfo().getPubkey().equals(event.getPubkey()))
+                                .filter(a -> a.getPubkey().equals(event.getPubkey()))
                                 .findFirst()
                                 .orElse(null);
                             if (ann == null) {
-                                logger.fine("New announce: " + event.getPubkey());
                                 NostrRTCAnnounce a = new NostrRTCAnnounce(event.getPubkey(), event.getExpirationTimestamp());
-                                for (NostrRTCSignalingListener listener : listeners) {
+                                for (Listener listener : listeners) {
                                     listener.onAddAnnounce(a);
                                 }
                                 seenAnnounces.add(a);
                             } else {
-                                logger.fine("Update announce: " + event.getPubkey());
+                                assert dbg(()->logger.finest("Update announce: " + event.getPubkey()));
                                 ann.updateExpireAt(event.getExpirationTimestamp());
-                                for (NostrRTCSignalingListener listener : listeners) {
+                                for (Listener listener : listeners) {
                                     listener.onUpdateAnnounce(ann);
                                 }
                             }
@@ -133,15 +153,15 @@ public class NostrRTCSignaling implements NostrSubEventListener, Closeable {
                         }
                     case "disconnect":
                         {
-                            logger.fine("Received disconnect event: " + event.getPubkey());
+                            logger.finest("Received disconnect event: " + event.getPubkey());
                             Iterator<NostrRTCAnnounce> it = seenAnnounces.iterator();
                             while (it.hasNext()) {
                                 NostrRTCAnnounce announce = it.next();
-                                if (!announce.getPeerInfo().getPubkey().equals(event.getPubkey())) continue;
+                                if (!announce.getPubkey().equals(event.getPubkey())) continue;
                                 it.remove();
-                                logger.fine("Remove announce: " + event.getPubkey());
-                                for (NostrRTCSignalingListener listener : listeners) {
-                                    listener.onRemoveAnnounce(announce, NostrRTCSignalingListener.RemoveReason.DISCONNECTED);
+                                logger.finest("Remove announce: " + event.getPubkey());
+                                for (Listener listener : listeners) {
+                                    listener.onRemoveAnnounce(announce, Listener.RemoveReason.DISCONNECTED);
                                 }
                             }
                             return null;
@@ -150,68 +170,48 @@ public class NostrRTCSignaling implements NostrSubEventListener, Closeable {
 
                 Platform platform = NostrUtils.getPlatform();
                 decrypt(event.getContent(), event.getPubkey())
+                    .catchException(exc -> {
+                        logger.warning("Error decrypting event: " + exc.getMessage());
+                    })
                     .then(decryptedContent -> {
                         try {
                             Map<String, Object> content = platform.fromJSON(decryptedContent, Map.class);
                             switch (type) {
                                 case "offer":
                                     {
-                                        logger.fine("Received offer from: " + event.getPubkey());
-                                        // NostrRTCAnnounce announce = seenAnnounces.get(event.getPubkey());
-                                        // if(announce!=null){
-                                        // logger.fine("Received offer from announce: "+event.getPubkey());
+                                        logger.finest("Received offer from: " + event.getPubkey());
                                         NostrRTCOffer offer = new NostrRTCOffer(event.getPubkey(), content);
-                                        for (NostrRTCSignalingListener listener : listeners) {
+                                        for (Listener listener : listeners) {
                                             listener.onReceiveOffer(offer);
-                                        }
-                                        // } else{
-                                        //     logger.warning("Received offer from unknown announce: "+event.getPubkey());
-                                        // }
-
+                                        }                                        
                                         return null;
                                     }
                                 case "answer":
                                     {
-                                        logger.fine("Received answer from: " + event.getPubkey());
-                                        // NostrRTCAnnounce announce = seenAnnounces.get(event.getPubkey());
-                                        // if(announce!=null){
-                                        // logger.fine("Received answer from announce: "+event.getPubkey());
+                                        logger.finest("Received answer from: " + event.getPubkey());                                     
                                         NostrRTCAnswer answer = new NostrRTCAnswer(event.getPubkey(), content);
-                                        for (NostrRTCSignalingListener listener : listeners) {
+                                        for (Listener listener : listeners) {
                                             listener.onReceiveAnswer(answer);
                                         }
-                                        // } else{
-                                        //     logger.warning("Received answer from unknown announce: "+event.getPubkey());
-                                        // }
-
                                         return null;
                                     }
                                 case "candidate":
                                     {
-                                        logger.fine("Received candidate event from: " + event.getPubkey());
-                                        // NostrRTCAnnounce announce = seenAnnounces.get(event.getPubkey());
-                                        // if(announce!=null){
-                                        // logger.fine("Received candidate from announce: "+event.getPubkey());
+                                        assert dbg(()->logger.finest("Received candidate event from: " + event.getPubkey()));                                     
                                         NostrRTCIceCandidate candidate = new NostrRTCIceCandidate(event.getPubkey(), content);
-                                        for (NostrRTCSignalingListener listener : listeners) {
+                                        for (Listener listener : listeners) {
                                             listener.onReceiveCandidates(candidate);
                                         }
-                                        // } else{
-                                        //     logger.warning("Received candidates from unknown announce: "+event.getPubkey());
-                                        // }
                                         return null;
                                     }
                             }
                             logger.warning("Unknown event type: " + type);
                             return null;
                         } catch (Exception e) {
-                            logger.warning("Error processing event: " + e.getMessage());
+                            logger.log(Level.WARNING, "Error processing event", e);
                             return null;
                         }
-                    })
-                    .catchException(exc -> {
-                        logger.warning("Error decrypting event: " + exc.getMessage());
-                    });
+                    });                   
                 return null;
             });
     }
@@ -239,7 +239,7 @@ public class NostrRTCSignaling implements NostrSubEventListener, Closeable {
         return platform
             .awaitAll(List.of(open1, open2))
             .compose(acks -> {
-                logger.fine("Opened subscriptions: " + acks);
+                logger.finest("Opened subscriptions: " + acks);
                 this.loop();
                 return platform.wrapPromise((res, rej) -> {
                     res.accept(null);
@@ -254,7 +254,7 @@ public class NostrRTCSignaling implements NostrSubEventListener, Closeable {
                     try {
                         this.sendAnnounce().await();
                     } catch (Exception e) {
-                        logger.warning("Error in loop: " + e.getMessage());
+                        logger.log(Level.WARNING,"Error in loop", e);
                     }
 
                     // remove all expired announces
@@ -264,8 +264,8 @@ public class NostrRTCSignaling implements NostrSubEventListener, Closeable {
                         NostrRTCAnnounce announce = it.next();
                         if (announce.getExpireAt().isBefore(now)) {
                             it.remove();
-                            for (NostrRTCSignalingListener listener : listeners) {
-                                listener.onRemoveAnnounce(announce, NostrRTCSignalingListener.RemoveReason.EXPIRED);
+                            for (Listener listener : listeners) {
+                                listener.onRemoveAnnounce(announce, Listener.RemoveReason.EXPIRED);
                             }
                         }
                     }
@@ -286,7 +286,7 @@ public class NostrRTCSignaling implements NostrSubEventListener, Closeable {
         connectEvent.setTag("r", this.roomKeyPair.getPublicKey().asHex());
         connectEvent.setTag("t", "connect");
         connectEvent.setTag("expiration", String.valueOf(Instant.now().plusSeconds(60).getEpochSecond()));
-        logger.fine("Sending announce: " + connectEvent);
+        // logger.fine("Sending announce: " + connectEvent);
         out =
             this.localPeer.getSigner()
                 .sign(connectEvent)
@@ -307,14 +307,14 @@ public class NostrRTCSignaling implements NostrSubEventListener, Closeable {
         event.setTag("p", recipient.asHex());
 
         Platform platform = NostrUtils.getPlatform();
-        Map<String, String> content = Map.of("offer", offer.getOfferString());
+        Map<String, Object> content = offer.get();
 
         String json = platform.toJSON(content);
 
         return encrypt(json, recipient)
             .compose(encContent -> {
                 event.setContent(encContent);
-                logger.fine("Sending offer: " + event + " " + content + " to " + recipient);
+                logger.finest("Sending offer: " + event + " " + content + " to " + recipient);
 
                 return this.localPeer.getSigner()
                     .sign(event)
@@ -335,14 +335,14 @@ public class NostrRTCSignaling implements NostrSubEventListener, Closeable {
         event.setTag("p", recipient.asHex());
 
         Platform platform = NostrUtils.getPlatform();
-        Map<String, String> content = Map.of("sdp", answer.getSdp());
+        Map<String, Object> content = answer.get();
 
         String json = platform.toJSON(content);
 
         return encrypt(json, recipient)
             .compose(encContent -> {
                 event.setContent(encContent);
-                logger.fine("Sending answer: " + event + " " + content + " to " + recipient);
+                logger.finest("Sending answer: " + event + " " + content + " to " + recipient);
 
                 return this.localPeer.getSigner()
                     .sign(event)
@@ -354,8 +354,7 @@ public class NostrRTCSignaling implements NostrSubEventListener, Closeable {
 
     public AsyncTask<List<NostrMessageAck>> sendCandidates(NostrRTCIceCandidate candidate, NostrPublicKey recipient)
         throws Exception {
-        Collection<String> candidates = candidate.getCandidates();
-        if (this.closed) throw new IllegalStateException("Already closed");
+         if (this.closed) throw new IllegalStateException("Already closed");
 
         UnsignedNostrEvent event = new UnsignedNostrEvent();
         event.setKind(25050);
@@ -365,12 +364,12 @@ public class NostrRTCSignaling implements NostrSubEventListener, Closeable {
         event.setTag("p", recipient.asHex());
 
         Platform platform = NostrUtils.getPlatform();
-        Map<String, Object> content = Map.of("candidates", candidates);
+        Map<String, Object> content = candidate.get();
         String json = platform.toJSON(content);
         return encrypt(json, recipient)
             .compose(encContent -> {
                 event.setContent(encContent);
-                logger.fine("Sending candidates: " + event + " " + content + " to " + recipient);
+                logger.finest("Sending candidates: " + event + " " + content + " to " + recipient);
 
                 return this.localPeer.getSigner()
                     .sign(event)

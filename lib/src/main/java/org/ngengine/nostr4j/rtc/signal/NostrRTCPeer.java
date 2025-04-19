@@ -28,52 +28,85 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package org.ngengine.nostr4j.rtc;
+package org.ngengine.nostr4j.rtc.signal;
 
-import java.util.Collection;
+import java.time.Instant;
+import java.util.HashMap;
 import java.util.Map;
-import org.ngengine.nostr4j.keypair.NostrKeyPair;
-import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
+import java.util.Objects;
+import org.ngengine.nostr4j.keypair.NostrPublicKey;
 
-public class NostrRTCLocalPeer extends NostrRTCPeer {
+/**
+ * All the info about a peer in the swarm.
+ */
+public class NostrRTCPeer {
 
-    private NostrKeyPairSigner signer;
-    private Collection<String> stunServers;
+    private final NostrPublicKey pubkey;
+    private final Map<String, Object> misc;
+    private final String turnServer;
+    private Instant lastSeen;
 
-    public NostrRTCLocalPeer(
-        NostrKeyPair keyPair,
-        Collection<String> stunServers,
-        String turnServer,
-        Map<String, Object> misc
-    ) {
-        super(keyPair.getPublicKey(), turnServer, misc);
-        this.signer = new NostrKeyPairSigner(keyPair);
-        this.stunServers = stunServers;
+    NostrRTCPeer(NostrPublicKey pubkey, String turnServer, Map<String, Object> misc) {
+        Objects.nonNull(turnServer);
+        Objects.nonNull(pubkey);
+        Objects.nonNull(misc);
+        if (turnServer.isEmpty()) {
+            throw new IllegalArgumentException("Turn server cannot be empty");
+        }
+
+        this.pubkey = pubkey;
+        this.turnServer = turnServer;
+
+        this.misc = new HashMap<>(misc);
     }
 
-    public NostrKeyPairSigner getSigner() {
-        return signer;
+    public NostrPublicKey getPubkey() {
+        return pubkey;
     }
 
-    public Collection<String> getStunServers() {
-        return stunServers;
+    public Map<String, Object> getMisc() {
+        return misc;
+    }
+
+    public String getTurnServer() {
+        return turnServer;
+    }
+
+    public Instant getLastSeen() {
+        if (lastSeen == null) return Instant.now();
+        return lastSeen;
+    }
+
+    public void setLastSeen(Instant lastSeen) {
+        this.lastSeen = lastSeen;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) return true;
+        if (obj == null || getClass() != obj.getClass()) return false;
+        NostrRTCPeer that = (NostrRTCPeer) obj;
+        return pubkey.equals(that.pubkey);
+    }
+
+    @Override
+    public int hashCode() {
+        return pubkey.hashCode();
     }
 
     @Override
     public String toString() {
         return (
-            "NostrRTCLocalPeer{" +
+            "NostrRTCPeer{" +
             "pubkey=" +
-            getPubkey() +
+            pubkey +
             ", misc=" +
-            getMisc() +
+            misc +
             ", turnServer='" +
-            getTurnServer() +
+            turnServer +
             '\'' +
             ", lastSeen=" +
-            getLastSeen() +
-            ", stunServers=" +
-            stunServers +
+            lastSeen +
             '}'
         );
     }

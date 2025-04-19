@@ -72,7 +72,7 @@ import org.ngengine.nostr4j.platform.AsyncTask;
 import org.ngengine.nostr4j.platform.NostrExecutor;
 import org.ngengine.nostr4j.platform.Platform;
 import org.ngengine.nostr4j.transport.NostrTransport;
-import org.ngengine.nostr4j.transport.rtc.RTCTransport;
+import org.ngengine.nostr4j.transport.RTCTransport;
 import org.ngengine.nostr4j.utils.NostrUtils;
 
 // thread-safe

@@ -28,67 +28,85 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package org.ngengine.nostr4j.rtc.signal.signals;
+package org.ngengine.nostr4j.rtc.signal;
 
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
-import org.ngengine.nostr4j.rtc.NostrRTCPeer;
 import org.ngengine.nostr4j.utils.NostrUtils;
 
-public class NostrRTCIceCandidate implements NostrRTCSignal {
+/**
+ * An answer to an offer with the peer pubkey, sdp and metadata.
+ */
+public class NostrRTCAnswer implements NostrRTCSignal {
 
     private static final long serialVersionUID = 1L;
 
     private final NostrPublicKey pubkey;
     private final Map<String, Object> map;
-    private final Collection<String> candidates;
+    private final String sdp;
+    private final String turnServer;
+
     private transient NostrRTCPeer peerInfo;
 
-    public NostrRTCIceCandidate(NostrPublicKey pubkey, Collection<String> candidates, Map<String, Object> misc) {
-        this.candidates = Collections.unmodifiableCollection(candidates);
+    public NostrRTCAnswer(NostrPublicKey pubkey, String sdp, String turnServer, Map<String, Object> misc) {
+        this.pubkey = pubkey;
+        this.sdp = sdp;
+        this.turnServer = turnServer;
         HashMap<String, Object> map = new HashMap<>();
         if (misc != null && !misc.isEmpty()) {
             map.putAll(misc);
         }
-        map.put("candidates", this.candidates);
+        map.put("sdp", this.sdp);
+        if (turnServer != null && !turnServer.isEmpty()) {
+            map.put("turn", turnServer);
+        } else {
+            map.remove("turn");
+        }
         this.map = Collections.unmodifiableMap(map);
-        this.pubkey = pubkey;
     }
 
-    public NostrRTCIceCandidate(NostrPublicKey pubkey, Map<String, Object> map) {
-        this(pubkey, Arrays.asList(NostrUtils.safeStringArray(map.get("candidates"))), map);
+    public NostrRTCAnswer(NostrPublicKey pubkey, Map<String, Object> map) {
+        this(pubkey, NostrUtils.safeString(map.get("sdp")), NostrUtils.safeString(map.get("turn")), map);
     }
 
-    public Collection<String> getCandidates() {
-        return this.candidates;
+    public String getSdp() {
+        return this.sdp;
+    }
+
+    public String getTurnServers() {
+        return this.turnServer;
     }
 
     public Map<String, Object> get() {
         return this.map;
     }
 
+    public NostrRTCPeer getPeerInfo() {
+        if (peerInfo != null) return peerInfo;
+        peerInfo = new NostrRTCPeer(pubkey, this.turnServer, this.map);
+        return peerInfo;
+    }
+
     @Override
     public String toString() {
         return (
-            "NostrRTCOffer{" +
+            "NostrRTCAnswer{" +
             "pubkey=" +
             pubkey +
+            ", sdp='" +
+            sdp +
+            '\'' +
+            ", turnServer='" +
+            turnServer +
+            '\'' +
             ", map=" +
             Arrays.deepToString(map.entrySet().toArray()) +
-            ", candidates='" +
-            Arrays.deepToString(candidates.toArray()) +
-            '\'' +
+            ", peerInfo=" +
+            peerInfo +
             '}'
         );
-    }
-
-    public NostrRTCPeer getPeerInfo() {
-        if (peerInfo != null) return peerInfo;
-        peerInfo = new NostrRTCPeer(pubkey, "", this.map);
-        return peerInfo;
     }
 }

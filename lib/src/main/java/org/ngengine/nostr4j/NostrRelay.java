@@ -43,6 +43,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.listeners.NostrRelayComponent;
@@ -566,7 +567,7 @@ public final class NostrRelay implements TransportListener {
                     } catch (Exception e) {
                         rej.accept(e);
                         assert dbg(() -> {
-                            logger.warning("Error processing message: " + e.getMessage());
+                            logger.log(Level.WARNING, "Error processing message" , e);
                         });
                     }
                 },

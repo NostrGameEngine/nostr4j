@@ -9,7 +9,8 @@
             "name": "Main",
             "request": "launch",
             "mainClass": "org.ngengine.nostr4j.rtc.Main",
-            "projectName": "lib"
+            "projectName": "lib",
+            "console": "integratedTerminal"
         },
         {
             "type": "java",
@@ -17,7 +18,6 @@
             "request": "launch",
             "mainClass": "org.ngengine.nostr4j.rtc.TestNostrRTC",
             "projectName": "lib",
-            "console": "integratedTerminal"
         },
         {
             "type": "java",

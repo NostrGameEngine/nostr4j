@@ -28,73 +28,87 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package org.ngengine.nostr4j.rtc;
+package org.ngengine.nostr4j.rtc.signal;
 
-import java.time.Instant;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
+import org.ngengine.nostr4j.utils.NostrUtils;
 
-public class NostrRTCPeer {
+/**
+ * A webRTC offer to connect with a peer, with the peer pubkey, sdp and metadata.
+ */
+public class NostrRTCOffer implements NostrRTCSignal {
+
+    private static final long serialVersionUID = 1L;
 
     private final NostrPublicKey pubkey;
-    private final Map<String, Object> misc;
+    private final Map<String, Object> map;
+    private final String offerString;
     private final String turnServer;
-    private Instant lastSeen;
+    private transient NostrRTCPeer peerInfo;
 
-    public NostrRTCPeer(NostrPublicKey pubkey, String turnServer, Map<String, Object> misc) {
+    public NostrRTCOffer(NostrPublicKey pubkey, String offerString, String turnServer, Map<String, Object> misc) {
         this.pubkey = pubkey;
+        this.offerString = offerString;
         this.turnServer = turnServer;
-        this.misc = new HashMap<>(misc);
+        if(turnServer.isEmpty()) {
+            throw new IllegalArgumentException("Turn server cannot be empty");
+        }
+        HashMap<String, Object> map = new HashMap<>();
+        if (misc != null && !misc.isEmpty()) {
+            map.putAll(misc);
+        }
+        map.put("offer", this.offerString);
+        if (turnServer != null && !turnServer.isEmpty()) {
+            map.put("turn", turnServer);
+        } else {
+            map.remove("turn");
+        }
+
+        this.map = Collections.unmodifiableMap(map);
     }
 
-    public NostrPublicKey getPubkey() {
-        return pubkey;
+    public NostrRTCOffer(NostrPublicKey pubkey, Map<String, Object> map) {
+        this(pubkey, NostrUtils.safeString(map.get("offer")), NostrUtils.safeString(map.get("turn")), map);
     }
 
-    public Map<String, Object> getMisc() {
-        return misc;
+    public String getOfferString() {
+        return this.offerString;
     }
 
     public String getTurnServer() {
-        return turnServer;
+        return this.turnServer;
     }
 
-    public Instant getLastSeen() {
-        if (lastSeen == null) return Instant.now();
-        return lastSeen;
+    public Map<String, Object> get() {
+        return this.map;
     }
 
-    public void setLastSeen(Instant lastSeen) {
-        this.lastSeen = lastSeen;
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-        if (this == obj) return true;
-        if (obj == null || getClass() != obj.getClass()) return false;
-        NostrRTCPeer that = (NostrRTCPeer) obj;
-        return pubkey.equals(that.pubkey);
-    }
-
-    @Override
-    public int hashCode() {
-        return pubkey.hashCode();
+    public NostrRTCPeer getPeerInfo() {
+        if (peerInfo != null) return peerInfo;
+        peerInfo = new NostrRTCPeer(pubkey, this.turnServer, this.map);
+        return peerInfo;
     }
 
     @Override
     public String toString() {
         return (
-            "NostrRTCPeer{" +
+            "NostrRTCOffer{" +
             "pubkey=" +
             pubkey +
-            ", misc=" +
-            misc +
+            ", map=" +
+            Arrays.deepToString(map.entrySet().toArray()) +
+            ", offerString='" +
+            offerString +
+            '\'' +
             ", turnServer='" +
             turnServer +
             '\'' +
-            ", lastSeen=" +
-            lastSeen +
+            ", peerInfo=" +
+            peerInfo +
             '}'
         );
     }

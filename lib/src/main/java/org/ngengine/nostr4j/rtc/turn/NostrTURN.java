@@ -49,13 +49,18 @@ import org.ngengine.nostr4j.event.tracker.PassthroughEventTracker;
 import org.ngengine.nostr4j.platform.AsyncTask;
 import org.ngengine.nostr4j.platform.NostrExecutor;
 import org.ngengine.nostr4j.platform.Platform;
-import org.ngengine.nostr4j.rtc.NostrRTCLocalPeer;
-import org.ngengine.nostr4j.rtc.NostrRTCPeer;
+import org.ngengine.nostr4j.rtc.signal.NostrRTCLocalPeer;
+import org.ngengine.nostr4j.rtc.signal.NostrRTCPeer;
 import org.ngengine.nostr4j.utils.NostrUtils;
 
 // A turn server that uses nostr relays to relay encrypted and compressed data
 public class NostrTURN {
 
+    public static interface  Listener {
+        void onTurnPacket(NostrRTCPeer peer, ByteBuffer data);
+    }
+
+   
     private static final Logger logger = Logger.getLogger(NostrTURN.class.getName());
 
     private static class Chunk {
@@ -102,7 +107,7 @@ public class NostrTURN {
     private final Map<Long, Packet> outQueue = new HashMap<>();
     private final AtomicLong packetCounter = new AtomicLong(0);
     private final NostrExecutor executor;
-    private final List<NostrTURNListener> listeners = new CopyOnWriteArrayList<>();
+    private final List<Listener> listeners = new CopyOnWriteArrayList<>();
 
     private Packet inPacket;
     private Runnable outQueueNotify;
@@ -117,8 +122,9 @@ public class NostrTURN {
         this.executor = platform.newPoolExecutor();
 
         // setup local peer turn server
+        logger.fine("Connecting to local TURN server: " + localPeer.getTurnServer());
         this.inPool = new NostrPool(PassthroughEventTracker.class);
-        this.inPool.connectRelay(new NostrRelay(localPeer.getTurnServer(), executor));
+        this.inPool.connectRelay(new NostrRelay(Objects.requireNonNull(localPeer.getTurnServer()), executor));
         this.inSub =
             this.inPool.subscribe(
                     new NostrFilter()
@@ -131,8 +137,9 @@ public class NostrTURN {
             });
 
         // setup remote peer turn server
+        logger.fine("Connecting to remote TURN server: " + remotePeer.getTurnServer());
         this.outPool = new NostrPool(PassthroughEventTracker.class);
-        this.outPool.connectRelay(new NostrRelay(remotePeer.getTurnServer(), executor));
+        this.outPool.connectRelay(new NostrRelay(Objects.requireNonNull(remotePeer.getTurnServer()), executor));
         this.outSub =
             this.outPool.subscribe(
                     new NostrFilter()
@@ -145,11 +152,11 @@ public class NostrTURN {
             });
     }
 
-    public void addListener(NostrTURNListener listener) {
+    public void addListener(Listener listener) {
         this.listeners.add(listener);
     }
 
-    public void removeListener(NostrTURNListener listener) {
+    public void removeListener(Listener listener) {
         this.listeners.remove(listener);
     }
 
@@ -281,7 +288,7 @@ public class NostrTURN {
                     inflater.end();
 
                     ByteBuffer byteBuffer = ByteBuffer.wrap(buffer, 0, decompressedSize);
-                    for (NostrTURNListener listener : listeners) {
+                    for (Listener listener : listeners) {
                         listener.onTurnPacket(remotePeer, byteBuffer);
                     }
                 } catch (Exception e) {

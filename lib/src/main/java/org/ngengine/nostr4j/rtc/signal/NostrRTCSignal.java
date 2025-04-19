@@ -30,27 +30,12 @@
  */
 package org.ngengine.nostr4j.rtc.signal;
 
-import org.ngengine.nostr4j.rtc.signal.signals.NostrRTCAnnounce;
-import org.ngengine.nostr4j.rtc.signal.signals.NostrRTCAnswer;
-import org.ngengine.nostr4j.rtc.signal.signals.NostrRTCIceCandidate;
-import org.ngengine.nostr4j.rtc.signal.signals.NostrRTCOffer;
+import java.io.Serializable;
+import java.util.Map;
 
-public interface NostrRTCSignalingListener {
-    enum RemoveReason {
-        EXPIRED,
-        DISCONNECTED,
-        UNKNOWN,
-    }
-
-    void onAddAnnounce(NostrRTCAnnounce announce);
-
-    void onUpdateAnnounce(NostrRTCAnnounce announce);
-
-    void onRemoveAnnounce(NostrRTCAnnounce announce, RemoveReason reason);
-
-    void onReceiveOffer(NostrRTCOffer offer);
-
-    void onReceiveAnswer(NostrRTCAnswer answer);
-
-    void onReceiveCandidates(NostrRTCIceCandidate candidate);
+/**
+ * A signal for the RTC handshake.
+ */
+public interface NostrRTCSignal extends Serializable {
+    Map<String, Object> get();
 }

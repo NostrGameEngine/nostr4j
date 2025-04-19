@@ -28,11 +28,59 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package org.ngengine.nostr4j.rtc.turn;
+package org.ngengine.nostr4j.rtc.signal;
 
-import java.nio.ByteBuffer;
-import org.ngengine.nostr4j.rtc.NostrRTCPeer;
+import java.util.Collection;
+import java.util.Map;
+import java.util.Objects;
+import org.ngengine.nostr4j.keypair.NostrKeyPair;
+import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
 
-public interface NostrTURNListener {
-    void onTurnPacket(NostrRTCPeer peer, ByteBuffer data);
+/**
+ * All the info about the current local peer.
+ */
+public class NostrRTCLocalPeer extends NostrRTCPeer {
+
+    private NostrKeyPairSigner signer;
+    private Collection<String> stunServers;
+
+    public NostrRTCLocalPeer(
+        NostrKeyPair keyPair,
+        Collection<String> stunServers,
+        String turnServer,
+        Map<String, Object> misc
+    ) {
+        super(keyPair.getPublicKey(), turnServer, misc);
+        Objects.nonNull(signer);
+        Objects.nonNull(stunServers);
+        this.signer = new NostrKeyPairSigner(keyPair);
+        this.stunServers = stunServers;
+    }
+
+    public NostrKeyPairSigner getSigner() {
+        return signer;
+    }
+
+    public Collection<String> getStunServers() {
+        return stunServers;
+    }
+
+    @Override
+    public String toString() {
+        return (
+            "NostrRTCLocalPeer{" +
+            "pubkey=" +
+            getPubkey() +
+            ", misc=" +
+            getMisc() +
+            ", turnServer='" +
+            getTurnServer() +
+            '\'' +
+            ", lastSeen=" +
+            getLastSeen() +
+            ", stunServers=" +
+            stunServers +
+            '}'
+        );
+    }
 }

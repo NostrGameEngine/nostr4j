@@ -31,7 +31,8 @@
 package org.ngengine.nostr4j.rtc;
 
 import java.nio.ByteBuffer;
-import org.ngengine.nostr4j.rtc.signal.signals.NostrRTCIceCandidate;
+
+import org.ngengine.nostr4j.rtc.signal.NostrRTCIceCandidate;
 
 public interface NostrRTCSocketListener {
     void onRTCSocketLocalIceCandidate(NostrRTCSocket socket, NostrRTCIceCandidate candidate);

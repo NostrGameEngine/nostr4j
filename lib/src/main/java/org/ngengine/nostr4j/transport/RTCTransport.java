@@ -28,19 +28,39 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package org.ngengine.nostr4j.transport.rtc;
+package org.ngengine.nostr4j.transport;
 
+import java.io.Closeable;
 import java.nio.ByteBuffer;
+import java.util.Collection;
+import org.ngengine.nostr4j.platform.AsyncTask;
 
-public interface RTCTransportListener {
-    void onLocalRTCIceCandidate(String candidate);
-    void onRTCBinaryMessage(ByteBuffer msg);
+public interface RTCTransport extends Closeable {
+    public static interface RTCTransportListener {
+        void onLocalRTCIceCandidate(String candidate);
 
-    void onRTCChannelClosed();
+        void onRTCBinaryMessage(ByteBuffer msg);
 
-    void onRTCChannelError(Throwable e);
+        void onRTCChannelClosed();
 
-    void onLinkEstablished();
+        void onRTCChannelError(Throwable e);
 
-    void onLinkLost();
+        void onLinkEstablished();
+
+        void onLinkLost();
+    }
+
+    void close();
+
+    AsyncTask<Void> start(String connId, Collection<String> stunServers);
+    AsyncTask<String> connectToChannel(String offerOrAnswer);
+    AsyncTask<String> initiateChannel();
+
+    void addRemoteIceCandidates(Collection<String> candidates);
+
+    void addListener(RTCTransportListener listener);
+
+    void removeListener(RTCTransportListener listener);
+
+    AsyncTask<Void> write(ByteBuffer message);
 }

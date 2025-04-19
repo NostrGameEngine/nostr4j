@@ -35,6 +35,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Queue;
@@ -50,6 +51,7 @@ import org.ngengine.nostr4j.platform.AsyncTask;
 import org.ngengine.nostr4j.platform.NostrExecutor;
 import org.ngengine.nostr4j.platform.Platform;
 import org.ngengine.nostr4j.transport.NostrTransport;
+import org.ngengine.nostr4j.transport.RTCTransport;
 import org.ngengine.nostr4j.utils.NostrUtils;
 import org.teavm.jso.JSBody;
 import org.teavm.jso.ajax.ReadyStateChangeHandler;
@@ -250,6 +252,12 @@ public class TeaVMPlatform implements Platform {
                             .catchError(rej::accept);
                 }, executor);
             }
+
+            @Override
+            public void cancel() {
+                // TODO Auto-generated method stub
+                throw new UnsupportedOperationException("Unimplemented method 'cancel'");
+            }
         };
     }
 
@@ -431,5 +439,11 @@ public class TeaVMPlatform implements Platform {
     public NostrExecutor newPoolExecutor() {
         return newJsExecutor();
 
+    }
+
+    @Override
+    public RTCTransport newRTCTransport(String connId, Collection<String> stunServers) {
+        // TODO Auto-generated method stub
+        throw new UnsupportedOperationException("Unimplemented method 'newRTCTransport'");
     }
 }

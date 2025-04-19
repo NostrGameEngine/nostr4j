@@ -49,6 +49,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.NostrFilter;
 import org.ngengine.nostr4j.NostrPool;
@@ -566,7 +567,7 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
                 }
             }
         } catch (Exception e) {
-            logger.warning("Error processing event: " + e.getMessage());
+            logger.log(Level.WARNING, "Error processing event" , e);
         }
     }
 

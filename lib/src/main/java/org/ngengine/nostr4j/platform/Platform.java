@@ -40,7 +40,7 @@ import java.util.function.Consumer;
 import org.ngengine.nostr4j.keypair.NostrPrivateKey;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.transport.NostrTransport;
-import org.ngengine.nostr4j.transport.rtc.RTCTransport;
+import org.ngengine.nostr4j.transport.RTCTransport;
 
 public interface Platform {
     byte[] generatePrivateKey() throws Exception;

@@ -38,7 +38,7 @@ import java.util.concurrent.TimeUnit;
 import org.ngengine.nostr4j.platform.AsyncTask;
 import org.ngengine.nostr4j.platform.NostrExecutor;
 import org.ngengine.nostr4j.transport.NostrTransport;
-import org.ngengine.nostr4j.transport.rtc.RTCTransport;
+import org.ngengine.nostr4j.transport.RTCTransport;
 
 public class JVMThreadedPlatform extends JVMAsyncPlatform {
 
