@@ -171,7 +171,7 @@ public class UnsignedNostrEvent implements NostrEvent {
     // nip40 expiration
     public UnsignedNostrEvent setExpirationTimestamp(Instant expiresAt) {
         if (expiresAt != null) {
-            setTag("expiration", "expiration", String.valueOf(Objects.requireNonNull(expiresAt).getEpochSecond()));
+            setTag("expiration",  String.valueOf(Objects.requireNonNull(expiresAt).getEpochSecond()));
         } else {
             unsetTag("expiration");
         }

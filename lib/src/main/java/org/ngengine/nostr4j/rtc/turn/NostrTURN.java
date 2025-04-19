@@ -30,6 +30,7 @@
  */
 package org.ngengine.nostr4j.rtc.turn;
 
+import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.util.*;
@@ -186,9 +187,10 @@ public class NostrTURN {
                     this.onReceivedAck(decrypted.substring(3));
                 } else if (prefix.equals("pkt") && !fromRemote) {
                     this.onReceivedPacket(decrypted.substring(3));
-                } else {
-                    logger.warning("Unknown TURN event: " + prefix + " fromRemote " + fromRemote);
-                }
+                } 
+                // else {
+                //     logger.warning("Unknown TURN event: " + prefix + " fromRemote " + fromRemote);
+                // }
                 return null;
             });
     }
@@ -283,11 +285,21 @@ public class NostrTURN {
                     // decompress
                     Inflater inflater = new Inflater();
                     inflater.setInput(decoded);
-                    byte[] buffer = new byte[config.getChunkLength()];
-                    int decompressedSize = inflater.inflate(buffer);
+                    
+                    ByteArrayOutputStream bos = new ByteArrayOutputStream(decoded.length );
+                    int decompressedSize = 0;
+                    byte[] chunk = new byte[1024];
+                    while(!inflater.finished()) {                     
+                        int s= inflater.inflate(chunk);
+                        if (s == 0) {
+                            break;
+                        }
+                        bos.write(chunk, 0, s);
+                        decompressedSize += s;
+                    }
                     inflater.end();
 
-                    ByteBuffer byteBuffer = ByteBuffer.wrap(buffer, 0, decompressedSize);
+                    ByteBuffer byteBuffer = ByteBuffer.wrap(bos.toByteArray(), 0, decompressedSize);
                     for (Listener listener : listeners) {
                         listener.onTurnPacket(remotePeer, byteBuffer);
                     }
@@ -327,84 +339,108 @@ public class NostrTURN {
     }
 
     private void loop() {
+
         this.executor.runLater(
                 () -> {
-                    Collection<Packet> packets = outQueue.values();
-                    if (packets.isEmpty()) {
-                        Platform platform = NostrUtils.getPlatform();
-                        platform
-                            .wrapPromise((res, rej) -> {
-                                assert outQueueNotify == null;
-                                outQueueNotify =
-                                    () -> {
-                                        res.accept(null);
-                                    };
-                            })
-                            .await();
-                    }
-                    if (this.stopped) return null;
-                    Map.Entry<Long, Packet> entry = outQueue.size() > 0 ? outQueue.entrySet().iterator().next() : null;
-                    if (entry != null) {
-                        Packet nextPacket = entry.getValue();
-                        for (int i = 0; i < nextPacket.chunks.size(); i++) {
-                            Chunk chunk = nextPacket.chunks.get(i);
-                            Instant lastAttempt = chunk.lastAttempt;
+                    try{
 
-                            // Skip chunk if not acked but still likely to be in transit
-                            if (Instant.now().isAfter(lastAttempt.plus(this.config.getMaxLatency()))) {
-                                continue;
-                            }
-
-                            // Skip chunk if acked
-                            if (chunk.ack) {
-                                continue;
-                            }
-
-                            // Update last attempt timestamp
-                            chunk.lastAttempt = Instant.now();
-
-                            // Prepare data for sending
-                            final int chunkIndex = i;
-                            String encrypted =
-                                this.localPeer.getSigner()
-                                    .encrypt(
-                                        "pkt" +
-                                        nextPacket.id +
-                                        "," +
-                                        chunkIndex +
-                                        "," +
-                                        nextPacket.chunks.size() +
-                                        "," +
-                                        chunk.data,
-                                        remotePeer.getPubkey()
-                                    )
-                                    .await();
-
-                            // First attempt, mark it as sent
-                            if (!chunk.sent) {
-                                chunk.sent = true;
-                                nextPacket.sent++;
-                            }
-
-                            logger.fine("Sending chunk " + nextPacket.id + "," + chunkIndex);
-
-                            // Create and send event
-                            UnsignedNostrEvent event = new UnsignedNostrEvent();
-                            event.setKind(this.config.getKind());
-                            event.setCreatedAt(Instant.now());
-                            event.setContent(encrypted);
-                            event.setTag("d", "turn-" + this.connectionId);
-                            event.setExpirationTimestamp(Instant.now().plus(this.config.getPacketTimeout()));
-
-                            SignedNostrEvent signed = this.localPeer.getSigner().sign(event).await();
-
-                            this.outPool.send(signed).await();
+                        Collection<Packet> packets = outQueue.values();
+                        if (packets.isEmpty()) {
+                            Platform platform = NostrUtils.getPlatform();
+                            platform
+                                .wrapPromise((res, rej) -> {
+                                    assert outQueueNotify == null;
+                                        System.out.println("waiting...");
+                                    outQueueNotify =
+                                        () -> {
+                                            res.accept(null);
+                                        };
+                                })
+                                .await();
+                            System.out.println("loop");
                         }
-                    }
+                        if (this.stopped) {
+                            System.out.println("Stopping loop");
+                            return null;
+                        }
+                        Map.Entry<Long, Packet> entry = outQueue.size() > 0 ? outQueue.entrySet().iterator().next() : null;
+                        if (entry != null) {
+                            Packet nextPacket = entry.getValue();
+                            for (int i = 0; i < nextPacket.chunks.size(); i++) {
+                                Chunk chunk = nextPacket.chunks.get(i);
+                                Instant lastAttempt = chunk.lastAttempt;
 
-                    if (this.stopped) return null;
-                    this.loop();
-                    return null;
+                                // Skip chunk if not acked but still likely to be in transit
+                                if (lastAttempt!=null&&Instant.now().isAfter(lastAttempt.plus(this.config.getMaxLatency()))) {
+                                    System.out.println("Skipping chunk " + nextPacket.id + "," + i);
+                                    continue;
+                                }
+
+                                // Skip chunk if acked
+                                if (chunk.ack) {
+                                    System.out.println("Skipping chunk " + nextPacket.id + "," + i + " acked");
+                                    continue;
+                                }
+
+                                // Update last attempt timestamp
+                                chunk.lastAttempt = Instant.now();
+
+                                // Prepare data for sending
+                                final int chunkIndex = i;
+                                System.out.println("Encrypting chunk " + nextPacket.id + "," + chunkIndex);
+                                String encrypted =
+                                    this.localPeer.getSigner()
+                                        .encrypt(
+                                            "pkt" +
+                                            nextPacket.id +
+                                            "," +
+                                            chunkIndex +
+                                            "," +
+                                            nextPacket.chunks.size() +
+                                            "," +
+                                            chunk.data,
+                                            remotePeer.getPubkey()
+                                        )
+                                        .await();
+                                System.out.println("Encrypted chunk " + nextPacket.id + "," + chunkIndex);
+                                // First attempt, mark it as sent
+                                if (!chunk.sent) {
+                                    chunk.sent = true;
+                                    nextPacket.sent++;
+                                }
+
+                                logger.fine("Sending chunk " + nextPacket.id + "," + chunkIndex);
+
+                                // Create and send event
+                                UnsignedNostrEvent event = new UnsignedNostrEvent();
+                                event.setKind(this.config.getKind());
+                                event.setCreatedAt(Instant.now());
+                                event.setContent(encrypted);
+                                event.setTag("d", "turn-" + this.connectionId);
+                                event.setExpirationTimestamp(Instant.now().plus(this.config.getPacketTimeout()));
+
+                                SignedNostrEvent signed = this.localPeer.getSigner().sign(event).await();
+                                System.out.println("Send!");
+
+                                this.outPool.send(signed).await();
+                                System.out.println("Sent");
+                            }
+                        }
+
+                        if (this.stopped) {
+                            System.out.println("Stopping loop1");
+
+                            return null;
+                        }
+
+                        System.out.println("schedule next loop");
+                        this.loop();
+                        return null;
+                    } catch (Exception e) {
+                        System.out.println("Error in loop: " + e.getMessage());
+                        e.printStackTrace();
+                        return null;
+                    }
                 },
                 this.config.getLoopInterval().toMillis(),
                 TimeUnit.MILLISECONDS
@@ -416,17 +452,29 @@ public class NostrTURN {
         return platform.promisify(
             (res, rej) -> {
                 // compress
-                Deflater deflater = new Deflater();
-                byte dataBytes[] = new byte[data.remaining()];
-                data.slice().get(dataBytes);
-                deflater.setInput(dataBytes);
-                deflater.finish();
-                byte[] buffer = new byte[dataBytes.length];
-                int compressedSize = deflater.deflate(buffer);
-                deflater.end();
+                    Deflater deflater = new Deflater();
+                    byte[] inputBytes = new byte[data.remaining()];
+              
+                    data.slice().get(inputBytes);
+                    deflater.setInput(inputBytes);
+                    deflater.finish(); 
+
+                    ByteArrayOutputStream outputStream = new ByteArrayOutputStream(); 
+                    byte[] buffer = new byte[1024]; 
+                    while (!deflater.finished()) {
+                        int count = deflater.deflate(buffer); 
+                        if (count > 0) {
+                            outputStream.write(buffer, 0, count);
+                        } else {
+                           
+                            break;
+                        }
+                    }
+                    deflater.end(); 
+                    byte[] compressedBytes = outputStream.toByteArray(); 
 
                 // encode to b64
-                String b64data = Base64.getEncoder().encodeToString(Arrays.copyOf(buffer, compressedSize));
+                String b64data = Base64.getEncoder().encodeToString(compressedBytes);
 
                 // split into chunks
                 long packetId = packetCounter.incrementAndGet();

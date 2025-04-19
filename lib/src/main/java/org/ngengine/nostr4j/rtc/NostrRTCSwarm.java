@@ -394,7 +394,11 @@ public class NostrRTCSwarm implements NostrRTCSignaling.Listener, NostrRTCSocket
         for (NostrRTCSwarmOnPeerMessage listener : onMessageListeners) {
             listener.onSwarmPeerMessage(socket.getRemotePeer().getPubkey(), socket, bbf, turn);
         }
-        logger.fine("Received message from peer: " + socket.getRemotePeer().getPubkey() + " : " + bbf);
+
+        byte bbfArray[] = new byte[bbf.remaining()];
+        bbf.get(bbfArray);
+        bbf.flip();
+        logger.fine("Received message from peer: " + socket.getRemotePeer().getPubkey() + " : " + new String(bbfArray));
     }
 
     public void send(NostrPublicKey peer, ByteBuffer bbf) {

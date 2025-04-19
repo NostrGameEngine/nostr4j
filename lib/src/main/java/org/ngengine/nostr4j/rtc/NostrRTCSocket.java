@@ -199,6 +199,7 @@ public class NostrRTCSocket implements RTCTransport.RTCTransportListener, NostrT
             // logger.fine("Use offer to connect");
             this.remotePeer =
                 Objects.requireNonNull(((NostrRTCOffer) offerOrAnswer).getPeerInfo(), "Remote Peer cannot be null");
+            emitCandidates();
             connectString = ((NostrRTCOffer) offerOrAnswer).getOfferString();
         } else if (offerOrAnswer instanceof NostrRTCAnswer) {
             // logger.fine("Use answer to connect");
@@ -207,7 +208,9 @@ public class NostrRTCSocket implements RTCTransport.RTCTransportListener, NostrT
 
             this.remotePeer =
                 Objects.requireNonNull(((NostrRTCAnswer) offerOrAnswer).getPeerInfo(), "Remote Peer cannot be null");
+            emitCandidates();
             connectString = ((NostrRTCAnswer) offerOrAnswer).getSdp();
+
         } else {
             throw new IllegalArgumentException("Invalid RTC signal type");
         }
@@ -263,6 +266,7 @@ public class NostrRTCSocket implements RTCTransport.RTCTransportListener, NostrT
     }
 
     public void useTURN(boolean use) {
+        
         if (use == useTURN) return;
         logger.fine("Using TURN: " + use);
         this.useTURN = use;

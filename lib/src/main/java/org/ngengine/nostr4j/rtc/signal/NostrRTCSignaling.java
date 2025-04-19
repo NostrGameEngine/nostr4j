@@ -222,7 +222,9 @@ public class NostrRTCSignaling implements NostrSubEventListener, Closeable {
         NostrPublicKey localpk = this.localPeer.getPubkey();
         this.sub1 =
             this.pool.subscribe(
-                    new NostrFilter().kind(25050).tag("r", roomKeyPair.getPublicKey().asHex()).tag("t", "connect", "disconnect")
+                    new NostrFilter().kind(25050)
+                    .tag("r", roomKeyPair.getPublicKey().asHex()).tag("t", "connect", "disconnect")
+                    .limit(0)
                 );
         this.sub2 =
             this.pool.subscribe(
@@ -231,6 +233,7 @@ public class NostrRTCSignaling implements NostrSubEventListener, Closeable {
                         .tag("r", roomKeyPair.getPublicKey().asHex())
                         .tag("t", "offer", "answer", "candidate")
                         .tag("p", localpk.asHex())
+                        .limit(0)
                 );
         this.sub1.listenEvent(this);
         this.sub2.listenEvent(this);

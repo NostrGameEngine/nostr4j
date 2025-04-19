@@ -82,7 +82,7 @@ public class TestNostrRTC {
 
                             @Override
                             public void onRTCSocketMessage(NostrRTCSocket socket, ByteBuffer bbf, boolean turn) {
-                                System.out.println(name + " incoming message: " + bbf);
+                                System.out.println(name + " incoming message: " + new String(bbf.array())+ " p2p:" + !turn);
                             }
                         }
                     );
