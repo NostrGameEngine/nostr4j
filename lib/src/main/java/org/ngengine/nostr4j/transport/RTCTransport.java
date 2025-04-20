@@ -36,7 +36,7 @@ import java.util.Collection;
 import org.ngengine.nostr4j.platform.AsyncTask;
 
 public interface RTCTransport extends Closeable {
-    public static interface RTCTransportListener {
+    interface RTCTransportListener {
         void onLocalRTCIceCandidate(String candidate);
 
         void onRTCBinaryMessage(ByteBuffer msg);

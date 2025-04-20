@@ -567,7 +567,7 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
                 }
             }
         } catch (Exception e) {
-            logger.log(Level.WARNING, "Error processing event" , e);
+            logger.log(Level.WARNING, "Error processing event", e);
         }
     }
 

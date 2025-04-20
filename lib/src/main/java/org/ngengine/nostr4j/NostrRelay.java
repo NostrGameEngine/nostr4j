@@ -284,9 +284,9 @@ public final class NostrRelay implements TransportListener {
                             this.connector.send(json)
                                 .catchException(e -> {
                                     // assert dbg(() -> {
-                                        
+
                                     // });
-                                    logger.log(Level.WARNING, "Error sending message",e);
+                                    logger.log(Level.WARNING, "Error sending message", e);
                                     result.callFailureCallback(e.getMessage());
                                 })
                                 .then(vo -> {
@@ -567,7 +567,7 @@ public final class NostrRelay implements TransportListener {
                     } catch (Exception e) {
                         rej.accept(e);
                         assert dbg(() -> {
-                            logger.log(Level.WARNING, "Error processing message" , e);
+                            logger.log(Level.WARNING, "Error processing message", e);
                         });
                     }
                 },

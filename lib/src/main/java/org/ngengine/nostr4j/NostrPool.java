@@ -114,7 +114,9 @@ public class NostrPool implements NostrRelayComponent {
                             atLeastOneSuccess = true;
                         } else {
                             logger.warning(
-                                "Failed to send message "+message+" to relay " +
+                                "Failed to send message " +
+                                message +
+                                " to relay " +
                                 ack.getRelay().getUrl() +
                                 ": " +
                                 ack.getMessage()

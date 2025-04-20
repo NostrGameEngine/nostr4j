@@ -30,9 +30,10 @@
  */
 package org.ngengine.nostr4j.rtc.signal;
 
+import static org.ngengine.nostr4j.utils.NostrUtils.dbg;
+
 import java.io.Closeable;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
@@ -58,10 +59,9 @@ import org.ngengine.nostr4j.rtc.NostrRTCSettings;
 import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
 import org.ngengine.nostr4j.transport.NostrMessageAck;
 import org.ngengine.nostr4j.utils.NostrUtils;
-import static org.ngengine.nostr4j.utils.NostrUtils.dbg;
 
 /**
- * Handles peer signaling 
+ * Handles peer signaling
  */
 public class NostrRTCSignaling implements NostrSubEventListener, Closeable {
 
@@ -143,7 +143,7 @@ public class NostrRTCSignaling implements NostrSubEventListener, Closeable {
                                 }
                                 seenAnnounces.add(a);
                             } else {
-                                assert dbg(()->logger.finest("Update announce: " + event.getPubkey()));
+                                assert dbg(() -> logger.finest("Update announce: " + event.getPubkey()));
                                 ann.updateExpireAt(event.getExpirationTimestamp());
                                 for (Listener listener : listeners) {
                                     listener.onUpdateAnnounce(ann);
@@ -183,12 +183,12 @@ public class NostrRTCSignaling implements NostrSubEventListener, Closeable {
                                         NostrRTCOffer offer = new NostrRTCOffer(event.getPubkey(), content);
                                         for (Listener listener : listeners) {
                                             listener.onReceiveOffer(offer);
-                                        }                                        
+                                        }
                                         return null;
                                     }
                                 case "answer":
                                     {
-                                        logger.finest("Received answer from: " + event.getPubkey());                                     
+                                        logger.finest("Received answer from: " + event.getPubkey());
                                         NostrRTCAnswer answer = new NostrRTCAnswer(event.getPubkey(), content);
                                         for (Listener listener : listeners) {
                                             listener.onReceiveAnswer(answer);
@@ -197,7 +197,7 @@ public class NostrRTCSignaling implements NostrSubEventListener, Closeable {
                                     }
                                 case "candidate":
                                     {
-                                        assert dbg(()->logger.finest("Received candidate event from: " + event.getPubkey()));                                     
+                                        assert dbg(() -> logger.finest("Received candidate event from: " + event.getPubkey()));
                                         NostrRTCIceCandidate candidate = new NostrRTCIceCandidate(event.getPubkey(), content);
                                         for (Listener listener : listeners) {
                                             listener.onReceiveCandidates(candidate);
@@ -211,7 +211,7 @@ public class NostrRTCSignaling implements NostrSubEventListener, Closeable {
                             logger.log(Level.WARNING, "Error processing event", e);
                             return null;
                         }
-                    });                   
+                    });
                 return null;
             });
     }
@@ -222,9 +222,11 @@ public class NostrRTCSignaling implements NostrSubEventListener, Closeable {
         NostrPublicKey localpk = this.localPeer.getPubkey();
         this.sub1 =
             this.pool.subscribe(
-                    new NostrFilter().kind(25050)
-                    .tag("r", roomKeyPair.getPublicKey().asHex()).tag("t", "connect", "disconnect")
-                    .limit(0)
+                    new NostrFilter()
+                        .kind(25050)
+                        .tag("r", roomKeyPair.getPublicKey().asHex())
+                        .tag("t", "connect", "disconnect")
+                        .limit(0)
                 );
         this.sub2 =
             this.pool.subscribe(
@@ -257,7 +259,7 @@ public class NostrRTCSignaling implements NostrSubEventListener, Closeable {
                     try {
                         this.sendAnnounce().await();
                     } catch (Exception e) {
-                        logger.log(Level.WARNING,"Error in loop", e);
+                        logger.log(Level.WARNING, "Error in loop", e);
                     }
 
                     // remove all expired announces
@@ -357,7 +359,7 @@ public class NostrRTCSignaling implements NostrSubEventListener, Closeable {
 
     public AsyncTask<List<NostrMessageAck>> sendCandidates(NostrRTCIceCandidate candidate, NostrPublicKey recipient)
         throws Exception {
-         if (this.closed) throw new IllegalStateException("Already closed");
+        if (this.closed) throw new IllegalStateException("Already closed");
 
         UnsignedNostrEvent event = new UnsignedNostrEvent();
         event.setKind(25050);

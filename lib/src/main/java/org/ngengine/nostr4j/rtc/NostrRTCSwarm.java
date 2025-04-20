@@ -145,8 +145,7 @@ public class NostrRTCSwarm implements NostrRTCSignaling.Listener, NostrRTCSocket
                             boolean isPending = pendingInitiatedConnections.containsKey(remotePubkey);
                             if (isPending) continue;
 
-
-                            if(!shouldOfferConnection(remotePubkey)) continue;
+                            if (!shouldOfferConnection(remotePubkey)) continue;
 
                             logger.fine("Initiating connection to: " + remotePubkey);
 
@@ -284,15 +283,15 @@ public class NostrRTCSwarm implements NostrRTCSignaling.Listener, NostrRTCSocket
         PendingConnection conn = pendingInitiatedConnections.get(remotePubkey);
         if (conn != null) {
             // if (hasPrecedenceOverLocal(remotePubkey)) {
-                // if there is already a connection initiated to this peer, forfeit it if the
-                // remote has precedence over local.
-                pendingInitiatedConnections.remove(remotePubkey);
-                logger.fine(
-                    "Forfeiting connection to peer: " +
-                    remotePubkey +
-                    " because remote peer has precedence over local peer and is initiating the connection"
-                );
-                conn.socket.close();
+            // if there is already a connection initiated to this peer, forfeit it if the
+            // remote has precedence over local.
+            pendingInitiatedConnections.remove(remotePubkey);
+            logger.fine(
+                "Forfeiting connection to peer: " +
+                remotePubkey +
+                " because remote peer has precedence over local peer and is initiating the connection"
+            );
+            conn.socket.close();
             // } else {
             //     logger.fine("Already have a pending connection for peer: " + remotePubkey + " with local peer precedence");
             //     // otherwise, just ignore it
@@ -375,9 +374,9 @@ public class NostrRTCSwarm implements NostrRTCSignaling.Listener, NostrRTCSocket
     public void onRTCSocketLocalIceCandidate(NostrRTCSocket socket, NostrRTCIceCandidate candidate) {
         try {
             NostrRTCPeer remotePeer = socket.getRemotePeer();
-            if(remotePeer==null)return;
+            if (remotePeer == null) return;
             NostrPublicKey pubkey = remotePeer.getPubkey();
-            if(pubkey==null)return;
+            if (pubkey == null) return;
             // if (!socket.isConnected()) return;
             // logger.fine("Received local ICE candidate: " + candidate + " sending to remote peer");
             // receive local candidate, send it to the remote peer

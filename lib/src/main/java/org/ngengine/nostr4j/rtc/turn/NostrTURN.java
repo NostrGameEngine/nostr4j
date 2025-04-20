@@ -57,11 +57,10 @@ import org.ngengine.nostr4j.utils.NostrUtils;
 // A turn server that uses nostr relays to relay encrypted and compressed data
 public class NostrTURN {
 
-    public static interface  Listener {
+    public static interface Listener {
         void onTurnPacket(NostrRTCPeer peer, ByteBuffer data);
     }
 
-   
     private static final Logger logger = Logger.getLogger(NostrTURN.class.getName());
 
     private static class Chunk {
@@ -187,7 +186,7 @@ public class NostrTURN {
                     this.onReceivedAck(decrypted.substring(3));
                 } else if (prefix.equals("pkt") && !fromRemote) {
                     this.onReceivedPacket(decrypted.substring(3));
-                } 
+                }
                 // else {
                 //     logger.warning("Unknown TURN event: " + prefix + " fromRemote " + fromRemote);
                 // }
@@ -285,12 +284,12 @@ public class NostrTURN {
                     // decompress
                     Inflater inflater = new Inflater();
                     inflater.setInput(decoded);
-                    
-                    ByteArrayOutputStream bos = new ByteArrayOutputStream(decoded.length );
+
+                    ByteArrayOutputStream bos = new ByteArrayOutputStream(decoded.length);
                     int decompressedSize = 0;
                     byte[] chunk = new byte[1024];
-                    while(!inflater.finished()) {                     
-                        int s= inflater.inflate(chunk);
+                    while (!inflater.finished()) {
+                        int s = inflater.inflate(chunk);
                         if (s == 0) {
                             break;
                         }
@@ -339,18 +338,16 @@ public class NostrTURN {
     }
 
     private void loop() {
-
         this.executor.runLater(
                 () -> {
-                    try{
-
+                    try {
                         Collection<Packet> packets = outQueue.values();
                         if (packets.isEmpty()) {
                             Platform platform = NostrUtils.getPlatform();
                             platform
                                 .wrapPromise((res, rej) -> {
                                     assert outQueueNotify == null;
-                                        System.out.println("waiting...");
+                                    System.out.println("waiting...");
                                     outQueueNotify =
                                         () -> {
                                             res.accept(null);
@@ -371,7 +368,9 @@ public class NostrTURN {
                                 Instant lastAttempt = chunk.lastAttempt;
 
                                 // Skip chunk if not acked but still likely to be in transit
-                                if (lastAttempt!=null&&Instant.now().isAfter(lastAttempt.plus(this.config.getMaxLatency()))) {
+                                if (
+                                    lastAttempt != null && Instant.now().isAfter(lastAttempt.plus(this.config.getMaxLatency()))
+                                ) {
                                     System.out.println("Skipping chunk " + nextPacket.id + "," + i);
                                     continue;
                                 }
@@ -452,26 +451,25 @@ public class NostrTURN {
         return platform.promisify(
             (res, rej) -> {
                 // compress
-                    Deflater deflater = new Deflater();
-                    byte[] inputBytes = new byte[data.remaining()];
-              
-                    data.slice().get(inputBytes);
-                    deflater.setInput(inputBytes);
-                    deflater.finish(); 
+                Deflater deflater = new Deflater();
+                byte[] inputBytes = new byte[data.remaining()];
 
-                    ByteArrayOutputStream outputStream = new ByteArrayOutputStream(); 
-                    byte[] buffer = new byte[1024]; 
-                    while (!deflater.finished()) {
-                        int count = deflater.deflate(buffer); 
-                        if (count > 0) {
-                            outputStream.write(buffer, 0, count);
-                        } else {
-                           
-                            break;
-                        }
+                data.slice().get(inputBytes);
+                deflater.setInput(inputBytes);
+                deflater.finish();
+
+                ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+                byte[] buffer = new byte[1024];
+                while (!deflater.finished()) {
+                    int count = deflater.deflate(buffer);
+                    if (count > 0) {
+                        outputStream.write(buffer, 0, count);
+                    } else {
+                        break;
                     }
-                    deflater.end(); 
-                    byte[] compressedBytes = outputStream.toByteArray(); 
+                }
+                deflater.end();
+                byte[] compressedBytes = outputStream.toByteArray();
 
                 // encode to b64
                 String b64data = Base64.getEncoder().encodeToString(compressedBytes);

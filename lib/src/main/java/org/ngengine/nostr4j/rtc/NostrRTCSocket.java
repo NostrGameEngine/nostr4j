@@ -188,12 +188,10 @@ public class NostrRTCSocket implements RTCTransport.RTCTransportListener, NostrT
         useTURN(false);
 
         Platform platform = NostrUtils.getPlatform();
-     
 
         String connectString;
         if (offerOrAnswer instanceof NostrRTCOffer) {
-            if (this.transport != null)
-                throw new IllegalStateException("Already connected");
+            if (this.transport != null) throw new IllegalStateException("Already connected");
             this.transport = platform.newRTCTransport(connectionId, localPeer.getStunServers());
             this.transport.addListener(this);
             // logger.fine("Use offer to connect");
@@ -203,14 +201,12 @@ public class NostrRTCSocket implements RTCTransport.RTCTransportListener, NostrT
             connectString = ((NostrRTCOffer) offerOrAnswer).getOfferString();
         } else if (offerOrAnswer instanceof NostrRTCAnswer) {
             // logger.fine("Use answer to connect");
-            if (this.transport == null)
-                throw new IllegalStateException("Not connected");
+            if (this.transport == null) throw new IllegalStateException("Not connected");
 
             this.remotePeer =
                 Objects.requireNonNull(((NostrRTCAnswer) offerOrAnswer).getPeerInfo(), "Remote Peer cannot be null");
             emitCandidates();
             connectString = ((NostrRTCAnswer) offerOrAnswer).getSdp();
-
         } else {
             throw new IllegalArgumentException("Invalid RTC signal type");
         }
@@ -266,7 +262,6 @@ public class NostrRTCSocket implements RTCTransport.RTCTransportListener, NostrT
     }
 
     public void useTURN(boolean use) {
-        
         if (use == useTURN) return;
         logger.fine("Using TURN: " + use);
         this.useTURN = use;

@@ -54,7 +54,7 @@ public class NostrRTCOffer implements NostrRTCSignal {
         this.pubkey = pubkey;
         this.offerString = offerString;
         this.turnServer = turnServer;
-        if(turnServer.isEmpty()) {
+        if (turnServer.isEmpty()) {
             throw new IllegalArgumentException("Turn server cannot be empty");
         }
         HashMap<String, Object> map = new HashMap<>();

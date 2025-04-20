@@ -38,9 +38,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Logger;
-
 import org.ngengine.nostr4j.platform.AsyncTask;
 import org.ngengine.nostr4j.platform.Platform;
 import org.ngengine.nostr4j.transport.RTCTransport;
@@ -55,7 +53,9 @@ import tel.schich.libdatachannel.PeerState;
 import tel.schich.libdatachannel.SessionDescriptionType;
 
 public class JVMRTCTransport implements RTCTransport {
+
     private static final Logger logger = Logger.getLogger(JVMRTCTransport.class.getName());
+
     static {
         LibDataChannelArchDetect.initialize();
     }
@@ -117,26 +117,26 @@ public class JVMRTCTransport implements RTCTransport {
         Platform platform = NostrUtils.getPlatform();
         return platform.wrapPromise((res, rej) -> {
             try {
-                this.openChannel.then(channel->{
-                    try{
-                        System.out.println("Sending..");
-                        boolean isDirectBuffer = message.isDirect();
-                        if (!isDirectBuffer) {
-                            ByteBuffer directBuffer = ByteBuffer.allocateDirect(message.remaining());
-                            directBuffer.put(message);
-                            directBuffer.flip();
-                            channel.sendMessage(directBuffer);
-                        }else{
-                            channel.sendMessage(message);
+                this.openChannel.then(channel -> {
+                        try {
+                            System.out.println("Sending..");
+                            boolean isDirectBuffer = message.isDirect();
+                            if (!isDirectBuffer) {
+                                ByteBuffer directBuffer = ByteBuffer.allocateDirect(message.remaining());
+                                directBuffer.put(message);
+                                directBuffer.flip();
+                                channel.sendMessage(directBuffer);
+                            } else {
+                                channel.sendMessage(message);
+                            }
+                            res.accept(null);
+                            return null;
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                            rej.accept(e);
+                            return null;
                         }
-                        res.accept(null);
-                        return null;
-                    }catch(Exception e) {
-                        e.printStackTrace();
-                        rej.accept(e);
-                        return null;
-                    }
-                });
+                    });
             } catch (Exception e) {
                 e.printStackTrace();
                 rej.accept(e);
@@ -146,7 +146,7 @@ public class JVMRTCTransport implements RTCTransport {
 
     AsyncTask<DataChannel> confChannel(DataChannel channel) {
         Platform platform = NostrUtils.getPlatform();
-        return platform.wrapPromise((res1,rej1)->{
+        return platform.wrapPromise((res1, rej1) -> {
             channel.onClosed.register((DataChannel c) -> {
                 for (RTCTransportListener listener : listeners) {
                     listener.onRTCChannelClosed();
@@ -163,7 +163,7 @@ public class JVMRTCTransport implements RTCTransport {
             AtomicBoolean iceReady = new AtomicBoolean(false);
             channel.onOpen.register((DataChannel cc) -> {
                 channelOpen.set(true);
-                if(channelOpen.get()&&iceReady.get()) {
+                if (channelOpen.get() && iceReady.get()) {
                     System.out.println("Channel opened");
                     res1.accept(this.channel);
                 }
@@ -171,29 +171,29 @@ public class JVMRTCTransport implements RTCTransport {
 
             if (channel.isOpen()) {
                 channelOpen.set(true);
-                if(iceReady.get()&&channelOpen.get()) {
+                if (iceReady.get() && channelOpen.get()) {
                     System.out.println("Channel already opened");
                     res1.accept(this.channel);
                 }
             }
 
             this.conn.onIceStateChange.register((PeerConnection peer, IceState state) -> {
-                if (state == IceState.RTC_ICE_CONNECTED || state == IceState.RTC_ICE_COMPLETED) {
-                    iceReady.set(true);
-                    if (channelOpen.get() && iceReady.get()) {
-                        System.out.println("Channel opened2");
-                        res1.accept(this.channel);
+                    if (state == IceState.RTC_ICE_CONNECTED || state == IceState.RTC_ICE_COMPLETED) {
+                        iceReady.set(true);
+                        if (channelOpen.get() && iceReady.get()) {
+                            System.out.println("Channel opened2");
+                            res1.accept(this.channel);
+                        }
                     }
-                }
-            });
+                });
 
             this.conn.onStateChange.register((PeerConnection p, PeerState state) -> {
-                if (state == PeerState.RTC_CLOSED) {
-                    rej1.accept(new Exception("Peer connection closed"));
-                } else if (state == PeerState.RTC_FAILED) {
-                    rej1.accept(new Exception("Peer connection failed"));
-                }
-            });
+                    if (state == PeerState.RTC_CLOSED) {
+                        rej1.accept(new Exception("Peer connection closed"));
+                    } else if (state == PeerState.RTC_FAILED) {
+                        rej1.accept(new Exception("Peer connection failed"));
+                    }
+                });
             channel.onMessage.register(
                 Message.handleBinary((c, buffer) -> {
                     System.out.println("Received Message!");
@@ -202,7 +202,6 @@ public class JVMRTCTransport implements RTCTransport {
                     }
                 })
             );
-          
         });
     }
 
@@ -210,30 +209,25 @@ public class JVMRTCTransport implements RTCTransport {
     public AsyncTask<String> initiateChannel() {
         this.isInitiator = true;
         Platform platform = NostrUtils.getPlatform();
-        return platform
-            .wrapPromise((res, rej) -> {
-                try {
-                
-                        this.conn.onLocalDescription
-                                .register((PeerConnection peer, String sdp, SessionDescriptionType type) -> {
-                                    if (type == SessionDescriptionType.OFFER) {
-                                        res.accept(sdp);
-                                    }
-                                });
-                        this.channel = this.conn.createDataChannel("nostr4j-" + connId);
-                        this.openChannel = confChannel(this.channel);
-
-                    // this.conn.setLocalDescription("offer");
-                } catch (Exception e) {
-                    rej.accept(e);
-                }
-            });
+        return platform.wrapPromise((res, rej) -> {
+            try {
+                this.conn.onLocalDescription.register((PeerConnection peer, String sdp, SessionDescriptionType type) -> {
+                        if (type == SessionDescriptionType.OFFER) {
+                            res.accept(sdp);
+                        }
+                    });
+                this.channel = this.conn.createDataChannel("nostr4j-" + connId);
+                this.openChannel = confChannel(this.channel);
+                // this.conn.setLocalDescription("offer");
+            } catch (Exception e) {
+                rej.accept(e);
+            }
+        });
     }
 
     @Override
     public void addRemoteIceCandidates(Collection<String> candidates) {
         for (String candidate : candidates) {
-
             if (!trackedRemoteCandidates.contains(candidate)) {
                 this.conn.addRemoteCandidate(candidate);
                 System.out.println("Adding remote candidate: " + candidate);
@@ -248,17 +242,17 @@ public class JVMRTCTransport implements RTCTransport {
         if (this.isInitiator) {
             logger.fine("Connect as initiator, use answer");
             String answer = offerOrAnswer;
-    
+
             return platform.wrapPromise((res1, rej1) -> {
                 this.conn.setRemoteDescription(answer, SessionDescriptionType.ANSWER);
 
                 this.conn.onStateChange.register((PeerConnection p, PeerState state) -> {
-                    if (state == PeerState.RTC_CLOSED) {
-                        rej1.accept(new Exception("Peer connection closed"));
-                    } else if (state == PeerState.RTC_FAILED) {
-                        rej1.accept(new Exception("Peer connection failed"));
-                    }
-                });
+                        if (state == PeerState.RTC_CLOSED) {
+                            rej1.accept(new Exception("Peer connection closed"));
+                        } else if (state == PeerState.RTC_FAILED) {
+                            rej1.accept(new Exception("Peer connection failed"));
+                        }
+                    });
 
                 res1.accept(null);
             });
@@ -266,36 +260,37 @@ public class JVMRTCTransport implements RTCTransport {
             logger.fine("Connect using offer");
 
             String offer = offerOrAnswer;
-            this.openChannel = platform.wrapPromise((res,rej)->{
-                this.conn.onDataChannel.register((PeerConnection peer, DataChannel channel) -> {
-                        this.channel = channel;
-                        confChannel(channel).catchException(exc->{
-                            rej.accept(exc);
-                        }).then(channel1->{
-                            res.accept(channel1);
-                            return null;
-                        }); 
-                }); 
-            });
-        
-            AsyncTask<String> answerSdpPromise = platform.wrapPromise((res2, rej2) -> {
-                this.conn.onLocalDescription
-                        .register((PeerConnection peer, String sdp, SessionDescriptionType type) -> {
-                            if (type == SessionDescriptionType.ANSWER) {
-                                logger.fine("answer is ready: " + sdp);
-                                res2.accept(sdp);
-                            }
+            this.openChannel =
+                platform.wrapPromise((res, rej) -> {
+                    this.conn.onDataChannel.register((PeerConnection peer, DataChannel channel) -> {
+                            this.channel = channel;
+                            confChannel(channel)
+                                .catchException(exc -> {
+                                    rej.accept(exc);
+                                })
+                                .then(channel1 -> {
+                                    res.accept(channel1);
+                                    return null;
+                                });
                         });
+                });
+
+            AsyncTask<String> answerSdpPromise = platform.wrapPromise((res2, rej2) -> {
+                this.conn.onLocalDescription.register((PeerConnection peer, String sdp, SessionDescriptionType type) -> {
+                        if (type == SessionDescriptionType.ANSWER) {
+                            logger.fine("answer is ready: " + sdp);
+                            res2.accept(sdp);
+                        }
+                    });
 
                 this.conn.onStateChange.register((PeerConnection peer, PeerState state) -> {
-                    logger.fine("Peer connection state changed: " + state);
+                        logger.fine("Peer connection state changed: " + state);
                         if (state == PeerState.RTC_CLOSED) {
                             rej2.accept(new Exception("Peer connection closed"));
                         } else if (state == PeerState.RTC_FAILED) {
                             rej2.accept(new Exception("Peer connection failed"));
                         }
                     });
-           
             });
             this.conn.setRemoteDescription(offer, SessionDescriptionType.OFFER);
             return answerSdpPromise;
@@ -317,12 +312,12 @@ public class JVMRTCTransport implements RTCTransport {
 
     @Override
     public void close() {
-        this. channel.close();
+        this.channel.close();
         // .catchException(exc->{
-            this.conn.close();
+        this.conn.close();
         // })
         // .then(channel->{
-           
+
         //     this.conn.close();
         //     return null;
         // });

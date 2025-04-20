@@ -82,7 +82,7 @@ public class TestNostrRTC {
 
                             @Override
                             public void onRTCSocketMessage(NostrRTCSocket socket, ByteBuffer bbf, boolean turn) {
-                                System.out.println(name + " incoming message: " + new String(bbf.array())+ " p2p:" + !turn);
+                                System.out.println(name + " incoming message: " + new String(bbf.array()) + " p2p:" + !turn);
                             }
                         }
                     );
@@ -95,19 +95,17 @@ public class TestNostrRTC {
     }
 
     static void loopSend(NostrRTCSocket socket) {
-        new Thread(
-            () -> {
-                try {
-                    while (true) {
-                        Thread.sleep(1000);
-                        socket.write(ByteBuffer.wrap(("hello").getBytes()));
-                    }
-                } catch (Exception e) {
-                    e.printStackTrace();
+        new Thread(() -> {
+            try {
+                while (true) {
+                    Thread.sleep(1000);
+                    socket.write(ByteBuffer.wrap(("hello").getBytes()));
                 }
+            } catch (Exception e) {
+                e.printStackTrace();
             }
-        ).start();
-
+        })
+            .start();
     }
 
     public static void main(String[] args) throws Exception {

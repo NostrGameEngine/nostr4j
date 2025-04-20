@@ -39,7 +39,7 @@ import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.utils.NostrUtils;
 
 /**
- * A collection of valid ice candidates that can be used to establish a 
+ * A collection of valid ice candidates that can be used to establish a
  * connection with a peer.
  */
 public class NostrRTCIceCandidate implements NostrRTCSignal {
