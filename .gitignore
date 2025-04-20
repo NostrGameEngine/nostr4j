@@ -4,8 +4,9 @@
 # Ignore Gradle build output directory
 build
 lib/bin
-gradle
 dist
 platform-teavm/bin
 platform-teavm/js
 node_modules
+package.json
+package-lock.json
