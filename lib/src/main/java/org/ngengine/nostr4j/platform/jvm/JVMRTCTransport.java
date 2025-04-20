@@ -159,33 +159,7 @@ public class JVMRTCTransport implements RTCTransport {
                 rej1.accept(new Exception(error));
             });
 
-            AtomicBoolean channelOpen = new AtomicBoolean(false);
-            AtomicBoolean iceReady = new AtomicBoolean(false);
-            channel.onOpen.register((DataChannel cc) -> {
-                channelOpen.set(true);
-                if (channelOpen.get() && iceReady.get()) {
-                    System.out.println("Channel opened");
-                    res1.accept(this.channel);
-                }
-            });
-
-            if (channel.isOpen()) {
-                channelOpen.set(true);
-                if (iceReady.get() && channelOpen.get()) {
-                    System.out.println("Channel already opened");
-                    res1.accept(this.channel);
-                }
-            }
-
-            this.conn.onIceStateChange.register((PeerConnection peer, IceState state) -> {
-                    if (state == IceState.RTC_ICE_CONNECTED || state == IceState.RTC_ICE_COMPLETED) {
-                        iceReady.set(true);
-                        if (channelOpen.get() && iceReady.get()) {
-                            System.out.println("Channel opened2");
-                            res1.accept(this.channel);
-                        }
-                    }
-                });
+ 
 
             this.conn.onStateChange.register((PeerConnection p, PeerState state) -> {
                     if (state == PeerState.RTC_CLOSED) {
@@ -194,14 +168,52 @@ public class JVMRTCTransport implements RTCTransport {
                         rej1.accept(new Exception("Peer connection failed"));
                     }
                 });
-            channel.onMessage.register(
-                Message.handleBinary((c, buffer) -> {
-                    System.out.println("Received Message!");
-                    for (RTCTransportListener listener : listeners) {
-                        listener.onRTCBinaryMessage(buffer);
+        
+
+            channel.onOpen.register((DataChannel cc) -> {
+            
+                    System.out.println("Channel opened");
+                    try{
+                        System.out.println("Message handler attached");
+
+                        channel.onMessage.register(
+                            Message.handleBinary((c, buffer) -> {
+                                System.out.println("Received Message!");
+                                for (RTCTransportListener listener : listeners) {
+                                    listener.onRTCBinaryMessage(buffer);
+                                }
+                            })
+                        );
+                    }catch(Exception e){
+                        e.printStackTrace();    
+                        System.out.println("Error attaching message handler: " + e.getMessage());
                     }
-                })
-            );
+                    res1.accept(channel);
+            });
+
+            if (channel.isOpen()) {
+              
+                    System.out.println("Channel already opened");
+                    try{
+                        System.out.println("Message handler attached");
+
+                        channel.onMessage.register(
+                            Message.handleBinary((c, buffer) -> {
+                                System.out.println("Received Message!");
+                                for (RTCTransportListener listener : listeners) {
+                                    listener.onRTCBinaryMessage(buffer);
+                                }
+                            })
+                        );
+                    } catch(Exception e){
+                        e.printStackTrace();    
+                        System.out.println("Error attaching message handler: " + e.getMessage());
+                    }
+                    res1.accept(channel);
+            
+                
+            }
+
         });
     }
 
