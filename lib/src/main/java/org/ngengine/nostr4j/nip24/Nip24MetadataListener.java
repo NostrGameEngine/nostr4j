@@ -31,12 +31,15 @@
 package org.ngengine.nostr4j.nip24;
 
 import java.util.function.Consumer;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.listeners.sub.NostrSubEventListener;
 
 public class Nip24MetadataListener implements NostrSubEventListener {
 
+    private static final Logger logger = Logger.getLogger(Nip24MetadataListener.class.getName());
     private final NostrPublicKey pubkey;
     private Consumer<Nip24Metadata> consumer;
 
@@ -60,7 +63,8 @@ public class Nip24MetadataListener implements NostrSubEventListener {
             Nip24Metadata profile = new Nip24Metadata(event);
             if (consumer != null) consumer.accept(profile);
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.log(Level.WARNING, "Error processing NIP-24 metadata", e);
+            // e.printStackTrace();
         }
     }
 }

@@ -30,6 +30,8 @@
  */
 package org.ngengine.nostr4j.platform.jvm;
 
+import static org.ngengine.nostr4j.utils.NostrUtils.dbg;
+
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.ByteBuffer;
@@ -37,6 +39,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.platform.AsyncTask;
 import org.ngengine.nostr4j.platform.Platform;
@@ -118,7 +121,6 @@ public class JVMRTCTransport implements RTCTransport {
             try {
                 this.openChannel.then(channel -> {
                         try {
-                            System.out.println("Sending..");
                             boolean isDirectBuffer = message.isDirect();
                             if (!isDirectBuffer) {
                                 ByteBuffer directBuffer = ByteBuffer.allocateDirect(message.remaining());
@@ -131,13 +133,15 @@ public class JVMRTCTransport implements RTCTransport {
                             res.accept(null);
                             return null;
                         } catch (Exception e) {
-                            e.printStackTrace();
+                            // e.printStackTrace();
+                            logger.log(Level.WARNING, "Error sending message", e);
                             rej.accept(e);
                             return null;
                         }
                     });
             } catch (Exception e) {
-                e.printStackTrace();
+                // e.printStackTrace();
+                logger.log(Level.WARNING, "Error sending message", e);
                 rej.accept(e);
             }
         });
@@ -166,44 +170,34 @@ public class JVMRTCTransport implements RTCTransport {
                     }
                 });
 
-            channel.onOpen.register((DataChannel cc) -> {
-                System.out.println("Channel opened");
-                try {
-                    System.out.println("Message handler attached");
-
-                    channel.onMessage.register(
-                        Message.handleBinary((c, buffer) -> {
-                            System.out.println("Received Message!");
-                            for (RTCTransportListener listener : listeners) {
-                                listener.onRTCBinaryMessage(buffer);
-                            }
-                        })
-                    );
-                } catch (Exception e) {
-                    e.printStackTrace();
-                    System.out.println("Error attaching message handler: " + e.getMessage());
-                }
-                res1.accept(channel);
-            });
-
             if (channel.isOpen()) {
-                System.out.println("Channel already opened");
-                try {
-                    System.out.println("Message handler attached");
-
+                logger.fine("Channel already opened");
+                channel.onMessage.register(
+                    Message.handleBinary((c, buffer) -> {
+                        assert dbg(() -> {
+                            logger.finest("Received Message");
+                        });
+                        for (RTCTransportListener listener : listeners) {
+                            listener.onRTCBinaryMessage(buffer);
+                        }
+                    })
+                );
+                res1.accept(channel);
+            } else {
+                channel.onOpen.register((DataChannel cc) -> {
+                    logger.fine("Channel opened");
                     channel.onMessage.register(
                         Message.handleBinary((c, buffer) -> {
-                            System.out.println("Received Message!");
+                            assert dbg(() -> {
+                                logger.finest("Received Message");
+                            });
                             for (RTCTransportListener listener : listeners) {
                                 listener.onRTCBinaryMessage(buffer);
                             }
                         })
                     );
-                } catch (Exception e) {
-                    e.printStackTrace();
-                    System.out.println("Error attaching message handler: " + e.getMessage());
-                }
-                res1.accept(channel);
+                    res1.accept(channel);
+                });
             }
         });
     }
@@ -233,7 +227,7 @@ public class JVMRTCTransport implements RTCTransport {
         for (String candidate : candidates) {
             if (!trackedRemoteCandidates.contains(candidate)) {
                 this.conn.addRemoteCandidate(candidate);
-                System.out.println("Adding remote candidate: " + candidate);
+                logger.fine("Adding remote candidate: " + candidate);
                 trackedRemoteCandidates.add(candidate);
             }
         }

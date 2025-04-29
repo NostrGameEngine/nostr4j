@@ -36,6 +36,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.NostrPool;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
@@ -169,7 +170,8 @@ public class NostrRTCSwarm implements NostrRTCSignaling.Listener, NostrRTCSocket
                                     try {
                                         this.signaling.sendOffer(offer, remotePubkey);
                                     } catch (Exception e) {
-                                        e.printStackTrace();
+                                        // e.printStackTrace();
+                                        logger.log(Level.WARNING, "Error sending offer", e);
                                     }
                                     return null;
                                 });
@@ -317,7 +319,8 @@ public class NostrRTCSwarm implements NostrRTCSignaling.Listener, NostrRTCSocket
                     logger.fine("Sending answer to remote peer: " + remotePubkey);
                     this.signaling.sendAnswer(answer, remotePubkey);
                 } catch (Exception e) {
-                    e.printStackTrace();
+                    // e.printStackTrace();
+                    logger.log(Level.WARNING, "Error sending answer", e);
                 }
                 return null;
             });
@@ -358,7 +361,7 @@ public class NostrRTCSwarm implements NostrRTCSignaling.Listener, NostrRTCSocket
 
     @Override
     public void onReceiveCandidates(NostrRTCIceCandidate candidate) {
-        System.out.println("Received ICE candidate: " + candidate);
+        logger.fine("Received ICE candidate: " + candidate);
         NostrPublicKey remotePubkey = candidate.getPubkey();
 
         // receive remote candidate, add it to the socket
@@ -383,7 +386,8 @@ public class NostrRTCSwarm implements NostrRTCSignaling.Listener, NostrRTCSocket
             this.signaling.sendCandidates(candidate, pubkey);
         } catch (Exception e) {
             // TODO Auto-generated catch block
-            e.printStackTrace();
+            // e.printStackTrace();
+            logger.log(Level.WARNING, "Error sending local ICE candidate", e);
         }
     }
 
@@ -397,7 +401,14 @@ public class NostrRTCSwarm implements NostrRTCSignaling.Listener, NostrRTCSocket
         byte bbfArray[] = new byte[bbf.remaining()];
         bbf.get(bbfArray);
         bbf.flip();
-        logger.fine("Received message from peer: " + socket.getRemotePeer().getPubkey() + " : " + new String(bbfArray));
+        logger.fine(
+            "Received message from peer: " +
+            socket.getRemotePeer().getPubkey() +
+            " : " +
+            new String(bbfArray) +
+            " turn: " +
+            turn
+        );
     }
 
     public void send(NostrPublicKey peer, ByteBuffer bbf) {

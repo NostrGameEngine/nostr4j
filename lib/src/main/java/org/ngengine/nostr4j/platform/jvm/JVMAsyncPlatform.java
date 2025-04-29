@@ -57,6 +57,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.crypto.Cipher;
 import javax.crypto.Mac;
@@ -516,7 +517,8 @@ public class JVMAsyncPlatform implements Platform {
 
                 promise
                     .catchException(e -> {
-                        e.printStackTrace();
+                        logger.log(Level.WARNING, "Error in awaitAll", e);
+
                         rej.accept(e);
                     })
                     .then(result -> {

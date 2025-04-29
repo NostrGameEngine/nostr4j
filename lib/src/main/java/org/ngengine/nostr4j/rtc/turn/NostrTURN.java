@@ -347,17 +347,14 @@ public class NostrTURN {
                             platform
                                 .wrapPromise((res, rej) -> {
                                     assert outQueueNotify == null;
-                                    System.out.println("waiting...");
                                     outQueueNotify =
                                         () -> {
                                             res.accept(null);
                                         };
                                 })
                                 .await();
-                            System.out.println("loop");
                         }
                         if (this.stopped) {
-                            System.out.println("Stopping loop");
                             return null;
                         }
                         Map.Entry<Long, Packet> entry = outQueue.size() > 0 ? outQueue.entrySet().iterator().next() : null;
@@ -371,13 +368,11 @@ public class NostrTURN {
                                 if (
                                     lastAttempt != null && Instant.now().isAfter(lastAttempt.plus(this.config.getMaxLatency()))
                                 ) {
-                                    System.out.println("Skipping chunk " + nextPacket.id + "," + i);
                                     continue;
                                 }
 
                                 // Skip chunk if acked
                                 if (chunk.ack) {
-                                    System.out.println("Skipping chunk " + nextPacket.id + "," + i + " acked");
                                     continue;
                                 }
 
@@ -386,7 +381,6 @@ public class NostrTURN {
 
                                 // Prepare data for sending
                                 final int chunkIndex = i;
-                                System.out.println("Encrypting chunk " + nextPacket.id + "," + chunkIndex);
                                 String encrypted =
                                     this.localPeer.getSigner()
                                         .encrypt(
@@ -401,14 +395,11 @@ public class NostrTURN {
                                             remotePeer.getPubkey()
                                         )
                                         .await();
-                                System.out.println("Encrypted chunk " + nextPacket.id + "," + chunkIndex);
                                 // First attempt, mark it as sent
                                 if (!chunk.sent) {
                                     chunk.sent = true;
                                     nextPacket.sent++;
                                 }
-
-                                logger.fine("Sending chunk " + nextPacket.id + "," + chunkIndex);
 
                                 // Create and send event
                                 UnsignedNostrEvent event = new UnsignedNostrEvent();
@@ -419,25 +410,19 @@ public class NostrTURN {
                                 event.setExpirationTimestamp(Instant.now().plus(this.config.getPacketTimeout()));
 
                                 SignedNostrEvent signed = this.localPeer.getSigner().sign(event).await();
-                                System.out.println("Send!");
 
                                 this.outPool.send(signed).await();
-                                System.out.println("Sent");
                             }
                         }
 
                         if (this.stopped) {
-                            System.out.println("Stopping loop1");
-
                             return null;
                         }
 
-                        System.out.println("schedule next loop");
                         this.loop();
                         return null;
                     } catch (Exception e) {
-                        System.out.println("Error in loop: " + e.getMessage());
-                        e.printStackTrace();
+                        logger.log(java.util.logging.Level.WARNING, "Error in TURN loop: " + e.getMessage(), e);
                         return null;
                     }
                 },

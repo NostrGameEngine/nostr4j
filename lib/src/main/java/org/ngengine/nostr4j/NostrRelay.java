@@ -430,8 +430,7 @@ public final class NostrRelay implements TransportListener {
                                 callback.run();
                             } catch (Throwable e) {
                                 assert dbg(() -> {
-                                    e.printStackTrace(); // TODO: remove me
-                                    logger.warning("Error in connect callback: " + e.getMessage());
+                                    logger.log(Level.WARNING, "Error in connect callback", e);
                                 });
                             }
                         }
@@ -467,8 +466,7 @@ public final class NostrRelay implements TransportListener {
                     res.accept(this);
                 } catch (Throwable e) {
                     assert dbg(() -> {
-                        e.printStackTrace(); // TODO: remove me
-                        logger.warning("Error in connect callback: " + e.getMessage());
+                        logger.log(Level.WARNING, "Error in connect callback", e);
                     });
                     rej.accept(e);
                 }
@@ -678,7 +676,7 @@ public final class NostrRelay implements TransportListener {
                         ack.callFailureCallback("Event status timeout");
                     }
                 } catch (Exception e) {
-                    e.printStackTrace();
+                    logger.log(Level.WARNING, "Error in loop (1)", e);
                 }
             }
 

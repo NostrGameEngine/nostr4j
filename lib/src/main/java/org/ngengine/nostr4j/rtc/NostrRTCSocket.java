@@ -30,6 +30,8 @@
  */
 package org.ngengine.nostr4j.rtc;
 
+import static org.ngengine.nostr4j.utils.NostrUtils.dbg;
+
 import java.io.Closeable;
 import java.nio.ByteBuffer;
 import java.time.Instant;
@@ -283,10 +285,14 @@ public class NostrRTCSocket implements RTCTransport.RTCTransportListener, NostrT
 
     public void write(ByteBuffer bbf) {
         if (this.useTURN) {
-            System.out.println("Send message with turn");
+            assert dbg(() -> {
+                logger.finest("Send message with turn");
+            });
             this.turn.write(bbf);
         } else {
-            System.out.println("Send message p2p");
+            assert dbg(() -> {
+                logger.finest("Send message p2p");
+            });
             this.transport.write(bbf);
         }
     }

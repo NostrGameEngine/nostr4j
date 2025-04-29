@@ -45,6 +45,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.event.SignedNostrEvent.ReceivedSignedNostrEvent;
@@ -446,7 +447,7 @@ public class NostrPool implements NostrRelayComponent {
                 }
             }
         } catch (Throwable t) {
-            t.printStackTrace();
+            logger.log(Level.WARNING, "Error processing message from relay " + relay.getUrl(), t);
         }
         return true;
     }
