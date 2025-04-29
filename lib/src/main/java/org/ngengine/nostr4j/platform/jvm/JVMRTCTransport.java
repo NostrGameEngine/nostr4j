@@ -37,7 +37,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.platform.AsyncTask;
 import org.ngengine.nostr4j.platform.Platform;
@@ -159,8 +158,6 @@ public class JVMRTCTransport implements RTCTransport {
                 rej1.accept(new Exception(error));
             });
 
- 
-
             this.conn.onStateChange.register((PeerConnection p, PeerState state) -> {
                     if (state == PeerState.RTC_CLOSED) {
                         rej1.accept(new Exception("Peer connection closed"));
@@ -168,52 +165,46 @@ public class JVMRTCTransport implements RTCTransport {
                         rej1.accept(new Exception("Peer connection failed"));
                     }
                 });
-        
 
             channel.onOpen.register((DataChannel cc) -> {
-            
-                    System.out.println("Channel opened");
-                    try{
-                        System.out.println("Message handler attached");
+                System.out.println("Channel opened");
+                try {
+                    System.out.println("Message handler attached");
 
-                        channel.onMessage.register(
-                            Message.handleBinary((c, buffer) -> {
-                                System.out.println("Received Message!");
-                                for (RTCTransportListener listener : listeners) {
-                                    listener.onRTCBinaryMessage(buffer);
-                                }
-                            })
-                        );
-                    }catch(Exception e){
-                        e.printStackTrace();    
-                        System.out.println("Error attaching message handler: " + e.getMessage());
-                    }
-                    res1.accept(channel);
+                    channel.onMessage.register(
+                        Message.handleBinary((c, buffer) -> {
+                            System.out.println("Received Message!");
+                            for (RTCTransportListener listener : listeners) {
+                                listener.onRTCBinaryMessage(buffer);
+                            }
+                        })
+                    );
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    System.out.println("Error attaching message handler: " + e.getMessage());
+                }
+                res1.accept(channel);
             });
 
             if (channel.isOpen()) {
-              
-                    System.out.println("Channel already opened");
-                    try{
-                        System.out.println("Message handler attached");
+                System.out.println("Channel already opened");
+                try {
+                    System.out.println("Message handler attached");
 
-                        channel.onMessage.register(
-                            Message.handleBinary((c, buffer) -> {
-                                System.out.println("Received Message!");
-                                for (RTCTransportListener listener : listeners) {
-                                    listener.onRTCBinaryMessage(buffer);
-                                }
-                            })
-                        );
-                    } catch(Exception e){
-                        e.printStackTrace();    
-                        System.out.println("Error attaching message handler: " + e.getMessage());
-                    }
-                    res1.accept(channel);
-            
-                
+                    channel.onMessage.register(
+                        Message.handleBinary((c, buffer) -> {
+                            System.out.println("Received Message!");
+                            for (RTCTransportListener listener : listeners) {
+                                listener.onRTCBinaryMessage(buffer);
+                            }
+                        })
+                    );
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    System.out.println("Error attaching message handler: " + e.getMessage());
+                }
+                res1.accept(channel);
             }
-
         });
     }
 
