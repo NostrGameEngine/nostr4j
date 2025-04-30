@@ -28,13 +28,12 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package org.ngengine.nostr4j.rtc;
+package org.ngengine.nostr4j.rtc.listeners;
 
 import java.nio.ByteBuffer;
-import org.ngengine.nostr4j.rtc.signal.NostrRTCIceCandidate;
+import org.ngengine.nostr4j.keypair.NostrPublicKey;
+import org.ngengine.nostr4j.rtc.NostrRTCSocket;
 
-public interface NostrRTCSocketListener {
-    void onRTCSocketLocalIceCandidate(NostrRTCSocket socket, NostrRTCIceCandidate candidate);
-
-    void onRTCSocketMessage(NostrRTCSocket socket, ByteBuffer bbf, boolean turn);
+public interface NostrRTCRoomPeerMessageListener extends NostrRTCRoomListener {
+    void onSwarmPeerMessage(NostrPublicKey peerKey, NostrRTCSocket socket, ByteBuffer bbf, boolean turn);
 }

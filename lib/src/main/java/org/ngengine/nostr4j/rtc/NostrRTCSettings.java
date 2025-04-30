@@ -38,12 +38,11 @@ public final class NostrRTCSettings implements Cloneable, Serializable {
 
     private static final long serialVersionUID = 1L;
 
-    public static final Duration ANNOUNCE_INTERVAL = Duration.ofSeconds(10);
+    public static final Duration SIGNALING_LOOP_INTERVAL = Duration.ofSeconds(5);
     public static final Duration PEER_EXPIRATION = Duration.ofMinutes(5);
-    public static final Duration GC_INTERVAL = Duration.ofSeconds(1);
-    public static final int KIND = 29999;
-    public static final Duration CONNECTING_TIMEOUT = Duration.ofMinutes(2);
-    public static final Duration P2P_TIMEOUT = Duration.ofSeconds(60);
+    public static final Duration DELAYED_CANDIDATES_INTERVAL = Duration.ofMillis(100);
+    public static final Duration ROOM_LOOP_INTERVAL = Duration.ofSeconds(1);
+    public static final Duration P2P_TIMEOUT = Duration.ofSeconds(120);
 
     public static final String[] PUBLIC_STUN_SERVERS = {
         "stun.cloudflare.com:3478",
@@ -60,47 +59,41 @@ public final class NostrRTCSettings implements Cloneable, Serializable {
         "stunserver2024.stunprotocol.org:3478",
     };
 
-    private final Duration announceInterval;
+    private final Duration signalingLoopInterval;
     private final Duration peerExpiration;
-    private final Duration gcInterval;
-    private final int kind;
-    private final Duration connectionAttemptTimeout;
+    private final Duration delayedCandidatesInterval;
+    private final Duration roomLoopInterval;
     private final Duration p2pAttemptTimeout;
 
     public NostrRTCSettings(
         Duration announceInterval,
         Duration peerExpiration,
-        Duration gcInterval,
-        int kind,
-        Duration connectionAttemptTimeout,
+        Duration delayedCandidatesInterval,
+        Duration roomLoopInterval,
         Duration p2pAttemptTimeout
     ) {
-        this.announceInterval = announceInterval;
+        this.signalingLoopInterval = announceInterval;
         this.peerExpiration = peerExpiration;
-        this.gcInterval = gcInterval;
-        this.kind = kind;
-        this.connectionAttemptTimeout = connectionAttemptTimeout;
+        this.delayedCandidatesInterval = delayedCandidatesInterval;
+        this.roomLoopInterval = roomLoopInterval;
         this.p2pAttemptTimeout = p2pAttemptTimeout;
     }
 
-    public Duration getAnnounceInterval() {
-        return announceInterval;
+    public Duration getSignalingLoopInterval() {
+        return signalingLoopInterval;
     }
 
     public Duration getPeerExpiration() {
         return peerExpiration;
     }
+ 
 
-    public Duration getGcInterval() {
-        return gcInterval;
+    public Duration getRoomLoopInterval() {
+        return roomLoopInterval;
     }
 
-    public int getKind() {
-        return kind;
-    }
-
-    public Duration getConnectionAttemptTimeout() {
-        return connectionAttemptTimeout;
+    public Duration getDelayedCandidatesInterval() {
+        return delayedCandidatesInterval;
     }
 
     public Duration getP2pAttemptTimeout() {
@@ -108,11 +101,10 @@ public final class NostrRTCSettings implements Cloneable, Serializable {
     }
 
     public static final NostrRTCSettings DEFAULT = new NostrRTCSettings(
-        ANNOUNCE_INTERVAL,
+        SIGNALING_LOOP_INTERVAL,
         PEER_EXPIRATION,
-        GC_INTERVAL,
-        KIND,
-        CONNECTING_TIMEOUT,
+            DELAYED_CANDIDATES_INTERVAL,
+        ROOM_LOOP_INTERVAL,
         P2P_TIMEOUT
     );
 
@@ -131,18 +123,17 @@ public final class NostrRTCSettings implements Cloneable, Serializable {
         if (!(o instanceof NostrRTCSettings)) return false;
         NostrRTCSettings that = (NostrRTCSettings) o;
         return (
-            announceInterval == that.announceInterval &&
+            signalingLoopInterval == that.signalingLoopInterval &&
             peerExpiration == that.peerExpiration &&
-            gcInterval == that.gcInterval &&
-            kind == that.kind &&
-            connectionAttemptTimeout == that.connectionAttemptTimeout &&
+            delayedCandidatesInterval == that.delayedCandidatesInterval &&
+            roomLoopInterval == that.roomLoopInterval &&
             p2pAttemptTimeout == that.p2pAttemptTimeout
         );
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(announceInterval, peerExpiration, gcInterval, kind, connectionAttemptTimeout, p2pAttemptTimeout);
+        return Objects.hash(signalingLoopInterval, peerExpiration, delayedCandidatesInterval,  roomLoopInterval, p2pAttemptTimeout);
     }
 
     @Override
@@ -150,15 +141,13 @@ public final class NostrRTCSettings implements Cloneable, Serializable {
         return (
             "NostrRTCSettings{" +
             "announceInterval=" +
-            announceInterval +
+            signalingLoopInterval +
             ", peerExpiration=" +
             peerExpiration +
-            ", gcInterval=" +
-            gcInterval +
-            ", kind=" +
-            kind +
-            ", connectionAttemptTimeout=" +
-            connectionAttemptTimeout +
+            ", delayedCandidatesInterval=" +
+            delayedCandidatesInterval +
+            ", roomLoopInterval=" +
+            roomLoopInterval +
             ", p2pAttemptTimeout=" +
             p2pAttemptTimeout +
             '}'

@@ -45,6 +45,8 @@ import org.teavm.jso.dom.events.Event;
 import org.teavm.jso.dom.events.EventListener;
 
 public class TeaVMWebsocketTransport implements NostrTransport {
+    private static final Logger logger =
+        Logger.getLogger(TeaVMWebsocketTransport.class.getName());
 
     private volatile BrowserWebSocket ws;
     private final List<TransportListener> listeners =
@@ -105,7 +107,15 @@ public class TeaVMWebsocketTransport implements NostrTransport {
 
                         this.ws.setOnOpen(evt -> {
                                 for (TransportListener listener : listeners) {
-                                    listener.onConnectionOpen();
+                                    try{
+                                        listener.onConnectionOpen();
+                                    } catch (Exception e) {
+                                        logger.log(
+                                            Level.WARNING,
+                                            "Error in onConnectionOpen listener",
+                                            e
+                                        );
+                                    }
                                 }
                                 res.accept(null);
                             });
@@ -115,7 +125,15 @@ public class TeaVMWebsocketTransport implements NostrTransport {
                                 aggregator.append(message);
                                 String fullMessage = aggregator.toString();
                                 for (TransportListener listener : listeners) {
-                                    listener.onConnectionMessage(fullMessage);
+                                    try{
+                                        listener.onConnectionMessage(fullMessage);
+                                    } catch (Exception e) {
+                                        logger.log(
+                                            Level.WARNING,
+                                            "Error in onConnectionMessage listener",
+                                            e
+                                        );
+                                    }
                                 }
                                 aggregator.setLength(0);
                             });
@@ -157,7 +175,15 @@ public class TeaVMWebsocketTransport implements NostrTransport {
                         this.ws = null;
 
                         for (TransportListener listener : listeners) {
-                            listener.onConnectionClosedByClient(reason);
+                            try{
+                                listener.onConnectionClosedByClient(reason);
+                            } catch (Exception e) {
+                                logger.log(
+                                    Level.WARNING,
+                                    "Error in onConnectionClosedByClient listener",
+                                    e
+                                );
+                            }
                         }
 
                         // Use NORMAL_CLOSURE code 1000

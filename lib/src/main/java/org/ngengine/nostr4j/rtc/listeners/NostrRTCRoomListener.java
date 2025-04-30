@@ -28,10 +28,6 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package org.ngengine.nostr4j.rtc;
+package org.ngengine.nostr4j.rtc.listeners;
 
-import org.ngengine.nostr4j.keypair.NostrPublicKey;
-
-public interface NostrRTCSwarmOnPeerDisconnection extends NostrRTCSwarmListener {
-    void onSwarmPeerDisconnected(NostrPublicKey peerKey, NostrRTCSocket socket);
-}
+public interface NostrRTCRoomListener {}

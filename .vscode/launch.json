@@ -18,6 +18,7 @@
             "request": "launch",
             "mainClass": "org.ngengine.nostr4j.rtc.TestNostrRTC",
             "projectName": "lib",
+            "vmArgs": "-ea"
         },
         {
             "type": "java",

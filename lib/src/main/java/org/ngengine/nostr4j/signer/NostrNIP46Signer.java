@@ -416,7 +416,7 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
                             .since(Instant.now().minusSeconds(60));
                         logger.finest("Creating subscription for filter: " + filter);
                         this.subscription = this.pool.subscribe(filter);
-                        this.subscription.listen(this);
+                        this.subscription.on(this);
                     }
 
                     if (!this.subscription.isOpened()) {

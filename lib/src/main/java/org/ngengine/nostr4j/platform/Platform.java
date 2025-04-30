@@ -39,6 +39,7 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import org.ngengine.nostr4j.keypair.NostrPrivateKey;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
+import org.ngengine.nostr4j.rtc.NostrRTCSettings;
 import org.ngengine.nostr4j.transport.NostrTransport;
 import org.ngengine.nostr4j.transport.RTCTransport;
 
@@ -58,7 +59,7 @@ public interface Platform {
 
     NostrTransport newTransport();
 
-    RTCTransport newRTCTransport(String connId, Collection<String> stunServers);
+    RTCTransport newRTCTransport(NostrRTCSettings settings, String connId, Collection<String> stunServers);
 
     String sha256(String data) throws NoSuchAlgorithmException;
     byte[] sha256(byte[] data) throws NoSuchAlgorithmException;
@@ -83,6 +84,8 @@ public interface Platform {
     <T> AsyncTask<T> wrapPromise(BiConsumer<Consumer<T>, Consumer<Throwable>> func);
 
     <T> AsyncTask<List<T>> awaitAll(List<AsyncTask<T>> promises);
+
+    <T> AsyncTask<List<AsyncTask<T>>> awaitAllSettled(List<AsyncTask<T>> promises);
 
     long getTimestampSeconds();
 

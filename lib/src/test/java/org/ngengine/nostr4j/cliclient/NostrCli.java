@@ -50,7 +50,7 @@ public class NostrCli {
         pool.connectRelay(new NostrRelay("ws://127.0.0.1:8087"));
 
         // listen for notices
-        pool.addNoticeListener((relay, msg, error) -> {
+        pool.onNotice((relay, msg, error) -> {
             if (error != null) {
                 System.out.println("Error: " + msg + " from relay: " + relay);
             } else {
@@ -62,15 +62,15 @@ public class NostrCli {
         NostrSubscription sub = pool.subscribe(new NostrFilter().kind(1).limit(3), FailOnDoubleTracker.class);
 
         // append listeners
-        sub.listenClose(reason -> {
+        sub.onClose(reason -> {
             System.out.println("Subscription closed: reason: " + reason);
         });
 
-        sub.listenEvent((event, stored) -> {
+        sub.onEvent((event, stored) -> {
             System.out.println("Event: " + event + " stored: " + stored);
         });
 
-        sub.listenEose(all -> {
+        sub.onEose(all -> {
             System.out.println("Eose: " + all);
         });
 

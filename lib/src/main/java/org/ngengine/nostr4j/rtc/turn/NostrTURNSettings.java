@@ -38,7 +38,7 @@ public final class NostrTURNSettings implements Cloneable, Serializable {
     public static final int CHUNK_LENGTH = 1024;
     public static final Duration PACKET_TIMEOUT = Duration.ofSeconds(10);
     public static final Duration MAX_LATENCY = Duration.ofSeconds(5);
-    public static final Duration LOOP_INTERVAL = Duration.ofSeconds(1);
+    public static final Duration LOOP_INTERVAL = Duration.ofMillis(100);
     public static final int TURN_KIND = 29999;
 
     private final int chunkLength;

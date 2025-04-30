@@ -41,6 +41,8 @@ import org.ngengine.nostr4j.TestLogger;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
 import org.ngengine.nostr4j.keypair.NostrPrivateKey;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
+import org.ngengine.nostr4j.rtc.listeners.NostrRTCRoomPeerConnectedListener;
+import org.ngengine.nostr4j.rtc.listeners.NostrRTCSocketListener;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCIceCandidate;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCLocalPeer;
 import org.ngengine.nostr4j.rtc.turn.NostrTURNSettings;
@@ -52,7 +54,7 @@ public class TestNostrRTC {
     private static void newPeer(String name, NostrKeyPair localKeyPair, NostrKeyPair roomKeyPair) throws Exception {
         NostrPool pool = new NostrPool();
         pool.connectRelay(new NostrRelay("wss://nostr.rblb.it"));
-
+      
         NostrRTCLocalPeer localPeer = new NostrRTCLocalPeer(
             localKeyPair,
             Arrays.asList(NostrRTCSettings.PUBLIC_STUN_SERVERS),
@@ -60,38 +62,26 @@ public class TestNostrRTC {
             new HashMap<>()
         );
 
-        NostrRTCSwarm swarm = new NostrRTCSwarm(
-            NostrRTCSettings.DEFAULT,
-            NostrTURNSettings.DEFAULT,
-            localPeer,
-            roomKeyPair,
-            pool
-        );
 
-        swarm.addListener(
-            new NostrRTCSwarmOnPeerConnection() {
-                @Override
-                public void onSwarmPeerConnected(NostrPublicKey peerKey, NostrRTCSocket conn) {
-                    System.out.println(name + " incoming connection : " + peerKey);
-                    conn.addListener(
-                        new NostrRTCSocketListener() {
-                            @Override
-                            public void onRTCSocketLocalIceCandidate(NostrRTCSocket socket, NostrRTCIceCandidate candidate) {
-                                // System.out.println(name + "local ICE candidate: " + candidate);
-                            }
-
-                            @Override
-                            public void onRTCSocketMessage(NostrRTCSocket socket, ByteBuffer bbf, boolean turn) {
-                                System.out.println(name + " incoming message: " + new String(bbf.array()) + " p2p:" + !turn);
-                            }
-                        }
-                    );
-                    loopSend(conn);
-                }
+        NostrRTCRoom room = NostrRTCRoom.join(
+            localPeer, roomKeyPair, 
+            Arrays.asList(new NostrRelay("wss://nostr.rblb.it")),
+            (peerKey, socket) -> {
+                logger.info(name + " peer connected: " + peerKey);                
+            },
+            (peerKey, socket) -> {
+                System.out.println(name + " peer disconnected: " + peerKey);
+            },
+            (peerKey, socket, bbf, turn) -> {
+                byte[] bb = new byte[bbf.limit()];
+                bbf.get(bb);
+                System.out.println(name + " incoming message: " + new String(bb) + " p2p:" + !turn);
             }
         );
 
-        swarm.start();
+        // room.close();
+
+   
     }
 
     static void loopSend(NostrRTCSocket socket) {

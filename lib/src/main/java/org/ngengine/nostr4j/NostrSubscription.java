@@ -208,7 +208,7 @@ public class NostrSubscription extends NostrMessage {
      * @param listener The event listener to add
      * @return This subscription for method chaining
      */
-    public NostrSubscription listenEvent(NostrSubEventListener listener) {
+    public NostrSubscription onEvent(NostrSubEventListener listener) {
         assert listener != null;
         assert onEventListeners.contains(listener) == false;
         onEventListeners.add((NostrSubEventListener) listener);
@@ -221,7 +221,7 @@ public class NostrSubscription extends NostrMessage {
      * @param listener The EOSE listener to add
      * @return This subscription for method chaining
      */
-    public NostrSubscription listenEose(NostrSubEoseListener listener) {
+    public NostrSubscription onEose(NostrSubEoseListener listener) {
         assert listener != null;
         assert onEoseListeners.contains(listener) == false;
         onEoseListeners.add(listener);
@@ -234,7 +234,7 @@ public class NostrSubscription extends NostrMessage {
      * @param listener The close listener to add
      * @return This subscription for method chaining
      */
-    public NostrSubscription listenClose(NostrSubCloseListener listener) {
+    public NostrSubscription onClose(NostrSubCloseListener listener) {
         assert listener != null;
         assert onCloseListeners.contains(listener) == false;
         onCloseListeners.add(listener);
@@ -247,7 +247,7 @@ public class NostrSubscription extends NostrMessage {
      * @param listener The listener to add
      * @return This subscription for method chaining
      */
-    public NostrSubscription listen(NostrSubListener listener) {
+    public NostrSubscription on(NostrSubListener listener) {
         assert listener != null;
         if (listener instanceof NostrSubEoseListener) {
             assert onEoseListeners.contains(listener) == false;
@@ -271,7 +271,7 @@ public class NostrSubscription extends NostrMessage {
      * @param listener The listener to remove
      * @return This subscription for method chaining
      */
-    public NostrSubscription stopListening(NostrSubListener listener) {
+    public NostrSubscription off(NostrSubListener listener) {
         if (listener instanceof NostrSubEoseListener) {
             onEoseListeners.remove((NostrSubEoseListener) listener);
         }

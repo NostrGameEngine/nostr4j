@@ -54,17 +54,28 @@ import org.ngengine.nostr4j.rtc.signal.NostrRTCLocalPeer;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCPeer;
 import org.ngengine.nostr4j.utils.NostrUtils;
 
-// A turn server that uses nostr relays to relay encrypted and compressed data
+/**
+ * TURN implemented on top of nostr relays.
+ * When a p2p connection is not possible, the packets can be relayed through a nostr relay
+ * using this class.
+ * The packets are automatically compressed, encrypted and split into chunks to ensure a reliable
+ * and private connection through public relays.
+ * 
+ * Note: this might cause unexpected heavy load on the relays, so use it only with relays that
+ * explicitly support this kind of workload.
+ */
 public class NostrTURN {
+    private static final Logger logger = Logger.getLogger(NostrTURN.class.getName());
 
     public static interface Listener {
         void onTurnPacket(NostrRTCPeer peer, ByteBuffer data);
     }
 
-    private static final Logger logger = Logger.getLogger(NostrTURN.class.getName());
 
+    /**
+     * A chunk of encrypted and compressed data to be sent.
+     */
     private static class Chunk {
-
         String data;
         boolean ack;
         boolean sent;
@@ -75,6 +86,9 @@ public class NostrTURN {
         }
     }
 
+    /**
+     * A packet is made of multiple chunks.
+     */
     private static class Packet {
 
         final long id;
@@ -109,32 +123,33 @@ public class NostrTURN {
     private final NostrExecutor executor;
     private final List<Listener> listeners = new CopyOnWriteArrayList<>();
 
-    private Packet inPacket;
-    private Runnable outQueueNotify;
+    private volatile Packet inPacket;
+    private volatile Runnable lockNotify;
     private volatile boolean stopped = false;
 
     public NostrTURN(String connectionId, NostrRTCLocalPeer localPeer, NostrRTCPeer remotePeer, NostrTURNSettings config) {
         Platform platform = NostrUtils.getPlatform();
-        this.connectionId = connectionId;
-        this.localPeer = localPeer;
-        this.remotePeer = remotePeer;
-        this.config = config;
+        this.connectionId = Objects.requireNonNull(connectionId, "connectionId cannot be null");
+        this.localPeer = Objects.requireNonNull(localPeer, "localPeer cannot be null");
+        this.remotePeer = Objects.requireNonNull( remotePeer, "remotePeer cannot be null");
+        this.config =  Objects.requireNonNull(config, "config cannot be null");
         this.executor = platform.newPoolExecutor();
 
         // setup local peer turn server
         logger.fine("Connecting to local TURN server: " + localPeer.getTurnServer());
         this.inPool = new NostrPool(PassthroughEventTracker.class);
         this.inPool.connectRelay(new NostrRelay(Objects.requireNonNull(localPeer.getTurnServer()), executor));
-        this.inSub =
+        this.inSub = // receive packets from remote peer
             this.inPool.subscribe(
-                    new NostrFilter()
-                        .author(this.remotePeer.getPubkey())
-                        .kind(this.config.getKind())
-                        .tag("d", "turn-" + this.connectionId)
-                );
-        this.inSub.listenEvent((event, stored) -> {
-                onTurnEvent(event, false);
-            });
+                new NostrFilter()
+                    .author(this.remotePeer.getPubkey())
+                    .kind(this.config.getKind())
+                    .tag("d", "turn-" + this.connectionId) // tag to identify the connection 
+            );
+                
+        this.inSub.onEvent((event, stored) -> {
+            onTurnEvent(event, false);
+        });
 
         // setup remote peer turn server
         logger.fine("Connecting to remote TURN server: " + remotePeer.getTurnServer());
@@ -143,11 +158,11 @@ public class NostrTURN {
         this.outSub =
             this.outPool.subscribe(
                     new NostrFilter()
-                        .author(this.localPeer.getPubkey())
+                        .author(this.remotePeer.getPubkey())
                         .kind(this.config.getKind())
                         .tag("d", "turn-" + this.connectionId)
                 );
-        this.outSub.listenEvent((event, stored) -> {
+        this.outSub.onEvent((event, stored) -> {
                 onTurnEvent(event, true);
             });
     }
@@ -175,29 +190,27 @@ public class NostrTURN {
         this.executor.close();
     }
 
-    // internal- called from executor thread
-    private void onTurnEvent(SignedNostrEvent event, boolean fromRemote) {
+    // handle incoming TURN events
+    private void onTurnEvent(SignedNostrEvent event, boolean remote) {
         String content = event.getContent();
-        this.localPeer.getSigner()
+        this.localPeer.getSigner() // decrypt for peer
             .decrypt(content, remotePeer.getPubkey())
             .then(decrypted -> {
                 String prefix = decrypted.substring(0, 3);
-                if (prefix.equals("ack") && fromRemote) {
+                if (prefix.equals("ack") && remote ) {
                     this.onReceivedAck(decrypted.substring(3));
-                } else if (prefix.equals("pkt") && !fromRemote) {
-                    this.onReceivedPacket(decrypted.substring(3));
+                } else if (prefix.equals("pkt") && !remote) {
+                    this.onReceivedPacketChunk(decrypted.substring(3));
                 }
-                // else {
-                //     logger.warning("Unknown TURN event: " + prefix + " fromRemote " + fromRemote);
-                // }
                 return null;
             });
     }
 
-    // internal- called from executor thread
+    // handle incoming ACK events by marking the chunk as acked 
+    // and moving the stream forward
     private void onReceivedAck(String data) {
         StringTokenizer tokenizer = new StringTokenizer(data, ",");
-        int packetId = NostrUtils.safeInt(tokenizer.nextToken());
+        long packetId = NostrUtils.safeLong(tokenizer.nextToken());
         Packet packet = outQueue.get(packetId);
         if (packet == null) return;
         int chunkId = NostrUtils.safeInt(tokenizer.nextToken());
@@ -210,15 +223,18 @@ public class NostrTURN {
         this.consume();
     }
 
-    // internal- called from executor thread
-    private void onReceivedPacket(String data) {
+    // handle incoming packet chunks by appending the chunk to the aggregated packet
+    private void onReceivedPacketChunk(String data) {
+        // string tokenizer to parse the data as we move forward
         StringTokenizer tokenizer = new StringTokenizer(data, ",");
-        int packetId = NostrUtils.safeInt(tokenizer.nextToken());
 
+        long packetId = NostrUtils.safeLong(tokenizer.nextToken());
         if (this.inPacket != null && this.inPacket.id != packetId) {
             logger.warning("Received packet with id " + packetId + " but current packet is " + this.inPacket.id);
             return;
         }
+
+        // create new aggregated packet if not already created
         if (this.inPacket == null) {
             this.inPacket = new Packet(packetId, new ArrayList<>(), null, null);
         }
@@ -265,7 +281,7 @@ public class NostrTURN {
             });
     }
 
-    // internal: call only from executor thread
+    // consume the aggregated packet when it is ready
     private void consume() {
         // if we have a full packet, emit data and delete it
         if (this.inPacket != null) {
@@ -300,7 +316,11 @@ public class NostrTURN {
 
                     ByteBuffer byteBuffer = ByteBuffer.wrap(bos.toByteArray(), 0, decompressedSize);
                     for (Listener listener : listeners) {
-                        listener.onTurnPacket(remotePeer, byteBuffer);
+                        try{
+                            listener.onTurnPacket(remotePeer, byteBuffer);
+                        } catch (Exception e) {
+                            logger.warning("Error running listener: " + e.getMessage());
+                        }
                     }
                 } catch (Exception e) {
                     logger.warning("Error decompressing data: " + e.getMessage());
@@ -337,6 +357,7 @@ public class NostrTURN {
         }
     }
 
+    // internal loop to send packets
     private void loop() {
         this.executor.runLater(
                 () -> {
@@ -346,8 +367,8 @@ public class NostrTURN {
                             Platform platform = NostrUtils.getPlatform();
                             platform
                                 .wrapPromise((res, rej) -> {
-                                    assert outQueueNotify == null;
-                                    outQueueNotify =
+                                    assert lockNotify == null;
+                                    lockNotify =
                                         () -> {
                                             res.accept(null);
                                         };
@@ -431,7 +452,14 @@ public class NostrTURN {
             );
     }
 
+    /**
+     * Send some data to the remote peer.
+     * @param data the data to send
+     * @return a promise that resolves when the data is sent
+     */
     public AsyncTask<Void> write(ByteBuffer data) {
+        Objects.nonNull(data);
+
         Platform platform = NostrUtils.getPlatform();
         return platform.promisify(
             (res, rej) -> {
@@ -484,8 +512,10 @@ public class NostrTURN {
 
                 // move stream forward
                 consume();
-                if (outQueueNotify != null) {
-                    outQueueNotify.run();
+
+                // notify the sending loop so that it unlocks and sends the data
+                if (lockNotify != null) {
+                    lockNotify.run();
                 }
             },
             this.executor

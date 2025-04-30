@@ -34,6 +34,8 @@ import java.io.Closeable;
 import java.nio.ByteBuffer;
 import java.util.Collection;
 import org.ngengine.nostr4j.platform.AsyncTask;
+import org.ngengine.nostr4j.platform.NostrExecutor;
+import org.ngengine.nostr4j.rtc.NostrRTCSettings;
 
 public interface RTCTransport extends Closeable {
     interface RTCTransportListener {
@@ -41,18 +43,18 @@ public interface RTCTransport extends Closeable {
 
         void onRTCBinaryMessage(ByteBuffer msg);
 
-        void onRTCChannelClosed();
+        void onRTCDisconnected(String reason);
 
         void onRTCChannelError(Throwable e);
 
-        void onLinkEstablished();
+        void onRTCConnected();
 
-        void onLinkLost();
     }
 
     void close();
+    boolean isConnected();
 
-    AsyncTask<Void> start(String connId, Collection<String> stunServers);
+    AsyncTask<Void> start(NostrRTCSettings settings, NostrExecutor executor, String connId, Collection<String> stunServers);
     AsyncTask<String> connectToChannel(String offerOrAnswer);
     AsyncTask<String> initiateChannel();
 

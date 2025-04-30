@@ -37,6 +37,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import org.ngengine.nostr4j.platform.AsyncTask;
 import org.ngengine.nostr4j.platform.NostrExecutor;
+import org.ngengine.nostr4j.rtc.NostrRTCSettings;
 import org.ngengine.nostr4j.transport.NostrTransport;
 import org.ngengine.nostr4j.transport.RTCTransport;
 
@@ -116,9 +117,9 @@ public class JVMThreadedPlatform extends JVMAsyncPlatform {
     }
 
     @Override
-    public RTCTransport newRTCTransport(String connId, Collection<String> stunServers) {
+    public RTCTransport newRTCTransport(NostrRTCSettings settings, String connId, Collection<String> stunServers) {
         JVMRTCTransport transport = new JVMRTCTransport();
-        transport.start(connId, stunServers);
+        transport.start(settings, new TNostrExecutor(), connId, stunServers);
         return transport;
     }
 }

@@ -38,7 +38,6 @@ import org.ngengine.nostr4j.keypair.NostrPublicKey;
  * Announce the peer can accept connections.
  */
 public class NostrRTCAnnounce implements NostrRTCSignal {
-
     private static final long serialVersionUID = 1L;
 
     private final NostrPublicKey publicKey;

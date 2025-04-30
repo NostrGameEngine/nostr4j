@@ -72,6 +72,7 @@ import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.platform.AsyncTask;
 import org.ngengine.nostr4j.platform.NostrExecutor;
 import org.ngengine.nostr4j.platform.Platform;
+import org.ngengine.nostr4j.rtc.NostrRTCSettings;
 import org.ngengine.nostr4j.transport.NostrTransport;
 import org.ngengine.nostr4j.transport.RTCTransport;
 import org.ngengine.nostr4j.utils.NostrUtils;
@@ -497,6 +498,43 @@ public class JVMAsyncPlatform implements Platform {
         return (AsyncTask<T>) promisify(func, null);
     }
 
+
+
+
+ 
+    @Override
+    public <T> AsyncTask<List<AsyncTask<T>>> awaitAllSettled(List<AsyncTask<T>> promises) {
+        return wrapPromise((res, rej) -> {
+            if (promises.size() == 0) {
+                res.accept(new ArrayList<>());
+                return;
+            }
+
+            AtomicInteger count = new AtomicInteger(promises.size());
+    
+            for (int i = 0; i < promises.size(); i++) {
+                AsyncTask<T> promise = promises.get(i);
+
+                promise
+                        .catchException(e -> {
+                            logger.log(Level.WARNING, "Error in awaitAll", e);
+                            int remaining = count.decrementAndGet();
+                             
+                            if (remaining == 0) {
+                                res.accept(promises);
+                            }
+                        })
+                        .then(result -> {
+                            int remaining = count.decrementAndGet();
+                            if (remaining == 0) {                               
+                                res.accept(promises);
+                            }
+                            return null;
+                        });
+            }
+        });
+    }
+
     @Override
     public <T> AsyncTask<List<T>> awaitAll(List<AsyncTask<T>> promises) {
         return wrapPromise((res, rej) -> {
@@ -687,9 +725,9 @@ public class JVMAsyncPlatform implements Platform {
     }
 
     @Override
-    public RTCTransport newRTCTransport(String connId, Collection<String> stunServers) {
+    public RTCTransport newRTCTransport(NostrRTCSettings settings, String connId, Collection<String> stunServers) {
         JVMRTCTransport transport = new JVMRTCTransport();
-        transport.start(connId, stunServers);
+        transport.start(settings, newVtExecutor(), connId, stunServers);
         return transport;
     }
 }

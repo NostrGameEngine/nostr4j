@@ -83,12 +83,14 @@ public class NostrPool implements NostrRelayComponent {
         this.defaultEventTracker = defaultEventTracker;
     }
 
-    public void addNoticeListener(NostrNoticeListener listener) {
+    public NostrPool onNotice(NostrNoticeListener listener) {
         this.noticeListener.add(listener);
+        return this;
     }
 
-    public void removeNoticeListener(NostrNoticeListener listener) {
+    public NostrPool offNotice(NostrNoticeListener listener) {
         this.noticeListener.remove(listener);
+        return this;
     }
 
     public AsyncTask<List<NostrMessageAck>> send(SignedNostrEvent ev) {
@@ -304,7 +306,7 @@ public class NostrPool implements NostrRelayComponent {
 
             scheduledActions.add(scheduled);
             sub
-                .listenEose(all -> {
+                .onEose(all -> {
                     if (all) {
                         assert dbg(() -> {
                             logger.fine("fetch eose for fetch " + sub.getId() + " with received events: " + events);
@@ -315,14 +317,14 @@ public class NostrPool implements NostrRelayComponent {
                         sub.close();
                     }
                 })
-                .listenEvent((e, stored) -> {
+                .onEvent((e, stored) -> {
                     assert dbg(() -> {
                         logger.finer("fetch event " + e + " for subscription " + sub.getId());
                     });
 
                     events.add(e);
                 })
-                .listenClose(reason -> {
+                .onClose(reason -> {
                     assert dbg(() -> {
                         logger.fine("fetch close " + reason + " for subscription " + sub.getId());
                     });
@@ -407,7 +409,13 @@ public class NostrPool implements NostrRelayComponent {
                 NostrNoticeMessage msg = (NostrNoticeMessage) rcv;
                 String eventMessage = msg.getMessage();
                 logger.info("Received notice from relay " + relay.getUrl() + ": " + eventMessage);
-                noticeListener.forEach(listener -> listener.onNotice(relay, eventMessage, null));
+                for(NostrNoticeListener listener : noticeListener) {
+                    try{
+                        listener.onNotice(relay, eventMessage, null);
+                    } catch (Exception e) {
+                        logger.log(Level.WARNING, "Error in notice listener", e);
+                    }
+                }
             } else if (rcv instanceof ReceivedSignedNostrEvent) {
                 ReceivedSignedNostrEvent e = (ReceivedSignedNostrEvent) rcv;
                 String subId = e.getSubId();
@@ -486,7 +494,13 @@ public class NostrPool implements NostrRelayComponent {
 
     @Override
     public boolean onRelayError(NostrRelay relay, Throwable error) {
-        noticeListener.forEach(listener -> listener.onNotice(relay, error.getMessage(), error));
+        for (NostrNoticeListener listener : noticeListener) {
+            try {
+                listener.onNotice(relay, error.getMessage(), error);
+            } catch (Exception e) {
+                logger.log(Level.WARNING, "Error in notice listener", e);
+            }
+        }
         return true;
     }
 
