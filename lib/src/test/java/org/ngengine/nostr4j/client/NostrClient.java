@@ -581,8 +581,7 @@ public class NostrClient extends JFrame {
         this.pool.connectRelay(new NostrRelay("wss://nostr.wine"));
 
         // Show notice in a cyber dialog
-        this.pool.onNotice((relay, notice, ex) ->
-                SwingUtilities.invokeLater(() -> showCyberMessageBox("SYSTEM NOTICE", notice))
+        this.pool.onNotice((relay, notice, ex) -> SwingUtilities.invokeLater(() -> showCyberMessageBox("SYSTEM NOTICE", notice))
             );
 
         // Subscribe to events

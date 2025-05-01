@@ -31,6 +31,7 @@
 package org.ngengine.nostr4j.rtc.signal;
 
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.Map;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
 
@@ -38,14 +39,21 @@ import org.ngengine.nostr4j.keypair.NostrPublicKey;
  * Announce the peer can accept connections.
  */
 public class NostrRTCAnnounce implements NostrRTCSignal {
+
     private static final long serialVersionUID = 1L;
 
     private final NostrPublicKey publicKey;
+    private final Map<String, Object> misc;
     private volatile Instant expireAt;
 
-    public NostrRTCAnnounce(NostrPublicKey publicKey, Instant expireAt) {
+    public NostrRTCAnnounce(NostrPublicKey publicKey, Instant expireAt, Map<String, Object> misc) {
         this.publicKey = publicKey;
         this.expireAt = expireAt;
+        HashMap<String, Object> map = new HashMap<>();
+        if (misc != null && !misc.isEmpty()) {
+            map.putAll(misc);
+        }
+        this.misc = map;
     }
 
     public void updateExpireAt(Instant expireAt) {
@@ -77,7 +85,7 @@ public class NostrRTCAnnounce implements NostrRTCSignal {
     }
 
     public Map<String, Object> get() {
-        return Map.of();
+        return misc;
     }
 
     public NostrPublicKey getPubkey() {

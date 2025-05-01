@@ -33,6 +33,7 @@ package org.ngengine.nostr4j.rtc.signal;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Objects;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
 
@@ -43,13 +44,15 @@ public class NostrRTCPeer {
 
     private final NostrPublicKey pubkey;
     private final Map<String, Object> misc;
+
     private final String turnServer;
     private Instant lastSeen;
+    private Map<String, Object> publicMisc;
 
     NostrRTCPeer(NostrPublicKey pubkey, String turnServer, Map<String, Object> misc) {
-        Objects.nonNull(turnServer);
-        Objects.nonNull(pubkey);
-        Objects.nonNull(misc);
+        Objects.requireNonNull(turnServer);
+        Objects.requireNonNull(pubkey);
+        Objects.requireNonNull(misc);
         if (turnServer.isEmpty()) {
             throw new IllegalArgumentException("Turn server cannot be empty");
         }
@@ -66,6 +69,18 @@ public class NostrRTCPeer {
 
     public Map<String, Object> getMisc() {
         return misc;
+    }
+
+    public Map<String, Object> getPublicMisc() {
+        if (publicMisc == null) {
+            publicMisc = new HashMap<>();
+            for (Entry<String, Object> entry : misc.entrySet()) {
+                if (entry.getKey().startsWith("public:")) {
+                    publicMisc.put(entry.getKey(), entry.getValue());
+                }
+            }
+        }
+        return publicMisc;
     }
 
     public String getTurnServer() {

@@ -51,8 +51,8 @@ public class NostrRTCLocalPeer extends NostrRTCPeer {
         Map<String, Object> misc
     ) {
         super(keyPair.getPublicKey(), turnServer, misc);
-        Objects.nonNull(signer);
-        Objects.nonNull(stunServers);
+        Objects.requireNonNull(signer);
+        Objects.requireNonNull(stunServers);
         this.signer = new NostrKeyPairSigner(keyPair);
         this.stunServers = stunServers;
     }

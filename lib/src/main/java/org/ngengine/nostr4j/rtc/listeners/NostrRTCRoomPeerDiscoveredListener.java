@@ -28,40 +28,16 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package org.ngengine.nostr4j.transport;
+package org.ngengine.nostr4j.rtc.listeners;
 
-import java.io.Closeable;
-import java.nio.ByteBuffer;
-import java.util.Collection;
-import org.ngengine.nostr4j.platform.AsyncTask;
-import org.ngengine.nostr4j.platform.NostrExecutor;
-import org.ngengine.nostr4j.rtc.NostrRTCSettings;
+import org.ngengine.nostr4j.keypair.NostrPublicKey;
+import org.ngengine.nostr4j.rtc.signal.NostrRTCAnnounce;
 
-public interface RTCTransport extends Closeable {
-    interface RTCTransportListener {
-        void onLocalRTCIceCandidate(String candidate);
-
-        void onRTCBinaryMessage(ByteBuffer msg);
-
-        void onRTCDisconnected(String reason);
-
-        void onRTCChannelError(Throwable e);
-
-        void onRTCConnected();
+public interface NostrRTCRoomPeerDiscoveredListener extends NostrRTCRoomListener {
+    enum NostrRTCRoomPeerDiscoveredState {
+        ONLINE,
+        OFFLINE,
     }
 
-    void close();
-    boolean isConnected();
-
-    AsyncTask<Void> start(NostrRTCSettings settings, NostrExecutor executor, String connId, Collection<String> stunServers);
-    AsyncTask<String> connectToChannel(String offerOrAnswer);
-    AsyncTask<String> initiateChannel();
-
-    void addRemoteIceCandidates(Collection<String> candidates);
-
-    void addListener(RTCTransportListener listener);
-
-    void removeListener(RTCTransportListener listener);
-
-    AsyncTask<Void> write(ByteBuffer message);
+    void onRoomPeerDiscovered(NostrPublicKey peerKey, NostrRTCAnnounce announce, NostrRTCRoomPeerDiscoveredState state);
 }

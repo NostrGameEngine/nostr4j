@@ -409,8 +409,8 @@ public class NostrPool implements NostrRelayComponent {
                 NostrNoticeMessage msg = (NostrNoticeMessage) rcv;
                 String eventMessage = msg.getMessage();
                 logger.info("Received notice from relay " + relay.getUrl() + ": " + eventMessage);
-                for(NostrNoticeListener listener : noticeListener) {
-                    try{
+                for (NostrNoticeListener listener : noticeListener) {
+                    try {
                         listener.onNotice(relay, eventMessage, null);
                     } catch (Exception e) {
                         logger.log(Level.WARNING, "Error in notice listener", e);

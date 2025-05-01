@@ -86,7 +86,6 @@ public final class NostrRTCSettings implements Cloneable, Serializable {
     public Duration getPeerExpiration() {
         return peerExpiration;
     }
- 
 
     public Duration getRoomLoopInterval() {
         return roomLoopInterval;
@@ -103,7 +102,7 @@ public final class NostrRTCSettings implements Cloneable, Serializable {
     public static final NostrRTCSettings DEFAULT = new NostrRTCSettings(
         SIGNALING_LOOP_INTERVAL,
         PEER_EXPIRATION,
-            DELAYED_CANDIDATES_INTERVAL,
+        DELAYED_CANDIDATES_INTERVAL,
         ROOM_LOOP_INTERVAL,
         P2P_TIMEOUT
     );
@@ -133,7 +132,13 @@ public final class NostrRTCSettings implements Cloneable, Serializable {
 
     @Override
     public int hashCode() {
-        return Objects.hash(signalingLoopInterval, peerExpiration, delayedCandidatesInterval,  roomLoopInterval, p2pAttemptTimeout);
+        return Objects.hash(
+            signalingLoopInterval,
+            peerExpiration,
+            delayedCandidatesInterval,
+            roomLoopInterval,
+            p2pAttemptTimeout
+        );
     }
 
     @Override

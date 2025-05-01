@@ -31,7 +31,6 @@
 package org.ngengine.nostr4j.rtc.listeners;
 
 import java.nio.ByteBuffer;
-
 import org.ngengine.nostr4j.rtc.NostrRTCSocket;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCIceCandidate;
 

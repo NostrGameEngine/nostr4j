@@ -43,7 +43,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.NostrPool;
-import org.ngengine.nostr4j.NostrRelay;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.platform.AsyncTask;
@@ -52,6 +51,7 @@ import org.ngengine.nostr4j.platform.Platform;
 import org.ngengine.nostr4j.rtc.listeners.NostrRTCRoomListener;
 import org.ngengine.nostr4j.rtc.listeners.NostrRTCRoomPeerConnectedListener;
 import org.ngengine.nostr4j.rtc.listeners.NostrRTCRoomPeerDisconnectListener;
+import org.ngengine.nostr4j.rtc.listeners.NostrRTCRoomPeerDiscoveredListener;
 import org.ngengine.nostr4j.rtc.listeners.NostrRTCRoomPeerMessageListener;
 import org.ngengine.nostr4j.rtc.listeners.NostrRTCSocketListener;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCAnnounce;
@@ -65,9 +65,11 @@ import org.ngengine.nostr4j.rtc.turn.NostrTURNSettings;
 import org.ngengine.nostr4j.utils.NostrUtils;
 
 public class NostrRTCRoom implements NostrRTCSignaling.Listener, NostrRTCSocketListener, Closeable {
+
     private static final Logger logger = Logger.getLogger(NostrRTCRoom.class.getName());
 
     private static class PendingConnection {
+
         Instant createdAt;
         NostrRTCSocket socket;
     }
@@ -79,6 +81,7 @@ public class NostrRTCRoom implements NostrRTCSignaling.Listener, NostrRTCSocketL
     private final List<NostrRTCRoomPeerConnectedListener> onConnectionListeners = new CopyOnWriteArrayList<>();
     private final List<NostrRTCRoomPeerDisconnectListener> onDisconnectionListeners = new CopyOnWriteArrayList<>();
     private final List<NostrRTCRoomPeerMessageListener> onMessageListeners = new CopyOnWriteArrayList<>();
+    private final List<NostrRTCRoomPeerDiscoveredListener> onPeerDiscoveredListeners = new CopyOnWriteArrayList<>();
 
     private final NostrRTCLocalPeer localPeer;
     private final NostrRTCSignaling signaling;
@@ -86,31 +89,6 @@ public class NostrRTCRoom implements NostrRTCSignaling.Listener, NostrRTCSocketL
     private final NostrTURNSettings turnSettings;
     private final NostrExecutor executor;
     private final NostrKeyPair roomKeyPair;
-
- 
-    public static NostrRTCRoom join(
-            NostrRTCLocalPeer localPeer,
-            NostrKeyPair roomKeyPair,
-            List<NostrRelay> relays,
-            NostrRTCRoomPeerConnectedListener onPeerConnected,
-            NostrRTCRoomPeerDisconnectListener onPeerDisconnected,
-            NostrRTCRoomPeerMessageListener onMessage) {
-        NostrPool pool = new NostrPool();
-        for (NostrRelay relay : relays) {
-            pool.connectRelay(relay);
-        }
-        NostrRTCRoom room = new NostrRTCRoom(
-                NostrRTCSettings.DEFAULT,
-                NostrTURNSettings.DEFAULT,
-                localPeer,
-                roomKeyPair,
-                pool);
-        if(onPeerConnected!=null)room.onConnection(onPeerConnected);
-        if(onPeerDisconnected!=null)room.onDisconnection(onPeerDisconnected);
-        if(onMessage!=null)room.onMessage(onMessage);
-        room.start();
-        return room;
-    }
 
     public NostrRTCRoom(
         NostrRTCSettings settings,
@@ -123,7 +101,13 @@ public class NostrRTCRoom implements NostrRTCSignaling.Listener, NostrRTCSocketL
         this.settings = Objects.requireNonNull(settings, "Settings cannot be null");
         this.turnSettings = Objects.requireNonNull(turnSettings, "Settings cannot be null");
         this.localPeer = Objects.requireNonNull(localPeer, "Local peer cannot be null");
-        this.signaling = new NostrRTCSignaling(settings, localPeer, roomKeyPair, Objects.requireNonNull(signalingPool, "Signaling pool cannot be null"));
+        this.signaling =
+            new NostrRTCSignaling(
+                settings,
+                localPeer,
+                roomKeyPair,
+                Objects.requireNonNull(signalingPool, "Signaling pool cannot be null")
+            );
         this.signaling.addListener(this);
         Platform platform = NostrUtils.getPlatform();
         this.executor = platform.newPoolExecutor();
@@ -157,6 +141,10 @@ public class NostrRTCRoom implements NostrRTCSignaling.Listener, NostrRTCSocketL
         return this;
     }
 
+    public NostrRTCRoom onPeerDiscovered(NostrRTCRoomPeerDiscoveredListener listener) {
+        this.onPeerDiscoveredListeners.add(listener);
+        return this;
+    }
 
     public NostrRTCRoom on(NostrRTCRoomListener listener) {
         if (listener instanceof NostrRTCRoomPeerConnectedListener) {
@@ -168,8 +156,10 @@ public class NostrRTCRoom implements NostrRTCSignaling.Listener, NostrRTCSocketL
         if (listener instanceof NostrRTCRoomPeerMessageListener) {
             this.onMessage((NostrRTCRoomPeerMessageListener) listener);
         }
+        if (listener instanceof NostrRTCRoomPeerDiscoveredListener) {
+            this.onPeerDiscovered((NostrRTCRoomPeerDiscoveredListener) listener);
+        }
         return this;
-
     }
 
     public NostrRTCRoom off(NostrRTCRoomListener listener) {
@@ -182,8 +172,10 @@ public class NostrRTCRoom implements NostrRTCSignaling.Listener, NostrRTCSocketL
         if (listener instanceof NostrRTCRoomPeerMessageListener) {
             this.onMessageListeners.remove(listener);
         }
+        if (listener instanceof NostrRTCRoomPeerDiscoveredListener) {
+            this.onPeerDiscoveredListeners.remove(listener);
+        }
         return this;
-
     }
 
     private void loop() {
@@ -272,10 +264,13 @@ public class NostrRTCRoom implements NostrRTCSignaling.Listener, NostrRTCSocketL
         return precedence;
     }
 
-  
+    public AsyncTask<Void> discover() {
+        return this.signaling.start(false);
+    }
+
     public AsyncTask<Void> start() {
         this.loop();
-        return this.signaling.start();
+        return this.signaling.start(true);
     }
 
     /**
@@ -289,8 +284,8 @@ public class NostrRTCRoom implements NostrRTCSignaling.Listener, NostrRTCSocketL
             logger.fine("Kicking peer: " + peer);
             socket.close();
             for (NostrRTCRoomPeerDisconnectListener listener : onDisconnectionListeners) {
-                try{
-                    listener.onSwarmPeerDisconnected(socket.getRemotePeer().getPubkey(), socket);
+                try {
+                    listener.onRoomPeerDisconnected(socket.getRemotePeer().getPubkey(), socket);
                 } catch (Exception e) {
                     logger.log(Level.WARNING, "Error notifying listener", e);
                 }
@@ -300,7 +295,6 @@ public class NostrRTCRoom implements NostrRTCSignaling.Listener, NostrRTCSocketL
         }
     }
 
-
     @Override
     public void onRTCSocketClose(NostrRTCSocket socket) {
         // if the socket is closed remotely, we remove it from the list of connections
@@ -309,13 +303,13 @@ public class NostrRTCRoom implements NostrRTCSignaling.Listener, NostrRTCSocketL
         if (c != null) {
             logger.fine("Closed peer: " + socket.getRemotePeer().getPubkey());
             for (NostrRTCRoomPeerDisconnectListener listener : onDisconnectionListeners) {
-                try{
-                    listener.onSwarmPeerDisconnected(socket.getRemotePeer().getPubkey(), socket);
+                try {
+                    listener.onRoomPeerDisconnected(socket.getRemotePeer().getPubkey(), socket);
                 } catch (Exception e) {
                     logger.log(Level.WARNING, "Error notifying listener", e);
                 }
             }
-        }  
+        }
     }
 
     /**
@@ -342,10 +336,34 @@ public class NostrRTCRoom implements NostrRTCSignaling.Listener, NostrRTCSocketL
     }
 
     @Override
-    public void onAddAnnounce(NostrRTCAnnounce announce) {}
+    public void onAddAnnounce(NostrRTCAnnounce announce) {
+        for (NostrRTCRoomPeerDiscoveredListener listener : onPeerDiscoveredListeners) {
+            try {
+                listener.onRoomPeerDiscovered(
+                    announce.getPubkey(),
+                    announce,
+                    NostrRTCRoomPeerDiscoveredListener.NostrRTCRoomPeerDiscoveredState.ONLINE
+                );
+            } catch (Exception e) {
+                logger.log(Level.WARNING, "Error notifying listener", e);
+            }
+        }
+    }
 
     @Override
-    public void onUpdateAnnounce(NostrRTCAnnounce announce) {}
+    public void onUpdateAnnounce(NostrRTCAnnounce announce) {
+        for (NostrRTCRoomPeerDiscoveredListener listener : onPeerDiscoveredListeners) {
+            try {
+                listener.onRoomPeerDiscovered(
+                    announce.getPubkey(),
+                    announce,
+                    NostrRTCRoomPeerDiscoveredListener.NostrRTCRoomPeerDiscoveredState.OFFLINE
+                );
+            } catch (Exception e) {
+                logger.log(Level.WARNING, "Error notifying listener", e);
+            }
+        }
+    }
 
     @Override
     public void onRemoveAnnounce(NostrRTCAnnounce announce, RemoveReason reason) {
@@ -358,8 +376,8 @@ public class NostrRTCRoom implements NostrRTCSignaling.Listener, NostrRTCSocketL
         if (socket != null) {
             socket.close();
             for (NostrRTCRoomPeerDisconnectListener listener : onDisconnectionListeners) {
-                try{
-                    listener.onSwarmPeerDisconnected(socket.getRemotePeer().getPubkey(), socket);
+                try {
+                    listener.onRoomPeerDisconnected(socket.getRemotePeer().getPubkey(), socket);
                 } catch (Exception e) {
                     logger.log(Level.WARNING, "Error notifying listener", e);
                 }
@@ -396,7 +414,6 @@ public class NostrRTCRoom implements NostrRTCSignaling.Listener, NostrRTCSocketL
 
     @Override
     public void onReceiveOffer(NostrRTCOffer offer) {
-
         NostrPublicKey remotePubkey = offer.getPeerInfo().getPubkey();
         // offer received from remote peer
         PendingConnection conn = pendingInitiatedConnections.get(remotePubkey);
@@ -409,7 +426,7 @@ public class NostrRTCRoom implements NostrRTCSignaling.Listener, NostrRTCSocketL
                 remotePubkey +
                 " because remote peer has precedence over local peer and is initiating the connection"
             );
-            conn.socket.close();      
+            conn.socket.close();
         }
 
         logger.fine("Connecting to peer: " + remotePubkey);
@@ -436,8 +453,8 @@ public class NostrRTCRoom implements NostrRTCSignaling.Listener, NostrRTCSocketL
             });
         connections.put(remotePubkey, socket);
         for (NostrRTCRoomPeerConnectedListener listener : onConnectionListeners) {
-            try{
-                listener.onSwarmPeerConnected(socket.getRemotePeer().getPubkey(), socket);
+            try {
+                listener.onRoomPeerConnected(socket.getRemotePeer().getPubkey(), socket);
             } catch (Exception e) {
                 logger.log(Level.WARNING, "Error notifying listener", e);
             }
@@ -464,8 +481,8 @@ public class NostrRTCRoom implements NostrRTCSignaling.Listener, NostrRTCSocketL
             connections.put(remotePubkey, conn.socket);
 
             for (NostrRTCRoomPeerConnectedListener listener : onConnectionListeners) {
-                try{
-                    listener.onSwarmPeerConnected(remotePubkey, conn.socket);
+                try {
+                    listener.onRoomPeerConnected(remotePubkey, conn.socket);
                 } catch (Exception e) {
                     logger.log(Level.WARNING, "Error notifying listener", e);
                 }
@@ -508,8 +525,8 @@ public class NostrRTCRoom implements NostrRTCSignaling.Listener, NostrRTCSocketL
     public void onRTCSocketMessage(NostrRTCSocket socket, ByteBuffer bbf, boolean turn) {
         // receive message from remote peer
         for (NostrRTCRoomPeerMessageListener listener : onMessageListeners) {
-            try{
-                listener.onSwarmPeerMessage(socket.getRemotePeer().getPubkey(), socket, bbf, turn);
+            try {
+                listener.onRoomPeerMessage(socket.getRemotePeer().getPubkey(), socket, bbf, turn);
             } catch (Exception e) {
                 logger.log(Level.WARNING, "Error notifying listener", e);
             }
@@ -518,15 +535,15 @@ public class NostrRTCRoom implements NostrRTCSignaling.Listener, NostrRTCSocketL
         byte bbfArray[] = new byte[bbf.remaining()];
         bbf.get(bbfArray);
         bbf.flip();
-        assert dbg(()->{
+        assert dbg(() -> {
             logger.finest(
-            "Received message from peer: " +
-            socket.getRemotePeer().getPubkey() +
-            " : " +
-            new String(bbfArray) +
-            " turn: " +
-            turn
-        );
+                "Received message from peer: " +
+                socket.getRemotePeer().getPubkey() +
+                " : " +
+                new String(bbfArray) +
+                " turn: " +
+                turn
+            );
         });
     }
 
@@ -534,7 +551,7 @@ public class NostrRTCRoom implements NostrRTCSignaling.Listener, NostrRTCSocketL
      * Send some data to a remote peer.
      * @param peer the remote peer to send the data to
      * @param bbf the data to send
-     * @return an async task that will complete when the data is sent or fail if 
+     * @return an async task that will complete when the data is sent or fail if
      * the peer is not connected
      */
     public AsyncTask<Void> send(NostrPublicKey peer, ByteBuffer bbf) {
@@ -559,11 +576,10 @@ public class NostrRTCRoom implements NostrRTCSignaling.Listener, NostrRTCSocketL
             tasks.add(socket.write(bbf));
         }
         Platform platform = NostrUtils.getPlatform();
-        return platform.awaitAllSettled(tasks).then((r)->{
-            return null;
-        });
+        return platform
+            .awaitAllSettled(tasks)
+            .then(r -> {
+                return null;
+            });
     }
-
-
-  
 }

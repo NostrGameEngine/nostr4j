@@ -35,5 +35,5 @@ import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.rtc.NostrRTCSocket;
 
 public interface NostrRTCRoomPeerMessageListener extends NostrRTCRoomListener {
-    void onSwarmPeerMessage(NostrPublicKey peerKey, NostrRTCSocket socket, ByteBuffer bbf, boolean turn);
+    void onRoomPeerMessage(NostrPublicKey peerKey, NostrRTCSocket socket, ByteBuffer bbf, boolean turn);
 }

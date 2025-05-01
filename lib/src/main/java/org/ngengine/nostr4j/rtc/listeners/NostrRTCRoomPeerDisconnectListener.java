@@ -34,5 +34,5 @@ import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.rtc.NostrRTCSocket;
 
 public interface NostrRTCRoomPeerDisconnectListener extends NostrRTCRoomListener {
-    void onSwarmPeerDisconnected(NostrPublicKey peerKey, NostrRTCSocket socket);
+    void onRoomPeerDisconnected(NostrPublicKey peerKey, NostrRTCSocket socket);
 }

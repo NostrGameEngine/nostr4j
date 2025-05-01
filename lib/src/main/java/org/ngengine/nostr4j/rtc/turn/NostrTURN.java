@@ -60,22 +60,23 @@ import org.ngengine.nostr4j.utils.NostrUtils;
  * using this class.
  * The packets are automatically compressed, encrypted and split into chunks to ensure a reliable
  * and private connection through public relays.
- * 
+ *
  * Note: this might cause unexpected heavy load on the relays, so use it only with relays that
  * explicitly support this kind of workload.
  */
 public class NostrTURN {
+
     private static final Logger logger = Logger.getLogger(NostrTURN.class.getName());
 
     public static interface Listener {
         void onTurnPacket(NostrRTCPeer peer, ByteBuffer data);
     }
 
-
     /**
      * A chunk of encrypted and compressed data to be sent.
      */
     private static class Chunk {
+
         String data;
         boolean ack;
         boolean sent;
@@ -131,8 +132,8 @@ public class NostrTURN {
         Platform platform = NostrUtils.getPlatform();
         this.connectionId = Objects.requireNonNull(connectionId, "connectionId cannot be null");
         this.localPeer = Objects.requireNonNull(localPeer, "localPeer cannot be null");
-        this.remotePeer = Objects.requireNonNull( remotePeer, "remotePeer cannot be null");
-        this.config =  Objects.requireNonNull(config, "config cannot be null");
+        this.remotePeer = Objects.requireNonNull(remotePeer, "remotePeer cannot be null");
+        this.config = Objects.requireNonNull(config, "config cannot be null");
         this.executor = platform.newPoolExecutor();
 
         // setup local peer turn server
@@ -141,15 +142,15 @@ public class NostrTURN {
         this.inPool.connectRelay(new NostrRelay(Objects.requireNonNull(localPeer.getTurnServer()), executor));
         this.inSub = // receive packets from remote peer
             this.inPool.subscribe(
-                new NostrFilter()
-                    .author(this.remotePeer.getPubkey())
-                    .kind(this.config.getKind())
-                    .tag("d", "turn-" + this.connectionId) // tag to identify the connection 
-            );
-                
+                    new NostrFilter()
+                        .author(this.remotePeer.getPubkey())
+                        .kind(this.config.getKind())
+                        .tag("d", "turn-" + this.connectionId) // tag to identify the connection
+                );
+
         this.inSub.onEvent((event, stored) -> {
-            onTurnEvent(event, false);
-        });
+                onTurnEvent(event, false);
+            });
 
         // setup remote peer turn server
         logger.fine("Connecting to remote TURN server: " + remotePeer.getTurnServer());
@@ -197,7 +198,7 @@ public class NostrTURN {
             .decrypt(content, remotePeer.getPubkey())
             .then(decrypted -> {
                 String prefix = decrypted.substring(0, 3);
-                if (prefix.equals("ack") && remote ) {
+                if (prefix.equals("ack") && remote) {
                     this.onReceivedAck(decrypted.substring(3));
                 } else if (prefix.equals("pkt") && !remote) {
                     this.onReceivedPacketChunk(decrypted.substring(3));
@@ -206,7 +207,7 @@ public class NostrTURN {
             });
     }
 
-    // handle incoming ACK events by marking the chunk as acked 
+    // handle incoming ACK events by marking the chunk as acked
     // and moving the stream forward
     private void onReceivedAck(String data) {
         StringTokenizer tokenizer = new StringTokenizer(data, ",");
@@ -316,7 +317,7 @@ public class NostrTURN {
 
                     ByteBuffer byteBuffer = ByteBuffer.wrap(bos.toByteArray(), 0, decompressedSize);
                     for (Listener listener : listeners) {
-                        try{
+                        try {
                             listener.onTurnPacket(remotePeer, byteBuffer);
                         } catch (Exception e) {
                             logger.warning("Error running listener: " + e.getMessage());
@@ -458,7 +459,7 @@ public class NostrTURN {
      * @return a promise that resolves when the data is sent
      */
     public AsyncTask<Void> write(ByteBuffer data) {
-        Objects.nonNull(data);
+        Objects.requireNonNull(data);
 
         Platform platform = NostrUtils.getPlatform();
         return platform.promisify(

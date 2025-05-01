@@ -78,11 +78,11 @@ public class JVMRTCTransport implements RTCTransport {
 
     public JVMRTCTransport() {}
 
-    @Override    
+    @Override
     public AsyncTask<Void> start(
         NostrRTCSettings settings,
         NostrExecutor executor,
-        String connId, 
+        String connId,
         Collection<String> stunServers
     ) {
         this.executor = executor;
@@ -103,20 +103,20 @@ public class JVMRTCTransport implements RTCTransport {
                 this.connId = connId;
                 this.conn = PeerConnection.createPeer(this.config);
                 this.conn.onIceStateChange.register((PeerConnection peer, IceState state) -> {
-                    if (state == IceState.RTC_ICE_FAILED) {
-                        // for (RTCTransportListener listener : listeners) {
-                        //     listener.onRTCIceFailed();
-                        // }
-                        this.close();
-                        // for (RTCTransportListener listener : listeners) {
-                        //     listener.onRTCChannelClosed();
-                        // }
-                    } else if (state == IceState.RTC_ICE_CONNECTED) {
-                        // for (RTCTransportListener listener : listeners) {
-                        //     listener.onRTCIceConnected();
-                        // }
-                    }
-                });
+                        if (state == IceState.RTC_ICE_FAILED) {
+                            // for (RTCTransportListener listener : listeners) {
+                            //     listener.onRTCIceFailed();
+                            // }
+                            this.close();
+                            // for (RTCTransportListener listener : listeners) {
+                            //     listener.onRTCChannelClosed();
+                            // }
+                        } else if (state == IceState.RTC_ICE_CONNECTED) {
+                            // for (RTCTransportListener listener : listeners) {
+                            //     listener.onRTCIceConnected();
+                            // }
+                        }
+                    });
 
                 // this.conn.onStateChange.register((PeerConnection p, PeerState state) -> {
                 //     if (state == PeerState.RTC_CLOSED) {
@@ -125,30 +125,34 @@ public class JVMRTCTransport implements RTCTransport {
                 //         connected = true;
                 //     }
                 // });
-                
-                this.conn.onLocalCandidate.register((PeerConnection peer, String candidate, String mediaId) -> {
-                    for (RTCTransportListener listener : listeners) {
-                        try{
-                            listener.onLocalRTCIceCandidate(candidate);
-                        }catch(Exception e){
-                            logger.log(Level.WARNING, "Error sending local candidate", e);
-                        }
-                    }
-                });
 
-                this.executor.runLater(()->{
-                    if(connected) return null;
-                    for (RTCTransportListener listener : listeners) {
-                        try{
-                            listener.onRTCDisconnected("timeout");
-                        }catch(Exception e){
-                            logger.log(Level.WARNING, "Error sending local candidate", e);
+                this.conn.onLocalCandidate.register((PeerConnection peer, String candidate, String mediaId) -> {
+                        for (RTCTransportListener listener : listeners) {
+                            try {
+                                listener.onLocalRTCIceCandidate(candidate);
+                            } catch (Exception e) {
+                                logger.log(Level.WARNING, "Error sending local candidate", e);
+                            }
                         }
-                    }
-                    this.close();
-                    return null;
-                }, settings.getP2pAttemptTimeout().toMillis(), TimeUnit.MILLISECONDS);
-                
+                    });
+
+                this.executor.runLater(
+                        () -> {
+                            if (connected) return null;
+                            for (RTCTransportListener listener : listeners) {
+                                try {
+                                    listener.onRTCDisconnected("timeout");
+                                } catch (Exception e) {
+                                    logger.log(Level.WARNING, "Error sending local candidate", e);
+                                }
+                            }
+                            this.close();
+                            return null;
+                        },
+                        settings.getP2pAttemptTimeout().toMillis(),
+                        TimeUnit.MILLISECONDS
+                    );
+
                 res.accept(null);
             } catch (Exception e) {
                 rej.accept(e);
@@ -162,25 +166,25 @@ public class JVMRTCTransport implements RTCTransport {
         return platform.wrapPromise((res, rej) -> {
             try {
                 this.openChannel.then(channel -> {
-                    try {
-                        boolean isDirectBuffer = message.isDirect();
-                        if (!isDirectBuffer) {
-                            ByteBuffer directBuffer = ByteBuffer.allocateDirect(message.remaining());
-                            directBuffer.put(message);
-                            directBuffer.flip();
-                            channel.sendMessage(directBuffer);
-                        } else {
-                            channel.sendMessage(message);
+                        try {
+                            boolean isDirectBuffer = message.isDirect();
+                            if (!isDirectBuffer) {
+                                ByteBuffer directBuffer = ByteBuffer.allocateDirect(message.remaining());
+                                directBuffer.put(message);
+                                directBuffer.flip();
+                                channel.sendMessage(directBuffer);
+                            } else {
+                                channel.sendMessage(message);
+                            }
+                            res.accept(null);
+                            return null;
+                        } catch (Exception e) {
+                            // e.printStackTrace();
+                            logger.log(Level.WARNING, "Error sending message", e);
+                            rej.accept(e);
+                            return null;
                         }
-                        res.accept(null);
-                        return null;
-                    } catch (Exception e) {
-                        // e.printStackTrace();
-                        logger.log(Level.WARNING, "Error sending message", e);
-                        rej.accept(e);
-                        return null;
-                    }
-                });
+                    });
             } catch (Exception e) {
                 // e.printStackTrace();
                 logger.log(Level.WARNING, "Error sending message", e);
@@ -199,9 +203,9 @@ public class JVMRTCTransport implements RTCTransport {
             // });
             channel.onError.register((c, error) -> {
                 for (RTCTransportListener listener : listeners) {
-                    try{
+                    try {
                         listener.onRTCChannelError(new Exception(error));
-                    }catch(Exception e){
+                    } catch (Exception e) {
                         logger.log(Level.WARNING, "Error sending local candidate", e);
                     }
                 }
@@ -212,9 +216,9 @@ public class JVMRTCTransport implements RTCTransport {
                     if (state == PeerState.RTC_CLOSED) {
                         this.connected = false;
                         for (RTCTransportListener listener : listeners) {
-                            try{
+                            try {
                                 listener.onRTCDisconnected("closed");
-                            }catch(Exception e){
+                            } catch (Exception e) {
                                 logger.log(Level.WARNING, "Error sending local candidate", e);
                             }
                         }
@@ -222,9 +226,9 @@ public class JVMRTCTransport implements RTCTransport {
                     } else if (state == PeerState.RTC_FAILED) {
                         this.connected = false;
                         for (RTCTransportListener listener : listeners) {
-                            try{
+                            try {
                                 listener.onRTCDisconnected("failed");
-                            }catch(Exception e){
+                            } catch (Exception e) {
                                 logger.log(Level.WARNING, "Error sending local candidate", e);
                             }
                         }
@@ -240,19 +244,19 @@ public class JVMRTCTransport implements RTCTransport {
                             logger.finest("Received Message");
                         });
                         for (RTCTransportListener listener : listeners) {
-                            try{
+                            try {
                                 listener.onRTCBinaryMessage(buffer);
-                            }catch(Exception e){
+                            } catch (Exception e) {
                                 logger.log(Level.WARNING, "Error sending local candidate", e);
                             }
                         }
                     })
                 );
                 this.connected = true;
-                for(RTCTransportListener listener : listeners) {
-                    try{
+                for (RTCTransportListener listener : listeners) {
+                    try {
                         listener.onRTCConnected();
-                    }catch(Exception e){
+                    } catch (Exception e) {
                         logger.log(Level.WARNING, "Error sending local candidate", e);
                     }
                 }
@@ -266,19 +270,19 @@ public class JVMRTCTransport implements RTCTransport {
                                 logger.finest("Received Message");
                             });
                             for (RTCTransportListener listener : listeners) {
-                                try{
+                                try {
                                     listener.onRTCBinaryMessage(buffer);
-                                }catch(Exception e){
+                                } catch (Exception e) {
                                     logger.log(Level.WARNING, "Error sending local candidate", e);
                                 }
                             }
                         })
                     );
                     this.connected = true;
-                    for(RTCTransportListener listener : listeners) {
-                        try{
+                    for (RTCTransportListener listener : listeners) {
+                        try {
                             listener.onRTCConnected();
-                        }catch(Exception e){
+                        } catch (Exception e) {
                             logger.log(Level.WARNING, "Error sending local candidate", e);
                         }
                     }
@@ -329,12 +333,12 @@ public class JVMRTCTransport implements RTCTransport {
             return platform.wrapPromise((res1, rej1) -> {
                 this.conn.setRemoteDescription(answer, SessionDescriptionType.ANSWER);
                 this.conn.onStateChange.register((PeerConnection p, PeerState state) -> {
-                    if (state == PeerState.RTC_CLOSED) {
-                        rej1.accept(new Exception("Peer connection closed"));
-                    } else if (state == PeerState.RTC_FAILED) {
-                        rej1.accept(new Exception("Peer connection failed"));
-                    }
-                });
+                        if (state == PeerState.RTC_CLOSED) {
+                            rej1.accept(new Exception("Peer connection closed"));
+                        } else if (state == PeerState.RTC_FAILED) {
+                            rej1.accept(new Exception("Peer connection failed"));
+                        }
+                    });
                 res1.accept(null);
             });
         } else {
@@ -391,7 +395,6 @@ public class JVMRTCTransport implements RTCTransport {
         listeners.remove(listener);
     }
 
-
     @Override
     public boolean isConnected() {
         return connected;
@@ -399,9 +402,9 @@ public class JVMRTCTransport implements RTCTransport {
 
     @Override
     public void close() {
-        if(this.channel!=null) this.channel.close();
+        if (this.channel != null) this.channel.close();
         // .catchException(exc->{
-        if(this.conn!=null) this.conn.close();
+        if (this.conn != null) this.conn.close();
         // })
         // .then(channel->{
 

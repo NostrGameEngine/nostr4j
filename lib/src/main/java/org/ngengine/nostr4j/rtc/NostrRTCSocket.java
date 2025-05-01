@@ -60,14 +60,14 @@ import org.ngengine.nostr4j.utils.NostrUtils;
  * An RTC socket between two peers.
  * This class will try to establish a direct connection between the two peers, when
  * not possible it will fallback to a TURN server.
- * 
- * Note: 
+ *
+ * Note:
  *      isConnected() will return true as long as any kind of connection is possible, this includes turn
  *      if the turn servers are provided. This also means that due to the nature of the TURN connection, the socket
  *       will always result connected as long as the TURN relay is reachable, even if the peer is long gone.
- * 
- *      This is because, to avoid inefficiencies, the keep-alive mechanism is implemented only in the 
- *      signaling protocol: when the signaling announce is stale, the socket should be closed using close(). 
+ *
+ *      This is because, to avoid inefficiencies, the keep-alive mechanism is implemented only in the
+ *      signaling protocol: when the signaling announce is stale, the socket should be closed using close().
  *      So keep in mind that you need to handle keep-alive youself, if you want to use this class by itself (without the signaling protocol).
  */
 public class NostrRTCSocket implements RTCTransport.RTCTransportListener, NostrTURN.Listener, Closeable {
@@ -130,7 +130,6 @@ public class NostrRTCSocket implements RTCTransport.RTCTransportListener, NostrT
         return connected;
     }
 
-
     /**
      * Close the socket.
      */
@@ -153,9 +152,9 @@ public class NostrRTCSocket implements RTCTransport.RTCTransportListener, NostrT
         localIceCandidates.clear();
         listeners.clear();
         for (NostrRTCSocketListener listener : listeners) {
-            try{
+            try {
                 listener.onRTCSocketClose(this);
-            }catch (Exception e){
+            } catch (Exception e) {
                 logger.severe("Error closing socket: " + e.getMessage());
             }
         }
@@ -185,9 +184,9 @@ public class NostrRTCSocket implements RTCTransport.RTCTransportListener, NostrT
                             new HashMap<String, Object>()
                         );
                         for (NostrRTCSocketListener listener : listeners) {
-                            try{
+                            try {
                                 listener.onRTCSocketLocalIceCandidate(this, iceCandidate);
-                            }catch (Exception e){
+                            } catch (Exception e) {
                                 logger.severe("Error emitting ICE candidates: " + e.getMessage());
                             }
                         }
@@ -236,7 +235,7 @@ public class NostrRTCSocket implements RTCTransport.RTCTransportListener, NostrT
      * @throws IllegalArgumentException If the argument is not an offer or answer.
      */
     AsyncTask<NostrRTCAnswer> connect(NostrRTCSignal offerOrAnswer) {
-        Objects.nonNull(offerOrAnswer);
+        Objects.requireNonNull(offerOrAnswer);
         // logger.fine("Connecting to RTC socket " + offerOrAnswer);
         useTURN(false);
 
@@ -265,11 +264,11 @@ public class NostrRTCSocket implements RTCTransport.RTCTransportListener, NostrT
         }
 
         // logger.fine("Initializing TURN connection");
-        if(!this.remotePeer.getTurnServer().isEmpty()){
+        if (!this.remotePeer.getTurnServer().isEmpty()) {
             this.turn = new NostrTURN(connectionId, localPeer, remotePeer, turnSettings);
             this.turn.addListener(this);
             this.turn.start();
-        } else { 
+        } else {
             this.turn = null;
         }
 
@@ -296,10 +295,9 @@ public class NostrRTCSocket implements RTCTransport.RTCTransportListener, NostrT
      * @param candidate The remote ICE candidates.
      */
     public void mergeRemoteRTCIceCandidate(NostrRTCIceCandidate candidate) {
-        Objects.nonNull(candidate);
-        Objects.nonNull(this.transport);
+        Objects.requireNonNull(candidate);
+        Objects.requireNonNull(this.transport);
         this.transport.addRemoteIceCandidates(candidate.getCandidates());
-        
     }
 
     @Override
@@ -318,18 +316,16 @@ public class NostrRTCSocket implements RTCTransport.RTCTransportListener, NostrT
 
     @Override
     public void onRTCDisconnected(String reason) {
-        if(this.turn != null) {
+        if (this.turn != null) {
             connected = true; // still connected via turn
             logger.info("RTC disconnected: " + reason);
             useTURN(true);
-        }else{
+        } else {
             connected = false;
             logger.info("RTC disconnected: " + reason);
             this.close();
         }
     }
-
-  
 
     /**
      * Set the socket to use the turn server.
@@ -344,9 +340,9 @@ public class NostrRTCSocket implements RTCTransport.RTCTransportListener, NostrT
     @Override
     public void onRTCBinaryMessage(ByteBuffer bbf) {
         for (NostrRTCSocketListener listener : listeners) {
-            try{
+            try {
                 listener.onRTCSocketMessage(this, bbf, false);
-            }catch (Exception e){
+            } catch (Exception e) {
                 logger.severe("Error emitting message: " + e.getMessage());
             }
         }
@@ -355,9 +351,9 @@ public class NostrRTCSocket implements RTCTransport.RTCTransportListener, NostrT
     @Override
     public void onTurnPacket(NostrRTCPeer peer, ByteBuffer data) {
         for (NostrRTCSocketListener listener : listeners) {
-            try{
+            try {
                 listener.onRTCSocketMessage(this, data, true);
-            }catch (Exception e){
+            } catch (Exception e) {
                 logger.severe("Error emitting message: " + e.getMessage());
             }
         }
@@ -380,15 +376,12 @@ public class NostrRTCSocket implements RTCTransport.RTCTransportListener, NostrT
             assert dbg(() -> {
                 logger.finest("Send message p2p");
             });
-            return  this.transport.write(bbf);
+            return this.transport.write(bbf);
         }
     }
-
-
 
     @Override
     public void onRTCChannelError(Throwable e) {
         logger.severe("RTC Channel Error " + e);
     }
-
 }
