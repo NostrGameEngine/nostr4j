@@ -410,8 +410,8 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
                     }
                     if (this.subscription == null) {
                         NostrFilter filter = new NostrFilter()
-                            .kind(24133)
-                            .tag("p", this.transportPubkey.asHex())
+                            .withKind(24133)
+                            .withTag("p", this.transportPubkey.asHex())
                             .limit(100)
                             .since(Instant.now().minusSeconds(60));
                         logger.finest("Creating subscription for filter: " + filter);

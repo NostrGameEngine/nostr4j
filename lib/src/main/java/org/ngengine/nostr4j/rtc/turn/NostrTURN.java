@@ -143,9 +143,9 @@ public class NostrTURN {
         this.inSub = // receive packets from remote peer
             this.inPool.subscribe(
                     new NostrFilter()
-                        .author(this.remotePeer.getPubkey())
-                        .kind(this.config.getKind())
-                        .tag("d", "turn-" + this.connectionId) // tag to identify the connection
+                        .withAuthor(this.remotePeer.getPubkey())
+                        .withKind(this.config.getKind())
+                        .withTag("d", "turn-" + this.connectionId) // tag to identify the connection
                 );
 
         this.inSub.onEvent((event, stored) -> {
@@ -159,9 +159,9 @@ public class NostrTURN {
         this.outSub =
             this.outPool.subscribe(
                     new NostrFilter()
-                        .author(this.remotePeer.getPubkey())
-                        .kind(this.config.getKind())
-                        .tag("d", "turn-" + this.connectionId)
+                        .withAuthor(this.remotePeer.getPubkey())
+                        .withKind(this.config.getKind())
+                        .withTag("d", "turn-" + this.connectionId)
                 );
         this.outSub.onEvent((event, stored) -> {
                 onTurnEvent(event, true);

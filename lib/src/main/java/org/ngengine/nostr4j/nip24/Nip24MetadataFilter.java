@@ -37,8 +37,8 @@ public class Nip24MetadataFilter extends NostrFilter {
 
     public Nip24MetadataFilter(NostrPublicKey pubkey) {
         super();
-        if (pubkey != null) this.author(pubkey.asHex());
-        this.kind(0);
+        if (pubkey != null) this.withAuthor(pubkey.asHex());
+        this.withKind(0);
         this.limit(1);
     }
 

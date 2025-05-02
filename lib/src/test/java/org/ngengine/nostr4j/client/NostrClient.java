@@ -586,7 +586,7 @@ public class NostrClient extends JFrame {
 
         // Subscribe to events
         NostrSubscription sub =
-            this.pool.subscribe(Arrays.asList(new NostrFilter().kind(1).limit(10)), FailOnDoubleTracker.class);
+            this.pool.subscribe(Arrays.asList(new NostrFilter().withKind(1).limit(10)), FailOnDoubleTracker.class);
 
         sub.onEvent((event, stored) -> addEventToFeed(event, true));
         sub.open();
@@ -785,7 +785,7 @@ public class NostrClient extends JFrame {
 
         this.pool.fetch(
                 new NostrSearchFilter()
-                    .kind(1)
+                    .withKind(1)
                     .search(searchBar.getText().trim())
                     .until(Instant.ofEpochSecond(earliestEvent))
                     .limit(5),
@@ -834,7 +834,7 @@ public class NostrClient extends JFrame {
 
         // Perform search
         pool.unsubscribeAll();
-        NostrSubscription sub = pool.subscribe(Arrays.asList(new NostrSearchFilter().kind(1).limit(10).search(query)));
+        NostrSubscription sub = pool.subscribe(Arrays.asList(new NostrSearchFilter().withKind(1).limit(10).search(query)));
 
         sub.onEvent((event, stored) -> {
             SwingUtilities.invokeLater(() -> {

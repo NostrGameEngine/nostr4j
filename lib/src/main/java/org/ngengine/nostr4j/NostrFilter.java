@@ -32,8 +32,9 @@ package org.ngengine.nostr4j;
 
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Collection;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.transport.NostrMessageFragment;
@@ -41,13 +42,13 @@ import org.ngengine.nostr4j.utils.NostrUtils;
 
 public class NostrFilter extends NostrMessageFragment {
 
-    private Collection<String> ids;
-    private Collection<String> authors;
-    private Collection<Integer> kinds;
+    private List<String> ids;
+    private List<String> authors;
+    private List<Integer> kinds;
     private Instant since;
     private Instant until;
     private Integer limit;
-    private Map<String, String[]> tags;
+    private Map<String, List<String>> tags;
 
     public NostrFilter id(String id) {
         if (ids == null) ids = new ArrayList<>();
@@ -55,33 +56,33 @@ public class NostrFilter extends NostrMessageFragment {
         return this;
     }
 
-    public Collection<String> getIds() {
+    public List<String> getIds() {
         return ids;
     }
 
-    public NostrFilter author(String author) {
+    public NostrFilter withAuthor(String author) {
         if (authors == null) authors = new ArrayList<>();
         authors.add(author);
         return this;
     }
 
-    public NostrFilter author(NostrPublicKey author) {
+    public NostrFilter withAuthor(NostrPublicKey author) {
         if (authors == null) authors = new ArrayList<>();
         authors.add(author.asHex());
         return this;
     }
 
-    public Collection<String> getAuthors() {
+    public List<String> getAuthors() {
         return authors;
     }
 
-    public NostrFilter kind(int kind) {
+    public NostrFilter withKind(int kind) {
         if (kinds == null) kinds = new ArrayList<>();
         kinds.add(kind);
         return this;
     }
 
-    public Collection<Integer> getKinds() {
+    public List<Integer> getKinds() {
         return kinds;
     }
 
@@ -92,6 +93,10 @@ public class NostrFilter extends NostrMessageFragment {
 
     public Instant getSince() {
         return since;
+    }
+
+    public Instant getUntil() {
+        return until;
     }
 
     public NostrFilter until(Instant until) {
@@ -108,14 +113,19 @@ public class NostrFilter extends NostrMessageFragment {
         return limit;
     }
 
-    public NostrFilter tag(String key, String... values) {
+    public NostrFilter withTag(String key, String... values) {
         if (tags == null) tags = new java.util.HashMap<>();
-        tags.put(key, values);
+        tags.put(key, Arrays.asList(values));
         return this;
     }
 
-    public Map<String, String[]> getTags() {
+    public Map<String, List<String>> getTags() {
         return tags;
+    }
+
+    public List<String> getTagValues(String key) {
+        if (tags == null) return null;
+        return tags.get(key);
     }
 
     @Override
@@ -128,9 +138,9 @@ public class NostrFilter extends NostrMessageFragment {
         if (until != null) serial.put("until", until.getEpochSecond());
         if (limit != null) serial.put("limit", limit);
         if (tags != null) {
-            for (Map.Entry<String, String[]> entry : tags.entrySet()) {
+            for (Map.Entry<String, List<String>> entry : tags.entrySet()) {
                 String key = entry.getKey();
-                String[] value = entry.getValue();
+                List<String> value = entry.getValue();
                 serial.put("#" + key, value);
             }
         }
@@ -141,13 +151,13 @@ public class NostrFilter extends NostrMessageFragment {
 
     public NostrFilter(Map<String, Object> map) throws Exception {
         if (map.containsKey("ids")) {
-            ids = (Collection<String>) map.get("ids");
+            ids = NostrUtils.safeStringList(map.get("ids"));
         }
         if (map.containsKey("authors")) {
-            authors = (Collection<String>) map.get("authors");
+            authors = NostrUtils.safeStringList(map.get("authors"));
         }
         if (map.containsKey("kinds")) {
-            kinds = (Collection<Integer>) map.get("kinds");
+            kinds = NostrUtils.safeIntList(map.get("kinds"));
         }
         if (map.containsKey("since")) {
             since = Instant.ofEpochSecond(NostrUtils.safeLong(map.get("since")));
@@ -158,11 +168,13 @@ public class NostrFilter extends NostrMessageFragment {
         if (map.containsKey("limit")) {
             limit = NostrUtils.safeInt(map.get("limit"));
         }
-        if (map.containsKey("tags")) {
-            Collection<String[]> tags = (Collection<String[]>) map.get("tags");
-            this.tags = new HashMap<>();
-            for (String[] tag : tags) {
-                this.tags.put(tag[0].substring(1), tag);
+        for (Map.Entry<String, Object> entry : map.entrySet()) {
+            String key = entry.getKey();
+            if (key.startsWith("#")) {
+                String tagKey = key.substring(1);
+                List<String> value = NostrUtils.safeStringList(entry.getValue());
+                if (tags == null) tags = new HashMap<>();
+                tags.put(tagKey, value);
             }
         }
     }

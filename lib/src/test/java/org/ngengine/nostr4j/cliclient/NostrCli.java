@@ -59,7 +59,7 @@ public class NostrCli {
         });
 
         // initialize subscription
-        NostrSubscription sub = pool.subscribe(new NostrFilter().kind(1).limit(3), FailOnDoubleTracker.class);
+        NostrSubscription sub = pool.subscribe(new NostrFilter().withKind(1).limit(3), FailOnDoubleTracker.class);
 
         // append listeners
         sub.onClose(reason -> {

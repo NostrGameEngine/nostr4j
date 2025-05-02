@@ -161,6 +161,74 @@ public class NostrUtils {
         }
     }
 
+    public static List<String> safeStringList(Object tags) {
+        if (
+            (tags instanceof Collection && ((Collection<?>) tags).isEmpty()) ||
+            (tags instanceof String[] && ((String[]) tags).length == 0)
+        ) {
+            return List.of();
+        }
+
+        if (tags instanceof List || tags instanceof Collection) {
+            if (tags instanceof Collection && !(tags instanceof List)) {
+                tags = new ArrayList<>((Collection<?>) tags);
+            }
+            for (int i = 0; i < ((List<?>) tags).size(); i++) {
+                List<Object> list = (List<Object>) tags;
+                list.set(i, safeString(list.get(i)));
+            }
+            return (List<String>) tags;
+        } else if (tags instanceof Iterable) {
+            ArrayList<String> list = new ArrayList<>();
+            for (Object o : (Iterable<?>) tags) {
+                list.add(safeString(o));
+            }
+            return list;
+        } else if (tags instanceof String[]) {
+            return List.of((String[]) tags);
+        } else {
+            throw new IllegalArgumentException("Input is not a string array: " + tags);
+        }
+    }
+
+    public static List<Integer> safeIntList(Object tags) {
+        if (
+            (tags instanceof Collection && ((Collection<?>) tags).isEmpty()) ||
+            (tags instanceof Integer[] && ((Integer[]) tags).length == 0) ||
+            (tags instanceof int[] && ((int[]) tags).length == 0)
+        ) {
+            return List.of();
+        }
+
+        if (tags instanceof List || tags instanceof Collection) {
+            if (tags instanceof Collection && !(tags instanceof List)) {
+                tags = new ArrayList<>((Collection<?>) tags);
+            }
+            for (int i = 0; i < ((List<?>) tags).size(); i++) {
+                List<Object> list = (List<Object>) tags;
+                list.set(i, safeInt(list.get(i)));
+            }
+            return (List<Integer>) tags;
+        } else if (tags instanceof Iterable) {
+            ArrayList<Integer> list = new ArrayList<>();
+            for (Object o : (Iterable<?>) tags) {
+                list.add(safeInt(o));
+            }
+            return list;
+        } else if (tags instanceof Integer[]) {
+            return List.of((Integer[]) tags);
+        } else if (tags instanceof int[]) {
+            int[] arr = (int[]) tags;
+            ArrayList<Integer> list = new ArrayList<>();
+            for (int o : arr) {
+                list.add(o);
+            }
+            return list;
+        } else {
+            throw new IllegalArgumentException("Input is not a string array: " + tags);
+        }
+    }
+
     public static Collection<String[]> safeCollectionOfStringArray(Object tags) {
         if (tags instanceof Collection && !(tags instanceof List)) {
             tags = new ArrayList<>((Collection<?>) tags);

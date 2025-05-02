@@ -33,6 +33,8 @@ package org.ngengine.nostr4j.nip50;
 import java.time.Instant;
 import java.util.Map;
 import org.ngengine.nostr4j.NostrFilter;
+import org.ngengine.nostr4j.keypair.NostrPublicKey;
+import org.ngengine.nostr4j.utils.NostrUtils;
 
 public class NostrSearchFilter extends NostrFilter {
 
@@ -56,7 +58,7 @@ public class NostrSearchFilter extends NostrFilter {
     public NostrSearchFilter(Map<String, Object> map) throws Exception {
         super(map);
         if (map.containsKey("search")) {
-            String search = (String) map.get("search");
+            String search = NostrUtils.safeString(map.get("search"));
             if (!search.isEmpty()) {
                 this.search = search;
             }
@@ -67,12 +69,16 @@ public class NostrSearchFilter extends NostrFilter {
         return (NostrSearchFilter) super.id(id);
     }
 
-    public NostrSearchFilter author(String author) {
-        return (NostrSearchFilter) super.author(author);
+    public NostrSearchFilter withAuthor(String author) {
+        return (NostrSearchFilter) super.withAuthor(author);
     }
 
-    public NostrSearchFilter kind(int kind) {
-        return (NostrSearchFilter) super.kind(kind);
+    public NostrSearchFilter withAuthor(NostrPublicKey author) {
+        return (NostrSearchFilter) super.withAuthor(author);
+    }
+
+    public NostrSearchFilter withKind(int kind) {
+        return (NostrSearchFilter) super.withKind(kind);
     }
 
     public NostrSearchFilter since(Instant since) {
@@ -87,7 +93,7 @@ public class NostrSearchFilter extends NostrFilter {
         return (NostrSearchFilter) super.limit(limit);
     }
 
-    public NostrSearchFilter tag(String key, String... values) {
-        return (NostrSearchFilter) super.tag(key, values);
+    public NostrSearchFilter withTag(String key, String... values) {
+        return (NostrSearchFilter) super.withTag(key, values);
     }
 }

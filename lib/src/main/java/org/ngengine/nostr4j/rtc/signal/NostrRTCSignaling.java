@@ -260,9 +260,9 @@ public class NostrRTCSignaling implements NostrSubEventListener, Closeable {
             this.discoverySub = // listen for connect and disconnect events directed to the room
                 this.pool.subscribe(
                         new NostrFilter()
-                            .kind(25050)
-                            .tag("r", this.roomKeyPair.getPublicKey().asHex())
-                            .tag("t", "connect", "disconnect")
+                            .withKind(25050)
+                            .withTag("r", this.roomKeyPair.getPublicKey().asHex())
+                            .withTag("t", "connect", "disconnect")
                             .limit(0)
                     );
             this.discoverySub.onEvent(this);
@@ -274,10 +274,10 @@ public class NostrRTCSignaling implements NostrSubEventListener, Closeable {
             this.signalingSub = // listen for offers, answers and candidates directed to the local peer
                 this.pool.subscribe(
                         new NostrFilter()
-                            .kind(25050)
-                            .tag("r", this.roomKeyPair.getPublicKey().asHex())
-                            .tag("t", "offer", "answer", "candidate")
-                            .tag("p", localpk.asHex())
+                            .withKind(25050)
+                            .withTag("r", this.roomKeyPair.getPublicKey().asHex())
+                            .withTag("t", "offer", "answer", "candidate")
+                            .withTag("p", localpk.asHex())
                             .limit(0)
                     );
             this.signalingSub.onEvent(this);
