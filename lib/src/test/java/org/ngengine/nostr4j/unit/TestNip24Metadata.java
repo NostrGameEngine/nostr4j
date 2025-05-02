@@ -90,6 +90,12 @@ public class TestNip24Metadata {
             throw new UnsupportedOperationException("Unimplemented method 'getTagRows'");
         }
         // Other methods can be stubbed or throw UnsupportedOperationException
+
+        @Override
+        public boolean hasTag(String tag) {
+            // TODO Auto-generated method stub
+            throw new UnsupportedOperationException("Unimplemented method 'hasTag'");
+        }
     }
 
     @Test
