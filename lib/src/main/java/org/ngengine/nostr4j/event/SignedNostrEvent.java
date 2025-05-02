@@ -122,19 +122,6 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
         this.tagRows = Collections.unmodifiableCollection(tags);
     }
 
-    // public SignedNostrEvent(
-    //     String id,
-    //     NostrPublicKey pubkey,
-    //     int kind,
-    //     String content,
-    //     Instant created_at,
-    //     String signature,
-    //     Collection<String[]> tags
-    // ) {
-    //     this(id, pubkey.asHex(), kind, content, created_at, signature, tags);
-    //     this.parsedPublicKey = pubkey;
-    // }
-
     public SignedNostrEvent(Map<String, Object> map) {
         this.kind = NostrUtils.safeInt(map.get("kind"));
         this.content = NostrUtils.safeString(map.get("content"));

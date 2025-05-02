@@ -50,6 +50,38 @@ public class NostrFilter extends NostrMessageFragment {
     private Integer limit;
     private Map<String, List<String>> tags;
 
+    public NostrFilter() {}
+
+    public NostrFilter(Map<String, Object> map) {
+        if (map.containsKey("ids")) {
+            ids = NostrUtils.safeStringList(map.get("ids"));
+        }
+        if (map.containsKey("authors")) {
+            authors = NostrUtils.safeStringList(map.get("authors"));
+        }
+        if (map.containsKey("kinds")) {
+            kinds = NostrUtils.safeIntList(map.get("kinds"));
+        }
+        if (map.containsKey("since")) {
+            since = Instant.ofEpochSecond(NostrUtils.safeLong(map.get("since")));
+        }
+        if (map.containsKey("until")) {
+            until = Instant.ofEpochSecond(NostrUtils.safeLong(map.get("until")));
+        }
+        if (map.containsKey("limit")) {
+            limit = NostrUtils.safeInt(map.get("limit"));
+        }
+        for (Map.Entry<String, Object> entry : map.entrySet()) {
+            String key = entry.getKey();
+            if (key.startsWith("#")) {
+                String tagKey = key.substring(1);
+                List<String> value = NostrUtils.safeStringList(entry.getValue());
+                if (tags == null) tags = new HashMap<>();
+                tags.put(tagKey, value);
+            }
+        }
+    }
+
     public NostrFilter id(String id) {
         if (ids == null) ids = new ArrayList<>();
         ids.add(id);
@@ -145,37 +177,5 @@ public class NostrFilter extends NostrMessageFragment {
             }
         }
         return serial;
-    }
-
-    public NostrFilter() {}
-
-    public NostrFilter(Map<String, Object> map) {
-        if (map.containsKey("ids")) {
-            ids = NostrUtils.safeStringList(map.get("ids"));
-        }
-        if (map.containsKey("authors")) {
-            authors = NostrUtils.safeStringList(map.get("authors"));
-        }
-        if (map.containsKey("kinds")) {
-            kinds = NostrUtils.safeIntList(map.get("kinds"));
-        }
-        if (map.containsKey("since")) {
-            since = Instant.ofEpochSecond(NostrUtils.safeLong(map.get("since")));
-        }
-        if (map.containsKey("until")) {
-            until = Instant.ofEpochSecond(NostrUtils.safeLong(map.get("until")));
-        }
-        if (map.containsKey("limit")) {
-            limit = NostrUtils.safeInt(map.get("limit"));
-        }
-        for (Map.Entry<String, Object> entry : map.entrySet()) {
-            String key = entry.getKey();
-            if (key.startsWith("#")) {
-                String tagKey = key.substring(1);
-                List<String> value = NostrUtils.safeStringList(entry.getValue());
-                if (tags == null) tags = new HashMap<>();
-                tags.put(tagKey, value);
-            }
-        }
     }
 }

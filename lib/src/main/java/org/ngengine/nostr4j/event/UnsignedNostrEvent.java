@@ -51,13 +51,12 @@ public class UnsignedNostrEvent implements NostrEvent {
     private transient Map<String, List<String>> tagsRO;
     private transient Collection<List<String>> tagRows;
 
-    public UnsignedNostrEvent() {
-    }
+    public UnsignedNostrEvent() {}
 
     public UnsignedNostrEvent(Map<String, Object> map) {
         fromMap(map);
     }
-    
+
     public UnsignedNostrEvent withKind(int kind) {
         this.kind = kind;
         return this;
@@ -158,7 +157,6 @@ public class UnsignedNostrEvent implements NostrEvent {
         }
         return this;
     }
-
 
     @Override
     public String toString() {
