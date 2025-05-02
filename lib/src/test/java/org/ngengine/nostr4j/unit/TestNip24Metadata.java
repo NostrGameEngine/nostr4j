@@ -89,6 +89,7 @@ public class TestNip24Metadata {
             // TODO Auto-generated method stub
             throw new UnsupportedOperationException("Unimplemented method 'getTagRows'");
         }
+
         // Other methods can be stubbed or throw UnsupportedOperationException
 
         @Override
