@@ -37,16 +37,16 @@ public final class NostrKeyPair implements Serializable, Cloneable {
     private NostrPublicKey publicKey;
     private NostrPrivateKey privateKey;
 
-    public NostrKeyPair(NostrPrivateKey privateKey, NostrPublicKey publicKey) throws Exception {
+    public NostrKeyPair(NostrPrivateKey privateKey, NostrPublicKey publicKey) {
         this.publicKey = publicKey;
         this.privateKey = privateKey;
     }
 
-    public NostrKeyPair(NostrPrivateKey privateKey) throws Exception {
+    public NostrKeyPair(NostrPrivateKey privateKey) {
         this(privateKey, privateKey.getPublicKey());
     }
 
-    public NostrKeyPair() throws Exception {
+    public NostrKeyPair() {
         NostrPrivateKey privateKey = NostrPrivateKey.generate();
         this.publicKey = privateKey.getPublicKey();
         this.privateKey = privateKey;

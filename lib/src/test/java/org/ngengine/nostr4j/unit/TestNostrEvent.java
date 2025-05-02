@@ -47,13 +47,12 @@ import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
 import org.ngengine.nostr4j.signer.NostrSigner;
 import org.ngengine.nostr4j.transport.NostrMessage;
 import org.ngengine.nostr4j.utils.Bech32;
-import org.ngengine.nostr4j.utils.Bech32.Bech32Exception;
 import org.ngengine.nostr4j.utils.NostrUtils;
 
 public class TestNostrEvent {
 
     @Test
-    public void testSigning() throws Bech32Exception, Exception {
+    public void testSigning() throws Exception {
         JVMAsyncPlatform._NO_AUX_RANDOM = true;
         String nsec = "nsec1v92q43n3ywpmp2p9nuaqmrrsa095rfys28p0rejn47vcqvktytxqaezlcl";
         String noteId = "note164s5jz53dt0kt4ralz96phw7kstvrzzdw0waxdyu5epqn7ssdg0su6wzjn";
@@ -74,7 +73,7 @@ public class TestNostrEvent {
     }
 
     @Test
-    public void testSigningAUXRandom() throws Bech32Exception, Exception {
+    public void testSigningAUXRandom() throws Exception {
         JVMAsyncPlatform._NO_AUX_RANDOM = false;
         String nsec = "nsec1v92q43n3ywpmp2p9nuaqmrrsa095rfys28p0rejn47vcqvktytxqaezlcl";
         String noteId = "note164s5jz53dt0kt4ralz96phw7kstvrzzdw0waxdyu5epqn7ssdg0su6wzjn";
@@ -137,7 +136,7 @@ public class TestNostrEvent {
     }
 
     @Test
-    public void testEventSerialization() throws Bech32Exception, Exception {
+    public void testEventSerialization() throws Exception {
         JVMAsyncPlatform._NO_AUX_RANDOM = true;
         UnsignedNostrEvent event = new UnsignedNostrEvent()
             .withContent("test123")

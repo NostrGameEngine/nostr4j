@@ -35,7 +35,10 @@ import static org.junit.Assert.*;
 import java.nio.ByteBuffer;
 import org.junit.Test;
 import org.ngengine.nostr4j.utils.Bech32;
-import org.ngengine.nostr4j.utils.Bech32.Bech32Exception;
+import org.ngengine.nostr4j.utils.Bech32.Bech32DecodingException;
+import org.ngengine.nostr4j.utils.Bech32.Bech32EncodingException;
+import org.ngengine.nostr4j.utils.Bech32.Bech32InvalidChecksumException;
+import org.ngengine.nostr4j.utils.Bech32.Bech32InvalidRangeException;
 
 public class TestBech32 {
 
@@ -82,7 +85,8 @@ public class TestBech32 {
     }
 
     @Test
-    public void randomData() throws Bech32Exception {
+    public void randomData()
+        throws Bech32EncodingException, Bech32DecodingException, Bech32InvalidChecksumException, Bech32InvalidRangeException {
         byte[] hrp = new byte[5];
         byte[] data = new byte[32];
         for (int i = 0; i < hrp.length; i++) {

@@ -28,54 +28,21 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package org.ngengine.nostr4j.rtc.signal;
+package org.ngengine.nostr4j.signer;
 
-import java.util.Collection;
-import java.util.Map;
-import java.util.Objects;
-import org.ngengine.nostr4j.signer.NostrSigner;
-import org.ngengine.nostr4j.utils.NostrUtils;
+public class FailedToSignException extends Exception {
 
-/**
- * All the info about the current local peer.
- */
-public class NostrRTCLocalPeer extends NostrRTCPeer {
+    private static final long serialVersionUID = 1L;
 
-    private NostrSigner signer;
-    private Collection<String> stunServers;
-
-    public NostrRTCLocalPeer(NostrSigner signer, Collection<String> stunServers, String turnServer, Map<String, Object> misc) {
-        super(NostrUtils.awaitNoThrow(signer.getPublicKey()), turnServer, misc);
-        Objects.requireNonNull(signer);
-        Objects.requireNonNull(stunServers);
-        this.signer = signer;
-        this.stunServers = stunServers;
+    public FailedToSignException(String message) {
+        super(message);
     }
 
-    public NostrSigner getSigner() {
-        return signer;
+    public FailedToSignException(String message, Throwable cause) {
+        super(message, cause);
     }
 
-    public Collection<String> getStunServers() {
-        return stunServers;
-    }
-
-    @Override
-    public String toString() {
-        return (
-            "NostrRTCLocalPeer{" +
-            "pubkey=" +
-            getPubkey() +
-            ", misc=" +
-            getMisc() +
-            ", turnServer='" +
-            getTurnServer() +
-            '\'' +
-            ", lastSeen=" +
-            getLastSeen() +
-            ", stunServers=" +
-            stunServers +
-            '}'
-        );
+    public FailedToSignException(Throwable cause) {
+        super(cause);
     }
 }

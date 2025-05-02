@@ -32,7 +32,6 @@ package org.ngengine.nostr4j.keypair;
 
 import java.io.Serializable;
 import java.util.Collection;
-import org.ngengine.nostr4j.utils.Bech32.Bech32Exception;
 
 /**
  * Represents a private or public key in the Nostr protocol.
@@ -58,7 +57,7 @@ public interface NostrKey extends Serializable, Cloneable {
      *
      * @return the bech32 string
      */
-    String asBech32() throws Bech32Exception;
+    String asBech32();
 
     String toString();
 
@@ -81,5 +80,5 @@ public interface NostrKey extends Serializable, Cloneable {
      * This method is useful when you want to generate the representations in advance
      * for performance reasons.
      */
-    void preload() throws Bech32Exception;
+    void preload();
 }

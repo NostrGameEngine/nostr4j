@@ -51,7 +51,7 @@ public class Nip44 {
     private static final int VERSION_SIZE = 1;
     private static final byte[] NIP44_V2_BYTES = "nip44-v2".getBytes(StandardCharsets.UTF_8);
 
-    public static byte[] getConversationKey(NostrPrivateKey privateKey, NostrPublicKey publicKey) throws Exception {
+    public static byte[] getConversationKey(NostrPrivateKey privateKey, NostrPublicKey publicKey) {
         byte pub[] = concatBytes(0x02, Integer.MIN_VALUE, publicKey._array(), null, null, -1);
         byte[] shared = NostrUtils.getPlatform().secp256k1SharedSecret(privateKey._array(), pub);
         byte sharedX[] = Arrays.copyOfRange(shared, 1, 33);
@@ -69,7 +69,7 @@ public class Nip44 {
         return nonce;
     }
 
-    private static byte[][] getMessageKeys(byte[] conversationKey, byte[] nonce) throws Exception {
+    private static byte[][] getMessageKeys(byte[] conversationKey, byte[] nonce) {
         if (conversationKey == null || conversationKey.length != CONVERSATION_KEY_SIZE) throw new IllegalArgumentException(
             "Conversation key must be 32 bytes"
         );
@@ -98,7 +98,7 @@ public class Nip44 {
         return concatBytes((unpaddedLen >> 8) & 0xFF, unpaddedLen & 0xFF, unpadded, null, null, paddedLen + 2);
     }
 
-    public static String encrypt(String plaintext, byte[] conversationKey, byte[] nonce) throws Exception {
+    public static String encrypt(String plaintext, byte[] conversationKey, byte[] nonce) {
         if (conversationKey == null || conversationKey.length != CONVERSATION_KEY_SIZE) throw new IllegalArgumentException(
             "Conversation key must be 32 bytes"
         );
@@ -117,11 +117,11 @@ public class Nip44 {
         return NostrUtils.getPlatform().base64encode(out);
     }
 
-    public static String encrypt(String plaintext, byte[] conversationKey) throws Exception {
+    public static String encrypt(String plaintext, byte[] conversationKey) {
         return encrypt(plaintext, conversationKey, null);
     }
 
-    private static byte[][] decodePayload(String payload) throws Exception {
+    private static byte[][] decodePayload(String payload) {
         int plen = payload.length();
         if (plen < 132 || plen > 87472) throw new IllegalArgumentException("invalid payload length: " + plen);
         if (payload.charAt(0) == '#') throw new IllegalArgumentException("unknown encryption version");
@@ -142,7 +142,7 @@ public class Nip44 {
         return new byte[][] { nonce, ciphertext, mac };
     }
 
-    public static String decrypt(String payload, byte[] conversationKey) throws Exception {
+    public static String decrypt(String payload, byte[] conversationKey) {
         if (conversationKey == null || conversationKey.length != CONVERSATION_KEY_SIZE) throw new IllegalArgumentException(
             "Conversation key must be 32 bytes"
         );

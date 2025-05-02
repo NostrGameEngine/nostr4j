@@ -38,6 +38,7 @@ import java.security.Security;
 import java.security.interfaces.ECPrivateKey;
 import java.security.spec.ECGenParameterSpec;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import org.ngengine.nostr4j.signer.FailedToSignException;
 
 // based on https://github.com/tcheeric/nostr-java/blob/main/nostr-java-crypto/src/main/java/nostr/crypto/schnorr/Schnorr.java#L19
 // thread-safe
@@ -48,12 +49,12 @@ class Schnorr {
     private static final String TAG_NONCE = "BIP0340/nonce";
     private static final String TAG_CHALLENGE = "BIP0340/challenge";
 
-    public static byte[] sign(byte[] msg, byte[] secKey, byte[] auxRand) throws Exception {
+    public static byte[] sign(byte[] msg, byte[] secKey, byte[] auxRand) throws FailedToSignException {
         if (msg == null || msg.length != 32) {
-            throw new Exception("The message must be a 32-byte array.");
+            throw new IllegalArgumentException("The message must be a 32-byte array.");
         }
         if (secKey == null) {
-            throw new Exception("Secret key cannot be null");
+            throw new IllegalArgumentException("Secret key cannot be null");
         }
 
         // Convert secret key to BigInteger
@@ -61,7 +62,7 @@ class Schnorr {
 
         // Validate secret key range
         if (!(ONE.compareTo(secKey0) <= 0 && secKey0.compareTo(Point.getn().subtract(ONE)) <= 0)) {
-            throw new Exception("The secret key must be an integer in the range 1..n-1.");
+            throw new IllegalArgumentException("The secret key must be an integer in the range 1..n-1.");
         }
 
         // Compute public key point
@@ -97,9 +98,23 @@ class Schnorr {
         System.arraycopy(msg, 0, nonceBuffer, t.length + pubKeyBytes.length, msg.length);
 
         // Generate nonce k0
-        BigInteger k0 = Util.bigIntFromBytes(Point.taggedHash(TAG_NONCE, nonceBuffer)).mod(Point.getn());
-        if (k0.compareTo(BigInteger.ZERO) == 0) {
-            throw new Exception("Failure. This happens only with negligible probability.");
+        BigInteger k0 = null;
+        for (int attempt = 0; attempt < 21; attempt++) {
+            // If retrying, modify the nonceBuffer slightly
+            if (attempt > 0) {
+                // Add retry counter to ensure different hash input
+                nonceBuffer[0] ^= (byte) attempt;
+            }
+
+            k0 = Util.bigIntFromBytes(Point.taggedHash(TAG_NONCE, nonceBuffer)).mod(Point.getn());
+            if (k0.compareTo(BigInteger.ZERO) != 0) {
+                // We have a valid nonce
+                break;
+            }
+
+            if (attempt == 21 - 1) {
+                throw new Error("Failed due to bad luck.");
+            }
         }
 
         // Compute R = k0*G
@@ -138,7 +153,7 @@ class Schnorr {
 
         // Verify signature before returning
         if (!verify(msg, pubKeyBytes, sig)) {
-            throw new Exception("The signature does not pass verification.");
+            throw new FailedToSignException("The signature does not pass verification.");
         }
 
         return sig;
@@ -149,12 +164,11 @@ class Schnorr {
      * @param pubkey
      * @param sig
      * @return
-     * @throws Exception
      */
-    public static boolean verify(byte[] msg, byte[] pubkey, byte[] sig) throws Exception {
-        if (msg.length != 32) throw new Exception("The message must be a 32-byte array.");
-        if (pubkey.length != 32) throw new Exception("The public key must be a 32-byte array.");
-        if (sig.length != 64) throw new Exception("The signature must be a 64-byte array.");
+    public static boolean verify(byte[] msg, byte[] pubkey, byte[] sig) {
+        if (msg.length != 32) throw new IllegalArgumentException("The message must be a 32-byte array.");
+        if (pubkey.length != 32) throw new IllegalArgumentException("The public key must be a 32-byte array.");
+        if (sig.length != 64) throw new IllegalArgumentException("The signature must be a 64-byte array.");
 
         Point P = Point.liftX(pubkey);
         if (P == null) return false;
@@ -174,7 +188,7 @@ class Schnorr {
         return R != null && R.hasEvenY() && R.getX().compareTo(r) == 0;
     }
 
-    public static byte[] genPubKey(byte[] secKey) throws Exception {
+    public static byte[] genPubKey(byte[] secKey) {
         BigInteger x = Util.bigIntFromBytes(secKey);
         if (!(BigInteger.ONE.compareTo(x) <= 0 && x.compareTo(Point.getn().subtract(BigInteger.ONE)) <= 0)) {
             return null;
@@ -183,11 +197,15 @@ class Schnorr {
         return Point.bytesFromPoint(ret);
     }
 
-    public static byte[] generatePrivateKey() throws Exception {
-        Security.addProvider(new BouncyCastleProvider());
-        KeyPairGenerator kpg = KeyPairGenerator.getInstance("ECDSA", "BC");
-        kpg.initialize(new ECGenParameterSpec("secp256k1"), SecureRandom.getInstanceStrong());
-        KeyPair processorKeyPair = kpg.genKeyPair();
-        return Util.bytesFromBigInteger(((ECPrivateKey) processorKeyPair.getPrivate()).getS());
+    public static byte[] generatePrivateKey() {
+        try {
+            Security.addProvider(new BouncyCastleProvider());
+            KeyPairGenerator kpg = KeyPairGenerator.getInstance("ECDSA", "BC");
+            kpg.initialize(new ECGenParameterSpec("secp256k1"), SecureRandom.getInstanceStrong());
+            KeyPair processorKeyPair = kpg.genKeyPair();
+            return Util.bytesFromBigInteger(((ECPrivateKey) processorKeyPair.getPrivate()).getS());
+        } catch (Exception e) {
+            throw new Error(e);
+        }
     }
 }

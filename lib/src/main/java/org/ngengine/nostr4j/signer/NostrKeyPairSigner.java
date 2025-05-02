@@ -48,7 +48,7 @@ public class NostrKeyPairSigner implements NostrSigner {
         this.keyPair = keyPair;
     }
 
-    public static NostrKeyPairSigner generate() throws Exception {
+    public static NostrKeyPairSigner generate() {
         return new NostrKeyPairSigner(new NostrKeyPair());
     }
 

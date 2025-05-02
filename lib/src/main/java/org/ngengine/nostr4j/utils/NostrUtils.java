@@ -38,6 +38,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
 import java.util.logging.Logger;
+import org.ngengine.nostr4j.platform.AsyncTask;
 import org.ngengine.nostr4j.platform.Platform;
 
 public class NostrUtils {
@@ -340,5 +341,13 @@ public class NostrUtils {
             }
         }
         return true;
+    }
+
+    public static <T> T awaitNoThrow(AsyncTask<T> task) {
+        try {
+            return task.await();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 }

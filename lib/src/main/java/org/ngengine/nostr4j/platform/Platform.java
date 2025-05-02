@@ -30,7 +30,6 @@
  */
 package org.ngengine.nostr4j.platform;
 
-import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
@@ -40,31 +39,32 @@ import java.util.function.Consumer;
 import org.ngengine.nostr4j.keypair.NostrPrivateKey;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.rtc.NostrRTCSettings;
+import org.ngengine.nostr4j.signer.FailedToSignException;
 import org.ngengine.nostr4j.transport.NostrTransport;
 import org.ngengine.nostr4j.transport.RTCTransport;
 
 public interface Platform {
-    byte[] generatePrivateKey() throws Exception;
-    byte[] genPubKey(byte[] secKey) throws Exception;
-    String toJSON(Object obj) throws Exception;
-    <T> T fromJSON(String json, Class<T> claz) throws Exception;
+    byte[] generatePrivateKey();
+    byte[] genPubKey(byte[] secKey);
+    String toJSON(Object obj);
+    <T> T fromJSON(String json, Class<T> claz);
 
-    byte[] secp256k1SharedSecret(byte[] privKey, byte[] pubKey) throws Exception;
-    byte[] hmac(byte[] key, byte[] data1, byte[] data2) throws Exception;
-    byte[] hkdf_extract(byte[] salt, byte[] ikm) throws Exception;
-    byte[] hkdf_expand(byte[] prk, byte[] info, int length) throws Exception;
-    String base64encode(byte[] data) throws Exception;
-    byte[] base64decode(String data) throws Exception;
-    byte[] chacha20(byte[] key, byte[] nonce, byte[] data, boolean forEncryption) throws Exception;
+    byte[] secp256k1SharedSecret(byte[] privKey, byte[] pubKey);
+    byte[] hmac(byte[] key, byte[] data1, byte[] data2);
+    byte[] hkdf_extract(byte[] salt, byte[] ikm);
+    byte[] hkdf_expand(byte[] prk, byte[] info, int length);
+    String base64encode(byte[] data);
+    byte[] base64decode(String data);
+    byte[] chacha20(byte[] key, byte[] nonce, byte[] data, boolean forEncryption);
 
     NostrTransport newTransport();
 
     RTCTransport newRTCTransport(NostrRTCSettings settings, String connId, Collection<String> stunServers);
 
-    String sha256(String data) throws NoSuchAlgorithmException;
-    byte[] sha256(byte[] data) throws NoSuchAlgorithmException;
-    String sign(String data, NostrPrivateKey privKey) throws Exception;
-    boolean verify(String data, String sign, NostrPublicKey pubKey) throws Exception;
+    String sha256(String data);
+    byte[] sha256(byte[] data);
+    String sign(String data, NostrPrivateKey privKey) throws FailedToSignException;
+    boolean verify(String data, String sign, NostrPublicKey pubKey);
 
     AsyncTask<String> signAsync(String data, NostrPrivateKey privKey);
 

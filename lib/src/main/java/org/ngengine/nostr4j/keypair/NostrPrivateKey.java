@@ -36,7 +36,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.Collections;
 import org.ngengine.nostr4j.utils.Bech32;
-import org.ngengine.nostr4j.utils.Bech32.Bech32Exception;
 import org.ngengine.nostr4j.utils.ByteBufferList;
 import org.ngengine.nostr4j.utils.NostrUtils;
 
@@ -103,11 +102,10 @@ public final class NostrPrivateKey implements NostrKey {
      *
      * @param bech32 the Bech32 string containing the public key data
      * @return a new NostrPrivateKey instance
-     * @throws Bech32Exception if the Bech32 string is invalid
      * @deprecated use {@link #fromBech32(String)} instead
      */
     @Deprecated
-    public static NostrPrivateKey fromNsec(String bech32) throws Bech32Exception {
+    public static NostrPrivateKey fromNsec(String bech32) {
         return fromBech32(bech32);
     }
 
@@ -116,19 +114,22 @@ public final class NostrPrivateKey implements NostrKey {
      *
      * @param bech32 the Bech32 string containing the public key data
      * @return a new NostrPrivateKey instance
-     * @throws Bech32Exception if the Bech32 string is invalid
      */
-    public static NostrPrivateKey fromBech32(String bech32) throws Bech32Exception {
-        if (!bech32.startsWith("nsec")) {
-            throw new IllegalArgumentException("Invalid npub key");
+    public static NostrPrivateKey fromBech32(String bech32) {
+        try {
+            if (!bech32.startsWith("nsec")) {
+                throw new IllegalArgumentException("Invalid npub key");
+            }
+            ByteBuffer data = Bech32.bech32Decode(bech32);
+            NostrPrivateKey key = new NostrPrivateKey(data);
+            assert data.position() == 0;
+            return key;
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Invalid nsec key", e);
         }
-        ByteBuffer data = Bech32.bech32Decode(bech32);
-        NostrPrivateKey key = new NostrPrivateKey(data);
-        assert data.position() == 0;
-        return key;
     }
 
-    public static NostrPrivateKey generate() throws Exception {
+    public static NostrPrivateKey generate() {
         byte[] data = NostrUtils.getPlatform().generatePrivateKey();
         NostrPrivateKey key = new NostrPrivateKey(ByteBuffer.wrap(data));
         return key;
@@ -181,11 +182,15 @@ public final class NostrPrivateKey implements NostrKey {
     }
 
     @Override
-    public String asBech32() throws Bech32Exception {
-        if (bech32 != null) return bech32;
-        bech32 = Bech32.bech32Encode(BECH32_PREFIX, this.data);
-        assert data.position() == 0 : "Data position must be 0";
-        return bech32;
+    public String asBech32() {
+        try {
+            if (bech32 != null) return bech32;
+            bech32 = Bech32.bech32Encode(BECH32_PREFIX, this.data);
+            assert data.position() == 0 : "Data position must be 0";
+            return bech32;
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Invalid nsec key", e);
+        }
     }
 
     @Override
@@ -246,7 +251,7 @@ public final class NostrPrivateKey implements NostrKey {
     }
 
     @Override
-    public void preload() throws Bech32Exception {
+    public void preload() {
         asHex();
         asBech32();
         asReadOnlyBytes();
@@ -254,7 +259,7 @@ public final class NostrPrivateKey implements NostrKey {
         assert data.position() == 0 : "Data position must be 0";
     }
 
-    public NostrPublicKey getPublicKey() throws Exception {
+    public NostrPublicKey getPublicKey() {
         if (publicKey == null) {
             byte bdata[] = this._array();
             bdata = NostrUtils.getPlatform().genPubKey(bdata);

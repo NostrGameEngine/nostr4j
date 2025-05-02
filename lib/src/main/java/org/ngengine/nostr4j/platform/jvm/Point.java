@@ -32,7 +32,6 @@ package org.ngengine.nostr4j.platform.jvm;
 
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
-import java.security.NoSuchAlgorithmException;
 import org.ngengine.nostr4j.utils.NostrUtils;
 
 final class Point {
@@ -161,7 +160,7 @@ final class Point {
         return isSquare(P.getY());
     }
 
-    public static byte[] taggedHash(String tag, byte[] msg) throws NoSuchAlgorithmException {
+    public static byte[] taggedHash(String tag, byte[] msg) {
         byte[] tagHash = NostrUtils.getPlatform().sha256(tag.getBytes(StandardCharsets.UTF_8));
         int len = (tagHash.length * 2) + msg.length;
         byte[] buf = new byte[len];

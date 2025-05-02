@@ -55,7 +55,7 @@ public class Nip24Metadata implements Serializable {
     public final Map<String, Object> metadata;
     protected final NostrEvent sourceEvent;
 
-    public Nip24Metadata(NostrEvent source) throws Exception {
+    public Nip24Metadata(NostrEvent source) {
         this.sourceEvent = source;
         Platform platform = NostrUtils.getPlatform();
         String content = sourceEvent.getContent();
@@ -64,7 +64,7 @@ public class Nip24Metadata implements Serializable {
         this.metadata = meta;
     }
 
-    public UnsignedNostrEvent toUpdateEvent() throws Exception {
+    public UnsignedNostrEvent toUpdateEvent() {
         UnsignedNostrEvent event = new UnsignedNostrEvent();
         event.withKind(0);
         event.createdAt(Instant.now());
@@ -198,7 +198,7 @@ public class Nip24Metadata implements Serializable {
         metadata.put("birthday", b);
     }
 
-    public static Nip24Metadata fromEvent(NostrEvent event) throws Exception {
+    public static Nip24Metadata fromEvent(NostrEvent event) {
         return new Nip24Metadata(event);
     }
 
@@ -232,8 +232,7 @@ public class Nip24Metadata implements Serializable {
             });
     }
 
-    public static AsyncTask<List<NostrMessageAck>> update(NostrPool pool, NostrSigner signer, Nip24Metadata newMetadata)
-        throws Exception {
+    public static AsyncTask<List<NostrMessageAck>> update(NostrPool pool, NostrSigner signer, Nip24Metadata newMetadata) {
         UnsignedNostrEvent event = newMetadata.toUpdateEvent();
 
         AsyncTask<SignedNostrEvent> signedP = signer.sign(event);

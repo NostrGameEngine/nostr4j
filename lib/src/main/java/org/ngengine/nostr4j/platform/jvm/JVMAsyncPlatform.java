@@ -50,6 +50,7 @@ import java.util.Queue;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -73,6 +74,7 @@ import org.ngengine.nostr4j.platform.AsyncTask;
 import org.ngengine.nostr4j.platform.NostrExecutor;
 import org.ngengine.nostr4j.platform.Platform;
 import org.ngengine.nostr4j.rtc.NostrRTCSettings;
+import org.ngengine.nostr4j.signer.FailedToSignException;
 import org.ngengine.nostr4j.transport.NostrTransport;
 import org.ngengine.nostr4j.transport.RTCTransport;
 import org.ngengine.nostr4j.utils.NostrUtils;
@@ -132,23 +134,23 @@ public class JVMAsyncPlatform implements Platform {
     }
 
     @Override
-    public byte[] generatePrivateKey() throws Exception {
+    public byte[] generatePrivateKey() {
         return Schnorr.generatePrivateKey();
     }
 
     @Override
-    public byte[] genPubKey(byte[] secKey) throws Exception {
+    public byte[] genPubKey(byte[] secKey) {
         return Schnorr.genPubKey(secKey);
     }
 
     @Override
-    public String sha256(String data) throws NoSuchAlgorithmException {
+    public String sha256(String data) {
         byte[] bytes = data.getBytes(StandardCharsets.UTF_8);
         return NostrUtils.bytesToHex(sha256(bytes));
     }
 
     @Override
-    public byte[] sha256(byte data[]) throws NoSuchAlgorithmException {
+    public byte[] sha256(byte data[]) {
         Context ctx = context.get();
         MessageDigest digest = ctx.sha256;
         byte[] hash = digest.digest(data);
@@ -156,19 +158,19 @@ public class JVMAsyncPlatform implements Platform {
     }
 
     @Override
-    public String toJSON(Object obj) throws Exception {
+    public String toJSON(Object obj) {
         Context ctx = context.get();
         return ctx.json.toJson(obj);
     }
 
     @Override
-    public <T> T fromJSON(String json, Class<T> claz) throws Exception {
+    public <T> T fromJSON(String json, Class<T> claz) {
         Context ctx = context.get();
         return ctx.json.fromJson(json, claz);
     }
 
     @Override
-    public String sign(String data, NostrPrivateKey privKey) throws Exception {
+    public String sign(String data, NostrPrivateKey privKey) throws FailedToSignException {
         byte dataB[] = NostrUtils.hexToByteArray(data);
         byte priv[] = privKey._array();
         byte sigB[] = Schnorr.sign(dataB, priv, _NO_AUX_RANDOM ? null : randomBytes(32));
@@ -177,7 +179,7 @@ public class JVMAsyncPlatform implements Platform {
     }
 
     @Override
-    public boolean verify(String data, String sign, NostrPublicKey pubKey) throws Exception {
+    public boolean verify(String data, String sign, NostrPublicKey pubKey) {
         byte dataB[] = NostrUtils.hexToByteArray(data);
         byte sig[] = NostrUtils.hexToByteArray(sign);
         byte pub[] = pubKey._array();
@@ -185,7 +187,7 @@ public class JVMAsyncPlatform implements Platform {
     }
 
     @Override
-    public byte[] secp256k1SharedSecret(byte[] privKey, byte[] pubKey) throws Exception {
+    public byte[] secp256k1SharedSecret(byte[] privKey, byte[] pubKey) {
         Context ctx = context.get();
         ECParameterSpec ecSpec = ctx.secp256k1;
         ECPoint point = ecSpec.getCurve().decodePoint(pubKey).normalize();
@@ -195,71 +197,79 @@ public class JVMAsyncPlatform implements Platform {
     }
 
     @Override
-    public byte[] hmac(byte[] key, byte[] data1, byte[] data2) throws Exception {
-        Mac mac = Mac.getInstance("HmacSHA256");
-        mac.init(new SecretKeySpec(key, "HmacSHA256"));
-        mac.update(data1, 0, data1.length);
-        if (data2 != null) {
-            mac.update(data2, 0, data2.length);
+    public byte[] hmac(byte[] key, byte[] data1, byte[] data2) {
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec(key, "HmacSHA256"));
+            mac.update(data1, 0, data1.length);
+            if (data2 != null) {
+                mac.update(data2, 0, data2.length);
+            }
+            return mac.doFinal();
+        } catch (Exception e) {
+            throw new Error(e);
         }
-        return mac.doFinal();
     }
 
     @Override
-    public byte[] hkdf_extract(byte[] salt, byte[] ikm) throws Exception {
+    public byte[] hkdf_extract(byte[] salt, byte[] ikm) {
         assert NostrUtils.allZeroes(EMPTY32);
         if (salt == null || salt.length == 0) salt = EMPTY32;
         return hmac(salt, ikm, null);
     }
 
     @Override
-    public byte[] hkdf_expand(byte[] prk, byte[] info, int length) throws Exception {
-        int hashLen = 32; // SHA-256 output length
+    public byte[] hkdf_expand(byte[] prk, byte[] info, int length) {
+        try {
+            int hashLen = 32; // SHA-256 output length
 
-        if (length > 255 * hashLen) {
-            throw new IllegalArgumentException("Length should be <= 255*HashLen");
+            if (length > 255 * hashLen) {
+                throw new IllegalArgumentException("Length should be <= 255*HashLen");
+            }
+
+            int blocks = (int) Math.ceil((double) length / hashLen);
+
+            if (info == null) {
+                info = EMPTY0; // empty buffer
+            }
+
+            byte[] okm = new byte[blocks * hashLen];
+            byte[] t = EMPTY0; // T(0) = empty string (zero length)
+            byte[] counter = new byte[1]; // single byte counter
+
+            // Use existing hmac functionality
+            for (int i = 0; i < blocks; i++) {
+                assert EMPTY0.length == 0;
+
+                counter[0] = (byte) (i + 1); // N = counter + 1
+
+                // T(N) = HMAC-Hash(PRK, T(N-1) | info | N)
+                Mac mac = Mac.getInstance("HmacSHA256");
+                mac.init(new SecretKeySpec(prk, "HmacSHA256"));
+
+                // Concatenate T(N-1) + info + counter
+                byte[] combined = new byte[t.length + info.length + counter.length];
+                System.arraycopy(t, 0, combined, 0, t.length);
+                System.arraycopy(info, 0, combined, t.length, info.length);
+                System.arraycopy(counter, 0, combined, t.length + info.length, counter.length);
+
+                t = mac.doFinal(combined);
+                System.arraycopy(t, 0, okm, hashLen * i, hashLen);
+            }
+
+            return Arrays.copyOf(okm, length);
+        } catch (Exception e) {
+            throw new Error(e);
         }
-
-        int blocks = (int) Math.ceil((double) length / hashLen);
-
-        if (info == null) {
-            info = EMPTY0; // empty buffer
-        }
-
-        byte[] okm = new byte[blocks * hashLen];
-        byte[] t = EMPTY0; // T(0) = empty string (zero length)
-        byte[] counter = new byte[1]; // single byte counter
-
-        // Use existing hmac functionality
-        for (int i = 0; i < blocks; i++) {
-            assert EMPTY0.length == 0;
-
-            counter[0] = (byte) (i + 1); // N = counter + 1
-
-            // T(N) = HMAC-Hash(PRK, T(N-1) | info | N)
-            Mac mac = Mac.getInstance("HmacSHA256");
-            mac.init(new SecretKeySpec(prk, "HmacSHA256"));
-
-            // Concatenate T(N-1) + info + counter
-            byte[] combined = new byte[t.length + info.length + counter.length];
-            System.arraycopy(t, 0, combined, 0, t.length);
-            System.arraycopy(info, 0, combined, t.length, info.length);
-            System.arraycopy(counter, 0, combined, t.length + info.length, counter.length);
-
-            t = mac.doFinal(combined);
-            System.arraycopy(t, 0, okm, hashLen * i, hashLen);
-        }
-
-        return Arrays.copyOf(okm, length);
     }
 
     @Override
-    public String base64encode(byte[] data) throws Exception {
+    public String base64encode(byte[] data) {
         return Base64.getEncoder().encodeToString(data);
     }
 
     @Override
-    public byte[] base64decode(String data) throws Exception {
+    public byte[] base64decode(String data) {
         try {
             return Base64.getDecoder().decode(data);
         } catch (Exception e) {
@@ -268,18 +278,22 @@ public class JVMAsyncPlatform implements Platform {
     }
 
     @Override
-    public byte[] chacha20(byte[] key, byte[] nonce, byte[] padded, boolean forEncryption) throws Exception {
-        if (key.length != 32) {
-            throw new IllegalArgumentException("ChaCha20 key must be 32 bytes");
-        }
-        if (nonce.length != 12) {
-            throw new IllegalArgumentException("ChaCha20 nonce must be 12 bytes");
-        }
-        Cipher cipher = Cipher.getInstance("ChaCha20");
-        ChaCha20ParameterSpec spec = new ChaCha20ParameterSpec(nonce, 0);
-        cipher.init(forEncryption ? Cipher.ENCRYPT_MODE : Cipher.DECRYPT_MODE, new SecretKeySpec(key, "ChaCha20"), spec);
+    public byte[] chacha20(byte[] key, byte[] nonce, byte[] padded, boolean forEncryption) {
+        try {
+            if (key.length != 32) {
+                throw new IllegalArgumentException("ChaCha20 key must be 32 bytes");
+            }
+            if (nonce.length != 12) {
+                throw new IllegalArgumentException("ChaCha20 nonce must be 12 bytes");
+            }
+            Cipher cipher = Cipher.getInstance("ChaCha20");
+            ChaCha20ParameterSpec spec = new ChaCha20ParameterSpec(nonce, 0);
+            cipher.init(forEncryption ? Cipher.ENCRYPT_MODE : Cipher.DECRYPT_MODE, new SecretKeySpec(key, "ChaCha20"), spec);
 
-        return cipher.doFinal(padded);
+            return cipher.doFinal(padded);
+        } catch (Exception e) {
+            throw new Error(e);
+        }
     }
 
     // private ExecutorService asyncExecutor =
@@ -332,7 +346,7 @@ public class JVMAsyncPlatform implements Platform {
             private volatile boolean cancelled = false;
 
             @Override
-            public T await() throws Exception {
+            public T await() throws InterruptedException, ExecutionException {
                 return fut.get();
             }
 

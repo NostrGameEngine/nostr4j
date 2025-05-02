@@ -66,7 +66,7 @@ public abstract class NostrMessage extends NostrMessageFragment {
         return serial;
     }
 
-    protected String toJSON() throws Exception {
+    protected String toJSON() {
         if (jsonCache == null) {
             Platform platform = NostrUtils.getPlatform();
             Collection<Object> serial = toSerial();
@@ -84,7 +84,7 @@ public abstract class NostrMessage extends NostrMessageFragment {
         }
     }
 
-    public static String toJSON(NostrMessage message) throws Exception {
+    public static String toJSON(NostrMessage message) {
         return message.toJSON();
     }
 

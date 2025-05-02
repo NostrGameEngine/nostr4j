@@ -359,9 +359,9 @@ public class NostrRTCSignaling implements NostrSubEventListener, Closeable {
      * @param offer the offer
      * @param recipient the recipient peer
      * @return the async task that will be completed when the message is sent
-     * @throws Exception
+     
      */
-    public AsyncTask<List<NostrMessageAck>> sendOffer(NostrRTCOffer offer, NostrPublicKey recipient) throws Exception {
+    public AsyncTask<List<NostrMessageAck>> sendOffer(NostrRTCOffer offer, NostrPublicKey recipient) {
         if (this.closed) throw new IllegalStateException("Already closed");
         if (!this.isSignalingStarted()) throw new IllegalStateException("Signaling not started");
 
@@ -395,9 +395,8 @@ public class NostrRTCSignaling implements NostrSubEventListener, Closeable {
      * @param answer the answer
      * @param recipient the recipient peer
      * @return the async task that will be completed when the message is sent
-     * @throws Exception
      */
-    public AsyncTask<List<NostrMessageAck>> sendAnswer(NostrRTCAnswer answer, NostrPublicKey recipient) throws Exception {
+    public AsyncTask<List<NostrMessageAck>> sendAnswer(NostrRTCAnswer answer, NostrPublicKey recipient) {
         if (this.closed) throw new IllegalStateException("Already closed");
         if (!this.isSignalingStarted()) throw new IllegalStateException("Signaling not started");
         UnsignedNostrEvent event = new UnsignedNostrEvent();
@@ -430,10 +429,8 @@ public class NostrRTCSignaling implements NostrSubEventListener, Closeable {
      * @param candidate the candidate
      * @param recipient the recipient peer
      * @return the async task that will be completed when the message is sent
-     * @throws Exception
      */
-    public AsyncTask<List<NostrMessageAck>> sendCandidates(NostrRTCIceCandidate candidate, NostrPublicKey recipient)
-        throws Exception {
+    public AsyncTask<List<NostrMessageAck>> sendCandidates(NostrRTCIceCandidate candidate, NostrPublicKey recipient) {
         if (this.closed) throw new IllegalStateException("Already closed");
         if (!this.isSignalingStarted()) throw new IllegalStateException("Signaling not started");
 

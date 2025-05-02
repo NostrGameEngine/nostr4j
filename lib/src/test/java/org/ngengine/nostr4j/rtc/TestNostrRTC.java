@@ -42,6 +42,7 @@ import org.ngengine.nostr4j.keypair.NostrKeyPair;
 import org.ngengine.nostr4j.keypair.NostrPrivateKey;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCLocalPeer;
 import org.ngengine.nostr4j.rtc.turn.NostrTURNSettings;
+import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
 
 public class TestNostrRTC {
 
@@ -51,8 +52,10 @@ public class TestNostrRTC {
         NostrPool pool = new NostrPool();
         pool.connectRelay(new NostrRelay("wss://nostr.rblb.it"));
 
+        NostrKeyPairSigner signer = new NostrKeyPairSigner(localKeyPair);
+
         NostrRTCLocalPeer localPeer = new NostrRTCLocalPeer(
-            localKeyPair,
+            signer,
             Arrays.asList(NostrRTCSettings.PUBLIC_STUN_SERVERS),
             "wss://nostr.rblb.it:7777",
             new HashMap<>()

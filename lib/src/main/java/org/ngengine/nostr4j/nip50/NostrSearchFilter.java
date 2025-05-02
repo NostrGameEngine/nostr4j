@@ -55,7 +55,7 @@ public class NostrSearchFilter extends NostrFilter {
         return map;
     }
 
-    public NostrSearchFilter(Map<String, Object> map) throws Exception {
+    public NostrSearchFilter(Map<String, Object> map) {
         super(map);
         if (map.containsKey("search")) {
             String search = NostrUtils.safeString(map.get("search"));

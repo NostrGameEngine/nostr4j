@@ -31,6 +31,7 @@
 package org.ngengine.nostr4j.platform;
 
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import org.ngengine.nostr4j.utils.NostrUtils;
@@ -40,7 +41,9 @@ public interface AsyncTask<T> {
     boolean isDone();
     boolean isFailed();
     boolean isSuccess();
-    T await() throws Exception;
+
+    T await() throws InterruptedException, ExecutionException;
+
     <R> AsyncTask<R> then(Function<T, R> func2);
 
     <R> AsyncTask<R> compose(Function<T, AsyncTask<R>> func2);

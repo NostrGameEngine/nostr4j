@@ -36,7 +36,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.Collections;
 import org.ngengine.nostr4j.utils.Bech32;
-import org.ngengine.nostr4j.utils.Bech32.Bech32Exception;
 import org.ngengine.nostr4j.utils.ByteBufferList;
 import org.ngengine.nostr4j.utils.NostrUtils;
 
@@ -111,11 +110,10 @@ public final class NostrPublicKey implements NostrKey {
      *
      * @param bech32 the Bech32 string containing the public key data
      * @return a new NostrPublicKey instance
-     * @throws Bech32Exception if the Bech32 string is invalid
      * @deprecated use {@link #fromBech32(String)} instead
      */
     @Deprecated
-    public static NostrPublicKey fromNpub(String bech32) throws Bech32Exception {
+    public static NostrPublicKey fromNpub(String bech32) {
         return fromBech32(bech32);
     }
 
@@ -124,15 +122,18 @@ public final class NostrPublicKey implements NostrKey {
      *
      * @param bech32 the Bech32 string containing the public key data
      * @return a new NostrPublicKey instance
-     * @throws Bech32Exception if the Bech32 string is invalid
      */
-    public static NostrPublicKey fromBech32(String bech32) throws Bech32Exception {
-        if (!bech32.startsWith("npub")) {
-            throw new IllegalArgumentException("Invalid npub key");
+    public static NostrPublicKey fromBech32(String bech32) {
+        try {
+            if (!bech32.startsWith("npub")) {
+                throw new IllegalArgumentException("Invalid npub key");
+            }
+            ByteBuffer data = Bech32.bech32Decode(bech32);
+            NostrPublicKey key = new NostrPublicKey(data);
+            return key;
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Invalid npub key", e);
         }
-        ByteBuffer data = Bech32.bech32Decode(bech32);
-        NostrPublicKey key = new NostrPublicKey(data);
-        return key;
     }
 
     /**
@@ -182,11 +183,15 @@ public final class NostrPublicKey implements NostrKey {
     }
 
     @Override
-    public String asBech32() throws Bech32Exception {
-        if (bech32 != null) return bech32;
-        bech32 = Bech32.bech32Encode(BECH32_PREFIX, this.data);
-        assert data.position() == 0 : "Data position must be 0";
-        return bech32;
+    public String asBech32() {
+        try {
+            if (bech32 != null) return bech32;
+            bech32 = Bech32.bech32Encode(BECH32_PREFIX, this.data);
+            assert data.position() == 0 : "Data position must be 0";
+            return bech32;
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Invalid npub key", e);
+        }
     }
 
     @Override
@@ -244,7 +249,7 @@ public final class NostrPublicKey implements NostrKey {
     }
 
     @Override
-    public void preload() throws Bech32Exception {
+    public void preload() {
         asHex();
         asBech32();
         asReadOnlyBytes();

@@ -33,7 +33,6 @@ package org.ngengine.nostr4j.rtc;
 import static org.ngengine.nostr4j.utils.NostrUtils.dbg;
 
 import java.io.Closeable;
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.util.*;
@@ -114,7 +113,7 @@ public class NostrRTCRoom implements NostrRTCSignaling.Listener, NostrRTCSocketL
     }
 
     @Override
-    public void close() throws IOException {
+    public void close() {
         // close everything
         for (NostrRTCSocket socket : connections.values()) {
             socket.close();

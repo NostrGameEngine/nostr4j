@@ -50,7 +50,7 @@ public class Nip05Identity implements Serializable {
     protected Collection<String> recommendedRelays;
     protected Nip05Nip46Data nip46;
 
-    public Nip05Identity(String name, String domain, Map<String, Object> nip05data) throws IllegalArgumentException {
+    public Nip05Identity(String name, String domain, Map<String, Object> nip05data) {
         this.data = nip05data;
         this.name = name;
         this.domain = domain;

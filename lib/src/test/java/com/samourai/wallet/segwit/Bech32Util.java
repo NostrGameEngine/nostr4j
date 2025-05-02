@@ -30,6 +30,9 @@
  */
 package com.samourai.wallet.segwit;
 
+import org.ngengine.nostr4j.utils.Bech32.Bech32DecodingException;
+import org.ngengine.nostr4j.utils.Bech32.Bech32InvalidChecksumException;
+
 public class Bech32Util {
 
     private static final String CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
@@ -62,34 +65,34 @@ public class Bech32Util {
         return new String(ret);
     }
 
-    public Pair<byte[], byte[]> bech32Decode(String bech) throws Exception {
+    public Pair<byte[], byte[]> bech32Decode(String bech) throws Bech32DecodingException, Bech32InvalidChecksumException {
         if (!bech.equals(bech.toLowerCase()) && !bech.equals(bech.toUpperCase())) {
-            throw new Exception("bech32 cannot mix upper and lower case");
+            throw new IllegalArgumentException("bech32 cannot mix upper and lower case");
         }
 
         byte[] buffer = bech.getBytes();
         for (byte b : buffer) {
             if (b < 0x21 || b > 0x7e) {
-                throw new Exception("bech32 characters  out of range");
+                throw new IllegalArgumentException("bech32 characters  out of range");
             }
         }
 
         bech = bech.toLowerCase();
         int pos = bech.lastIndexOf('1');
         if (pos < 1) {
-            throw new Exception("bech32 missing separator");
+            throw new IllegalArgumentException("bech32 missing separator");
         } else if (pos + 7 > bech.length()) {
-            throw new Exception("bech32 separator misplaced");
+            throw new IllegalArgumentException("bech32 separator misplaced");
         } else if (bech.length() < 8) {
-            throw new Exception("bech32 input too short");
+            throw new IllegalArgumentException("bech32 input too short");
         } else if (bech.length() > 90) {
-            throw new Exception("bech32 input too long");
+            throw new IllegalArgumentException("bech32 input too long");
         }
 
         String s = bech.substring(pos + 1);
         for (int i = 0; i < s.length(); i++) {
             if (CHARSET.indexOf(s.charAt(i)) == -1) {
-                throw new Exception("bech32 characters  out of range");
+                throw new IllegalArgumentException("bech32 characters  out of range");
             }
         }
 
@@ -101,7 +104,7 @@ public class Bech32Util {
         }
 
         if (!verifyChecksum(hrp, data)) {
-            throw new Exception("invalid bech32 checksum");
+            throw new Bech32InvalidChecksumException("invalid bech32 checksum");
         }
 
         byte[] ret = new byte[data.length - 6];

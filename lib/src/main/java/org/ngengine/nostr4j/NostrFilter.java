@@ -149,7 +149,7 @@ public class NostrFilter extends NostrMessageFragment {
 
     public NostrFilter() {}
 
-    public NostrFilter(Map<String, Object> map) throws Exception {
+    public NostrFilter(Map<String, Object> map) {
         if (map.containsKey("ids")) {
             ids = NostrUtils.safeStringList(map.get("ids"));
         }

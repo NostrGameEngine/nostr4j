@@ -145,7 +145,7 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
     private Duration requestsTimeout = Duration.ofSeconds(30);
     private Duration challengesTimeout = Duration.ofSeconds(30);
 
-    public NostrNIP46Signer(Nip46AppMetadata metadata, NostrKeyPair clientKeyPair) throws Exception {
+    public NostrNIP46Signer(Nip46AppMetadata metadata, NostrKeyPair clientKeyPair) {
         // this.challengeHandler = challengeHandler;
 
         if (clientKeyPair == null) {

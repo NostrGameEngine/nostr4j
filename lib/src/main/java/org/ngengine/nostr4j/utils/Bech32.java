@@ -50,6 +50,19 @@ public class Bech32 {
         }
     }
 
+    public static class Bech32RuntimeException extends RuntimeException {
+
+        private static final long serialVersionUID = 1L;
+
+        public Bech32RuntimeException(String message) {
+            super(message);
+        }
+
+        public Bech32RuntimeException(Exception e) {
+            super(e);
+        }
+    }
+
     public static class Bech32EncodingException extends Bech32Exception {
 
         private static final long serialVersionUID = 1L;
@@ -91,12 +104,12 @@ public class Bech32 {
     private static final int[] GENERATORS = { 0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3 };
     private static final char BECH32_SEPARATOR = '1';
 
-    public static String bech32Encode(byte[] hrp, ByteBuffer data) throws Bech32Exception {
+    public static String bech32Encode(byte[] hrp, ByteBuffer data) throws Bech32EncodingException {
         byte[] chk = new byte[6];
         return bech32Encode(hrp, data, chk);
     }
 
-    public static String bech32Encode(byte[] hrp, ByteBuffer data, byte[] chkOut) throws Bech32Exception {
+    public static String bech32Encode(byte[] hrp, ByteBuffer data, byte[] chkOut) throws Bech32EncodingException {
         if (chkOut == null || chkOut.length < 6) {
             throw new Bech32EncodingException("invalid checksum buffer");
         }
@@ -133,7 +146,8 @@ public class Bech32 {
         return new String(ret, StandardCharsets.UTF_8);
     }
 
-    public static ByteBuffer bech32Decode(String bech) throws Bech32Exception {
+    public static ByteBuffer bech32Decode(String bech)
+        throws Bech32DecodingException, Bech32InvalidChecksumException, Bech32InvalidRangeException {
         byte[] bytes = getLowerCaseBytes(bech);
         if (bytes.length > 90) throw new Bech32DecodingException("invalid bech32 string - too long");
         if (bytes.length < 8) throw new Bech32DecodingException("invalid bech32 string - too short");
@@ -173,8 +187,7 @@ public class Bech32 {
         return out.slice();
     }
 
-    private static int polymod(byte hrp[], int hrpLength, ByteBuffer data, byte[] zeroes, int zeroesOffset)
-        throws Bech32Exception {
+    private static int polymod(byte hrp[], int hrpLength, ByteBuffer data, byte[] zeroes, int zeroesOffset) {
         int chk = 1;
 
         // expand an process hrp
@@ -213,12 +226,12 @@ public class Bech32 {
         return chk;
     }
 
-    private static boolean verifyChecksum(byte[] combinedData, int hrpLength, int dataOffset) throws Bech32Exception {
+    private static boolean verifyChecksum(byte[] combinedData, int hrpLength, int dataOffset) {
         int p = polymod(combinedData, hrpLength, null, combinedData, dataOffset);
         return (1 == p);
     }
 
-    private static void createChecksum(byte[] hrp, int hrpLength, ByteBuffer data, byte[] ret) throws Bech32Exception {
+    private static void createChecksum(byte[] hrp, int hrpLength, ByteBuffer data, byte[] ret) {
         int polymod = polymod(hrp, hrpLength, data, ZEROES, 0) ^ 1;
         for (int i = 0; i < 6; i++) {
             ret[i] = (byte) ((polymod >> 5 * (5 - i)) & 0x1f);
