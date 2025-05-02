@@ -50,6 +50,8 @@ public interface NostrEvent extends Cloneable, Serializable {
 
     Collection<List<String>> getTagRows();
 
+    boolean hasTag(String tag);
+
     static String computeEventId(String pubkey, NostrEvent event) {
         try {
             Collection<Object> serial = Arrays.asList(

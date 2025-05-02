@@ -350,4 +350,10 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
         }
         return expiresAt;
     }
+
+    @Override
+    public boolean hasTag(String tag) {
+        if (tag == null) return false;
+        return tags.get(tag) != null;
+    }
 }

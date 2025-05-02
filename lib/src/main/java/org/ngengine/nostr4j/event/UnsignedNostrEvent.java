@@ -203,4 +203,10 @@ public class UnsignedNostrEvent implements NostrEvent {
             throw new RuntimeException("Clone not supported", e);
         }
     }
+
+    @Override
+    public boolean hasTag(String tag) {
+        if (tag == null) return false;
+        return tags.get(tag) != null;
+    }
 }
