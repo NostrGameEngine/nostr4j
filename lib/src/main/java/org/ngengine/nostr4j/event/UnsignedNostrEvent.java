@@ -86,6 +86,15 @@ public class UnsignedNostrEvent implements NostrEvent {
         return this;
     }
 
+    public UnsignedNostrEvent withTag(String key, Collection<String> values) {
+        if (values == null || values.isEmpty()) {
+            return withoutTag(key);
+        }
+        tagRows = null;
+        tags.put(key, Collections.unmodifiableList(new ArrayList<>(values)));
+        return this;
+    }
+
     public UnsignedNostrEvent withoutTag(String key) {
         tagRows = null;
         tags.remove(key);
