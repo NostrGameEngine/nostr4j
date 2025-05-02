@@ -36,6 +36,8 @@ import java.io.Serializable;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.List;
+import java.util.Map;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.utils.NostrUtils;
 
@@ -43,8 +45,10 @@ public interface NostrEvent extends Cloneable, Serializable {
     Instant getCreatedAt();
     int getKind();
     String getContent();
-    Collection<String[]> listTags();
-    String[] getTag(String key);
+    Map<String, List<String>> getTags();
+    List<String> getTagValues(String key);
+
+    Collection<List<String>> getTagRows();
 
     static String computeEventId(String pubkey, NostrEvent event) {
         try {
@@ -53,7 +57,7 @@ public interface NostrEvent extends Cloneable, Serializable {
                 pubkey,
                 event.getCreatedAt().getEpochSecond(),
                 event.getKind(),
-                event.listTags(),
+                event.getTagRows(),
                 event.getContent()
             );
             assert dbg(() -> {
@@ -74,10 +78,10 @@ public interface NostrEvent extends Cloneable, Serializable {
 
     // nip40 expiration
     default Instant getExpirationTimestamp() {
-        String[] tag = getTag("expiration");
+        List<String> tag = getTagValues("expiration");
         Instant expiresAt = null;
-        if (tag != null && tag.length > 1) {
-            long expires = NostrUtils.safeLong(tag[1]);
+        if (tag != null) {
+            long expires = NostrUtils.safeLong(tag.get(0));
             expiresAt = Instant.ofEpochSecond(expires);
         } else {
             expiresAt = Instant.now().plusSeconds(60 * 60 * 24 * 365 * 2100);

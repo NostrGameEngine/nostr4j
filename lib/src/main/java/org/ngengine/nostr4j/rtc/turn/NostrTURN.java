@@ -268,11 +268,11 @@ public class NostrTURN {
             .encrypt(ack, remotePeer.getPubkey())
             .compose(encrypted -> {
                 UnsignedNostrEvent event = new UnsignedNostrEvent();
-                event.setKind(this.config.getKind());
-                event.setCreatedAt(Instant.now());
-                event.setContent(encrypted);
-                event.setTag("d", "turn-" + this.connectionId);
-                event.setExpirationTimestamp(Instant.now().plus(this.config.getPacketTimeout()));
+                event.withKind(this.config.getKind());
+                event.createdAt(Instant.now());
+                event.withContent(encrypted);
+                event.withTag("d", "turn-" + this.connectionId);
+                event.withExpiration(Instant.now().plus(this.config.getPacketTimeout()));
 
                 return this.localPeer.getSigner()
                     .sign(event)
@@ -425,11 +425,11 @@ public class NostrTURN {
 
                                 // Create and send event
                                 UnsignedNostrEvent event = new UnsignedNostrEvent();
-                                event.setKind(this.config.getKind());
-                                event.setCreatedAt(Instant.now());
-                                event.setContent(encrypted);
-                                event.setTag("d", "turn-" + this.connectionId);
-                                event.setExpirationTimestamp(Instant.now().plus(this.config.getPacketTimeout()));
+                                event.withKind(this.config.getKind());
+                                event.createdAt(Instant.now());
+                                event.withContent(encrypted);
+                                event.withTag("d", "turn-" + this.connectionId);
+                                event.withExpiration(Instant.now().plus(this.config.getPacketTimeout()));
 
                                 SignedNostrEvent signed = this.localPeer.getSigner().sign(event).await();
 

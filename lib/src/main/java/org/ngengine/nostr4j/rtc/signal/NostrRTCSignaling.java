@@ -129,7 +129,7 @@ public class NostrRTCSignaling implements NostrSubEventListener, Closeable {
         if (closed) return;
         if (event.getPubkey().equals(this.localPeer.getPubkey())) return;
         this.executor.run(() -> {
-                String type = event.getTag("t")[1];
+                String type = event.getTagValues("t").get(0);
                 switch (type) {
                     case "connect":
                         {
@@ -341,11 +341,11 @@ public class NostrRTCSignaling implements NostrSubEventListener, Closeable {
         if (this.closed) throw new IllegalStateException("Already closed");
         if (!this.isSignalingStarted()) throw new IllegalStateException("Signaling not started");
         UnsignedNostrEvent connectEvent = new UnsignedNostrEvent();
-        connectEvent.setKind(25050);
-        connectEvent.setCreatedAt(Instant.now());
-        connectEvent.setTag("r", this.roomKeyPair.getPublicKey().asHex());
-        connectEvent.setTag("t", "connect");
-        connectEvent.setTag("expiration", String.valueOf(Instant.now().plusSeconds(60).getEpochSecond()));
+        connectEvent.withKind(25050);
+        connectEvent.createdAt(Instant.now());
+        connectEvent.withTag("r", this.roomKeyPair.getPublicKey().asHex());
+        connectEvent.withTag("t", "connect");
+        connectEvent.withTag("expiration", String.valueOf(Instant.now().plusSeconds(60).getEpochSecond()));
         // logger.fine("Sending announce: " + connectEvent);
         return this.localPeer.getSigner()
             .sign(connectEvent)
@@ -366,11 +366,11 @@ public class NostrRTCSignaling implements NostrSubEventListener, Closeable {
         if (!this.isSignalingStarted()) throw new IllegalStateException("Signaling not started");
 
         UnsignedNostrEvent event = new UnsignedNostrEvent();
-        event.setKind(25050);
-        event.setCreatedAt(Instant.now());
-        event.setTag("r", this.roomKeyPair.getPublicKey().asHex());
-        event.setTag("t", "offer");
-        event.setTag("p", recipient.asHex());
+        event.withKind(25050);
+        event.createdAt(Instant.now());
+        event.withTag("r", this.roomKeyPair.getPublicKey().asHex());
+        event.withTag("t", "offer");
+        event.withTag("p", recipient.asHex());
 
         Platform platform = NostrUtils.getPlatform();
         Map<String, Object> content = offer.get();
@@ -379,7 +379,7 @@ public class NostrRTCSignaling implements NostrSubEventListener, Closeable {
 
         return encrypt(json, recipient)
             .compose(encContent -> {
-                event.setContent(encContent);
+                event.withContent(encContent);
                 logger.finest("Sending offer: " + event + " " + content + " to " + recipient);
 
                 return this.localPeer.getSigner()
@@ -401,11 +401,11 @@ public class NostrRTCSignaling implements NostrSubEventListener, Closeable {
         if (this.closed) throw new IllegalStateException("Already closed");
         if (!this.isSignalingStarted()) throw new IllegalStateException("Signaling not started");
         UnsignedNostrEvent event = new UnsignedNostrEvent();
-        event.setKind(25050);
-        event.setCreatedAt(Instant.now());
-        event.setTag("r", this.roomKeyPair.getPublicKey().asHex());
-        event.setTag("t", "answer");
-        event.setTag("p", recipient.asHex());
+        event.withKind(25050);
+        event.createdAt(Instant.now());
+        event.withTag("r", this.roomKeyPair.getPublicKey().asHex());
+        event.withTag("t", "answer");
+        event.withTag("p", recipient.asHex());
 
         Platform platform = NostrUtils.getPlatform();
         Map<String, Object> content = answer.get();
@@ -414,7 +414,7 @@ public class NostrRTCSignaling implements NostrSubEventListener, Closeable {
 
         return encrypt(json, recipient)
             .compose(encContent -> {
-                event.setContent(encContent);
+                event.withContent(encContent);
                 logger.finest("Sending answer: " + event + " " + content + " to " + recipient);
 
                 return this.localPeer.getSigner()
@@ -438,18 +438,18 @@ public class NostrRTCSignaling implements NostrSubEventListener, Closeable {
         if (!this.isSignalingStarted()) throw new IllegalStateException("Signaling not started");
 
         UnsignedNostrEvent event = new UnsignedNostrEvent();
-        event.setKind(25050);
-        event.setCreatedAt(Instant.now());
-        event.setTag("r", this.roomKeyPair.getPublicKey().asHex());
-        event.setTag("t", "candidate");
-        event.setTag("p", recipient.asHex());
+        event.withKind(25050);
+        event.createdAt(Instant.now());
+        event.withTag("r", this.roomKeyPair.getPublicKey().asHex());
+        event.withTag("t", "candidate");
+        event.withTag("p", recipient.asHex());
 
         Platform platform = NostrUtils.getPlatform();
         Map<String, Object> content = candidate.get();
         String json = platform.toJSON(content);
         return encrypt(json, recipient)
             .compose(encContent -> {
-                event.setContent(encContent);
+                event.withContent(encContent);
                 logger.finest("Sending candidates: " + event + " " + content + " to " + recipient);
 
                 return this.localPeer.getSigner()
@@ -469,10 +469,10 @@ public class NostrRTCSignaling implements NostrSubEventListener, Closeable {
         this.closed = true;
 
         UnsignedNostrEvent connectEvent = new UnsignedNostrEvent();
-        connectEvent.setKind(25050);
-        connectEvent.setCreatedAt(Instant.now());
-        connectEvent.setTag("r", this.roomKeyPair.getPublicKey().asHex());
-        connectEvent.setTag("t", "disconnect");
+        connectEvent.withKind(25050);
+        connectEvent.createdAt(Instant.now());
+        connectEvent.withTag("r", this.roomKeyPair.getPublicKey().asHex());
+        connectEvent.withTag("t", "disconnect");
         this.localPeer.getSigner()
             .sign(connectEvent)
             .compose(ev -> {

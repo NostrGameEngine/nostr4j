@@ -39,8 +39,10 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.platform.AsyncTask;
 import org.ngengine.nostr4j.transport.NostrMessage;
@@ -81,35 +83,15 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
 
     private final int kind;
     private final String content;
-    private final Map<String, String[]> tags = new HashMap<String, String[]>();
+    private final Map<String, List<String>> tags;
+    private final Collection<List<String>> tagRows;
     private final String signature;
     private final String pubkey;
     private final Identifier identifier;
 
     private transient String bech32Id;
     private transient NostrPublicKey parsedPublicKey;
-    private transient Collection<String[]> taglist;
     private transient Instant expiresAt;
-
-    public SignedNostrEvent(
-        String id,
-        String pubkey,
-        int kind,
-        String content,
-        Instant created_at,
-        String signature,
-        Collection<String[]> tags
-    ) {
-        this.kind = kind;
-        this.content = content;
-        this.signature = signature;
-        this.pubkey = pubkey;
-        this.identifier = new Identifier(id, created_at);
-
-        for (String[] tag : tags) {
-            this.tags.put(tag[0], tag);
-        }
-    }
 
     public SignedNostrEvent(
         String id,
@@ -118,11 +100,40 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
         String content,
         Instant created_at,
         String signature,
-        Collection<String[]> tags
+        Collection<List<String>> tags
     ) {
-        this(id, pubkey.asHex(), kind, content, created_at, signature, tags);
-        this.parsedPublicKey = pubkey;
+        this.kind = kind;
+        this.content = content;
+        this.signature = signature;
+        this.pubkey = pubkey.asHex();
+        this.identifier = new Identifier(id, created_at);
+
+        LinkedHashMap<String, List<String>> tagsMap = new LinkedHashMap<>();
+
+        for (List<String> tag : tags) {
+            ArrayList<String> values = new ArrayList<>();
+            for (int i = 1; i < tag.size(); i++) {
+                values.add(tag.get(i));
+            }
+            tagsMap.put(tag.get(0), values);
+        }
+
+        this.tags = Collections.unmodifiableMap(tagsMap);
+        this.tagRows = Collections.unmodifiableCollection(tags);
     }
+
+    // public SignedNostrEvent(
+    //     String id,
+    //     NostrPublicKey pubkey,
+    //     int kind,
+    //     String content,
+    //     Instant created_at,
+    //     String signature,
+    //     Collection<String[]> tags
+    // ) {
+    //     this(id, pubkey.asHex(), kind, content, created_at, signature, tags);
+    //     this.parsedPublicKey = pubkey;
+    // }
 
     public SignedNostrEvent(Map<String, Object> map) {
         this.kind = NostrUtils.safeInt(map.get("kind"));
@@ -137,10 +148,38 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
         Collection<String[]> tags = NostrUtils.safeCollectionOfStringArray(
             map.getOrDefault("tags", new ArrayList<Collection<String>>())
         );
+
+        LinkedHashMap<String, List<String>> tagsMap = new LinkedHashMap<>();
+
         for (String tag[] : tags) {
             if (tag.length == 0) continue;
-            this.tags.put(tag[0], tag);
+            ArrayList<String> values = new ArrayList<>();
+            for (int i = 1; i < tag.length; i++) {
+                values.add(tag[i]);
+            }
+            tagsMap.put(tag[0], values);
         }
+
+        this.tags = Collections.unmodifiableMap(tagsMap);
+
+        ArrayList<List<String>> tagRows = new ArrayList<>();
+        for (Entry<String, List<String>> entry : tagsMap.entrySet()) {
+            ArrayList<String> tagRow = new ArrayList<>();
+            tagRow.add(entry.getKey());
+            tagRow.addAll(entry.getValue());
+            tagRows.add(tagRow);
+        }
+        this.tagRows = Collections.unmodifiableCollection(tagRows);
+    }
+
+    @Override
+    public Map<String, List<String>> getTags() {
+        return this.tags;
+    }
+
+    @Override
+    public Collection<List<String>> getTagRows() {
+        return this.tagRows;
     }
 
     @Override
@@ -156,14 +195,6 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
     @Override
     public String getContent() {
         return this.content;
-    }
-
-    @Override
-    public Collection<String[]> listTags() {
-        if (taglist == null) {
-            taglist = Collections.unmodifiableCollection(tags.values());
-        }
-        return taglist;
     }
 
     public String getSignature() {
@@ -201,7 +232,7 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
         cachedFragment.put("content", this.content);
         cachedFragment.put("created_at", this.identifier.createdAt);
         cachedFragment.put("sig", this.signature);
-        cachedFragment.put("tags", this.listTags());
+        cachedFragment.put("tags", this.getTagRows());
         return cachedFragment;
     }
 
@@ -224,20 +255,12 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
         try {
             return (SignedNostrEvent) super.clone();
         } catch (Exception e) {
-            return new SignedNostrEvent(
-                identifier.id,
-                pubkey,
-                kind,
-                content,
-                identifier.createdAtInstant,
-                signature,
-                listTags()
-            );
+            throw new RuntimeException("Clone not supported", e);
         }
     }
 
     @Override
-    public String[] getTag(String key) {
+    public List<String> getTagValues(String key) {
         return tags.get(key);
     }
 
@@ -283,20 +306,6 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
 
         protected final String subId;
 
-        public ReceivedSignedNostrEvent(
-            String subId,
-            String id,
-            NostrPublicKey pubkey,
-            int kind,
-            String content,
-            Instant created_at,
-            String signature,
-            Collection<String[]> tags
-        ) {
-            super(id, pubkey, kind, content, created_at, signature, tags);
-            this.subId = subId;
-        }
-
         public ReceivedSignedNostrEvent(String subId, Map<String, Object> map) {
             super(map);
             this.subId = subId;
@@ -332,9 +341,9 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
     @Override
     public Instant getExpirationTimestamp() {
         if (expiresAt != null) return expiresAt;
-        String[] tag = getTag("expiration");
-        if (tag != null && tag.length > 1) {
-            long expires = NostrUtils.safeLong(tag[1]);
+        List<String> tag = getTagValues("expiration");
+        if (tag != null) {
+            long expires = NostrUtils.safeLong(tag.get(0));
             expiresAt = Instant.ofEpochSecond(expires);
         } else {
             expiresAt = Instant.now().plusSeconds(60 * 60 * 24 * 365 * 2100);

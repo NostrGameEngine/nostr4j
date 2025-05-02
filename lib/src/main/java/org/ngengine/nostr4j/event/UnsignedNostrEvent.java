@@ -35,7 +35,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import org.ngengine.nostr4j.utils.NostrUtils;
@@ -45,65 +46,100 @@ public class UnsignedNostrEvent implements NostrEvent {
     private Instant createdAt = Instant.now();
     private int kind = 1;
     private String content = "";
-    private Map<String, String[]> tags = new HashMap<String, String[]>();
+    private LinkedHashMap<String, List<String>> tags = new LinkedHashMap<String, List<String>>();
 
-    private transient Collection<String[]> taglist;
+    private transient Map<String, List<String>> tagsRO;
+    private transient Collection<List<String>> tagRows;
 
-    public UnsignedNostrEvent setKind(int kind) {
+    public UnsignedNostrEvent withKind(int kind) {
         this.kind = kind;
-
         return this;
     }
 
-    public UnsignedNostrEvent setContent(String content) {
+    public UnsignedNostrEvent withContent(String content) {
         this.content = content;
 
         return this;
     }
 
-    public UnsignedNostrEvent setCreatedAt(Instant created_at) {
+    public UnsignedNostrEvent createdAt(Instant created_at) {
         this.createdAt = created_at;
         return this;
     }
 
-    public UnsignedNostrEvent setTag(String... tag) {
-        tags.put(tag[0], tag);
+    // nip40 expiration
+    public UnsignedNostrEvent withExpiration(Instant expiresAt) {
+        if (expiresAt != null) {
+            withTag("expiration", String.valueOf(Objects.requireNonNull(expiresAt).getEpochSecond()));
+        } else {
+            withoutTag("expiration");
+        }
         return this;
     }
 
-    public UnsignedNostrEvent unsetTag(String key) {
+    public UnsignedNostrEvent withTag(String key, String... values) {
+        if (values == null || values.length == 0) {
+            return withoutTag(key);
+        }
+        tagRows = null;
+        tags.put(key, Collections.unmodifiableList(Arrays.asList(values)));
+        return this;
+    }
+
+    public UnsignedNostrEvent withoutTag(String key) {
+        tagRows = null;
         tags.remove(key);
         return this;
     }
 
     @Override
-    public String[] getTag(String key) {
+    public List<String> getTagValues(String key) {
         return tags.get(key);
     }
 
-    public UnsignedNostrEvent setTags(Collection<String[]> tags) {
-        this.tags.clear();
-        for (String[] tag : tags) {
-            this.tags.put(tag[0], tag);
+    @Override
+    public Map<String, List<String>> getTags() {
+        if (tagsRO == null) {
+            tagsRO = Collections.unmodifiableMap(tags);
         }
-
-        return this;
+        return tagsRO;
     }
 
     @Override
-    public Collection<String[]> listTags() {
-        if (taglist == null) {
-            taglist = Collections.unmodifiableCollection(tags.values());
+    public Collection<List<String>> getTagRows() {
+        if (tagRows == null) {
+            ArrayList<List<String>> tagRows = new ArrayList<>();
+            for (Map.Entry<String, List<String>> entry : tags.entrySet()) {
+                ArrayList<String> row = new ArrayList<>();
+                row.add(entry.getKey());
+                List<String> values = entry.getValue();
+                if (values != null) {
+                    for (String value : values) {
+                        row.add(value);
+                    }
+                }
+                tagRows.add(Collections.unmodifiableList(row));
+            }
+            this.tagRows = Collections.unmodifiableCollection(tagRows);
         }
-        return taglist;
+        return tagRows;
     }
 
     public UnsignedNostrEvent fromMap(Map<String, Object> map) {
         this.kind = NostrUtils.safeInt(map.get("kind"));
-        this.content = map.get("content").toString();
+        this.content = NostrUtils.safeString(map.get("content"));
         this.createdAt = NostrUtils.safeSecondsInstant(map.get("created_at"));
         Collection<String[]> tags = NostrUtils.safeCollectionOfStringArray(map.getOrDefault("tags", new ArrayList<String[]>()));
-        setTags(tags);
+        for (String[] tag : tags) {
+            if (tag.length == 0) continue;
+            String key = tag[0];
+            String[] values = Arrays.copyOfRange(tag, 1, tag.length);
+            if (values.length == 0) {
+                withoutTag(key);
+            } else {
+                withTag(key, values);
+            }
+        }
         return this;
     }
 
@@ -115,8 +151,8 @@ public class UnsignedNostrEvent implements NostrEvent {
         sb.append(",\n\tkind=").append(kind);
         sb.append(",\n\tcontent='").append(content).append('\'');
         sb.append(",\n\ttags=\n");
-        for (String[] tags : listTags()) {
-            sb.append("\t\t").append(Arrays.toString(tags)).append("\n");
+        for (Map.Entry<String, List<String>> entry : tags.entrySet()) {
+            sb.append("\t\t").append(entry.getKey()).append("=").append(entry.getValue()).append("\n");
         }
         sb.append('}');
         return sb.toString();
@@ -147,7 +183,7 @@ public class UnsignedNostrEvent implements NostrEvent {
             e.getCreatedAt().equals(getCreatedAt()) &&
             e.getKind() == getKind() &&
             e.getContent().equals(getContent()) &&
-            e.listTags().equals(listTags())
+            NostrUtils.equalsWithOrder(e.getTags(), getTags())
         );
     }
 
@@ -160,21 +196,11 @@ public class UnsignedNostrEvent implements NostrEvent {
     public UnsignedNostrEvent clone() {
         try {
             UnsignedNostrEvent clone = (UnsignedNostrEvent) super.clone();
-            clone.tags = new HashMap<>(this.tags);
-            clone.taglist = null;
+            clone.tags = new LinkedHashMap<>(this.tags);
+            clone.tagsRO = null;
             return clone;
         } catch (CloneNotSupportedException e) {
-            return new UnsignedNostrEvent().setKind(kind).setContent(content).setTags(listTags()).setCreatedAt(createdAt);
+            throw new RuntimeException("Clone not supported", e);
         }
-    }
-
-    // nip40 expiration
-    public UnsignedNostrEvent setExpirationTimestamp(Instant expiresAt) {
-        if (expiresAt != null) {
-            setTag("expiration", String.valueOf(Objects.requireNonNull(expiresAt).getEpochSecond()));
-        } else {
-            unsetTag("expiration");
-        }
-        return this;
     }
 }

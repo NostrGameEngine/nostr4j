@@ -79,11 +79,11 @@ public class FullBenchmark {
 
         for (int i = 0; i < EVENTS; i++) {
             UnsignedNostrEvent event = new UnsignedNostrEvent();
-            event.setKind(1);
-            event.setTag("t", testId);
-            event.setContent(content.substring(0, i));
-            event.setCreatedAt(Instant.now());
-            event.setTag("eventId", i + "");
+            event.withKind(1);
+            event.withTag("t", testId);
+            event.withContent(content.substring(0, i));
+            event.createdAt(Instant.now());
+            event.withTag("eventId", i + "");
             signer
                 .sign(event)
                 .then(signed -> {
@@ -100,7 +100,7 @@ public class FullBenchmark {
         long receiveStarted = System.currentTimeMillis();
         NostrSubscription sub = reader.subscribe(new NostrFilter().withKind(1).withTag("t", testId), NaiveEventTracker.class);
         sub.onEvent((event, stored) -> {
-            String i = event.getTag("eventId")[1];
+            String i = event.getTagValues("eventId").get(0);
             if (track.contains(i)) {
                 assert false : "Duplicate event: " + i;
             } else {

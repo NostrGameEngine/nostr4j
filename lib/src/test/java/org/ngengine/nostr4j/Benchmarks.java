@@ -55,10 +55,10 @@ public class Benchmarks {
         for (int i = 0; i < EVENTS; i++) {
             UnsignedNostrEvent event = new UnsignedNostrEvent();
             for (int t = 0; t < i; t++) {
-                event.setTag("t", "nada");
+                event.withTag("t", "nada");
             }
-            event.setKind(1);
-            event.setContent(baseContent.substring(0, EVENTS - i));
+            event.withKind(1);
+            event.withContent(baseContent.substring(0, EVENTS - i));
             SignedNostrEvent signed = signer.sign(event).await();
             List<Object> message = new ArrayList<>();
             message.addAll(NostrMessage.toSerial(signed));

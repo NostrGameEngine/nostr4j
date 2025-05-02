@@ -66,9 +66,9 @@ public class Nip24Metadata implements Serializable {
 
     public UnsignedNostrEvent toUpdateEvent() throws Exception {
         UnsignedNostrEvent event = new UnsignedNostrEvent();
-        event.setKind(0);
-        event.setCreatedAt(Instant.now());
-        event.setContent(NostrUtils.getPlatform().toJSON(metadata));
+        event.withKind(0);
+        event.createdAt(Instant.now());
+        event.withContent(NostrUtils.getPlatform().toJSON(metadata));
         return event;
     }
 

@@ -34,6 +34,7 @@ import java.io.*;
 import java.time.Instant;
 import java.util.Calendar;
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import org.junit.Assert;
 import org.junit.Test;
@@ -72,15 +73,21 @@ public class TestNip24Metadata {
         }
 
         @Override
-        public Collection<String[]> listTags() {
+        public Map<String, List<String>> getTags() {
             // TODO Auto-generated method stub
-            throw new UnsupportedOperationException("Unimplemented method 'listTags'");
+            throw new UnsupportedOperationException("Unimplemented method 'getTags'");
         }
 
         @Override
-        public String[] getTag(String key) {
+        public List<String> getTagValues(String key) {
             // TODO Auto-generated method stub
-            throw new UnsupportedOperationException("Unimplemented method 'getTag'");
+            throw new UnsupportedOperationException("Unimplemented method 'getTagValues'");
+        }
+
+        @Override
+        public Collection<List<String>> getTagRows() {
+            // TODO Auto-generated method stub
+            throw new UnsupportedOperationException("Unimplemented method 'getTagRows'");
         }
         // Other methods can be stubbed or throw UnsupportedOperationException
     }

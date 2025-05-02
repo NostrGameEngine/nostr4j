@@ -66,7 +66,7 @@ public class NostrKeyPairSigner implements NostrSigner {
                     event.getContent(),
                     event.getCreatedAt(),
                     sig,
-                    event.listTags()
+                    event.getTagRows()
                 );
             });
     }

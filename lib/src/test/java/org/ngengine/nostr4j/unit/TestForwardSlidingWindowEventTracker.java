@@ -36,12 +36,15 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import org.junit.Before;
 import org.junit.Test;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.event.tracker.ForwardSlidingWindowEventTracker;
+import org.ngengine.nostr4j.keypair.NostrPrivateKey;
+import org.ngengine.nostr4j.keypair.NostrPublicKey;
 
 public class TestForwardSlidingWindowEventTracker {
 
@@ -97,20 +100,29 @@ public class TestForwardSlidingWindowEventTracker {
         }
     }
 
+    private NostrPublicKey pubkey;
+
     /**
      * Creates a real SignedNostrEvent with specified timestamp and event ID
      */
     private SignedNostrEvent createEvent(long timestampSeconds, String id) {
-        SignedNostrEvent event = new SignedNostrEvent(
-            id,
-            id,
-            0,
-            "",
-            Instant.ofEpochSecond(timestampSeconds),
-            "",
-            new ArrayList<String[]>()
-        );
-        return event;
+        try {
+            if (pubkey == null) {
+                pubkey = NostrPrivateKey.generate().getPublicKey();
+            }
+            SignedNostrEvent event = new SignedNostrEvent(
+                id,
+                pubkey,
+                0,
+                "",
+                Instant.ofEpochSecond(timestampSeconds),
+                "",
+                (Collection<List<String>>) new ArrayList<List<String>>()
+            );
+            return event;
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to create event", e);
+        }
     }
 
     @Before

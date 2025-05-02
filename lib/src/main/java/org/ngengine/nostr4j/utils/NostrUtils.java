@@ -35,6 +35,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Supplier;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.platform.Platform;
@@ -304,6 +305,40 @@ public class NostrUtils {
             }
         };
         assert s.get() : "Debug statement failed";
+        return true;
+    }
+
+    public static boolean equalsIgnoreOrder(Map<String, List<String>> tags, Map<String, List<String>> tags2) {
+        if (tags == null && tags2 == null) return true;
+        if (tags == null || tags2 == null) return false;
+        if (tags.size() != tags2.size()) return false;
+
+        for (Map.Entry<String, List<String>> entry : tags.entrySet()) {
+            String key = entry.getKey();
+            List<String> value = entry.getValue();
+            List<String> value2 = tags2.get(key);
+            if (value2 == null || value.size() != value2.size()) return false;
+            for (String v : value) {
+                if (!value2.contains(v)) return false;
+            }
+        }
+        return true;
+    }
+
+    public static boolean equalsWithOrder(Map<String, List<String>> tags, Map<String, List<String>> tags2) {
+        if (tags == null && tags2 == null) return true;
+        if (tags == null || tags2 == null) return false;
+        if (tags.size() != tags2.size()) return false;
+
+        for (Map.Entry<String, List<String>> entry : tags.entrySet()) {
+            String key = entry.getKey();
+            List<String> value = entry.getValue();
+            List<String> value2 = tags2.get(key);
+            if (value2 == null || value.size() != value2.size()) return false;
+            for (int i = 0; i < value.size(); i++) {
+                if (!value.get(i).equals(value2.get(i))) return false;
+            }
+        }
         return true;
     }
 }

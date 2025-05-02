@@ -614,10 +614,10 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
                     reqBody.put("params", params);
 
                     UnsignedNostrEvent event = new UnsignedNostrEvent()
-                        .setKind(24133)
-                        .setCreatedAt(Instant.now())
-                        .setTag("p", this.signerPubkey.asHex())
-                        .setContent(platform.toJSON(reqBody));
+                        .withKind(24133)
+                        .createdAt(Instant.now())
+                        .withTag("p", this.signerPubkey.asHex())
+                        .withContent(platform.toJSON(reqBody));
 
                     assert dbg(() -> logger.finer("Sending request: " + event));
 
@@ -626,7 +626,7 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
                         this.transportSigner.getKeyPair().getPrivateKey(),
                         this.signerPubkey
                     );
-                    event.setContent(Nip44.encrypt(event.getContent(), conversationKey));
+                    event.withContent(Nip44.encrypt(event.getContent(), conversationKey));
 
                     // we need to start waiting for the response before we publish the event
                     // to make sure we don't miss the response if it comes in before we have a chance to wait for it
@@ -651,7 +651,7 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
         Collection<Object> params = new ArrayList<>();
         params.add(event.getKind());
         params.add(event.getContent());
-        params.add(event.listTags());
+        params.add(event.getTagRows());
         params.add(event.getCreatedAt().getEpochSecond());
         return sendRPC(method, params, requestsTimeout)
             .then(signed -> {
