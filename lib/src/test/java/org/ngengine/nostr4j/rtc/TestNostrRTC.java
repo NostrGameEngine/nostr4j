@@ -56,7 +56,7 @@ public class TestNostrRTC {
 
         NostrRTCLocalPeer localPeer = new NostrRTCLocalPeer(
             signer,
-            Arrays.asList(NostrRTCSettings.PUBLIC_STUN_SERVERS),
+            NostrRTCSettings.PUBLIC_STUN_SERVERS,
             "wss://nostr.rblb.it:7777",
             new HashMap<>()
         );

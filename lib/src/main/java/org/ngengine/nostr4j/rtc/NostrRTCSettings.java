@@ -32,6 +32,9 @@ package org.ngengine.nostr4j.rtc;
 
 import java.io.Serializable;
 import java.time.Duration;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Objects;
 
 public final class NostrRTCSettings implements Cloneable, Serializable {
@@ -44,20 +47,24 @@ public final class NostrRTCSettings implements Cloneable, Serializable {
     public static final Duration ROOM_LOOP_INTERVAL = Duration.ofSeconds(1);
     public static final Duration P2P_TIMEOUT = Duration.ofSeconds(120);
 
-    public static final String[] PUBLIC_STUN_SERVERS = {
-        "stun.cloudflare.com:3478",
-        "stun.l.google.com:19302",
-        "stun.l.google.com:5349",
-        "stun1.l.google.com:3478",
-        "stun1.l.google.com:5349",
-        "stun2.l.google.com:19302",
-        "stun2.l.google.com:5349",
-        "stun3.l.google.com:3478",
-        "stun3.l.google.com:5349",
-        "stun4.l.google.com:19302",
-        "stun4.l.google.com:5349",
-        "stunserver2024.stunprotocol.org:3478",
-    };
+    public static final Collection<String> PUBLIC_STUN_SERVERS = Collections.unmodifiableCollection(
+        Arrays.asList(
+            new String[] {
+                "stun.cloudflare.com:3478",
+                "stun.l.google.com:19302",
+                "stun.l.google.com:5349",
+                "stun1.l.google.com:3478",
+                "stun1.l.google.com:5349",
+                "stun2.l.google.com:19302",
+                "stun2.l.google.com:5349",
+                "stun3.l.google.com:3478",
+                "stun3.l.google.com:5349",
+                "stun4.l.google.com:19302",
+                "stun4.l.google.com:5349",
+                "stunserver2024.stunprotocol.org:3478",
+            }
+        )
+    );
 
     private final Duration signalingLoopInterval;
     private final Duration peerExpiration;
