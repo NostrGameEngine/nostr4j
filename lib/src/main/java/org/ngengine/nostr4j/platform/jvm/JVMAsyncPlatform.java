@@ -46,6 +46,7 @@ import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
@@ -689,7 +690,7 @@ public class JVMAsyncPlatform implements Platform {
     }
 
     @Override
-    public AsyncTask<String> httpGet(String url, Duration timeout) {
+    public AsyncTask<String> httpGet(String url, Duration timeout, Map<String, String> headers) {
         HttpClient.Builder b = HttpClient
             .newBuilder()
             .connectTimeout(timeout)
@@ -699,17 +700,24 @@ public class JVMAsyncPlatform implements Platform {
         HttpClient httpClient = b.build();
         return wrapPromise((res, rej) -> {
             try {
-                HttpRequest request = HttpRequest
+                HttpRequest.Builder requestBuilder = HttpRequest
                     .newBuilder()
                     .uri(URI.create(url))
-                    .timeout(Duration.ofSeconds(30))
                     .header(
                         "User-Agent",
                         "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0 nostr4j/1.0"
                     )
-                    .GET()
-                    .build();
+                    .GET();
+                if (headers != null) {
+                    for (String key : headers.keySet()) {
+                        requestBuilder.header(key, headers.get(key));
+                    }
+                }
+                if (timeout != null) {
+                    requestBuilder.timeout(timeout);
+                }
 
+                HttpRequest request = requestBuilder.build();
                 httpClient
                     .sendAsync(request, HttpResponse.BodyHandlers.ofString())
                     .handleAsync(

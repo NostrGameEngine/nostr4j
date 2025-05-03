@@ -32,6 +32,7 @@ package org.ngengine.nostr4j;
 
 import static org.ngengine.nostr4j.utils.NostrUtils.dbg;
 
+import java.io.IOException;
 import java.time.Instant;
 import java.util.Iterator;
 import java.util.List;
@@ -112,9 +113,7 @@ public final class NostrRelay implements TransportListener {
 
     protected AtomicReference<AsyncTask> queue = new AtomicReference(null);
 
-    boolean fast = true;
-
-    boolean fastEvents = false;
+    protected transient NostrRelayInfo relayInfo = null;
 
     public NostrRelay(String url) {
         this(url, NostrUtils.getPlatform().newRelayExecutor());
@@ -131,6 +130,16 @@ public final class NostrRelay implements TransportListener {
             this.executor = executor;
         } catch (Exception e) {
             throw new RuntimeException("Error creating NostrRelay", e);
+        }
+    }
+
+    public NostrRelayInfo getInfo() throws IOException {
+        if (relayInfo != null) return relayInfo;
+        try {
+            relayInfo = NostrRelayInfo.get(url).await();
+            return relayInfo;
+        } catch (Exception e) {
+            throw new IOException("Error getting relay info", e);
         }
     }
 

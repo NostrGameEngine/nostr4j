@@ -143,7 +143,7 @@ public class Nip05Identity implements Serializable {
         Platform platform = NostrUtils.getPlatform();
         // https://<domain>/.well-known/nostr.json?name=<local-part>
         String fullUrl = "http" + (useHttps ? "s" : "") + "://" + domain + "/.well-known/nostr.json?name=" + name;
-        AsyncTask<String> json = platform.httpGet(fullUrl, timeout);
+        AsyncTask<String> json = platform.httpGet(fullUrl, timeout, null);
         AsyncTask<Map> jsonData = json.then(r -> {
             try {
                 return platform.fromJSON(r, Map.class);

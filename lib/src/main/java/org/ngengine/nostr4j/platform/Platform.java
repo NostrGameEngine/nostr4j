@@ -33,6 +33,7 @@ package org.ngengine.nostr4j.platform;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Queue;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -91,5 +92,5 @@ public interface Platform {
 
     <T> Queue<T> newConcurrentQueue(Class<T> claz);
 
-    AsyncTask<String> httpGet(String url, Duration timeout);
+    AsyncTask<String> httpGet(String url, Duration timeout, Map<String, String> headers);
 }
