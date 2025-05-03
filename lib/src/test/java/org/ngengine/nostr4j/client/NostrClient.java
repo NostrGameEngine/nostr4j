@@ -581,14 +581,15 @@ public class NostrClient extends JFrame {
         this.pool.connectRelay(new NostrRelay("wss://nostr.wine"));
 
         // Show notice in a cyber dialog
-        this.pool.onNotice((relay, notice, ex) -> SwingUtilities.invokeLater(() -> showCyberMessageBox("SYSTEM NOTICE", notice))
+        this.pool.addNoticeListener((relay, notice, ex) ->
+                SwingUtilities.invokeLater(() -> showCyberMessageBox("SYSTEM NOTICE", notice))
             );
 
         // Subscribe to events
         NostrSubscription sub =
             this.pool.subscribe(Arrays.asList(new NostrFilter().withKind(1).limit(10)), FailOnDoubleTracker.class);
 
-        sub.onEvent((event, stored) -> addEventToFeed(event, true));
+        sub.addEventListener((event, stored) -> addEventToFeed(event, true));
         sub.open();
     }
 
@@ -836,7 +837,7 @@ public class NostrClient extends JFrame {
         pool.unsubscribeAll();
         NostrSubscription sub = pool.subscribe(Arrays.asList(new NostrSearchFilter().withKind(1).limit(10).search(query)));
 
-        sub.onEvent((event, stored) -> {
+        sub.addEventListener((event, stored) -> {
             SwingUtilities.invokeLater(() -> {
                 // Remove searching label on first result
                 if (contentPanel.getComponentCount() == 1 && contentPanel.getComponent(0) == loadingPanel) {

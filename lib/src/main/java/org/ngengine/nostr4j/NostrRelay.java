@@ -61,11 +61,11 @@ import org.ngengine.nostr4j.transport.impl.NostrOKMessage;
 import org.ngengine.nostr4j.utils.ExponentialBackoff;
 import org.ngengine.nostr4j.utils.NostrUtils;
 
-public final class NostrRelay implements TransportListener {
+public final class NostrRelay {
 
     private static final Logger logger = Logger.getLogger(NostrRelay.class.getName());
 
-    static final class QueuedMessage {
+    private static final class QueuedMessage {
 
         final NostrMessage message;
         final Consumer<NostrMessageAck> res;
@@ -90,6 +90,33 @@ public final class NostrRelay implements TransportListener {
             return message.hashCode();
         }
     }
+
+    private TransportListener listener = new TransportListener() {
+        @Override
+        public void onConnectionClosedByServer(String reason) {
+            NostrRelay.this.onConnectionClosedByServer(reason);
+        }
+
+        @Override
+        public void onConnectionOpen() {
+            NostrRelay.this.onConnectionOpen();
+        }
+
+        @Override
+        public void onConnectionMessage(String msg) {
+            NostrRelay.this.onConnectionMessage(msg);
+        }
+
+        @Override
+        public void onConnectionClosedByClient(String reason) {
+            NostrRelay.this.onConnectionClosedByClient(reason);
+        }
+
+        @Override
+        public void onConnectionError(Throwable e) {
+            NostrRelay.this.onConnectionError(e);
+        }
+    };
 
     protected final NostrTransport connector;
     protected final String url;
@@ -123,7 +150,7 @@ public final class NostrRelay implements TransportListener {
         try {
             Platform platform = NostrUtils.getPlatform();
             this.connector = platform.newTransport();
-            this.connector.addListener(this);
+            this.connector.addListener(listener);
             this.messageQueue = platform.newConcurrentQueue(QueuedMessage.class);
             this.connectCallbacks = platform.newConcurrentQueue(Runnable.class);
             this.url = url;
@@ -199,13 +226,15 @@ public final class NostrRelay implements TransportListener {
         return outputUnit.convert(this.ackTimeoutS, TimeUnit.SECONDS);
     }
 
-    public void addComponent(NostrRelayComponent listener) {
+    public NostrRelay addComponent(NostrRelayComponent listener) {
         assert !listeners.contains(listener);
         this.listeners.add(listener);
+        return this;
     }
 
-    public void removeComponent(NostrRelayComponent listener) {
+    public NostrRelay removeComponent(NostrRelayComponent listener) {
         this.listeners.remove(listener);
+        return this;
     }
 
     public <T extends NostrRelayComponent> T getComponent(Class<T> clazz) {
@@ -406,8 +435,8 @@ public final class NostrRelay implements TransportListener {
     }
 
     // await for order
-    @Override
-    public void onConnectionOpen() {
+
+    private void onConnectionOpen() {
         runInRelayExecutor(
             (res, rej) -> {
                 try {
@@ -485,8 +514,7 @@ public final class NostrRelay implements TransportListener {
     }
 
     //ordered
-    @Override
-    public void onConnectionMessage(String msg) {
+    private void onConnectionMessage(String msg) {
         try {
             Platform platform = NostrUtils.getPlatform();
             assert dbg(() -> {
@@ -586,8 +614,7 @@ public final class NostrRelay implements TransportListener {
     }
 
     // await for order
-    @Override
-    public void onConnectionClosedByServer(String reason) {
+    private void onConnectionClosedByServer(String reason) {
         logger.finer("Connection closed by server: " + this.url + " reason: " + reason);
         boolean wasConnected = this.connected;
         this.connecting = false;
@@ -635,8 +662,7 @@ public final class NostrRelay implements TransportListener {
     }
 
     // await for order
-    @Override
-    public void onConnectionClosedByClient(String reason) {
+    private void onConnectionClosedByClient(String reason) {
         this.connected = false;
         this.connecting = false;
         logger.finer("Connection closed by client: " + this.url + " reason: " + reason);
@@ -725,8 +751,7 @@ public final class NostrRelay implements TransportListener {
     }
 
     // await for order
-    @Override
-    public void onConnectionError(Throwable e) {
+    private void onConnectionError(Throwable e) {
         try {
             runInRelayExecutor(
                 (res, rej) -> {

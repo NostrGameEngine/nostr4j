@@ -116,7 +116,7 @@ public class TestNostrEvent {
 
         assertEquals(event.getCreatedAt().getEpochSecond(), 1742147457);
 
-        assertEquals(event.getExpirationTimestamp().getEpochSecond(), 1742147457);
+        assertEquals(event.getExpiration().getEpochSecond(), 1742147457);
 
         assertEquals(event.getTagRows().size(), 3);
 

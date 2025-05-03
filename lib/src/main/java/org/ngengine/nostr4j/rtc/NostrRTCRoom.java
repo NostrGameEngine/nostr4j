@@ -63,7 +63,7 @@ import org.ngengine.nostr4j.rtc.signal.NostrRTCSignaling;
 import org.ngengine.nostr4j.rtc.turn.NostrTURNSettings;
 import org.ngengine.nostr4j.utils.NostrUtils;
 
-public class NostrRTCRoom implements NostrRTCSignaling.Listener, NostrRTCSocketListener, Closeable {
+public class NostrRTCRoom implements Closeable {
 
     private static final Logger logger = Logger.getLogger(NostrRTCRoom.class.getName());
 
@@ -89,6 +89,55 @@ public class NostrRTCRoom implements NostrRTCSignaling.Listener, NostrRTCSocketL
     private final NostrExecutor executor;
     private final NostrKeyPair roomKeyPair;
 
+    private static interface Listener extends NostrRTCSignaling.Listener, NostrRTCSocketListener {}
+
+    private final Listener listener = new Listener() {
+        @Override
+        public void onAddAnnounce(NostrRTCAnnounce announce) {
+            NostrRTCRoom.this.onAddAnnounce(announce);
+        }
+
+        @Override
+        public void onUpdateAnnounce(NostrRTCAnnounce announce) {
+            NostrRTCRoom.this.onUpdateAnnounce(announce);
+        }
+
+        @Override
+        public void onRTCSocketClose(NostrRTCSocket socket) {
+            NostrRTCRoom.this.onRTCSocketClose(socket);
+        }
+
+        @Override
+        public void onReceiveOffer(NostrRTCOffer offer) {
+            NostrRTCRoom.this.onReceiveOffer(offer);
+        }
+
+        @Override
+        public void onReceiveAnswer(NostrRTCAnswer answer) {
+            NostrRTCRoom.this.onReceiveAnswer(answer);
+        }
+
+        @Override
+        public void onReceiveCandidates(NostrRTCIceCandidate candidate) {
+            NostrRTCRoom.this.onReceiveCandidates(candidate);
+        }
+
+        @Override
+        public void onRTCSocketMessage(NostrRTCSocket socket, ByteBuffer bbf, boolean turn) {
+            NostrRTCRoom.this.onRTCSocketMessage(socket, bbf, turn);
+        }
+
+        @Override
+        public void onRTCSocketLocalIceCandidate(NostrRTCSocket socket, NostrRTCIceCandidate candidate) {
+            NostrRTCRoom.this.onRTCSocketLocalIceCandidate(socket, candidate);
+        }
+
+        @Override
+        public void onRemoveAnnounce(NostrRTCAnnounce announce, RemoveReason reason) {
+            NostrRTCRoom.this.onRemoveAnnounce(announce, reason);
+        }
+    };
+
     public NostrRTCRoom(
         NostrRTCSettings settings,
         NostrTURNSettings turnSettings,
@@ -107,7 +156,7 @@ public class NostrRTCRoom implements NostrRTCSignaling.Listener, NostrRTCSocketL
                 roomKeyPair,
                 Objects.requireNonNull(signalingPool, "Signaling pool cannot be null")
             );
-        this.signaling.addListener(this);
+        this.signaling.addListener(listener);
         Platform platform = NostrUtils.getPlatform();
         this.executor = platform.newPoolExecutor();
     }
@@ -125,43 +174,43 @@ public class NostrRTCRoom implements NostrRTCSignaling.Listener, NostrRTCSocketL
         this.executor.close();
     }
 
-    public NostrRTCRoom onMessage(NostrRTCRoomPeerMessageListener listener) {
+    public NostrRTCRoom addMessageListener(NostrRTCRoomPeerMessageListener listener) {
         this.onMessageListeners.add(listener);
         return this;
     }
 
-    public NostrRTCRoom onConnection(NostrRTCRoomPeerConnectedListener listener) {
+    public NostrRTCRoom addConnectionListener(NostrRTCRoomPeerConnectedListener listener) {
         this.onConnectionListeners.add(listener);
         return this;
     }
 
-    public NostrRTCRoom onDisconnection(NostrRTCRoomPeerDisconnectListener listener) {
+    public NostrRTCRoom addDisconnectionListener(NostrRTCRoomPeerDisconnectListener listener) {
         this.onDisconnectionListeners.add(listener);
         return this;
     }
 
-    public NostrRTCRoom onPeerDiscovered(NostrRTCRoomPeerDiscoveredListener listener) {
+    public NostrRTCRoom addPeerDiscoveryListener(NostrRTCRoomPeerDiscoveredListener listener) {
         this.onPeerDiscoveredListeners.add(listener);
         return this;
     }
 
-    public NostrRTCRoom on(NostrRTCRoomListener listener) {
+    public NostrRTCRoom addListener(NostrRTCRoomListener listener) {
         if (listener instanceof NostrRTCRoomPeerConnectedListener) {
-            this.onConnection((NostrRTCRoomPeerConnectedListener) listener);
+            this.addConnectionListener((NostrRTCRoomPeerConnectedListener) listener);
         }
         if (listener instanceof NostrRTCRoomPeerDisconnectListener) {
-            this.onDisconnection((NostrRTCRoomPeerDisconnectListener) listener);
+            this.addDisconnectionListener((NostrRTCRoomPeerDisconnectListener) listener);
         }
         if (listener instanceof NostrRTCRoomPeerMessageListener) {
-            this.onMessage((NostrRTCRoomPeerMessageListener) listener);
+            this.addMessageListener((NostrRTCRoomPeerMessageListener) listener);
         }
         if (listener instanceof NostrRTCRoomPeerDiscoveredListener) {
-            this.onPeerDiscovered((NostrRTCRoomPeerDiscoveredListener) listener);
+            this.addPeerDiscoveryListener((NostrRTCRoomPeerDiscoveredListener) listener);
         }
         return this;
     }
 
-    public NostrRTCRoom off(NostrRTCRoomListener listener) {
+    public NostrRTCRoom removeListener(NostrRTCRoomListener listener) {
         if (listener instanceof NostrRTCRoomPeerConnectedListener) {
             this.onConnectionListeners.remove(listener);
         }
@@ -218,7 +267,7 @@ public class NostrRTCRoom implements NostrRTCSignaling.Listener, NostrRTCSocketL
                                     turnSettings
                                 );
 
-                            conn.socket.addListener(this);
+                            conn.socket.addListener(listener);
 
                             // send offer to remote peer
                             conn.socket
@@ -294,8 +343,7 @@ public class NostrRTCRoom implements NostrRTCSignaling.Listener, NostrRTCSocketL
         }
     }
 
-    @Override
-    public void onRTCSocketClose(NostrRTCSocket socket) {
+    protected void onRTCSocketClose(NostrRTCSocket socket) {
         // if the socket is closed remotely, we remove it from the list of connections
         // and notify the listeners
         NostrRTCSocket c = connections.remove(socket.getRemotePeer().getPubkey());
@@ -334,8 +382,7 @@ public class NostrRTCRoom implements NostrRTCSignaling.Listener, NostrRTCSocketL
         bannedPeers.remove(peer);
     }
 
-    @Override
-    public void onAddAnnounce(NostrRTCAnnounce announce) {
+    protected void onAddAnnounce(NostrRTCAnnounce announce) {
         for (NostrRTCRoomPeerDiscoveredListener listener : onPeerDiscoveredListeners) {
             try {
                 listener.onRoomPeerDiscovered(
@@ -349,8 +396,7 @@ public class NostrRTCRoom implements NostrRTCSignaling.Listener, NostrRTCSocketL
         }
     }
 
-    @Override
-    public void onUpdateAnnounce(NostrRTCAnnounce announce) {
+    protected void onUpdateAnnounce(NostrRTCAnnounce announce) {
         for (NostrRTCRoomPeerDiscoveredListener listener : onPeerDiscoveredListeners) {
             try {
                 listener.onRoomPeerDiscovered(
@@ -364,8 +410,7 @@ public class NostrRTCRoom implements NostrRTCSignaling.Listener, NostrRTCSocketL
         }
     }
 
-    @Override
-    public void onRemoveAnnounce(NostrRTCAnnounce announce, RemoveReason reason) {
+    protected void onRemoveAnnounce(NostrRTCAnnounce announce, NostrRTCSignaling.Listener.RemoveReason reason) {
         // we use the announce as keep alive signaling. If the announce is not updated in a while
         // the peer will disconnect automatically.
         NostrPublicKey remotePubkey = announce.getPubkey();
@@ -411,8 +456,7 @@ public class NostrRTCRoom implements NostrRTCSignaling.Listener, NostrRTCSocketL
         return this.localPeer;
     }
 
-    @Override
-    public void onReceiveOffer(NostrRTCOffer offer) {
+    protected void onReceiveOffer(NostrRTCOffer offer) {
         NostrPublicKey remotePubkey = offer.getPeerInfo().getPubkey();
         // offer received from remote peer
         PendingConnection conn = pendingInitiatedConnections.get(remotePubkey);
@@ -436,7 +480,7 @@ public class NostrRTCRoom implements NostrRTCSignaling.Listener, NostrRTCSocketL
             settings,
             turnSettings
         );
-        socket.addListener(this);
+        socket.addListener(listener);
 
         // send answer to remote peer
         socket
@@ -460,8 +504,7 @@ public class NostrRTCRoom implements NostrRTCSignaling.Listener, NostrRTCSocketL
         }
     }
 
-    @Override
-    public void onReceiveAnswer(NostrRTCAnswer answer) {
+    protected void onReceiveAnswer(NostrRTCAnswer answer) {
         // answer received from remote peer
         NostrPublicKey remotePubkey = answer.getPeerInfo().getPubkey();
 
@@ -492,8 +535,7 @@ public class NostrRTCRoom implements NostrRTCSignaling.Listener, NostrRTCSocketL
         }
     }
 
-    @Override
-    public void onReceiveCandidates(NostrRTCIceCandidate candidate) {
+    protected void onReceiveCandidates(NostrRTCIceCandidate candidate) {
         logger.fine("Received ICE candidate: " + candidate);
         NostrPublicKey remotePubkey = candidate.getPubkey();
 
@@ -506,8 +548,7 @@ public class NostrRTCRoom implements NostrRTCSignaling.Listener, NostrRTCSocketL
         }
     }
 
-    @Override
-    public void onRTCSocketLocalIceCandidate(NostrRTCSocket socket, NostrRTCIceCandidate candidate) {
+    protected void onRTCSocketLocalIceCandidate(NostrRTCSocket socket, NostrRTCIceCandidate candidate) {
         try {
             NostrRTCPeer remotePeer = socket.getRemotePeer();
             if (remotePeer == null) return;
@@ -520,8 +561,7 @@ public class NostrRTCRoom implements NostrRTCSignaling.Listener, NostrRTCSocketL
         }
     }
 
-    @Override
-    public void onRTCSocketMessage(NostrRTCSocket socket, ByteBuffer bbf, boolean turn) {
+    protected void onRTCSocketMessage(NostrRTCSocket socket, ByteBuffer bbf, boolean turn) {
         // receive message from remote peer
         for (NostrRTCRoomPeerMessageListener listener : onMessageListeners) {
             try {

@@ -79,7 +79,7 @@ public interface NostrEvent extends Cloneable, Serializable {
     }
 
     // nip40 expiration
-    default Instant getExpirationTimestamp() {
+    default Instant getExpiration() {
         List<String> tag = getTagValues("expiration");
         Instant expiresAt = null;
         if (tag != null) {

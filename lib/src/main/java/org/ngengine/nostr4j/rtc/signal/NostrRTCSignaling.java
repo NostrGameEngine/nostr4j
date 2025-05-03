@@ -64,7 +64,7 @@ import org.ngengine.nostr4j.utils.NostrUtils;
 /**
  * Handles peer signaling
  */
-public class NostrRTCSignaling implements NostrSubEventListener, Closeable {
+public class NostrRTCSignaling implements Closeable {
 
     public static interface Listener {
         enum RemoveReason {
@@ -103,6 +103,13 @@ public class NostrRTCSignaling implements NostrSubEventListener, Closeable {
     private volatile NostrSubscription discoverySub;
     private volatile NostrSubscription signalingSub;
 
+    private final NostrSubEventListener listener = new NostrSubEventListener() {
+        @Override
+        public void onSubEvent(SignedNostrEvent event, boolean stored) {
+            NostrRTCSignaling.this.onSubEvent(event, stored);
+        }
+    };
+
     public NostrRTCSignaling(NostrRTCSettings settings, NostrRTCLocalPeer localPeer, NostrKeyPair roomKeyPair, NostrPool pool) {
         this.pool = pool;
         this.localPeer = localPeer;
@@ -116,16 +123,17 @@ public class NostrRTCSignaling implements NostrSubEventListener, Closeable {
         return seenAnnouncesRO;
     }
 
-    public void addListener(Listener listener) {
+    public NostrRTCSignaling addListener(Listener listener) {
         listeners.add(listener);
+        return this;
     }
 
-    public void removeListener(Listener listener) {
+    public NostrRTCSignaling removeListener(Listener listener) {
         listeners.remove(listener);
+        return this;
     }
 
-    @Override
-    public void onSubEvent(SignedNostrEvent event, boolean stored) {
+    protected void onSubEvent(SignedNostrEvent event, boolean stored) {
         if (closed) return;
         if (event.getPubkey().equals(this.localPeer.getPubkey())) return;
         this.executor.run(() -> {
@@ -141,7 +149,7 @@ public class NostrRTCSignaling implements NostrSubEventListener, Closeable {
                             if (ann == null) {
                                 NostrRTCAnnounce a = new NostrRTCAnnounce(
                                     event.getPubkey(),
-                                    event.getExpirationTimestamp(),
+                                    event.getExpiration(),
                                     localPeer.getPublicMisc()
                                 );
                                 for (Listener listener : listeners) {
@@ -154,7 +162,7 @@ public class NostrRTCSignaling implements NostrSubEventListener, Closeable {
                                 seenAnnounces.add(a);
                             } else {
                                 assert dbg(() -> logger.finest("Update announce: " + event.getPubkey()));
-                                ann.updateExpireAt(event.getExpirationTimestamp());
+                                ann.updateExpireAt(event.getExpiration());
                                 for (Listener listener : listeners) {
                                     try {
                                         listener.onUpdateAnnounce(ann);
@@ -265,7 +273,7 @@ public class NostrRTCSignaling implements NostrSubEventListener, Closeable {
                             .withTag("t", "connect", "disconnect")
                             .limit(0)
                     );
-            this.discoverySub.onEvent(this);
+            this.discoverySub.addEventListener(listener);
             waitQueue.add(this.discoverySub.open());
         }
 
@@ -280,7 +288,7 @@ public class NostrRTCSignaling implements NostrSubEventListener, Closeable {
                             .withTag("p", localpk.asHex())
                             .limit(0)
                     );
-            this.signalingSub.onEvent(this);
+            this.signalingSub.addEventListener(listener);
             waitQueue.add(this.signalingSub.open());
         }
 

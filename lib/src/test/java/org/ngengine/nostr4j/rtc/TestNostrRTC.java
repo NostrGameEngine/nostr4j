@@ -61,13 +61,13 @@ public class TestNostrRTC {
         );
 
         NostrRTCRoom room = new NostrRTCRoom(NostrRTCSettings.DEFAULT, NostrTURNSettings.DEFAULT, localPeer, roomKeyPair, pool);
-        room.onConnection((peerKey, socket) -> {
+        room.addConnectionListener((peerKey, socket) -> {
             logger.info(name + " peer connected: " + peerKey);
         });
-        room.onDisconnection((peerKey, socket) -> {
+        room.addDisconnectionListener((peerKey, socket) -> {
             System.out.println(name + " peer disconnected: " + peerKey);
         });
-        room.onMessage((peerKey, socket, bbf, turn) -> {
+        room.addMessageListener((peerKey, socket, bbf, turn) -> {
             byte[] bb = new byte[bbf.limit()];
             bbf.get(bb);
             System.out.println(name + " incoming message: " + new String(bb) + " p2p:" + !turn);

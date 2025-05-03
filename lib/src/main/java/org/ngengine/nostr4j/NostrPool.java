@@ -64,7 +64,7 @@ import org.ngengine.nostr4j.transport.impl.NostrNoticeMessage;
 import org.ngengine.nostr4j.utils.NostrUtils;
 import org.ngengine.nostr4j.utils.ScheduledAction;
 
-public class NostrPool implements NostrRelayComponent {
+public class NostrPool {
 
     private static final Logger logger = Logger.getLogger(NostrPool.class.getName());
     private static final AtomicLong subCounter = new AtomicLong(0);
@@ -75,6 +75,48 @@ public class NostrPool implements NostrRelayComponent {
     private final List<ScheduledAction> scheduledActions = new CopyOnWriteArrayList<>();
     private final Class<? extends EventTracker> defaultEventTracker;
 
+    private NostrRelayComponent listener = new NostrRelayComponent() {
+        @Override
+        public boolean onRelayConnectRequest(NostrRelay relay) {
+            return NostrPool.this.onRelayConnectRequest(relay);
+        }
+
+        @Override
+        public boolean onRelayConnect(NostrRelay relay) {
+            return NostrPool.this.onRelayConnect(relay);
+        }
+
+        @Override
+        public boolean onRelayMessage(NostrRelay relay, NostrMessage message) {
+            return NostrPool.this.onRelayMessage(relay, message);
+        }
+
+        @Override
+        public boolean onRelayError(NostrRelay relay, Throwable error) {
+            return NostrPool.this.onRelayError(relay, error);
+        }
+
+        @Override
+        public boolean onRelayLoop(NostrRelay relay, Instant nowInstant) {
+            return NostrPool.this.onRelayLoop(relay, nowInstant);
+        }
+
+        @Override
+        public boolean onRelayDisconnect(NostrRelay relay, String reason, boolean byClient) {
+            return NostrPool.this.onRelayDisconnect(relay, reason, byClient);
+        }
+
+        @Override
+        public boolean onRelaySend(NostrRelay relay, NostrMessage message) {
+            return NostrPool.this.onRelaySend(relay, message);
+        }
+
+        @Override
+        public boolean onRelayDisconnectRequest(NostrRelay relay, String reason) {
+            return NostrPool.this.onRelayDisconnectRequest(relay, reason);
+        }
+    };
+
     public NostrPool() {
         this(ForwardSlidingWindowEventTracker.class);
     }
@@ -83,12 +125,12 @@ public class NostrPool implements NostrRelayComponent {
         this.defaultEventTracker = defaultEventTracker;
     }
 
-    public NostrPool onNotice(NostrNoticeListener listener) {
+    public NostrPool addNoticeListener(NostrNoticeListener listener) {
         this.noticeListener.add(listener);
         return this;
     }
 
-    public NostrPool offNotice(NostrNoticeListener listener) {
+    public NostrPool removeNoticeListener(NostrNoticeListener listener) {
         this.noticeListener.remove(listener);
         return this;
     }
@@ -143,14 +185,14 @@ public class NostrPool implements NostrRelayComponent {
             if (relay.getComponent(NostrRelayLifecycleManager.class) == null) {
                 relay.addComponent(new NostrRelayLifecycleManager());
             }
-            relay.addComponent(this);
+            relay.addComponent(listener);
         }
         return relay.connect();
     }
 
     public NostrRelay removeRelay(NostrRelay relay) {
         if (relays.contains(relay)) {
-            relay.removeComponent(this);
+            relay.removeComponent(listener);
             relays.remove(relay);
             return relay;
         }
@@ -306,7 +348,7 @@ public class NostrPool implements NostrRelayComponent {
 
             scheduledActions.add(scheduled);
             sub
-                .onEose(all -> {
+                .addEoseListener(all -> {
                     if (all) {
                         assert dbg(() -> {
                             logger.fine("fetch eose for fetch " + sub.getId() + " with received events: " + events);
@@ -317,14 +359,14 @@ public class NostrPool implements NostrRelayComponent {
                         sub.close();
                     }
                 })
-                .onEvent((e, stored) -> {
+                .addEventListener((e, stored) -> {
                     assert dbg(() -> {
                         logger.finer("fetch event " + e + " for subscription " + sub.getId());
                     });
 
                     events.add(e);
                 })
-                .onClose(reason -> {
+                .addCloseListener(reason -> {
                     assert dbg(() -> {
                         logger.fine("fetch close " + reason + " for subscription " + sub.getId());
                     });
@@ -333,8 +375,7 @@ public class NostrPool implements NostrRelayComponent {
         });
     }
 
-    @Override
-    public boolean onRelayMessage(NostrRelay relay, NostrMessage rcv) {
+    protected boolean onRelayMessage(NostrRelay relay, NostrMessage rcv) {
         assert dbg(() -> {
             logger.finer("received message from relay " + relay.getUrl() + " : " + rcv);
         });
@@ -483,8 +524,7 @@ public class NostrPool implements NostrRelayComponent {
         return relaysRO;
     }
 
-    @Override
-    public boolean onRelayConnect(NostrRelay relay) {
+    protected boolean onRelayConnect(NostrRelay relay) {
         // subscribe the relay to everything
         for (NostrSubscription sub : subscriptions.values()) {
             relay.sendMessage(sub);
@@ -492,8 +532,7 @@ public class NostrPool implements NostrRelayComponent {
         return true;
     }
 
-    @Override
-    public boolean onRelayError(NostrRelay relay, Throwable error) {
+    protected boolean onRelayError(NostrRelay relay, Throwable error) {
         for (NostrNoticeListener listener : noticeListener) {
             try {
                 listener.onNotice(relay, error.getMessage(), error);
@@ -504,28 +543,23 @@ public class NostrPool implements NostrRelayComponent {
         return true;
     }
 
-    @Override
-    public boolean onRelayConnectRequest(NostrRelay relay) {
+    protected boolean onRelayConnectRequest(NostrRelay relay) {
         return true;
     }
 
-    @Override
-    public boolean onRelayLoop(NostrRelay relay, Instant nowInstant) {
+    protected boolean onRelayLoop(NostrRelay relay, Instant nowInstant) {
         return true;
     }
 
-    @Override
-    public boolean onRelayDisconnect(NostrRelay relay, String reason, boolean byClient) {
+    protected boolean onRelayDisconnect(NostrRelay relay, String reason, boolean byClient) {
         return true;
     }
 
-    @Override
-    public boolean onRelaySend(NostrRelay relay, NostrMessage message) {
+    protected boolean onRelaySend(NostrRelay relay, NostrMessage message) {
         return true;
     }
 
-    @Override
-    public boolean onRelayDisconnectRequest(NostrRelay relay, String reason) {
+    protected boolean onRelayDisconnectRequest(NostrRelay relay, String reason) {
         return true;
     }
 }

@@ -148,7 +148,7 @@ public class NostrTURN {
                         .withTag("d", "turn-" + this.connectionId) // tag to identify the connection
                 );
 
-        this.inSub.onEvent((event, stored) -> {
+        this.inSub.addEventListener((event, stored) -> {
                 onTurnEvent(event, false);
             });
 
@@ -163,7 +163,7 @@ public class NostrTURN {
                         .withKind(this.config.getKind())
                         .withTag("d", "turn-" + this.connectionId)
                 );
-        this.outSub.onEvent((event, stored) -> {
+        this.outSub.addEventListener((event, stored) -> {
                 onTurnEvent(event, true);
             });
     }
