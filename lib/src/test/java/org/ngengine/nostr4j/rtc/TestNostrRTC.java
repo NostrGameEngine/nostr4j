@@ -39,6 +39,7 @@ import org.ngengine.nostr4j.NostrRelay;
 import org.ngengine.nostr4j.TestLogger;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
 import org.ngengine.nostr4j.keypair.NostrPrivateKey;
+import org.ngengine.nostr4j.platform.RTCSettings;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCLocalPeer;
 import org.ngengine.nostr4j.rtc.turn.NostrTURNSettings;
 import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
@@ -55,12 +56,12 @@ public class TestNostrRTC {
 
         NostrRTCLocalPeer localPeer = new NostrRTCLocalPeer(
             signer,
-            NostrRTCSettings.PUBLIC_STUN_SERVERS,
+            RTCSettings.PUBLIC_STUN_SERVERS,
             "wss://nostr.rblb.it:7777",
             new HashMap<>()
         );
 
-        NostrRTCRoom room = new NostrRTCRoom(NostrRTCSettings.DEFAULT, NostrTURNSettings.DEFAULT, localPeer, roomKeyPair, pool);
+        NostrRTCRoom room = new NostrRTCRoom(RTCSettings.DEFAULT, NostrTURNSettings.DEFAULT, localPeer, roomKeyPair, pool);
         room.addConnectionListener((peerKey, socket) -> {
             logger.info(name + " peer connected: " + peerKey);
         });

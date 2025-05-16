@@ -54,11 +54,11 @@ import org.ngengine.nostr4j.keypair.NostrKeyPair;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.listeners.sub.NostrSubEventListener;
 import org.ngengine.nostr4j.platform.AsyncTask;
-import org.ngengine.nostr4j.platform.NostrExecutor;
+import org.ngengine.nostr4j.platform.RTCSettings;
+import org.ngengine.nostr4j.proto.NostrMessageAck;
+import org.ngengine.nostr4j.platform.AsyncExecutor;
 import org.ngengine.nostr4j.platform.Platform;
-import org.ngengine.nostr4j.rtc.NostrRTCSettings;
 import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
-import org.ngengine.nostr4j.transport.NostrMessageAck;
 import org.ngengine.nostr4j.utils.NostrUtils;
 
 /**
@@ -93,8 +93,8 @@ public class NostrRTCSignaling implements Closeable {
     private final Queue<NostrRTCAnnounce> seenAnnounces = NostrUtils.getPlatform().newConcurrentQueue(NostrRTCAnnounce.class);
     private final Collection<NostrRTCAnnounce> seenAnnouncesRO = Collections.unmodifiableCollection(seenAnnounces);
     private final List<Listener> listeners = new CopyOnWriteArrayList<>();
-    private final NostrRTCSettings settings;
-    private final NostrExecutor executor;
+    private final RTCSettings settings;
+    private final AsyncExecutor executor;
     private final NostrKeyPair roomKeyPair;
     private final NostrKeyPairSigner roomSigner;
 
@@ -110,7 +110,7 @@ public class NostrRTCSignaling implements Closeable {
         }
     };
 
-    public NostrRTCSignaling(NostrRTCSettings settings, NostrRTCLocalPeer localPeer, NostrKeyPair roomKeyPair, NostrPool pool) {
+    public NostrRTCSignaling(RTCSettings settings, NostrRTCLocalPeer localPeer, NostrKeyPair roomKeyPair, NostrPool pool) {
         this.pool = pool;
         this.localPeer = localPeer;
         this.settings = settings;

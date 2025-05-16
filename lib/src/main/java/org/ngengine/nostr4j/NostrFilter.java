@@ -37,7 +37,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
-import org.ngengine.nostr4j.transport.NostrMessageFragment;
+import org.ngengine.nostr4j.proto.NostrMessageFragment;
 import org.ngengine.nostr4j.utils.NostrUtils;
 
 public class NostrFilter extends NostrMessageFragment {

@@ -44,8 +44,8 @@ import org.ngengine.nostr4j.event.UnsignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.platform.AsyncTask;
 import org.ngengine.nostr4j.platform.Platform;
+import org.ngengine.nostr4j.proto.NostrMessageAck;
 import org.ngengine.nostr4j.signer.NostrSigner;
-import org.ngengine.nostr4j.transport.NostrMessageAck;
 import org.ngengine.nostr4j.utils.NostrUtils;
 
 public class Nip24Metadata implements Serializable {

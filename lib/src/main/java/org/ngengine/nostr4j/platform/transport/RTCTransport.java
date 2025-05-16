@@ -28,14 +28,28 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package org.ngengine.nostr4j.platform;
+package org.ngengine.nostr4j.platform.transport;
 
-import java.util.concurrent.Callable;
-import java.util.concurrent.TimeUnit;
+import java.io.Closeable;
+import java.nio.ByteBuffer;
+import java.util.Collection;
+import org.ngengine.nostr4j.platform.AsyncTask;
+import org.ngengine.nostr4j.platform.RTCSettings;
+import org.ngengine.nostr4j.platform.AsyncExecutor;
 
-public interface NostrExecutor {
-    <T> AsyncTask<T> runLater(Callable<T> r, long delay, TimeUnit unit);
-    <T> AsyncTask<T> run(Callable<T> r);
-
+public interface RTCTransport extends Closeable {
     void close();
+    boolean isConnected();
+
+    AsyncTask<Void> start(RTCSettings settings, AsyncExecutor executor, String connId, Collection<String> stunServers);
+    AsyncTask<String> connectToChannel(String offerOrAnswer);
+    AsyncTask<String> initiateChannel();
+
+    void addRemoteIceCandidates(Collection<String> candidates);
+
+    void addListener(RTCTransportListener listener);
+
+    void removeListener(RTCTransportListener listener);
+
+    AsyncTask<Void> write(ByteBuffer message);
 }

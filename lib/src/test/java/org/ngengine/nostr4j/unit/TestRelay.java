@@ -47,7 +47,7 @@ import org.ngengine.nostr4j.NostrRelay;
 import org.ngengine.nostr4j.NostrRelayLifecycleManager;
 import org.ngengine.nostr4j.TestLogger;
 import org.ngengine.nostr4j.listeners.NostrRelayComponent;
-import org.ngengine.nostr4j.transport.NostrMessage;
+import org.ngengine.nostr4j.proto.NostrMessage;
 
 public class TestRelay {
 

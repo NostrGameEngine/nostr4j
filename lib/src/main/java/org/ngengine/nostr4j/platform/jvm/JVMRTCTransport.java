@@ -43,10 +43,11 @@ import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.platform.AsyncTask;
-import org.ngengine.nostr4j.platform.NostrExecutor;
+import org.ngengine.nostr4j.platform.RTCSettings;
+import org.ngengine.nostr4j.platform.transport.RTCTransport;
+import org.ngengine.nostr4j.platform.transport.RTCTransportListener;
+import org.ngengine.nostr4j.platform.AsyncExecutor;
 import org.ngengine.nostr4j.platform.Platform;
-import org.ngengine.nostr4j.rtc.NostrRTCSettings;
-import org.ngengine.nostr4j.transport.RTCTransport;
 import org.ngengine.nostr4j.utils.NostrUtils;
 import tel.schich.libdatachannel.DataChannel;
 import tel.schich.libdatachannel.DataChannelCallback.Message;
@@ -73,15 +74,15 @@ public class JVMRTCTransport implements RTCTransport {
     private DataChannel channel;
     private boolean isInitiator;
     private List<String> trackedRemoteCandidates = new CopyOnWriteArrayList<>();
-    private NostrExecutor executor;
+    private AsyncExecutor executor;
     private volatile boolean connected = false;
 
     public JVMRTCTransport() {}
 
     @Override
     public AsyncTask<Void> start(
-        NostrRTCSettings settings,
-        NostrExecutor executor,
+        RTCSettings settings,
+        AsyncExecutor executor,
         String connId,
         Collection<String> stunServers
     ) {

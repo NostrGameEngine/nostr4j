@@ -48,12 +48,12 @@ import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.platform.AsyncTask;
-import org.ngengine.nostr4j.transport.NostrTransport;
-import org.ngengine.nostr4j.transport.TransportListener;
+import org.ngengine.nostr4j.platform.transport.WebsocketTransport;
+import org.ngengine.nostr4j.platform.transport.WebsocketTransportListener;
 
-public class WebsocketTransport implements NostrTransport, WebSocket.Listener {
+public class JVMWebsocketTransport implements WebsocketTransport, WebSocket.Listener {
 
-    private static final Logger logger = Logger.getLogger(WebsocketTransport.class.getName());
+    private static final Logger logger = Logger.getLogger(JVMWebsocketTransport.class.getName());
     private static final int DEFAULT_MAX_MESSAGE_SIZE = 65_536;
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(10);
     private static final int BUFFER_INITIAL_SIZE = 8192;
@@ -62,14 +62,14 @@ public class WebsocketTransport implements NostrTransport, WebSocket.Listener {
     private static final int maxMessageSize = DEFAULT_MAX_MESSAGE_SIZE;
     private final StringBuilder messageBuffer = new StringBuilder(BUFFER_INITIAL_SIZE);
 
-    private final List<TransportListener> listeners = new CopyOnWriteArrayList<>();
+    private final List<WebsocketTransportListener> listeners = new CopyOnWriteArrayList<>();
     private final JVMAsyncPlatform platform;
     private final HttpClient httpClient;
     private final Executor executor;
 
     private final AtomicReference<CompletableFuture<?>> queue = new AtomicReference<>(CompletableFuture.completedFuture(null));
 
-    public WebsocketTransport(JVMAsyncPlatform platform, Executor executor) {
+    public JVMWebsocketTransport(JVMAsyncPlatform platform, Executor executor) {
         this.platform = platform;
         this.executor = executor;
         HttpClient.Builder b = HttpClient
@@ -143,7 +143,7 @@ public class WebsocketTransport implements NostrTransport, WebSocket.Listener {
         WebSocket ws = this.openWebSocket;
         this.openWebSocket = null;
 
-        for (TransportListener listener : listeners) {
+        for (WebsocketTransportListener listener : listeners) {
             try {
                 listener.onConnectionClosedByClient(reason);
             } catch (Exception e) {
@@ -182,7 +182,7 @@ public class WebsocketTransport implements NostrTransport, WebSocket.Listener {
         if (last) {
             String message = messageBuffer.toString();
             messageBuffer.setLength(0);
-            for (TransportListener listener : listeners) {
+            for (WebsocketTransportListener listener : listeners) {
                 try {
                     listener.onConnectionMessage(message);
                 } catch (Exception e) {
@@ -198,7 +198,7 @@ public class WebsocketTransport implements NostrTransport, WebSocket.Listener {
         logger.finest("WebSocket opened");
         assert this.openWebSocket == null : "WebSocket already open";
         this.openWebSocket = webSocket;
-        for (TransportListener listener : listeners) {
+        for (WebsocketTransportListener listener : listeners) {
             try {
                 listener.onConnectionOpen();
             } catch (Exception e) {
@@ -212,7 +212,7 @@ public class WebsocketTransport implements NostrTransport, WebSocket.Listener {
     public CompletionStage<?> onClose(WebSocket webSocket, int statusCode, String reason) {
         logger.finest("WebSocket closed: " + statusCode + " " + reason);
         this.openWebSocket = null;
-        for (TransportListener listener : listeners) {
+        for (WebsocketTransportListener listener : listeners) {
             try {
                 listener.onConnectionClosedByServer(reason);
             } catch (Exception e) {
@@ -225,7 +225,7 @@ public class WebsocketTransport implements NostrTransport, WebSocket.Listener {
     @Override
     public void onError(WebSocket webSocket, Throwable error) {
         logger.warning("WebSocket error: " + error);
-        for (TransportListener listener : listeners) {
+        for (WebsocketTransportListener listener : listeners) {
             try {
                 listener.onConnectionError(error);
             } catch (Exception e) {
@@ -313,7 +313,7 @@ public class WebsocketTransport implements NostrTransport, WebSocket.Listener {
     }
 
     @Override
-    public void addListener(TransportListener listener) {
+    public void addListener(WebsocketTransportListener listener) {
         assert !listeners.contains(listener) : "Listener already added";
         if (listener != null) {
             listeners.add(listener);
@@ -321,7 +321,7 @@ public class WebsocketTransport implements NostrTransport, WebSocket.Listener {
     }
 
     @Override
-    public void removeListener(TransportListener listener) {
+    public void removeListener(WebsocketTransportListener listener) {
         listeners.remove(listener);
     }
 }

@@ -28,41 +28,14 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package org.ngengine.nostr4j.transport.impl;
+package org.ngengine.nostr4j.platform.transport;
 
-import java.util.Collection;
-import java.util.List;
-import org.ngengine.nostr4j.transport.NostrMessage;
-import org.ngengine.nostr4j.utils.NostrUtils;
+public interface WebsocketTransportListener {
+    void onConnectionClosedByServer(String reason);
+    void onConnectionOpen();
+    void onConnectionMessage(String msg);
 
-public class NostrEOSEMessage extends NostrMessage {
+    void onConnectionClosedByClient(String reason);
 
-    private final String subId;
-
-    public NostrEOSEMessage(String subId) {
-        this.subId = subId;
-    }
-
-    public String getSubId() {
-        return this.subId;
-    }
-
-    @Override
-    protected String getPrefix() {
-        return "EOSE";
-    }
-
-    @Override
-    protected Collection<Object> getFragments() {
-        return List.of(this.subId);
-    }
-
-    public static NostrEOSEMessage parse(List<Object> data) {
-        String prefix = NostrUtils.safeString(data.get(0));
-        if (data.size() < 2 || !prefix.equals("EOSE")) {
-            return null;
-        }
-        String subId = NostrUtils.safeString(data.get(1));
-        return new NostrEOSEMessage(subId);
-    }
+    void onConnectionError(Throwable e);
 }

@@ -28,40 +28,23 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package org.ngengine.nostr4j.transport;
+package org.ngengine.nostr4j.proto;
 
-import java.io.Closeable;
-import java.nio.ByteBuffer;
-import java.util.Collection;
-import org.ngengine.nostr4j.platform.AsyncTask;
-import org.ngengine.nostr4j.platform.NostrExecutor;
-import org.ngengine.nostr4j.rtc.NostrRTCSettings;
+import java.util.Map;
+import org.ngengine.nostr4j.platform.Platform;
+import org.ngengine.nostr4j.utils.NostrUtils;
 
-public interface RTCTransport extends Closeable {
-    interface RTCTransportListener {
-        void onLocalRTCIceCandidate(String candidate);
+public abstract class NostrMessageFragment {
 
-        void onRTCBinaryMessage(ByteBuffer msg);
+    protected abstract Map<String, Object> toMap();
 
-        void onRTCDisconnected(String reason);
-
-        void onRTCChannelError(Throwable e);
-
-        void onRTCConnected();
+    public String toString() {
+        try {
+            Platform platform = NostrUtils.getPlatform();
+            Map<String, Object> map = toMap();
+            return platform.toJSON(map);
+        } catch (Exception e) {
+            return (this.getClass().getName() + "@" + Integer.toHexString(this.hashCode()));
+        }
     }
-
-    void close();
-    boolean isConnected();
-
-    AsyncTask<Void> start(NostrRTCSettings settings, NostrExecutor executor, String connId, Collection<String> stunServers);
-    AsyncTask<String> connectToChannel(String offerOrAnswer);
-    AsyncTask<String> initiateChannel();
-
-    void addRemoteIceCandidates(Collection<String> candidates);
-
-    void addListener(RTCTransportListener listener);
-
-    void removeListener(RTCTransportListener listener);
-
-    AsyncTask<Void> write(ByteBuffer message);
 }

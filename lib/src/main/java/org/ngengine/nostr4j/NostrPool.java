@@ -56,11 +56,11 @@ import org.ngengine.nostr4j.listeners.NostrNoticeListener;
 import org.ngengine.nostr4j.listeners.NostrRelayComponent;
 import org.ngengine.nostr4j.platform.AsyncTask;
 import org.ngengine.nostr4j.platform.Platform;
-import org.ngengine.nostr4j.transport.NostrMessage;
-import org.ngengine.nostr4j.transport.NostrMessageAck;
-import org.ngengine.nostr4j.transport.impl.NostrClosedMessage;
-import org.ngengine.nostr4j.transport.impl.NostrEOSEMessage;
-import org.ngengine.nostr4j.transport.impl.NostrNoticeMessage;
+import org.ngengine.nostr4j.proto.NostrMessage;
+import org.ngengine.nostr4j.proto.NostrMessageAck;
+import org.ngengine.nostr4j.proto.impl.NostrClosedMessage;
+import org.ngengine.nostr4j.proto.impl.NostrEOSEMessage;
+import org.ngengine.nostr4j.proto.impl.NostrNoticeMessage;
 import org.ngengine.nostr4j.utils.NostrUtils;
 import org.ngengine.nostr4j.utils.ScheduledAction;
 

@@ -32,7 +32,7 @@ package org.ngengine.nostr4j.listeners;
 
 import java.time.Instant;
 import org.ngengine.nostr4j.NostrRelay;
-import org.ngengine.nostr4j.transport.NostrMessage;
+import org.ngengine.nostr4j.proto.NostrMessage;
 
 public interface NostrRelayComponent {
     boolean onRelayConnectRequest(NostrRelay relay);

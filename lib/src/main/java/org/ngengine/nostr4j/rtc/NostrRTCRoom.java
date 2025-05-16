@@ -45,7 +45,8 @@ import org.ngengine.nostr4j.NostrPool;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.platform.AsyncTask;
-import org.ngengine.nostr4j.platform.NostrExecutor;
+import org.ngengine.nostr4j.platform.RTCSettings;
+import org.ngengine.nostr4j.platform.AsyncExecutor;
 import org.ngengine.nostr4j.platform.Platform;
 import org.ngengine.nostr4j.rtc.listeners.NostrRTCRoomListener;
 import org.ngengine.nostr4j.rtc.listeners.NostrRTCRoomPeerConnectedListener;
@@ -84,9 +85,9 @@ public class NostrRTCRoom implements Closeable {
 
     private final NostrRTCLocalPeer localPeer;
     private final NostrRTCSignaling signaling;
-    private final NostrRTCSettings settings;
+    private final RTCSettings settings;
     private final NostrTURNSettings turnSettings;
-    private final NostrExecutor executor;
+    private final AsyncExecutor executor;
     private final NostrKeyPair roomKeyPair;
 
     private static interface Listener extends NostrRTCSignaling.Listener, NostrRTCSocketListener {}
@@ -139,7 +140,7 @@ public class NostrRTCRoom implements Closeable {
     };
 
     public NostrRTCRoom(
-        NostrRTCSettings settings,
+        RTCSettings settings,
         NostrTURNSettings turnSettings,
         NostrRTCLocalPeer localPeer,
         NostrKeyPair roomKeyPair,

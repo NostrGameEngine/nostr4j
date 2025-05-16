@@ -49,15 +49,15 @@ import java.util.logging.Logger;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.listeners.NostrRelayComponent;
 import org.ngengine.nostr4j.platform.AsyncTask;
-import org.ngengine.nostr4j.platform.NostrExecutor;
+import org.ngengine.nostr4j.platform.AsyncExecutor;
 import org.ngengine.nostr4j.platform.Platform;
-import org.ngengine.nostr4j.transport.NostrMessage;
-import org.ngengine.nostr4j.transport.NostrMessageAck;
-import org.ngengine.nostr4j.transport.NostrTransport;
-import org.ngengine.nostr4j.transport.TransportListener;
-import org.ngengine.nostr4j.transport.impl.NostrClosedMessage;
-import org.ngengine.nostr4j.transport.impl.NostrEOSEMessage;
-import org.ngengine.nostr4j.transport.impl.NostrOKMessage;
+import org.ngengine.nostr4j.platform.transport.WebsocketTransport;
+import org.ngengine.nostr4j.platform.transport.WebsocketTransportListener;
+import org.ngengine.nostr4j.proto.NostrMessage;
+import org.ngengine.nostr4j.proto.NostrMessageAck;
+import org.ngengine.nostr4j.proto.impl.NostrClosedMessage;
+import org.ngengine.nostr4j.proto.impl.NostrEOSEMessage;
+import org.ngengine.nostr4j.proto.impl.NostrOKMessage;
 import org.ngengine.nostr4j.utils.ExponentialBackoff;
 import org.ngengine.nostr4j.utils.NostrUtils;
 
@@ -91,7 +91,7 @@ public final class NostrRelay {
         }
     }
 
-    private TransportListener listener = new TransportListener() {
+    private WebsocketTransportListener listener = new WebsocketTransportListener() {
         @Override
         public void onConnectionClosedByServer(String reason) {
             NostrRelay.this.onConnectionClosedByServer(reason);
@@ -118,11 +118,11 @@ public final class NostrRelay {
         }
     };
 
-    protected final NostrTransport connector;
+    protected final WebsocketTransport connector;
     protected final String url;
     protected final List<NostrRelayComponent> listeners = new CopyOnWriteArrayList<>();
     protected final Map<String, NostrMessageAck> waitingEventsAck = new ConcurrentHashMap<>();
-    protected final NostrExecutor executor;
+    protected final AsyncExecutor executor;
 
     protected final ExponentialBackoff reconnectionBackoff = new ExponentialBackoff();
 
@@ -146,7 +146,7 @@ public final class NostrRelay {
         this(url, NostrUtils.getPlatform().newRelayExecutor());
     }
 
-    public NostrRelay(String url, NostrExecutor executor) {
+    public NostrRelay(String url, AsyncExecutor executor) {
         try {
             Platform platform = NostrUtils.getPlatform();
             this.connector = platform.newTransport();
@@ -405,7 +405,7 @@ public final class NostrRelay {
         this.connected = false;
         this.disconnectedByClient = true;
         this.connector.close(reason);
-        NostrExecutor executor = this.executor;
+        AsyncExecutor executor = this.executor;
         Platform platform = NostrUtils.getPlatform();
         return platform.wrapPromise((ores, orej) -> {
             runInRelayExecutor(

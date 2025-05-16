@@ -28,7 +28,7 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package org.ngengine.nostr4j.rtc;
+package org.ngengine.nostr4j.platform;
 
 import java.io.Serializable;
 import java.time.Duration;
@@ -37,7 +37,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Objects;
 
-public final class NostrRTCSettings implements Cloneable, Serializable {
+public final class RTCSettings implements Cloneable, Serializable {
 
     private static final long serialVersionUID = 1L;
 
@@ -72,7 +72,7 @@ public final class NostrRTCSettings implements Cloneable, Serializable {
     private final Duration roomLoopInterval;
     private final Duration p2pAttemptTimeout;
 
-    public NostrRTCSettings(
+    public RTCSettings(
         Duration announceInterval,
         Duration peerExpiration,
         Duration delayedCandidatesInterval,
@@ -106,7 +106,7 @@ public final class NostrRTCSettings implements Cloneable, Serializable {
         return p2pAttemptTimeout;
     }
 
-    public static final NostrRTCSettings DEFAULT = new NostrRTCSettings(
+    public static final RTCSettings DEFAULT = new RTCSettings(
         SIGNALING_LOOP_INTERVAL,
         PEER_EXPIRATION,
         DELAYED_CANDIDATES_INTERVAL,
@@ -115,9 +115,9 @@ public final class NostrRTCSettings implements Cloneable, Serializable {
     );
 
     @Override
-    public NostrRTCSettings clone() {
+    public RTCSettings clone() {
         try {
-            return (NostrRTCSettings) super.clone();
+            return (RTCSettings) super.clone();
         } catch (CloneNotSupportedException e) {
             throw new RuntimeException("Clone not supported", e);
         }
@@ -126,8 +126,8 @@ public final class NostrRTCSettings implements Cloneable, Serializable {
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (!(o instanceof NostrRTCSettings)) return false;
-        NostrRTCSettings that = (NostrRTCSettings) o;
+        if (!(o instanceof RTCSettings)) return false;
+        RTCSettings that = (RTCSettings) o;
         return (
             signalingLoopInterval == that.signalingLoopInterval &&
             peerExpiration == that.peerExpiration &&

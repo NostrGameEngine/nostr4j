@@ -28,48 +28,59 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package org.ngengine.nostr4j.transport.impl;
+package org.ngengine.nostr4j.proto.impl;
 
 import java.util.Collection;
 import java.util.List;
-import org.ngengine.nostr4j.transport.NostrMessage;
+
+import org.ngengine.nostr4j.proto.NostrMessage;
 import org.ngengine.nostr4j.utils.NostrUtils;
 
-public class NostrClosedMessage extends NostrMessage {
+public class NostrNoticeMessage extends NostrMessage {
 
-    private final String subId;
-    private final String reason;
+    private final String message;
+    private final Throwable exception;
 
-    public NostrClosedMessage(String subId, String reason) {
-        this.subId = subId;
-        this.reason = reason;
+    public NostrNoticeMessage(String message, Throwable exception) {
+        this.message = message;
+        this.exception = exception;
     }
 
-    public String getSubId() {
-        return this.subId;
+    public NostrNoticeMessage(String message) {
+        this(message, null);
     }
 
-    public String getReason() {
-        return this.reason;
+    public String getMessage() {
+        return this.message;
+    }
+
+    public Throwable getException() {
+        return this.exception;
+    }
+
+    public void throwException() throws Throwable {
+        if (this.exception != null) {
+            throw this.exception;
+        }
     }
 
     @Override
     protected String getPrefix() {
-        return "CLOSED";
+        return "NOTICE";
     }
 
     @Override
     protected Collection<Object> getFragments() {
-        return List.of(this.subId, this.reason);
+        return List.of(this.message);
     }
 
-    public static NostrClosedMessage parse(List<Object> doc) {
-        String prefix = NostrUtils.safeString(doc.get(0));
-        if (doc.size() < 2 || !prefix.equals("CLOSED")) {
+    public static NostrClosedMessage parse(List<Object> data) {
+        String prefix = NostrUtils.safeString(data.get(0));
+        if (data.size() < 3 || !prefix.equals("NOTICE")) {
             return null;
         }
-        String subId = NostrUtils.safeString(doc.get(1));
-        String reason = doc.size() > 2 ? NostrUtils.safeString(doc.get(2)) : "";
+        String subId = NostrUtils.safeString(data.get(1));
+        String reason = NostrUtils.safeString(data.get(2));
         return new NostrClosedMessage(subId, reason);
     }
 }

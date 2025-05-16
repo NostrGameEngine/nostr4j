@@ -45,7 +45,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.platform.AsyncTask;
-import org.ngengine.nostr4j.transport.NostrMessage;
+import org.ngengine.nostr4j.proto.NostrMessage;
 import org.ngengine.nostr4j.utils.Bech32;
 import org.ngengine.nostr4j.utils.Bech32.Bech32Exception;
 import org.ngengine.nostr4j.utils.NostrUtils;

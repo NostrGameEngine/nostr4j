@@ -72,13 +72,17 @@ import org.bouncycastle.math.ec.ECPoint;
 import org.ngengine.nostr4j.keypair.NostrPrivateKey;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.platform.AsyncTask;
-import org.ngengine.nostr4j.platform.NostrExecutor;
+import org.ngengine.nostr4j.platform.RTCSettings;
+import org.ngengine.nostr4j.platform.transport.WebsocketTransport;
+import org.ngengine.nostr4j.platform.transport.RTCTransport;
+import org.ngengine.nostr4j.platform.AsyncExecutor;
 import org.ngengine.nostr4j.platform.Platform;
-import org.ngengine.nostr4j.rtc.NostrRTCSettings;
 import org.ngengine.nostr4j.signer.FailedToSignException;
-import org.ngengine.nostr4j.transport.NostrTransport;
-import org.ngengine.nostr4j.transport.RTCTransport;
 import org.ngengine.nostr4j.utils.NostrUtils;
+
+import java.awt.Toolkit;
+import java.awt.datatransfer.Clipboard;
+import java.awt.datatransfer.DataFlavor;
 
 // thread-safe
 public class JVMAsyncPlatform implements Platform {
@@ -171,9 +175,8 @@ public class JVMAsyncPlatform implements Platform {
     }
 
     @Override
-    public String sign(String data, NostrPrivateKey privKey) throws FailedToSignException {
+    public String sign(String data, byte priv[]) throws FailedToSignException {
         byte dataB[] = NostrUtils.hexToByteArray(data);
-        byte priv[] = privKey._array();
         byte sigB[] = Schnorr.sign(dataB, priv, _NO_AUX_RANDOM ? null : randomBytes(32));
         String sig = NostrUtils.bytesToHex(sigB);
         return sig;
@@ -311,12 +314,12 @@ public class JVMAsyncPlatform implements Platform {
     // }
 
     @Override
-    public NostrTransport newTransport() {
-        return new WebsocketTransport(this, executor);
+    public WebsocketTransport newTransport() {
+        return new JVMWebsocketTransport(this, executor);
     }
 
     @Override
-    public <T> AsyncTask<T> promisify(BiConsumer<Consumer<T>, Consumer<Throwable>> func, NostrExecutor executor) {
+    public <T> AsyncTask<T> promisify(BiConsumer<Consumer<T>, Consumer<Throwable>> func, AsyncExecutor executor) {
         CompletableFuture<T> fut = new CompletableFuture<>();
         if (executor != null && executor instanceof VtNostrExecutor) {
             ((VtNostrExecutor) executor).executor.submit(() -> {
@@ -584,7 +587,7 @@ public class JVMAsyncPlatform implements Platform {
 
     private ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
 
-    private class VtNostrExecutor implements NostrExecutor {
+    private class VtNostrExecutor implements AsyncExecutor {
 
         protected final ExecutorService executor;
 
@@ -627,27 +630,27 @@ public class JVMAsyncPlatform implements Platform {
         public void close() {}
     }
 
-    private NostrExecutor newVtExecutor() {
+    private AsyncExecutor newVtExecutor() {
         return new VtNostrExecutor(executor);
     }
 
     @Override
-    public NostrExecutor newRelayExecutor() {
+    public AsyncExecutor newRelayExecutor() {
         return newVtExecutor();
     }
 
     @Override
-    public NostrExecutor newSubscriptionExecutor() {
+    public AsyncExecutor newSubscriptionExecutor() {
         return newVtExecutor();
     }
 
     @Override
-    public NostrExecutor newPoolExecutor() {
+    public AsyncExecutor newPoolExecutor() {
         return newVtExecutor();
     }
 
     @Override
-    public NostrExecutor newSignerExecutor() {
+    public AsyncExecutor newSignerExecutor() {
         return newVtExecutor();
     }
 
@@ -662,7 +665,7 @@ public class JVMAsyncPlatform implements Platform {
     }
 
     @Override
-    public AsyncTask<String> signAsync(String data, NostrPrivateKey privKey) {
+    public AsyncTask<String> signAsync(String data, byte privKey[]) {
         return wrapPromise((res, rej) -> {
             CompletableFuture.runAsync(() -> {
                 try {
@@ -743,9 +746,32 @@ public class JVMAsyncPlatform implements Platform {
     }
 
     @Override
-    public RTCTransport newRTCTransport(NostrRTCSettings settings, String connId, Collection<String> stunServers) {
+    public RTCTransport newRTCTransport(RTCSettings settings, String connId, Collection<String> stunServers) {
         JVMRTCTransport transport = new JVMRTCTransport();
         transport.start(settings, newVtExecutor(), connId, stunServers);
         return transport;
+    }
+
+    @Override
+    public void setClipboardContent(String data) {
+        try {
+            Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
+            clipboard.setContents(new java.awt.datatransfer.StringSelection(data), null);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    @Override
+    public String getClipboardContent() {
+        try {
+            Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
+            if (clipboard.isDataFlavorAvailable(DataFlavor.stringFlavor)) {
+                return (String) clipboard.getData(DataFlavor.stringFlavor);
+            }
+        } catch (Exception e) {
+        }
+
+        return "";
     }
 }

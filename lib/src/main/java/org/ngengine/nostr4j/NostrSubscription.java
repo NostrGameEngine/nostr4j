@@ -45,10 +45,10 @@ import org.ngengine.nostr4j.listeners.sub.NostrSubEoseListener;
 import org.ngengine.nostr4j.listeners.sub.NostrSubEventListener;
 import org.ngengine.nostr4j.listeners.sub.NostrSubListener;
 import org.ngengine.nostr4j.platform.AsyncTask;
-import org.ngengine.nostr4j.platform.NostrExecutor;
+import org.ngengine.nostr4j.platform.AsyncExecutor;
 import org.ngengine.nostr4j.platform.Platform;
-import org.ngengine.nostr4j.transport.NostrMessage;
-import org.ngengine.nostr4j.transport.NostrMessageAck;
+import org.ngengine.nostr4j.proto.NostrMessage;
+import org.ngengine.nostr4j.proto.NostrMessageAck;
 import org.ngengine.nostr4j.utils.NostrUtils;
 
 /**
@@ -79,7 +79,7 @@ public class NostrSubscription extends NostrMessage {
     private final Collection<NostrSubEventListener> onEventListeners = new CopyOnWriteArrayList<>();
     private final Collection<NostrSubCloseListener> onCloseListeners = new CopyOnWriteArrayList<>();
 
-    private NostrExecutor exc;
+    private AsyncExecutor exc;
     private final Collection<NostrFilter> filters;
     private final Collection<NostrFilter> filtersRO;
 
@@ -140,7 +140,7 @@ public class NostrSubscription extends NostrMessage {
      *
      * @return The executor handling subscription tasks
      */
-    protected NostrExecutor getExecutor() {
+    protected AsyncExecutor getExecutor() {
         if (this.exc == null) {
             throw new IllegalStateException("Subscription not opened yet");
         }

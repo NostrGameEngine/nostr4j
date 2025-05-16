@@ -28,23 +28,42 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package org.ngengine.nostr4j.transport;
+package org.ngengine.nostr4j.proto.impl;
 
-import java.util.Map;
-import org.ngengine.nostr4j.platform.Platform;
+import java.util.Collection;
+import java.util.List;
+
+import org.ngengine.nostr4j.proto.NostrMessage;
 import org.ngengine.nostr4j.utils.NostrUtils;
 
-public abstract class NostrMessageFragment {
+public class NostrEOSEMessage extends NostrMessage {
 
-    protected abstract Map<String, Object> toMap();
+    private final String subId;
 
-    public String toString() {
-        try {
-            Platform platform = NostrUtils.getPlatform();
-            Map<String, Object> map = toMap();
-            return platform.toJSON(map);
-        } catch (Exception e) {
-            return (this.getClass().getName() + "@" + Integer.toHexString(this.hashCode()));
+    public NostrEOSEMessage(String subId) {
+        this.subId = subId;
+    }
+
+    public String getSubId() {
+        return this.subId;
+    }
+
+    @Override
+    protected String getPrefix() {
+        return "EOSE";
+    }
+
+    @Override
+    protected Collection<Object> getFragments() {
+        return List.of(this.subId);
+    }
+
+    public static NostrEOSEMessage parse(List<Object> data) {
+        String prefix = NostrUtils.safeString(data.get(0));
+        if (data.size() < 2 || !prefix.equals("EOSE")) {
+            return null;
         }
+        String subId = NostrUtils.safeString(data.get(1));
+        return new NostrEOSEMessage(subId);
     }
 }

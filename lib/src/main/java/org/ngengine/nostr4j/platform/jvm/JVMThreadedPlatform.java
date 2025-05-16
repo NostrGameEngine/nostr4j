@@ -36,10 +36,10 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import org.ngengine.nostr4j.platform.AsyncTask;
-import org.ngengine.nostr4j.platform.NostrExecutor;
-import org.ngengine.nostr4j.rtc.NostrRTCSettings;
-import org.ngengine.nostr4j.transport.NostrTransport;
-import org.ngengine.nostr4j.transport.RTCTransport;
+import org.ngengine.nostr4j.platform.RTCSettings;
+import org.ngengine.nostr4j.platform.transport.WebsocketTransport;
+import org.ngengine.nostr4j.platform.transport.RTCTransport;
+import org.ngengine.nostr4j.platform.AsyncExecutor;
 
 public class JVMThreadedPlatform extends JVMAsyncPlatform {
 
@@ -47,7 +47,7 @@ public class JVMThreadedPlatform extends JVMAsyncPlatform {
         super();
     }
 
-    private class TNostrExecutor implements NostrExecutor {
+    private class TNostrExecutor implements AsyncExecutor {
 
         protected final ScheduledExecutorService executor;
 
@@ -92,32 +92,32 @@ public class JVMThreadedPlatform extends JVMAsyncPlatform {
     }
 
     @Override
-    public NostrExecutor newRelayExecutor() {
+    public AsyncExecutor newRelayExecutor() {
         return new TNostrExecutor();
     }
 
     @Override
-    public NostrExecutor newSubscriptionExecutor() {
+    public AsyncExecutor newSubscriptionExecutor() {
         return new TNostrExecutor();
     }
 
     @Override
-    public NostrExecutor newSignerExecutor() {
+    public AsyncExecutor newSignerExecutor() {
         return new TNostrExecutor();
     }
 
     @Override
-    public NostrExecutor newPoolExecutor() {
+    public AsyncExecutor newPoolExecutor() {
         return new TNostrExecutor();
     }
 
     @Override
-    public NostrTransport newTransport() {
-        return new WebsocketTransport(this, Executors.newScheduledThreadPool(1));
+    public WebsocketTransport newTransport() {
+        return new JVMWebsocketTransport(this, Executors.newScheduledThreadPool(1));
     }
 
     @Override
-    public RTCTransport newRTCTransport(NostrRTCSettings settings, String connId, Collection<String> stunServers) {
+    public RTCTransport newRTCTransport(RTCSettings settings, String connId, Collection<String> stunServers) {
         JVMRTCTransport transport = new JVMRTCTransport();
         transport.start(settings, new TNostrExecutor(), connId, stunServers);
         return transport;

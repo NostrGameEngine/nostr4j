@@ -48,7 +48,7 @@ import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.event.UnsignedNostrEvent;
 import org.ngengine.nostr4j.event.tracker.PassthroughEventTracker;
 import org.ngengine.nostr4j.platform.AsyncTask;
-import org.ngengine.nostr4j.platform.NostrExecutor;
+import org.ngengine.nostr4j.platform.AsyncExecutor;
 import org.ngengine.nostr4j.platform.Platform;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCLocalPeer;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCPeer;
@@ -121,7 +121,7 @@ public class NostrTURN {
     private final NostrSubscription outSub;
     private final Map<Long, Packet> outQueue = new HashMap<>();
     private final AtomicLong packetCounter = new AtomicLong(0);
-    private final NostrExecutor executor;
+    private final AsyncExecutor executor;
     private final List<Listener> listeners = new CopyOnWriteArrayList<>();
 
     private volatile Packet inPacket;

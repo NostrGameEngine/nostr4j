@@ -37,8 +37,8 @@ import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.event.UnsignedNostrEvent;
 import org.ngengine.nostr4j.event.tracker.PassthroughEventTracker;
 import org.ngengine.nostr4j.platform.jvm.JVMThreadedPlatform;
+import org.ngengine.nostr4j.proto.NostrMessage;
 import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
-import org.ngengine.nostr4j.transport.NostrMessage;
 import org.ngengine.nostr4j.utils.NostrUtils;
 
 public class Benchmarks {

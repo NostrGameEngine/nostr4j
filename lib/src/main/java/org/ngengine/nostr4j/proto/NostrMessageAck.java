@@ -28,61 +28,78 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package org.ngengine.nostr4j.transport.impl;
+package org.ngengine.nostr4j.proto;
 
-import java.util.Collection;
-import java.util.List;
-import org.ngengine.nostr4j.transport.NostrMessage;
-import org.ngengine.nostr4j.utils.NostrUtils;
+import java.time.Instant;
+import java.util.function.BiConsumer;
+import org.ngengine.nostr4j.NostrRelay;
 
-public class NostrOKMessage extends NostrMessage {
+public class NostrMessageAck {
 
-    private final String eventId;
-    private final boolean success;
-    private final String message;
+    private final String id;
+    private final Instant sentAt;
+    private boolean success;
+    private String message;
+    private final NostrRelay relay;
+    private final BiConsumer<NostrMessageAck, String> successCallback;
+    private final BiConsumer<NostrMessageAck, String> failureCallback;
 
-    public NostrOKMessage(String eventId, boolean success, String message) {
-        this.eventId = eventId;
+    NostrMessageAck(
+        NostrRelay relay,
+        String id,
+        Instant sentAt,
+        BiConsumer<NostrMessageAck, String> successCallback,
+        BiConsumer<NostrMessageAck, String> failureCallback
+    ) {
+        this.id = id;
+        this.sentAt = sentAt;
+        this.successCallback = successCallback;
+        this.failureCallback = failureCallback;
+        this.relay = relay;
+    }
+
+    public void callSuccessCallback(String message) {
+        if (successCallback != null) {
+            successCallback.accept(this, message);
+        }
+    }
+
+    public void callFailureCallback(String message) {
+        if (failureCallback != null) {
+            failureCallback.accept(this, message);
+        }
+    }
+
+    public void setSuccess(boolean success) {
         this.success = success;
+    }
+
+    public void setMessage(String message) {
         this.message = message;
     }
 
-    public String getEventId() {
-        return this.eventId;
+    public NostrRelay get() throws Exception {
+        if (success) return relay;
+        throw new Exception(message);
     }
 
     public boolean isSuccess() {
-        return this.success;
+        return success;
     }
 
     public String getMessage() {
-        return this.message;
+        return message;
     }
 
-    public void throwException() throws Throwable {
-        if (!this.success) {
-            throw new Exception(this.message);
-        }
+    public NostrRelay getRelay() {
+        return relay;
     }
 
-    @Override
-    protected String getPrefix() {
-        return "OK";
+    public String getId() {
+        return id;
     }
 
-    @Override
-    protected Collection<Object> getFragments() {
-        return List.of(this.message);
-    }
-
-    public static NostrOKMessage parse(List<Object> data) {
-        String prefix = NostrUtils.safeString(data.get(0));
-        if (data.size() < 3 || !prefix.equals("OK")) {
-            return null;
-        }
-        String eventId = NostrUtils.safeString(data.get(1));
-        boolean success = NostrUtils.safeBool(data.get(2));
-        String message = data.size() > 3 ? NostrUtils.safeString(data.get(3)) : "";
-        return new NostrOKMessage(eventId, success, message);
+    public Instant getSentAt() {
+        return sentAt;
     }
 }

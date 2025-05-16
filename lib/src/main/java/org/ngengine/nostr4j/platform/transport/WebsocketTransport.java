@@ -28,20 +28,20 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package org.ngengine.nostr4j.transport;
+package org.ngengine.nostr4j.platform.transport;
 
 import org.ngengine.nostr4j.platform.AsyncTask;
 
-public interface NostrTransport {
+public interface WebsocketTransport {
     AsyncTask<Void> close(String reason);
 
     AsyncTask<Void> connect(String url);
 
     AsyncTask<Void> send(String message);
 
-    void addListener(TransportListener listener);
+    void addListener(WebsocketTransportListener listener);
 
-    void removeListener(TransportListener listener);
+    void removeListener(WebsocketTransportListener listener);
 
     boolean isConnected();
 }

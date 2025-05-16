@@ -39,8 +39,8 @@ import java.util.logging.Logger;
 import org.ngengine.nostr4j.event.UnsignedNostrEvent;
 import org.ngengine.nostr4j.event.tracker.NaiveEventTracker;
 import org.ngengine.nostr4j.platform.AsyncTask;
+import org.ngengine.nostr4j.proto.NostrMessageAck;
 import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
-import org.ngengine.nostr4j.transport.NostrMessageAck;
 
 // docker run -p8087:8080 --rm -it -v./src/test/resources/strfry.conf:/etc/strfry.conf -vtest-nostr4j-strfry-db:/strfry-db ghcr.io/hoytech/strfry:latest
 

@@ -39,10 +39,9 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import org.ngengine.nostr4j.keypair.NostrPrivateKey;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
-import org.ngengine.nostr4j.rtc.NostrRTCSettings;
+import org.ngengine.nostr4j.platform.transport.WebsocketTransport;
+import org.ngengine.nostr4j.platform.transport.RTCTransport;
 import org.ngengine.nostr4j.signer.FailedToSignException;
-import org.ngengine.nostr4j.transport.NostrTransport;
-import org.ngengine.nostr4j.transport.RTCTransport;
 
 public interface Platform {
     byte[] generatePrivateKey();
@@ -58,29 +57,29 @@ public interface Platform {
     byte[] base64decode(String data);
     byte[] chacha20(byte[] key, byte[] nonce, byte[] data, boolean forEncryption);
 
-    NostrTransport newTransport();
+    WebsocketTransport newTransport();
 
-    RTCTransport newRTCTransport(NostrRTCSettings settings, String connId, Collection<String> stunServers);
+    RTCTransport newRTCTransport(RTCSettings settings, String connId, Collection<String> stunServers);
 
     String sha256(String data);
     byte[] sha256(byte[] data);
-    String sign(String data, NostrPrivateKey privKey) throws FailedToSignException;
+    String sign(String data, byte privKey[]) throws FailedToSignException;
     boolean verify(String data, String sign, NostrPublicKey pubKey);
 
-    AsyncTask<String> signAsync(String data, NostrPrivateKey privKey);
+    AsyncTask<String> signAsync(String data, byte privKey[]);
 
     AsyncTask<Boolean> verifyAsync(String data, String sign, NostrPublicKey pubKey);
     byte[] randomBytes(int n);
 
-    NostrExecutor newRelayExecutor();
+    AsyncExecutor newRelayExecutor();
 
-    NostrExecutor newSubscriptionExecutor();
+    AsyncExecutor newSubscriptionExecutor();
 
-    NostrExecutor newSignerExecutor();
+    AsyncExecutor newSignerExecutor();
 
-    NostrExecutor newPoolExecutor();
+    AsyncExecutor newPoolExecutor();
 
-    <T> AsyncTask<T> promisify(BiConsumer<Consumer<T>, Consumer<Throwable>> func, NostrExecutor executor);
+    <T> AsyncTask<T> promisify(BiConsumer<Consumer<T>, Consumer<Throwable>> func, AsyncExecutor executor);
 
     <T> AsyncTask<T> wrapPromise(BiConsumer<Consumer<T>, Consumer<Throwable>> func);
 
@@ -93,4 +92,7 @@ public interface Platform {
     <T> Queue<T> newConcurrentQueue(Class<T> claz);
 
     AsyncTask<String> httpGet(String url, Duration timeout, Map<String, String> headers);
+
+    void setClipboardContent(String data);
+    String getClipboardContent();
 }

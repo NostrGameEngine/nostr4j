@@ -34,9 +34,9 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import org.ngengine.nostr4j.listeners.NostrRelayComponent;
-import org.ngengine.nostr4j.transport.NostrMessage;
-import org.ngengine.nostr4j.transport.impl.NostrClosedMessage;
-import org.ngengine.nostr4j.transport.impl.NostrEOSEMessage;
+import org.ngengine.nostr4j.proto.NostrMessage;
+import org.ngengine.nostr4j.proto.impl.NostrClosedMessage;
+import org.ngengine.nostr4j.proto.impl.NostrEOSEMessage;
 
 public class NostrRelaySubManager implements NostrRelayComponent {
 

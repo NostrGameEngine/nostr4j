@@ -57,7 +57,7 @@ public class NostrKeyPairSigner implements NostrSigner {
         String id = NostrEvent.computeEventId(keyPair.getPublicKey().asHex(), event);
         return NostrUtils
             .getPlatform()
-            .signAsync(id, keyPair.getPrivateKey())
+            .signAsync(id, keyPair.getPrivateKey()._array())
             .then(sig -> {
                 return new SignedNostrEvent(
                     id,

@@ -42,7 +42,10 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.platform.AsyncTask;
-import org.ngengine.nostr4j.platform.NostrExecutor;
+import org.ngengine.nostr4j.platform.RTCSettings;
+import org.ngengine.nostr4j.platform.transport.RTCTransport;
+import org.ngengine.nostr4j.platform.transport.RTCTransportListener;
+import org.ngengine.nostr4j.platform.AsyncExecutor;
 import org.ngengine.nostr4j.platform.Platform;
 import org.ngengine.nostr4j.rtc.listeners.NostrRTCSocketListener;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCAnswer;
@@ -53,7 +56,6 @@ import org.ngengine.nostr4j.rtc.signal.NostrRTCPeer;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCSignal;
 import org.ngengine.nostr4j.rtc.turn.NostrTURN;
 import org.ngengine.nostr4j.rtc.turn.NostrTURNSettings;
-import org.ngengine.nostr4j.transport.RTCTransport;
 import org.ngengine.nostr4j.utils.NostrUtils;
 
 /**
@@ -70,7 +72,7 @@ import org.ngengine.nostr4j.utils.NostrUtils;
  *      signaling protocol: when the signaling announce is stale, the socket should be closed using close().
  *      So keep in mind that you need to handle keep-alive youself, if you want to use this class by itself (without the signaling protocol).
  */
-public class NostrRTCSocket implements RTCTransport.RTCTransportListener, NostrTURN.Listener, Closeable {
+public class NostrRTCSocket implements RTCTransportListener, NostrTURN.Listener, Closeable {
 
     private static final Logger logger = Logger.getLogger(NostrRTCSocket.class.getName());
 
@@ -78,9 +80,9 @@ public class NostrRTCSocket implements RTCTransport.RTCTransportListener, NostrT
     private final CopyOnWriteArrayList<String> localIceCandidates = new CopyOnWriteArrayList<>();
 
     private final String connectionId;
-    private final NostrRTCSettings settings;
+    private final RTCSettings settings;
     private final NostrTURNSettings turnSettings;
-    private final NostrExecutor executor;
+    private final AsyncExecutor executor;
 
     private final NostrRTCLocalPeer localPeer;
 
@@ -93,10 +95,10 @@ public class NostrRTCSocket implements RTCTransport.RTCTransportListener, NostrT
     private volatile AsyncTask<Void> delayedCandidateEmission;
 
     public NostrRTCSocket(
-        NostrExecutor executor,
+        AsyncExecutor executor,
         NostrRTCLocalPeer localPeer,
         String connectionId,
-        NostrRTCSettings settings,
+        RTCSettings settings,
         NostrTURNSettings turnSettings
     ) {
         this.executor = Objects.requireNonNull(executor, "Executor cannot be null");

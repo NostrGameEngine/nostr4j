@@ -65,9 +65,9 @@ import org.ngengine.nostr4j.nip46.BunkerUrl;
 import org.ngengine.nostr4j.nip46.Nip46AppMetadata;
 import org.ngengine.nostr4j.nip46.NostrconnectUrl;
 import org.ngengine.nostr4j.platform.AsyncTask;
-import org.ngengine.nostr4j.platform.NostrExecutor;
+import org.ngengine.nostr4j.platform.AsyncExecutor;
 import org.ngengine.nostr4j.platform.Platform;
-import org.ngengine.nostr4j.transport.NostrMessageAck;
+import org.ngengine.nostr4j.proto.NostrMessageAck;
 import org.ngengine.nostr4j.utils.NostrUtils;
 
 /**
@@ -136,7 +136,7 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
     private transient volatile NostrSubscription subscription;
     private transient volatile BiFunction<String, String, Consumer<Throwable>> challengeHandler;
     private transient volatile Map<String, PendingChallenge> pendingChallenges;
-    private transient volatile NostrExecutor executor;
+    private transient volatile AsyncExecutor executor;
     private transient volatile boolean closed = false;
 
     private Set<String> relays = new HashSet<>();

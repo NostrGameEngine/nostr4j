@@ -28,14 +28,14 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package org.ngengine.nostr4j.transport;
+package org.ngengine.nostr4j.platform;
 
-public interface TransportListener {
-    void onConnectionClosedByServer(String reason);
-    void onConnectionOpen();
-    void onConnectionMessage(String msg);
+import java.util.concurrent.Callable;
+import java.util.concurrent.TimeUnit;
 
-    void onConnectionClosedByClient(String reason);
+public interface AsyncExecutor {
+    <T> AsyncTask<T> runLater(Callable<T> r, long delay, TimeUnit unit);
+    <T> AsyncTask<T> run(Callable<T> r);
 
-    void onConnectionError(Throwable e);
+    void close();
 }
