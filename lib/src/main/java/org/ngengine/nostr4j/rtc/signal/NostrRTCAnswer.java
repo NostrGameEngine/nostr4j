@@ -35,7 +35,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
-import org.ngengine.nostr4j.utils.NostrUtils;
+import org.ngengine.platform.NGEUtils;
 
 /**
  * An answer to an offer with the peer pubkey, sdp and metadata.
@@ -69,7 +69,7 @@ public class NostrRTCAnswer implements NostrRTCSignal {
     }
 
     public NostrRTCAnswer(NostrPublicKey pubkey, Map<String, Object> map) {
-        this(pubkey, NostrUtils.safeString(map.get("sdp")), NostrUtils.safeString(map.get("turn")), map);
+        this(pubkey, NGEUtils.safeString(map.get("sdp")), NGEUtils.safeString(map.get("turn")), map);
     }
 
     public String getSdp() {

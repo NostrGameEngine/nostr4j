@@ -34,7 +34,7 @@ import java.util.Collection;
 import java.util.List;
 
 import org.ngengine.nostr4j.proto.NostrMessage;
-import org.ngengine.nostr4j.utils.NostrUtils;
+import org.ngengine.platform.NGEUtils;
 
 public class NostrClosedMessage extends NostrMessage {
 
@@ -65,12 +65,12 @@ public class NostrClosedMessage extends NostrMessage {
     }
 
     public static NostrClosedMessage parse(List<Object> doc) {
-        String prefix = NostrUtils.safeString(doc.get(0));
+        String prefix = NGEUtils.safeString(doc.get(0));
         if (doc.size() < 2 || !prefix.equals("CLOSED")) {
             return null;
         }
-        String subId = NostrUtils.safeString(doc.get(1));
-        String reason = doc.size() > 2 ? NostrUtils.safeString(doc.get(2)) : "";
+        String subId = NGEUtils.safeString(doc.get(1));
+        String reason = doc.size() > 2 ? NGEUtils.safeString(doc.get(2)) : "";
         return new NostrClosedMessage(subId, reason);
     }
 }

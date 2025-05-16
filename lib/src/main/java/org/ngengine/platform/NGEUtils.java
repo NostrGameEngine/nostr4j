@@ -28,7 +28,7 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package org.ngengine.nostr4j.utils;
+package org.ngengine.platform;
 
 import java.nio.ByteBuffer;
 import java.time.Instant;
@@ -38,35 +38,18 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
 import java.util.logging.Logger;
-import org.ngengine.nostr4j.platform.AsyncTask;
-import org.ngengine.nostr4j.platform.Platform;
 
-public class NostrUtils {
+public class NGEUtils {
 
-    private static final Logger logger = Logger.getLogger(NostrUtils.class.getName());
+    private static final Logger logger = Logger.getLogger(NGEUtils.class.getName());
     private static final char[] HEX_ARRAY = "0123456789abcdef".toCharArray();
-    private static volatile Platform platform;
 
-    public static void setPlatform(Platform platform) {
-        NostrUtils.platform = platform;
+    public static void setPlatform(NGEPlatform platform) {
+        NGEPlatform.set(platform);
     }
 
-    public static Platform getPlatform() {
-        if (NostrUtils.platform == null) { // DCL
-            synchronized (NostrUtils.class) {
-                if (NostrUtils.platform == null) {
-                    logger.warning("Platform not set, using default JVM platform.");
-                    String defaultPlatformClass = "org.ngengine.nostr4j.platform.jvm.JVMAsyncPlatform";
-                    try {
-                        Class<?> clazz = Class.forName(defaultPlatformClass);
-                        NostrUtils.platform = (Platform) clazz.getDeclaredConstructor().newInstance();
-                    } catch (Exception e) {
-                        throw new RuntimeException("Failed to load default platform: " + defaultPlatformClass, e);
-                    }
-                }
-            }
-        }
-        return NostrUtils.platform;
+    public static NGEPlatform getPlatform() {
+        return NGEPlatform.get();
     }
 
     public static String bytesToHex(ByteBuffer bbf) {

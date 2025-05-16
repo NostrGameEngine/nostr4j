@@ -28,20 +28,21 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package org.ngengine.nostr4j.platform.transport;
+package org.ngengine.platform;
 
-import org.ngengine.nostr4j.platform.AsyncTask;
+public class FailedToSignException extends Exception {
 
-public interface WebsocketTransport {
-    AsyncTask<Void> close(String reason);
+    private static final long serialVersionUID = 1L;
 
-    AsyncTask<Void> connect(String url);
+    public FailedToSignException(String message) {
+        super(message);
+    }
 
-    AsyncTask<Void> send(String message);
+    public FailedToSignException(String message, Throwable cause) {
+        super(message, cause);
+    }
 
-    void addListener(WebsocketTransportListener listener);
-
-    void removeListener(WebsocketTransportListener listener);
-
-    boolean isConnected();
+    public FailedToSignException(Throwable cause) {
+        super(cause);
+    }
 }

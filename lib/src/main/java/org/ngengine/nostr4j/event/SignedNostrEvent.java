@@ -44,11 +44,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
-import org.ngengine.nostr4j.platform.AsyncTask;
 import org.ngengine.nostr4j.proto.NostrMessage;
 import org.ngengine.nostr4j.utils.Bech32;
 import org.ngengine.nostr4j.utils.Bech32.Bech32Exception;
-import org.ngengine.nostr4j.utils.NostrUtils;
+import org.ngengine.platform.AsyncTask;
+import org.ngengine.platform.NGEUtils;
 
 public class SignedNostrEvent extends NostrMessage implements NostrEvent {
 
@@ -123,16 +123,16 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
     }
 
     public SignedNostrEvent(Map<String, Object> map) {
-        this.kind = NostrUtils.safeInt(map.get("kind"));
-        this.content = NostrUtils.safeString(map.get("content"));
-        this.signature = NostrUtils.safeString(map.get("sig"));
-        this.pubkey = NostrUtils.safeString(map.get("pubkey"));
+        this.kind = NGEUtils.safeInt(map.get("kind"));
+        this.content = NGEUtils.safeString(map.get("content"));
+        this.signature = NGEUtils.safeString(map.get("sig"));
+        this.pubkey = NGEUtils.safeString(map.get("pubkey"));
 
-        String id = NostrUtils.safeString(map.get("id"));
-        Instant createdAt = NostrUtils.safeSecondsInstant(map.get("created_at"));
+        String id = NGEUtils.safeString(map.get("id"));
+        Instant createdAt = NGEUtils.safeSecondsInstant(map.get("created_at"));
         this.identifier = new Identifier(id, createdAt);
 
-        Collection<String[]> tags = NostrUtils.safeCollectionOfStringArray(
+        Collection<String[]> tags = NGEUtils.safeCollectionOfStringArray(
             map.getOrDefault("tags", new ArrayList<Collection<String>>())
         );
 
@@ -252,11 +252,11 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
     }
 
     public boolean verify() throws Exception {
-        return NostrUtils.getPlatform().verify(this.identifier.id, this.signature, this.getPubkey());
+        return NGEUtils.getPlatform().verify(this.identifier.id, this.signature, this.getPubkey()._array());
     }
 
     public AsyncTask<Boolean> verifyAsync() {
-        return NostrUtils.getPlatform().verifyAsync(this.identifier.id, this.signature, this.getPubkey());
+        return NGEUtils.getPlatform().verifyAsync(this.identifier.id, this.signature, this.getPubkey()._array());
     }
 
     public String getIdBech32() {
@@ -264,7 +264,7 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
             if (bech32Id != null) return bech32Id;
             String id = getId();
             if (id == null) return null;
-            ByteBuffer data = NostrUtils.hexToBytes(id);
+            ByteBuffer data = NGEUtils.hexToBytes(id);
             bech32Id = Bech32.bech32Encode(BECH32_PREVIX, data);
             assert data.position() == 0 : "Data position must be 0";
             return bech32Id;
@@ -314,11 +314,11 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
     }
 
     public static ReceivedSignedNostrEvent parse(List<Object> doc) {
-        String prefix = NostrUtils.safeString(doc.get(0));
+        String prefix = NGEUtils.safeString(doc.get(0));
         if (!prefix.equals("EVENT") || doc.size() < 3) {
             return null;
         }
-        String subId = NostrUtils.safeString(doc.get(1));
+        String subId = NGEUtils.safeString(doc.get(1));
         Map<String, Object> eventMap = (Map<String, Object>) doc.get(2);
         ReceivedSignedNostrEvent e = new ReceivedSignedNostrEvent(subId, eventMap);
         return e;
@@ -330,7 +330,7 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
         if (expiresAt != null) return expiresAt;
         List<String> tag = getTagValues("expiration");
         if (tag != null) {
-            long expires = NostrUtils.safeLong(tag.get(0));
+            long expires = NGEUtils.safeLong(tag.get(0));
             expiresAt = Instant.ofEpochSecond(expires);
         } else {
             expiresAt = Instant.now().plusSeconds(60 * 60 * 24 * 365 * 2100);

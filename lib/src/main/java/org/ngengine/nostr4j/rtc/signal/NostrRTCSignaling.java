@@ -30,7 +30,7 @@
  */
 package org.ngengine.nostr4j.rtc.signal;
 
-import static org.ngengine.nostr4j.utils.NostrUtils.dbg;
+import static org.ngengine.platform.NGEUtils.dbg;
 
 import java.io.Closeable;
 import java.time.Instant;
@@ -53,13 +53,13 @@ import org.ngengine.nostr4j.event.UnsignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.listeners.sub.NostrSubEventListener;
-import org.ngengine.nostr4j.platform.AsyncTask;
-import org.ngengine.nostr4j.platform.RTCSettings;
 import org.ngengine.nostr4j.proto.NostrMessageAck;
-import org.ngengine.nostr4j.platform.AsyncExecutor;
-import org.ngengine.nostr4j.platform.Platform;
 import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
-import org.ngengine.nostr4j.utils.NostrUtils;
+import org.ngengine.platform.AsyncExecutor;
+import org.ngengine.platform.AsyncTask;
+import org.ngengine.platform.NGEPlatform;
+import org.ngengine.platform.NGEUtils;
+import org.ngengine.platform.RTCSettings;
 
 /**
  * Handles peer signaling
@@ -90,7 +90,7 @@ public class NostrRTCSignaling implements Closeable {
     private final NostrPool pool;
 
     private final NostrRTCLocalPeer localPeer;
-    private final Queue<NostrRTCAnnounce> seenAnnounces = NostrUtils.getPlatform().newConcurrentQueue(NostrRTCAnnounce.class);
+    private final Queue<NostrRTCAnnounce> seenAnnounces = NGEUtils.getPlatform().newConcurrentQueue(NostrRTCAnnounce.class);
     private final Collection<NostrRTCAnnounce> seenAnnouncesRO = Collections.unmodifiableCollection(seenAnnounces);
     private final List<Listener> listeners = new CopyOnWriteArrayList<>();
     private final RTCSettings settings;
@@ -114,7 +114,7 @@ public class NostrRTCSignaling implements Closeable {
         this.pool = pool;
         this.localPeer = localPeer;
         this.settings = settings;
-        this.executor = NostrUtils.getPlatform().newPoolExecutor();
+        this.executor = NGEUtils.getPlatform().newPoolExecutor();
         this.roomKeyPair = roomKeyPair;
         this.roomSigner = new NostrKeyPairSigner(roomKeyPair);
     }
@@ -194,7 +194,7 @@ public class NostrRTCSignaling implements Closeable {
                         }
                 }
 
-                Platform platform = NostrUtils.getPlatform();
+                NGEPlatform platform = NGEUtils.getPlatform();
                 decrypt(event.getContent(), event.getPubkey())
                     .catchException(exc -> {
                         logger.warning("Error decrypting event: " + exc.getMessage());
@@ -292,7 +292,7 @@ public class NostrRTCSignaling implements Closeable {
             waitQueue.add(this.signalingSub.open());
         }
 
-        Platform platform = NostrUtils.getPlatform();
+        NGEPlatform platform = NGEUtils.getPlatform();
 
         return platform
             .awaitAll(waitQueue)
@@ -380,7 +380,7 @@ public class NostrRTCSignaling implements Closeable {
         event.withTag("t", "offer");
         event.withTag("p", recipient.asHex());
 
-        Platform platform = NostrUtils.getPlatform();
+        NGEPlatform platform = NGEUtils.getPlatform();
         Map<String, Object> content = offer.get();
 
         String json = platform.toJSON(content);
@@ -414,7 +414,7 @@ public class NostrRTCSignaling implements Closeable {
         event.withTag("t", "answer");
         event.withTag("p", recipient.asHex());
 
-        Platform platform = NostrUtils.getPlatform();
+        NGEPlatform platform = NGEUtils.getPlatform();
         Map<String, Object> content = answer.get();
 
         String json = platform.toJSON(content);
@@ -449,7 +449,7 @@ public class NostrRTCSignaling implements Closeable {
         event.withTag("t", "candidate");
         event.withTag("p", recipient.asHex());
 
-        Platform platform = NostrUtils.getPlatform();
+        NGEPlatform platform = NGEUtils.getPlatform();
         Map<String, Object> content = candidate.get();
         String json = platform.toJSON(content);
         return encrypt(json, recipient)

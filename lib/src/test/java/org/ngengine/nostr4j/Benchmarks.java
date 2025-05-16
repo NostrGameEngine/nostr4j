@@ -36,10 +36,10 @@ import java.util.List;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.event.UnsignedNostrEvent;
 import org.ngengine.nostr4j.event.tracker.PassthroughEventTracker;
-import org.ngengine.nostr4j.platform.jvm.JVMThreadedPlatform;
 import org.ngengine.nostr4j.proto.NostrMessage;
 import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
-import org.ngengine.nostr4j.utils.NostrUtils;
+import org.ngengine.platform.NGEUtils;
+import org.ngengine.platform.jvm.JVMThreadedPlatform;
 
 public class Benchmarks {
 
@@ -74,7 +74,7 @@ public class Benchmarks {
     NostrRelay relay;
 
     public Benchmarks(boolean trusted, boolean threaded) throws Exception {
-        if (threaded) NostrUtils.setPlatform(new JVMThreadedPlatform());
+        if (threaded) NGEUtils.setPlatform(new JVMThreadedPlatform());
         pool = new NostrPool();
 
         relay = new NostrRelay("ws://127.0.0.1:8087");

@@ -39,7 +39,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import org.ngengine.nostr4j.utils.NostrUtils;
+
+import org.ngengine.platform.NGEUtils;
 
 public class UnsignedNostrEvent implements NostrEvent {
 
@@ -141,10 +142,10 @@ public class UnsignedNostrEvent implements NostrEvent {
     }
 
     public UnsignedNostrEvent fromMap(Map<String, Object> map) {
-        this.kind = NostrUtils.safeInt(map.get("kind"));
-        this.content = NostrUtils.safeString(map.get("content"));
-        this.createdAt = NostrUtils.safeSecondsInstant(map.get("created_at"));
-        Collection<String[]> tags = NostrUtils.safeCollectionOfStringArray(map.getOrDefault("tags", new ArrayList<String[]>()));
+        this.kind = NGEUtils.safeInt(map.get("kind"));
+        this.content = NGEUtils.safeString(map.get("content"));
+        this.createdAt = NGEUtils.safeSecondsInstant(map.get("created_at"));
+        Collection<String[]> tags = NGEUtils.safeCollectionOfStringArray(map.getOrDefault("tags", new ArrayList<String[]>()));
         for (String[] tag : tags) {
             if (tag.length == 0) continue;
             String key = tag[0];
@@ -198,7 +199,7 @@ public class UnsignedNostrEvent implements NostrEvent {
             e.getCreatedAt().equals(getCreatedAt()) &&
             e.getKind() == getKind() &&
             e.getContent().equals(getContent()) &&
-            NostrUtils.equalsWithOrder(e.getTags(), getTags())
+            NGEUtils.equalsWithOrder(e.getTags(), getTags())
         );
     }
 

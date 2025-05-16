@@ -37,9 +37,9 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
-import org.ngengine.nostr4j.platform.AsyncTask;
-import org.ngengine.nostr4j.platform.Platform;
-import org.ngengine.nostr4j.utils.NostrUtils;
+import org.ngengine.platform.AsyncTask;
+import org.ngengine.platform.NGEPlatform;
+import org.ngengine.platform.NGEUtils;
 
 public class Nip05Identity implements Serializable {
 
@@ -74,7 +74,7 @@ public class Nip05Identity implements Serializable {
         Map<String, Object> nip46data = (Map<String, Object>) nip46o;
         Object relayso = nip46data.get("relays");
         if (relayso != null) {
-            String[] relays = NostrUtils.safeStringArray(relayso);
+            String[] relays = NGEUtils.safeStringArray(relayso);
             if (relays.length > 0) {
                 nip46.setRelays(Arrays.asList(relays));
             }
@@ -82,7 +82,7 @@ public class Nip05Identity implements Serializable {
 
         Object nostrconnect = nip46data.get("nostrconnect");
         if (nostrconnect != null) {
-            String nostrconnectRedirect = NostrUtils.safeString(nostrconnect);
+            String nostrconnectRedirect = NGEUtils.safeString(nostrconnect);
             if (!nostrconnectRedirect.isEmpty()) {
                 nip46.setNostrconnectRedirectTemplate(nostrconnectRedirect);
             }
@@ -115,7 +115,7 @@ public class Nip05Identity implements Serializable {
         Map<String, Object> relays = (Map<String, Object>) o;
         Object userRelays = relays.get(publicKey.asHex());
         if (userRelays == null || !(userRelays instanceof Collection)) return Collections.emptyList();
-        recommendedRelays = Arrays.asList(NostrUtils.safeStringArray(userRelays));
+        recommendedRelays = Arrays.asList(NGEUtils.safeStringArray(userRelays));
         return recommendedRelays;
     }
 
@@ -140,7 +140,7 @@ public class Nip05Identity implements Serializable {
         String[] id = parseIdentifier(identifier);
         String name = id[0];
         String domain = id[1];
-        Platform platform = NostrUtils.getPlatform();
+        NGEPlatform platform = NGEUtils.getPlatform();
         // https://<domain>/.well-known/nostr.json?name=<local-part>
         String fullUrl = "http" + (useHttps ? "s" : "") + "://" + domain + "/.well-known/nostr.json?name=" + name;
         AsyncTask<String> json = platform.httpGet(fullUrl, timeout, null);

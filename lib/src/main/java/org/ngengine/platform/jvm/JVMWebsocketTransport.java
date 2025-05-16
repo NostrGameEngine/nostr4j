@@ -28,9 +28,9 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package org.ngengine.nostr4j.platform.jvm;
+package org.ngengine.platform.jvm;
 
-import static org.ngengine.nostr4j.utils.NostrUtils.dbg;
+import static org.ngengine.platform.NGEUtils.dbg;
 
 import java.io.IOException;
 import java.net.URI;
@@ -47,9 +47,10 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import org.ngengine.nostr4j.platform.AsyncTask;
-import org.ngengine.nostr4j.platform.transport.WebsocketTransport;
-import org.ngengine.nostr4j.platform.transport.WebsocketTransportListener;
+
+import org.ngengine.platform.AsyncTask;
+import org.ngengine.platform.transport.WebsocketTransport;
+import org.ngengine.platform.transport.WebsocketTransportListener;
 
 public class JVMWebsocketTransport implements WebsocketTransport, WebSocket.Listener {
 

@@ -36,7 +36,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
-import org.ngengine.nostr4j.utils.NostrUtils;
+import org.ngengine.platform.NGEUtils;
 
 /**
  * A collection of valid ice candidates that can be used to establish a
@@ -62,7 +62,7 @@ public class NostrRTCIceCandidate implements NostrRTCSignal {
     }
 
     public NostrRTCIceCandidate(NostrPublicKey pubkey, Map<String, Object> map) {
-        this(pubkey, Arrays.asList(NostrUtils.safeStringArray(map.get("candidates"))), map);
+        this(pubkey, Arrays.asList(NGEUtils.safeStringArray(map.get("candidates"))), map);
     }
 
     public Collection<String> getCandidates() {

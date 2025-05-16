@@ -33,8 +33,9 @@ package org.ngengine.nostr4j.rtc.signal;
 import java.util.Collection;
 import java.util.Map;
 import java.util.Objects;
+
 import org.ngengine.nostr4j.signer.NostrSigner;
-import org.ngengine.nostr4j.utils.NostrUtils;
+import org.ngengine.platform.NGEUtils;
 
 /**
  * All the info about the current local peer.
@@ -45,7 +46,7 @@ public class NostrRTCLocalPeer extends NostrRTCPeer {
     private Collection<String> stunServers;
 
     public NostrRTCLocalPeer(NostrSigner signer, Collection<String> stunServers, String turnServer, Map<String, Object> misc) {
-        super(NostrUtils.awaitNoThrow(signer.getPublicKey()), turnServer, misc);
+        super(NGEUtils.awaitNoThrow(signer.getPublicKey()), turnServer, misc);
         Objects.requireNonNull(signer);
         Objects.requireNonNull(stunServers);
         this.signer = signer;

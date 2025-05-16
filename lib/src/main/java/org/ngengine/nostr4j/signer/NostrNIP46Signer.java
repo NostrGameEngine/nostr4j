@@ -30,7 +30,7 @@
  */
 package org.ngengine.nostr4j.signer;
 
-import static org.ngengine.nostr4j.utils.NostrUtils.dbg;
+import static org.ngengine.platform.NGEUtils.dbg;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -64,11 +64,11 @@ import org.ngengine.nostr4j.nip44.Nip44;
 import org.ngengine.nostr4j.nip46.BunkerUrl;
 import org.ngengine.nostr4j.nip46.Nip46AppMetadata;
 import org.ngengine.nostr4j.nip46.NostrconnectUrl;
-import org.ngengine.nostr4j.platform.AsyncTask;
-import org.ngengine.nostr4j.platform.AsyncExecutor;
-import org.ngengine.nostr4j.platform.Platform;
 import org.ngengine.nostr4j.proto.NostrMessageAck;
-import org.ngengine.nostr4j.utils.NostrUtils;
+import org.ngengine.platform.AsyncExecutor;
+import org.ngengine.platform.AsyncTask;
+import org.ngengine.platform.NGEPlatform;
+import org.ngengine.platform.NGEUtils;
 
 /**
  * NIP-46 Signer
@@ -219,7 +219,7 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
      * Close this signer and all its resources.
      */
     public AsyncTask<NostrSigner> close() {
-        Platform platform = NostrUtils.getPlatform();
+        NGEPlatform platform = NGEUtils.getPlatform();
         return platform.wrapPromise((res, rej) -> {
             try {
                 if (closed) {
@@ -299,9 +299,9 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
      * @return an async task that will complete with this signer after the connection is established
      */
     public AsyncTask<NostrNIP46Signer> listen(List<String> relays, Consumer<NostrconnectUrl> onUrl, Duration timeout) {
-        Platform platform = NostrUtils.getPlatform();
+        NGEPlatform platform = NGEUtils.getPlatform();
 
-        String secret = NostrUtils.bytesToHex(platform.randomBytes(32));
+        String secret = NGEUtils.bytesToHex(platform.randomBytes(32));
         for (String relay : relays) {
             this.relays.add(relay);
         }
@@ -367,7 +367,7 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
      */
     private AsyncTask<List<NostrMessageAck>> check() {
         if (closed) throw new RuntimeException("Closed");
-        Platform p = NostrUtils.getPlatform();
+        NGEPlatform p = NGEUtils.getPlatform();
 
         if (this.executor == null) { // DCL
             synchronized (this) {
@@ -478,16 +478,16 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
 
             assert dbg(() -> logger.finer("Received response: " + decryptedContent));
             // parse content
-            Map<String, Object> response = NostrUtils.getPlatform().fromJSON(decryptedContent, Map.class);
+            Map<String, Object> response = NGEUtils.getPlatform().fromJSON(decryptedContent, Map.class);
 
             // get the id from the content, unless we are dealing with a spontaneous connection
             // a spontaneous nostrconnect connection has an hardcoded id, because
             // we are routing it to a single special response listener for all spontaneous
             // connections
-            String id = isSpontaneousConnection ? "nostrconnect" : NostrUtils.safeString(response.get("id"));
+            String id = isSpontaneousConnection ? "nostrconnect" : NGEUtils.safeString(response.get("id"));
 
-            String error = NostrUtils.safeString(response.get("error"));
-            String result = NostrUtils.safeString(response.get("result"));
+            String error = NGEUtils.safeString(response.get("error"));
+            String result = NGEUtils.safeString(response.get("result"));
 
             // get the listener for this response
             ResponseListener listener = listeners.get(id);
@@ -569,7 +569,7 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
      * Used internally
      */
     private AsyncTask<String> waitForResponse(String method, String id, Predicate<String> verifyPayload, Duration timeout) {
-        Platform platform = NostrUtils.getPlatform();
+        NGEPlatform platform = NGEUtils.getPlatform();
         if (this.listeners == null) {
             this.listeners = new ConcurrentHashMap<>();
         }
@@ -598,7 +598,7 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
         return check()
             .compose(r -> {
                 try {
-                    Platform platform = NostrUtils.getPlatform();
+                    NGEPlatform platform = NGEUtils.getPlatform();
                     String requestId = "nostr4j-nip46-" + lastRequestId.incrementAndGet();
 
                     Map<String, Object> reqBody = new HashMap<>();
@@ -649,7 +649,7 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
         return sendRPC(method, params, requestsTimeout)
             .then(signed -> {
                 try {
-                    Platform platform = NostrUtils.getPlatform();
+                    NGEPlatform platform = NGEUtils.getPlatform();
                     return new SignedNostrEvent(platform.fromJSON(signed, Map.class));
                 } catch (Exception e) {
                     throw new RuntimeException("Failed to sign event", e);

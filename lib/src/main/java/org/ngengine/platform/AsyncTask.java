@@ -28,21 +28,28 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package org.ngengine.nostr4j.signer;
+package org.ngengine.platform;
 
-public class FailedToSignException extends Exception {
+import java.util.List;
+import java.util.concurrent.ExecutionException;
+import java.util.function.Consumer;
+import java.util.function.Function;
 
-    private static final long serialVersionUID = 1L;
+public interface AsyncTask<T> {
+    void cancel();
+    boolean isDone();
+    boolean isFailed();
+    boolean isSuccess();
 
-    public FailedToSignException(String message) {
-        super(message);
-    }
+    T await() throws InterruptedException, ExecutionException;
 
-    public FailedToSignException(String message, Throwable cause) {
-        super(message, cause);
-    }
+    <R> AsyncTask<R> then(Function<T, R> func2);
 
-    public FailedToSignException(Throwable cause) {
-        super(cause);
+    <R> AsyncTask<R> compose(Function<T, AsyncTask<R>> func2);
+    AsyncTask<T> catchException(Consumer<Throwable> func2);
+
+    static <T> AsyncTask<List<T>> awaitAll(List<AsyncTask<T>> tasks) {
+        NGEPlatform platform = NGEUtils.getPlatform();
+        return platform.awaitAll(tasks);
     }
 }

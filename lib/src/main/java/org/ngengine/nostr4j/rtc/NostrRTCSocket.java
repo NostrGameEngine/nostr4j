@@ -30,7 +30,7 @@
  */
 package org.ngengine.nostr4j.rtc;
 
-import static org.ngengine.nostr4j.utils.NostrUtils.dbg;
+import static org.ngengine.platform.NGEUtils.dbg;
 
 import java.io.Closeable;
 import java.nio.ByteBuffer;
@@ -41,12 +41,7 @@ import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
-import org.ngengine.nostr4j.platform.AsyncTask;
-import org.ngengine.nostr4j.platform.RTCSettings;
-import org.ngengine.nostr4j.platform.transport.RTCTransport;
-import org.ngengine.nostr4j.platform.transport.RTCTransportListener;
-import org.ngengine.nostr4j.platform.AsyncExecutor;
-import org.ngengine.nostr4j.platform.Platform;
+
 import org.ngengine.nostr4j.rtc.listeners.NostrRTCSocketListener;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCAnswer;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCIceCandidate;
@@ -56,7 +51,13 @@ import org.ngengine.nostr4j.rtc.signal.NostrRTCPeer;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCSignal;
 import org.ngengine.nostr4j.rtc.turn.NostrTURN;
 import org.ngengine.nostr4j.rtc.turn.NostrTURNSettings;
-import org.ngengine.nostr4j.utils.NostrUtils;
+import org.ngengine.platform.AsyncExecutor;
+import org.ngengine.platform.AsyncTask;
+import org.ngengine.platform.NGEPlatform;
+import org.ngengine.platform.NGEUtils;
+import org.ngengine.platform.RTCSettings;
+import org.ngengine.platform.transport.RTCTransport;
+import org.ngengine.platform.transport.RTCTransportListener;
 
 /**
  * An RTC socket between two peers.
@@ -210,7 +211,7 @@ public class NostrRTCSocket implements RTCTransportListener, NostrTURN.Listener,
         // logger.fine("Listening for RTC connections");
         useTURN(false);
 
-        Platform platform = NostrUtils.getPlatform();
+        NGEPlatform platform = NGEUtils.getPlatform();
         this.transport = platform.newRTCTransport(settings, connectionId, localPeer.getStunServers());
         this.transport.addListener(this);
 
@@ -241,7 +242,7 @@ public class NostrRTCSocket implements RTCTransportListener, NostrTURN.Listener,
         // logger.fine("Connecting to RTC socket " + offerOrAnswer);
         useTURN(false);
 
-        Platform platform = NostrUtils.getPlatform();
+        NGEPlatform platform = NGEUtils.getPlatform();
 
         String connectString;
         if (offerOrAnswer instanceof NostrRTCOffer) {

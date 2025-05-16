@@ -28,11 +28,12 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package org.ngengine.nostr4j.platform.jvm;
+package org.ngengine.platform.jvm;
 
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
-import org.ngengine.nostr4j.utils.NostrUtils;
+
+import org.ngengine.platform.NGEUtils;
 
 final class Point {
 
@@ -161,13 +162,13 @@ final class Point {
     }
 
     public static byte[] taggedHash(String tag, byte[] msg) {
-        byte[] tagHash = NostrUtils.getPlatform().sha256(tag.getBytes(StandardCharsets.UTF_8));
+        byte[] tagHash = NGEUtils.getPlatform().sha256(tag.getBytes(StandardCharsets.UTF_8));
         int len = (tagHash.length * 2) + msg.length;
         byte[] buf = new byte[len];
         System.arraycopy(tagHash, 0, buf, 0, tagHash.length);
         System.arraycopy(tagHash, 0, buf, tagHash.length, tagHash.length);
         System.arraycopy(msg, 0, buf, tagHash.length * 2, msg.length);
-        return NostrUtils.getPlatform().sha256(buf);
+        return NGEUtils.getPlatform().sha256(buf);
     }
 
     public byte[] toBytes() {

@@ -30,7 +30,7 @@
  */
 package org.ngengine.nostr4j.rtc;
 
-import static org.ngengine.nostr4j.utils.NostrUtils.dbg;
+import static org.ngengine.platform.NGEUtils.dbg;
 
 import java.io.Closeable;
 import java.nio.ByteBuffer;
@@ -44,10 +44,6 @@ import java.util.logging.Logger;
 import org.ngengine.nostr4j.NostrPool;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
-import org.ngengine.nostr4j.platform.AsyncTask;
-import org.ngengine.nostr4j.platform.RTCSettings;
-import org.ngengine.nostr4j.platform.AsyncExecutor;
-import org.ngengine.nostr4j.platform.Platform;
 import org.ngengine.nostr4j.rtc.listeners.NostrRTCRoomListener;
 import org.ngengine.nostr4j.rtc.listeners.NostrRTCRoomPeerConnectedListener;
 import org.ngengine.nostr4j.rtc.listeners.NostrRTCRoomPeerDisconnectListener;
@@ -62,7 +58,11 @@ import org.ngengine.nostr4j.rtc.signal.NostrRTCOffer;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCPeer;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCSignaling;
 import org.ngengine.nostr4j.rtc.turn.NostrTURNSettings;
-import org.ngengine.nostr4j.utils.NostrUtils;
+import org.ngengine.platform.AsyncExecutor;
+import org.ngengine.platform.AsyncTask;
+import org.ngengine.platform.NGEPlatform;
+import org.ngengine.platform.NGEUtils;
+import org.ngengine.platform.RTCSettings;
 
 public class NostrRTCRoom implements Closeable {
 
@@ -158,7 +158,7 @@ public class NostrRTCRoom implements Closeable {
                 Objects.requireNonNull(signalingPool, "Signaling pool cannot be null")
             );
         this.signaling.addListener(listener);
-        Platform platform = NostrUtils.getPlatform();
+        NGEPlatform platform = NGEUtils.getPlatform();
         this.executor = platform.newPoolExecutor();
     }
 
@@ -615,7 +615,7 @@ public class NostrRTCRoom implements Closeable {
         for (NostrRTCSocket socket : connections.values()) {
             tasks.add(socket.write(bbf));
         }
-        Platform platform = NostrUtils.getPlatform();
+        NGEPlatform platform = NGEUtils.getPlatform();
         return platform
             .awaitAllSettled(tasks)
             .then(r -> {

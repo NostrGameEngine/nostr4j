@@ -35,9 +35,10 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.Collections;
+
 import org.ngengine.nostr4j.utils.Bech32;
 import org.ngengine.nostr4j.utils.ByteBufferList;
-import org.ngengine.nostr4j.utils.NostrUtils;
+import org.ngengine.platform.NGEUtils;
 
 public final class NostrPrivateKey implements NostrKey {
 
@@ -93,7 +94,7 @@ public final class NostrPrivateKey implements NostrKey {
      * @return a new NostrPrivateKey instance
      */
     public static NostrPrivateKey fromHex(String hex) {
-        NostrPrivateKey key = new NostrPrivateKey(NostrUtils.hexToBytes(hex));
+        NostrPrivateKey key = new NostrPrivateKey(NGEUtils.hexToBytes(hex));
         return key;
     }
 
@@ -130,7 +131,7 @@ public final class NostrPrivateKey implements NostrKey {
     }
 
     public static NostrPrivateKey generate() {
-        byte[] data = NostrUtils.getPlatform().generatePrivateKey();
+        byte[] data = NGEUtils.getPlatform().generatePrivateKey();
         NostrPrivateKey key = new NostrPrivateKey(ByteBuffer.wrap(data));
         return key;
     }
@@ -166,7 +167,7 @@ public final class NostrPrivateKey implements NostrKey {
     @Override
     public String asHex() {
         if (hex != null) return hex;
-        hex = NostrUtils.bytesToHex(data);
+        hex = NGEUtils.bytesToHex(data);
         assert data.position() == 0 : "Data position must be 0";
         return hex;
     }
@@ -262,7 +263,7 @@ public final class NostrPrivateKey implements NostrKey {
     public NostrPublicKey getPublicKey() {
         if (publicKey == null) {
             byte bdata[] = this._array();
-            bdata = NostrUtils.getPlatform().genPubKey(bdata);
+            bdata = NGEUtils.getPlatform().genPubKey(bdata);
             publicKey = new NostrPublicKey(ByteBuffer.wrap(bdata));
         }
         assert data.position() == 0 : "Data position must be 0";

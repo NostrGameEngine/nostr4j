@@ -36,9 +36,9 @@ import org.ngengine.nostr4j.event.UnsignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.nip44.Nip44;
-import org.ngengine.nostr4j.platform.AsyncTask;
-import org.ngengine.nostr4j.platform.Platform;
-import org.ngengine.nostr4j.utils.NostrUtils;
+import org.ngengine.platform.AsyncTask;
+import org.ngengine.platform.NGEPlatform;
+import org.ngengine.platform.NGEUtils;
 
 public class NostrKeyPairSigner implements NostrSigner {
 
@@ -55,7 +55,7 @@ public class NostrKeyPairSigner implements NostrSigner {
     @Override
     public AsyncTask<SignedNostrEvent> sign(UnsignedNostrEvent event) {
         String id = NostrEvent.computeEventId(keyPair.getPublicKey().asHex(), event);
-        return NostrUtils
+        return NGEUtils
             .getPlatform()
             .signAsync(id, keyPair.getPrivateKey()._array())
             .then(sig -> {
@@ -73,7 +73,7 @@ public class NostrKeyPairSigner implements NostrSigner {
 
     @Override
     public AsyncTask<String> encrypt(String message, NostrPublicKey publicKey) {
-        Platform platform = NostrUtils.getPlatform();
+        NGEPlatform platform = NGEUtils.getPlatform();
         return platform.wrapPromise((res, rej) -> {
             try {
                 byte[] sharedKey = Nip44.getConversationKey(keyPair.getPrivateKey(), publicKey);
@@ -86,7 +86,7 @@ public class NostrKeyPairSigner implements NostrSigner {
 
     @Override
     public AsyncTask<String> decrypt(String message, NostrPublicKey publicKey) {
-        Platform platform = NostrUtils.getPlatform();
+        NGEPlatform platform = NGEUtils.getPlatform();
 
         return platform.wrapPromise((res, rej) -> {
             try {
@@ -100,7 +100,7 @@ public class NostrKeyPairSigner implements NostrSigner {
 
     @Override
     public AsyncTask<NostrPublicKey> getPublicKey() {
-        Platform platform = NostrUtils.getPlatform();
+        NGEPlatform platform = NGEUtils.getPlatform();
         return platform.wrapPromise((res, rej) -> {
             try {
                 res.accept(keyPair.getPublicKey());
@@ -152,7 +152,7 @@ public class NostrKeyPairSigner implements NostrSigner {
 
     @Override
     public AsyncTask<NostrSigner> close() {
-        return NostrUtils
+        return NGEUtils
             .getPlatform()
             .wrapPromise((res, rej) -> {
                 res.accept(this);

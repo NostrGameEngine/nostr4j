@@ -28,7 +28,7 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package org.ngengine.nostr4j.platform.jvm;
+package org.ngengine.platform.jvm;
 
 import java.math.BigInteger;
 import java.security.KeyPair;
@@ -38,7 +38,7 @@ import java.security.Security;
 import java.security.interfaces.ECPrivateKey;
 import java.security.spec.ECGenParameterSpec;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
-import org.ngengine.nostr4j.signer.FailedToSignException;
+import org.ngengine.platform.FailedToSignException;
 
 // based on https://github.com/tcheeric/nostr-java/blob/main/nostr-java-crypto/src/main/java/nostr/crypto/schnorr/Schnorr.java#L19
 // thread-safe

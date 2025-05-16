@@ -47,12 +47,12 @@ import org.ngengine.nostr4j.NostrSubscription;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.event.UnsignedNostrEvent;
 import org.ngengine.nostr4j.event.tracker.PassthroughEventTracker;
-import org.ngengine.nostr4j.platform.AsyncTask;
-import org.ngengine.nostr4j.platform.AsyncExecutor;
-import org.ngengine.nostr4j.platform.Platform;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCLocalPeer;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCPeer;
-import org.ngengine.nostr4j.utils.NostrUtils;
+import org.ngengine.platform.AsyncExecutor;
+import org.ngengine.platform.AsyncTask;
+import org.ngengine.platform.NGEPlatform;
+import org.ngengine.platform.NGEUtils;
 
 /**
  * TURN implemented on top of nostr relays.
@@ -129,7 +129,7 @@ public class NostrTURN {
     private volatile boolean stopped = false;
 
     public NostrTURN(String connectionId, NostrRTCLocalPeer localPeer, NostrRTCPeer remotePeer, NostrTURNSettings config) {
-        Platform platform = NostrUtils.getPlatform();
+        NGEPlatform platform = NGEUtils.getPlatform();
         this.connectionId = Objects.requireNonNull(connectionId, "connectionId cannot be null");
         this.localPeer = Objects.requireNonNull(localPeer, "localPeer cannot be null");
         this.remotePeer = Objects.requireNonNull(remotePeer, "remotePeer cannot be null");
@@ -211,10 +211,10 @@ public class NostrTURN {
     // and moving the stream forward
     private void onReceivedAck(String data) {
         StringTokenizer tokenizer = new StringTokenizer(data, ",");
-        long packetId = NostrUtils.safeLong(tokenizer.nextToken());
+        long packetId = NGEUtils.safeLong(tokenizer.nextToken());
         Packet packet = outQueue.get(packetId);
         if (packet == null) return;
-        int chunkId = NostrUtils.safeInt(tokenizer.nextToken());
+        int chunkId = NGEUtils.safeInt(tokenizer.nextToken());
         Chunk chunk = packet.chunks.get(chunkId);
         if (chunk == null || chunk.ack) return;
         chunk.ack = true;
@@ -229,7 +229,7 @@ public class NostrTURN {
         // string tokenizer to parse the data as we move forward
         StringTokenizer tokenizer = new StringTokenizer(data, ",");
 
-        long packetId = NostrUtils.safeLong(tokenizer.nextToken());
+        long packetId = NGEUtils.safeLong(tokenizer.nextToken());
         if (this.inPacket != null && this.inPacket.id != packetId) {
             logger.warning("Received packet with id " + packetId + " but current packet is " + this.inPacket.id);
             return;
@@ -240,8 +240,8 @@ public class NostrTURN {
             this.inPacket = new Packet(packetId, new ArrayList<>(), null, null);
         }
 
-        int chunkId = NostrUtils.safeInt(tokenizer.nextToken());
-        int nChunks = NostrUtils.safeInt(tokenizer.nextToken());
+        int chunkId = NGEUtils.safeInt(tokenizer.nextToken());
+        int nChunks = NGEUtils.safeInt(tokenizer.nextToken());
         while (this.inPacket.chunks.size() < nChunks) {
             this.inPacket.chunks.add(new Chunk(null));
         }
@@ -365,7 +365,7 @@ public class NostrTURN {
                     try {
                         Collection<Packet> packets = outQueue.values();
                         if (packets.isEmpty()) {
-                            Platform platform = NostrUtils.getPlatform();
+                            NGEPlatform platform = NGEUtils.getPlatform();
                             platform
                                 .wrapPromise((res, rej) -> {
                                     assert lockNotify == null;
@@ -461,7 +461,7 @@ public class NostrTURN {
     public AsyncTask<Void> write(ByteBuffer data) {
         Objects.requireNonNull(data);
 
-        Platform platform = NostrUtils.getPlatform();
+        NGEPlatform platform = NGEUtils.getPlatform();
         return platform.promisify(
             (res, rej) -> {
                 // compress

@@ -28,9 +28,9 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package org.ngengine.nostr4j.platform.jvm;
+package org.ngengine.platform.jvm;
 
-import static org.ngengine.nostr4j.utils.NostrUtils.dbg;
+import static org.ngengine.platform.NGEUtils.dbg;
 
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -42,13 +42,15 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import org.ngengine.nostr4j.platform.AsyncTask;
-import org.ngengine.nostr4j.platform.RTCSettings;
-import org.ngengine.nostr4j.platform.transport.RTCTransport;
-import org.ngengine.nostr4j.platform.transport.RTCTransportListener;
-import org.ngengine.nostr4j.platform.AsyncExecutor;
-import org.ngengine.nostr4j.platform.Platform;
-import org.ngengine.nostr4j.utils.NostrUtils;
+
+import org.ngengine.platform.AsyncExecutor;
+import org.ngengine.platform.AsyncTask;
+import org.ngengine.platform.NGEPlatform;
+import org.ngengine.platform.NGEUtils;
+import org.ngengine.platform.RTCSettings;
+import org.ngengine.platform.transport.RTCTransport;
+import org.ngengine.platform.transport.RTCTransportListener;
+
 import tel.schich.libdatachannel.DataChannel;
 import tel.schich.libdatachannel.DataChannelCallback.Message;
 import tel.schich.libdatachannel.IceState;
@@ -87,7 +89,7 @@ public class JVMRTCTransport implements RTCTransport {
         Collection<String> stunServers
     ) {
         this.executor = executor;
-        Platform platform = NostrUtils.getPlatform();
+        NGEPlatform platform = NGEUtils.getPlatform();
         return platform.wrapPromise((res, rej) -> {
             try {
                 Collection<URI> stunUris = new ArrayList<>();
@@ -163,7 +165,7 @@ public class JVMRTCTransport implements RTCTransport {
 
     @Override
     public AsyncTask<Void> write(ByteBuffer message) {
-        Platform platform = NostrUtils.getPlatform();
+        NGEPlatform platform = NGEUtils.getPlatform();
         return platform.wrapPromise((res, rej) -> {
             try {
                 this.openChannel.then(channel -> {
@@ -195,7 +197,7 @@ public class JVMRTCTransport implements RTCTransport {
     }
 
     AsyncTask<DataChannel> confChannel(DataChannel channel) {
-        Platform platform = NostrUtils.getPlatform();
+        NGEPlatform platform = NGEUtils.getPlatform();
         return platform.wrapPromise((res1, rej1) -> {
             // channel.onClosed.register((DataChannel c) -> {
             //     for (RTCTransportListener listener : listeners) {
@@ -296,7 +298,7 @@ public class JVMRTCTransport implements RTCTransport {
     @Override
     public AsyncTask<String> initiateChannel() {
         this.isInitiator = true;
-        Platform platform = NostrUtils.getPlatform();
+        NGEPlatform platform = NGEUtils.getPlatform();
         return platform.wrapPromise((res, rej) -> {
             try {
                 this.conn.onLocalDescription.register((PeerConnection peer, String sdp, SessionDescriptionType type) -> {
@@ -326,7 +328,7 @@ public class JVMRTCTransport implements RTCTransport {
 
     @Override
     public AsyncTask<String> connectToChannel(String offerOrAnswer) {
-        Platform platform = NostrUtils.getPlatform();
+        NGEPlatform platform = NGEUtils.getPlatform();
         if (this.isInitiator) {
             logger.fine("Connect as initiator, use answer");
             String answer = offerOrAnswer;

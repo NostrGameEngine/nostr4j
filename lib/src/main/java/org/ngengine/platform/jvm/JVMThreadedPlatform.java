@@ -28,18 +28,19 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package org.ngengine.nostr4j.platform.jvm;
+package org.ngengine.platform.jvm;
 
 import java.util.Collection;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import org.ngengine.nostr4j.platform.AsyncTask;
-import org.ngengine.nostr4j.platform.RTCSettings;
-import org.ngengine.nostr4j.platform.transport.WebsocketTransport;
-import org.ngengine.nostr4j.platform.transport.RTCTransport;
-import org.ngengine.nostr4j.platform.AsyncExecutor;
+
+import org.ngengine.platform.AsyncExecutor;
+import org.ngengine.platform.AsyncTask;
+import org.ngengine.platform.RTCSettings;
+import org.ngengine.platform.transport.RTCTransport;
+import org.ngengine.platform.transport.WebsocketTransport;
 
 public class JVMThreadedPlatform extends JVMAsyncPlatform {
 

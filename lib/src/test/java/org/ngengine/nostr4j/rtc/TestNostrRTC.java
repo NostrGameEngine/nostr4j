@@ -39,10 +39,10 @@ import org.ngengine.nostr4j.NostrRelay;
 import org.ngengine.nostr4j.TestLogger;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
 import org.ngengine.nostr4j.keypair.NostrPrivateKey;
-import org.ngengine.nostr4j.platform.RTCSettings;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCLocalPeer;
 import org.ngengine.nostr4j.rtc.turn.NostrTURNSettings;
 import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
+import org.ngengine.platform.RTCSettings;
 
 public class TestNostrRTC {
 

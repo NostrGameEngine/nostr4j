@@ -34,7 +34,7 @@ import java.util.Collection;
 import java.util.List;
 
 import org.ngengine.nostr4j.proto.NostrMessage;
-import org.ngengine.nostr4j.utils.NostrUtils;
+import org.ngengine.platform.NGEUtils;
 
 public class NostrOKMessage extends NostrMessage {
 
@@ -77,13 +77,13 @@ public class NostrOKMessage extends NostrMessage {
     }
 
     public static NostrOKMessage parse(List<Object> data) {
-        String prefix = NostrUtils.safeString(data.get(0));
+        String prefix = NGEUtils.safeString(data.get(0));
         if (data.size() < 3 || !prefix.equals("OK")) {
             return null;
         }
-        String eventId = NostrUtils.safeString(data.get(1));
-        boolean success = NostrUtils.safeBool(data.get(2));
-        String message = data.size() > 3 ? NostrUtils.safeString(data.get(3)) : "";
+        String eventId = NGEUtils.safeString(data.get(1));
+        boolean success = NGEUtils.safeBool(data.get(2));
+        String message = data.size() > 3 ? NGEUtils.safeString(data.get(3)) : "";
         return new NostrOKMessage(eventId, success, message);
     }
 }

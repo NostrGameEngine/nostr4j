@@ -35,7 +35,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
-import org.ngengine.nostr4j.utils.NostrUtils;
+import org.ngengine.platform.NGEUtils;
 
 /**
  * A webRTC offer to connect with a peer, with the peer pubkey, sdp and metadata.
@@ -72,7 +72,7 @@ public class NostrRTCOffer implements NostrRTCSignal {
     }
 
     public NostrRTCOffer(NostrPublicKey pubkey, Map<String, Object> map) {
-        this(pubkey, NostrUtils.safeString(map.get("offer")), NostrUtils.safeString(map.get("turn")), map);
+        this(pubkey, NGEUtils.safeString(map.get("offer")), NGEUtils.safeString(map.get("turn")), map);
     }
 
     public String getOfferString() {

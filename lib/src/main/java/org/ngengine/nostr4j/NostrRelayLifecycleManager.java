@@ -30,7 +30,7 @@
  */
 package org.ngengine.nostr4j;
 
-import static org.ngengine.nostr4j.utils.NostrUtils.dbg;
+import static org.ngengine.platform.NGEUtils.dbg;
 
 import java.time.Instant;
 import java.util.concurrent.CopyOnWriteArrayList;

@@ -30,7 +30,7 @@
  */
 package org.ngengine.nostr4j.event;
 
-import static org.ngengine.nostr4j.utils.NostrUtils.dbg;
+import static org.ngengine.platform.NGEUtils.dbg;
 
 import java.io.Serializable;
 import java.time.Instant;
@@ -39,7 +39,8 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Logger;
-import org.ngengine.nostr4j.utils.NostrUtils;
+
+import org.ngengine.platform.NGEUtils;
 
 public interface NostrEvent extends Cloneable, Serializable {
     Instant getCreatedAt();
@@ -66,12 +67,12 @@ public interface NostrEvent extends Cloneable, Serializable {
                 Logger logger = Logger.getLogger(NostrEvent.class.getName());
                 logger.finest("Serializing event: " + serial);
             });
-            String json = NostrUtils.getPlatform().toJSON(serial);
+            String json = NGEUtils.getPlatform().toJSON(serial);
             assert dbg(() -> {
                 Logger logger = Logger.getLogger(NostrEvent.class.getName());
                 logger.finest("Serialized event: " + json);
             });
-            String id = NostrUtils.getPlatform().sha256(json);
+            String id = NGEUtils.getPlatform().sha256(json);
             return id;
         } catch (Exception e) {
             return null;
@@ -83,7 +84,7 @@ public interface NostrEvent extends Cloneable, Serializable {
         List<String> tag = getTagValues("expiration");
         Instant expiresAt = null;
         if (tag != null) {
-            long expires = NostrUtils.safeLong(tag.get(0));
+            long expires = NGEUtils.safeLong(tag.get(0));
             expiresAt = Instant.ofEpochSecond(expires);
         } else {
             expiresAt = Instant.now().plusSeconds(60 * 60 * 24 * 365 * 2100);

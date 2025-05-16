@@ -34,7 +34,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import org.ngengine.nostr4j.keypair.NostrPrivateKey;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
-import org.ngengine.nostr4j.utils.NostrUtils;
+import org.ngengine.platform.NGEUtils;
 
 /**
  * NIP-44 encrypt/decrypt
@@ -53,16 +53,16 @@ public class Nip44 {
 
     public static byte[] getConversationKey(NostrPrivateKey privateKey, NostrPublicKey publicKey) {
         byte pub[] = concatBytes(0x02, Integer.MIN_VALUE, publicKey._array(), null, null, -1);
-        byte[] shared = NostrUtils.getPlatform().secp256k1SharedSecret(privateKey._array(), pub);
+        byte[] shared = NGEUtils.getPlatform().secp256k1SharedSecret(privateKey._array(), pub);
         byte sharedX[] = Arrays.copyOfRange(shared, 1, 33);
         assert sharedX.length == CONVERSATION_KEY_SIZE;
-        return NostrUtils.getPlatform().hkdf_extract(NIP44_V2_BYTES, sharedX);
+        return NGEUtils.getPlatform().hkdf_extract(NIP44_V2_BYTES, sharedX);
     }
 
     private static byte[] safeNonce(byte[] nonce) {
         if (nonce == null) {
-            nonce = NostrUtils.getPlatform().randomBytes(NONCE_SIZE);
-            assert !NostrUtils.allZeroes(nonce);
+            nonce = NGEUtils.getPlatform().randomBytes(NONCE_SIZE);
+            assert !NGEUtils.allZeroes(nonce);
         } else if (nonce.length != NONCE_SIZE) {
             throw new IllegalArgumentException("Nonce must be 32 bytes");
         }
@@ -74,7 +74,7 @@ public class Nip44 {
             "Conversation key must be 32 bytes"
         );
         nonce = safeNonce(nonce);
-        byte[] keys = NostrUtils.getPlatform().hkdf_expand(conversationKey, nonce, 76);
+        byte[] keys = NGEUtils.getPlatform().hkdf_expand(conversationKey, nonce, 76);
         byte[] chachaKey = Arrays.copyOfRange(keys, 0, 32);
         byte[] chachaNonce = Arrays.copyOfRange(keys, 32, 44);
         byte[] hmacKey = Arrays.copyOfRange(keys, 44, 76);
@@ -110,11 +110,11 @@ public class Nip44 {
         byte[] hmacKey = keys[2];
 
         byte[] padded = pad(plaintext);
-        byte[] ciphertext = NostrUtils.getPlatform().chacha20(chachaKey, chachaNonce, padded, true);
-        byte[] mac = NostrUtils.getPlatform().hmac(hmacKey, nonce, ciphertext);
+        byte[] ciphertext = NGEUtils.getPlatform().chacha20(chachaKey, chachaNonce, padded, true);
+        byte[] mac = NGEUtils.getPlatform().hmac(hmacKey, nonce, ciphertext);
         byte[] out = concatBytes(VERSION_V2, Integer.MIN_VALUE, nonce, ciphertext, mac, -1);
 
-        return NostrUtils.getPlatform().base64encode(out);
+        return NGEUtils.getPlatform().base64encode(out);
     }
 
     public static String encrypt(String plaintext, byte[] conversationKey) {
@@ -126,7 +126,7 @@ public class Nip44 {
         if (plen < 132 || plen > 87472) throw new IllegalArgumentException("invalid payload length: " + plen);
         if (payload.charAt(0) == '#') throw new IllegalArgumentException("unknown encryption version");
 
-        byte[] data = NostrUtils.getPlatform().base64decode(payload);
+        byte[] data = NGEUtils.getPlatform().base64decode(payload);
         int dataLen = data.length;
         if (dataLen < (VERSION_SIZE + NONCE_SIZE + 1 + MAC_SIZE) || dataLen > 65603) {
             throw new IllegalArgumentException("invalid data length: " + dataLen);
@@ -157,12 +157,12 @@ public class Nip44 {
         byte[] chachaNonce = keys[1];
         byte[] hmacKey = keys[2];
 
-        byte[] calculatedMac = NostrUtils.getPlatform().hmac(hmacKey, nonce, ciphertext);
+        byte[] calculatedMac = NGEUtils.getPlatform().hmac(hmacKey, nonce, ciphertext);
         if (!constantTimeEquals(calculatedMac, mac)) {
             throw new SecurityException("invalid MAC - message authentication failed");
         }
 
-        byte[] padded = NostrUtils.getPlatform().chacha20(chachaKey, chachaNonce, ciphertext, false);
+        byte[] padded = NGEUtils.getPlatform().chacha20(chachaKey, chachaNonce, ciphertext, false);
         if (padded.length < 3) {
             throw new IllegalArgumentException("invalid padding");
         }

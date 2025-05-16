@@ -41,7 +41,7 @@ import org.junit.Test;
 import org.ngengine.nostr4j.event.NostrEvent;
 import org.ngengine.nostr4j.event.UnsignedNostrEvent;
 import org.ngengine.nostr4j.nip24.Nip24Metadata;
-import org.ngengine.nostr4j.utils.NostrUtils;
+import org.ngengine.platform.NGEUtils;
 
 public class TestNip24Metadata {
 
@@ -153,7 +153,7 @@ public class TestNip24Metadata {
         // The update event content should be the JSON representation of the metadata
         // map.
         String updateContent = updateEvent.getContent();
-        Map parsed = NostrUtils.getPlatform().fromJSON(updateContent, Map.class);
+        Map parsed = NGEUtils.getPlatform().fromJSON(updateContent, Map.class);
         Assert.assertEquals("Test Display", parsed.get("display_name"));
         Assert.assertEquals("TestName", parsed.get("name"));
     }

@@ -44,12 +44,12 @@ import org.ngengine.nostr4j.listeners.sub.NostrSubCloseListener;
 import org.ngengine.nostr4j.listeners.sub.NostrSubEoseListener;
 import org.ngengine.nostr4j.listeners.sub.NostrSubEventListener;
 import org.ngengine.nostr4j.listeners.sub.NostrSubListener;
-import org.ngengine.nostr4j.platform.AsyncTask;
-import org.ngengine.nostr4j.platform.AsyncExecutor;
-import org.ngengine.nostr4j.platform.Platform;
 import org.ngengine.nostr4j.proto.NostrMessage;
 import org.ngengine.nostr4j.proto.NostrMessageAck;
-import org.ngengine.nostr4j.utils.NostrUtils;
+import org.ngengine.platform.AsyncExecutor;
+import org.ngengine.platform.AsyncTask;
+import org.ngengine.platform.NGEPlatform;
+import org.ngengine.platform.NGEUtils;
 
 /**
  * Represents a subscription to a Nostr relay based on specific filter criteria.
@@ -165,7 +165,7 @@ public class NostrSubscription extends NostrMessage {
         if (opened) {
             throw new IllegalStateException("Subscription already opened");
         }
-        Platform platform = NostrUtils.getPlatform();
+        NGEPlatform platform = NGEUtils.getPlatform();
         this.exc = platform.newSubscriptionExecutor();
         opened = true;
         return this.onOpen.apply(this);
@@ -181,7 +181,7 @@ public class NostrSubscription extends NostrMessage {
      * @return An async task representing the close operation
      */
     public AsyncTask<List<NostrMessageAck>> close() {
-        Platform platform = NostrUtils.getPlatform();
+        NGEPlatform platform = NGEUtils.getPlatform();
         if (!opened) return platform.wrapPromise((res, rej) -> {
             res.accept(Collections.emptyList());
         });

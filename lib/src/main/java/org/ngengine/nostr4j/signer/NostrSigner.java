@@ -34,7 +34,7 @@ import java.io.Serializable;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.event.UnsignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
-import org.ngengine.nostr4j.platform.AsyncTask;
+import org.ngengine.platform.AsyncTask;
 
 public interface NostrSigner extends Cloneable, Serializable {
     /**

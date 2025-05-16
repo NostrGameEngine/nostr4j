@@ -30,7 +30,7 @@
  */
 package org.ngengine.nostr4j;
 
-import static org.ngengine.nostr4j.utils.NostrUtils.dbg;
+import static org.ngengine.platform.NGEUtils.dbg;
 
 import java.lang.reflect.InvocationTargetException;
 import java.time.Instant;
@@ -54,15 +54,15 @@ import org.ngengine.nostr4j.event.tracker.ForwardSlidingWindowEventTracker;
 import org.ngengine.nostr4j.event.tracker.NaiveEventTracker;
 import org.ngengine.nostr4j.listeners.NostrNoticeListener;
 import org.ngengine.nostr4j.listeners.NostrRelayComponent;
-import org.ngengine.nostr4j.platform.AsyncTask;
-import org.ngengine.nostr4j.platform.Platform;
 import org.ngengine.nostr4j.proto.NostrMessage;
 import org.ngengine.nostr4j.proto.NostrMessageAck;
 import org.ngengine.nostr4j.proto.impl.NostrClosedMessage;
 import org.ngengine.nostr4j.proto.impl.NostrEOSEMessage;
 import org.ngengine.nostr4j.proto.impl.NostrNoticeMessage;
-import org.ngengine.nostr4j.utils.NostrUtils;
 import org.ngengine.nostr4j.utils.ScheduledAction;
+import org.ngengine.platform.AsyncTask;
+import org.ngengine.platform.NGEPlatform;
+import org.ngengine.platform.NGEUtils;
 
 public class NostrPool {
 
@@ -147,7 +147,7 @@ public class NostrPool {
             });
             promises.add(relay.sendMessage(message));
         }
-        Platform platform = NostrUtils.getPlatform();
+        NGEPlatform platform = NGEUtils.getPlatform();
         return platform
             .awaitAll(promises)
             .compose(acks -> {
@@ -317,7 +317,7 @@ public class NostrPool {
         TimeUnit unit,
         Class<? extends EventTracker> eventTracker
     ) {
-        Platform platform = NostrUtils.getPlatform();
+        NGEPlatform platform = NGEUtils.getPlatform();
         NostrSubscription sub = subscribe(filters, eventTracker);
         return platform.wrapPromise((res, rej) -> {
             List<SignedNostrEvent> events = new ArrayList<>();

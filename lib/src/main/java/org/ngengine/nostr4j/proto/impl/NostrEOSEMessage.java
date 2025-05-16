@@ -34,7 +34,7 @@ import java.util.Collection;
 import java.util.List;
 
 import org.ngengine.nostr4j.proto.NostrMessage;
-import org.ngengine.nostr4j.utils.NostrUtils;
+import org.ngengine.platform.NGEUtils;
 
 public class NostrEOSEMessage extends NostrMessage {
 
@@ -59,11 +59,11 @@ public class NostrEOSEMessage extends NostrMessage {
     }
 
     public static NostrEOSEMessage parse(List<Object> data) {
-        String prefix = NostrUtils.safeString(data.get(0));
+        String prefix = NGEUtils.safeString(data.get(0));
         if (data.size() < 2 || !prefix.equals("EOSE")) {
             return null;
         }
-        String subId = NostrUtils.safeString(data.get(1));
+        String subId = NGEUtils.safeString(data.get(1));
         return new NostrEOSEMessage(subId);
     }
 }

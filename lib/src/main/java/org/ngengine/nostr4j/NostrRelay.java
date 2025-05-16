@@ -30,7 +30,7 @@
  */
 package org.ngengine.nostr4j;
 
-import static org.ngengine.nostr4j.utils.NostrUtils.dbg;
+import static org.ngengine.platform.NGEUtils.dbg;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -48,18 +48,18 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.listeners.NostrRelayComponent;
-import org.ngengine.nostr4j.platform.AsyncTask;
-import org.ngengine.nostr4j.platform.AsyncExecutor;
-import org.ngengine.nostr4j.platform.Platform;
-import org.ngengine.nostr4j.platform.transport.WebsocketTransport;
-import org.ngengine.nostr4j.platform.transport.WebsocketTransportListener;
 import org.ngengine.nostr4j.proto.NostrMessage;
 import org.ngengine.nostr4j.proto.NostrMessageAck;
 import org.ngengine.nostr4j.proto.impl.NostrClosedMessage;
 import org.ngengine.nostr4j.proto.impl.NostrEOSEMessage;
 import org.ngengine.nostr4j.proto.impl.NostrOKMessage;
 import org.ngengine.nostr4j.utils.ExponentialBackoff;
-import org.ngengine.nostr4j.utils.NostrUtils;
+import org.ngengine.platform.AsyncExecutor;
+import org.ngengine.platform.AsyncTask;
+import org.ngengine.platform.NGEPlatform;
+import org.ngengine.platform.NGEUtils;
+import org.ngengine.platform.transport.WebsocketTransport;
+import org.ngengine.platform.transport.WebsocketTransportListener;
 
 public final class NostrRelay {
 
@@ -143,12 +143,12 @@ public final class NostrRelay {
     protected transient NostrRelayInfo relayInfo = null;
 
     public NostrRelay(String url) {
-        this(url, NostrUtils.getPlatform().newRelayExecutor());
+        this(url, NGEUtils.getPlatform().newRelayExecutor());
     }
 
     public NostrRelay(String url, AsyncExecutor executor) {
         try {
-            Platform platform = NostrUtils.getPlatform();
+            NGEPlatform platform = NGEUtils.getPlatform();
             this.connector = platform.newTransport();
             this.connector.addListener(listener);
             this.messageQueue = platform.newConcurrentQueue(QueuedMessage.class);
@@ -187,7 +187,7 @@ public final class NostrRelay {
     }
 
     protected <T> void runInRelayExecutor(BiConsumer<Consumer<T>, Consumer<Throwable>> runnable, boolean enqueue) {
-        Platform platform = NostrUtils.getPlatform();
+        NGEPlatform platform = NGEUtils.getPlatform();
         if (!enqueue) {
             platform.promisify(runnable, executor);
         } else {
@@ -252,7 +252,7 @@ public final class NostrRelay {
 
     // await for order
     public AsyncTask<NostrMessageAck> sendMessage(NostrMessage message) {
-        Platform platform = NostrUtils.getPlatform();
+        NGEPlatform platform = NGEUtils.getPlatform();
         return platform.wrapPromise((ores, orej) -> {
             runInRelayExecutor(
                 (r0, rj0) -> {
@@ -356,7 +356,7 @@ public final class NostrRelay {
     }
 
     public AsyncTask<NostrRelay> connect() {
-        Platform platform = NostrUtils.getPlatform();
+        NGEPlatform platform = NGEUtils.getPlatform();
 
         if (!this.connected && !this.connecting) {
             this.connecting = true;
@@ -406,7 +406,7 @@ public final class NostrRelay {
         this.disconnectedByClient = true;
         this.connector.close(reason);
         AsyncExecutor executor = this.executor;
-        Platform platform = NostrUtils.getPlatform();
+        NGEPlatform platform = NGEUtils.getPlatform();
         return platform.wrapPromise((ores, orej) -> {
             runInRelayExecutor(
                 (rs0, rj0) -> {
@@ -516,12 +516,12 @@ public final class NostrRelay {
     //ordered
     private void onConnectionMessage(String msg) {
         try {
-            Platform platform = NostrUtils.getPlatform();
+            NGEPlatform platform = NGEUtils.getPlatform();
             assert dbg(() -> {
                 logger.finest("Received message: " + msg);
             });
             List<Object> data = platform.fromJSON(msg, List.class);
-            String prefix = NostrUtils.safeString(data.get(0));
+            String prefix = NGEUtils.safeString(data.get(0));
 
             // syncher.await();
             NostrMessage rcv = null;

@@ -37,8 +37,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
 import org.ngengine.nostr4j.NostrRelay;
-import org.ngengine.nostr4j.platform.Platform;
-import org.ngengine.nostr4j.utils.NostrUtils;
+import org.ngengine.platform.NGEPlatform;
+import org.ngengine.platform.NGEUtils;
 
 public abstract class NostrMessage extends NostrMessageFragment {
 
@@ -68,7 +68,7 @@ public abstract class NostrMessage extends NostrMessageFragment {
 
     protected String toJSON() {
         if (jsonCache == null) {
-            Platform platform = NostrUtils.getPlatform();
+            NGEPlatform platform = NGEUtils.getPlatform();
             Collection<Object> serial = toSerial();
             jsonCache = platform.toJSON(serial);
         }

@@ -42,12 +42,12 @@ import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.event.UnsignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
 import org.ngengine.nostr4j.keypair.NostrPrivateKey;
-import org.ngengine.nostr4j.platform.jvm.JVMAsyncPlatform;
 import org.ngengine.nostr4j.proto.NostrMessage;
 import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
 import org.ngengine.nostr4j.signer.NostrSigner;
 import org.ngengine.nostr4j.utils.Bech32;
-import org.ngengine.nostr4j.utils.NostrUtils;
+import org.ngengine.platform.NGEUtils;
+import org.ngengine.platform.jvm.JVMAsyncPlatform;
 
 public class TestNostrEvent {
 
@@ -67,7 +67,7 @@ public class TestNostrEvent {
         SignedNostrEvent signedEvent = signer.sign(event).await();
         assertTrue(signedEvent.verify());
 
-        assertEquals(NostrUtils.bytesToHex(Bech32.bech32Decode(noteId)), signedEvent.getId());
+        assertEquals(NGEUtils.bytesToHex(Bech32.bech32Decode(noteId)), signedEvent.getId());
         assertEquals(noteId, signedEvent.getIdBech32());
         assertEquals(signature, signedEvent.getSignature());
     }
@@ -88,7 +88,7 @@ public class TestNostrEvent {
         System.out.println(event.toString());
         SignedNostrEvent signedEvent = signer.sign(event).await();
         assertTrue(signedEvent.verify());
-        assertEquals(NostrUtils.bytesToHex(Bech32.bech32Decode(noteId)), signedEvent.getId());
+        assertEquals(NGEUtils.bytesToHex(Bech32.bech32Decode(noteId)), signedEvent.getId());
         assertEquals(noteId, signedEvent.getIdBech32());
 
         // aux random signature is not equal to the hardcoded one

@@ -41,7 +41,7 @@ import org.junit.Test;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
 import org.ngengine.nostr4j.keypair.NostrPrivateKey;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
-import org.ngengine.nostr4j.utils.NostrUtils;
+import org.ngengine.platform.NGEUtils;
 
 public class TestNostrKeyPair {
 
@@ -75,7 +75,7 @@ public class TestNostrKeyPair {
         assertEquals(bytesString(derivedPubKey._array()), pubBytes);
 
         byte arrayFromInternal[] = privKey._array();
-        byte arrayFromHex[] = NostrUtils.hexToByteArray(privKey.asHex());
+        byte arrayFromHex[] = NGEUtils.hexToByteArray(privKey.asHex());
         assertArrayEquals(arrayFromInternal, arrayFromHex);
     }
 

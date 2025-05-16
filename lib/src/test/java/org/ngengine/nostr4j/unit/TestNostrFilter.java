@@ -38,8 +38,8 @@ import java.util.Map;
 import org.junit.Test;
 import org.ngengine.nostr4j.NostrFilter;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
-import org.ngengine.nostr4j.platform.Platform;
-import org.ngengine.nostr4j.utils.NostrUtils;
+import org.ngengine.platform.NGEPlatform;
+import org.ngengine.platform.NGEUtils;
 
 public class TestNostrFilter {
 
@@ -106,7 +106,7 @@ public class TestNostrFilter {
             "{\"limit\":10,\"ids\":[\"123\",\"234\"],\"kinds\":[0,1],\"until\":1,\"#a\":[\"1\"],\"authors\":[\"2dfd5a7b5389aa6b550efbf996ef5cd2708fbce28de0bc48d2d5c0b2253f9652\",\"77cca49d43c6013b25be4991e5be283be83d156c6fe30d0e6fa89306d47c5253\"],\"since\":2,\"#b\":[\"1\",\"2\",\"3\"]}";
 
         Map<String, Object> map = ((TestableNostrFilter) filter).toMap();
-        Platform p = NostrUtils.getPlatform();
+        NGEPlatform p = NGEUtils.getPlatform();
         String json = p.toJSON(map);
         assertEquals(json, expectedJson);
 

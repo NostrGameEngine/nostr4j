@@ -35,9 +35,10 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.Collections;
+
 import org.ngengine.nostr4j.utils.Bech32;
 import org.ngengine.nostr4j.utils.ByteBufferList;
-import org.ngengine.nostr4j.utils.NostrUtils;
+import org.ngengine.platform.NGEUtils;
 
 /**
  * Represents a Nostr public key.
@@ -101,7 +102,7 @@ public final class NostrPublicKey implements NostrKey {
      * @return a new NostrPublicKey instance
      */
     public static NostrPublicKey fromHex(String hex) {
-        NostrPublicKey key = new NostrPublicKey(NostrUtils.hexToBytes(hex));
+        NostrPublicKey key = new NostrPublicKey(NGEUtils.hexToBytes(hex));
         return key;
     }
 
@@ -167,7 +168,7 @@ public final class NostrPublicKey implements NostrKey {
     @Override
     public String asHex() {
         if (hex != null) return hex;
-        hex = NostrUtils.bytesToHex(data);
+        hex = NGEUtils.bytesToHex(data);
         assert data.position() == 0 : "Data position must be 0";
         return hex;
     }

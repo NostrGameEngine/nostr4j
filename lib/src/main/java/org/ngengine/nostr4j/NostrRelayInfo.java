@@ -41,9 +41,9 @@ import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
-import org.ngengine.nostr4j.platform.AsyncTask;
-import org.ngengine.nostr4j.platform.Platform;
-import org.ngengine.nostr4j.utils.NostrUtils;
+import org.ngengine.platform.AsyncTask;
+import org.ngengine.platform.NGEPlatform;
+import org.ngengine.platform.NGEUtils;
 
 /**
  * Nip-11
@@ -82,7 +82,7 @@ public class NostrRelayInfo implements Cloneable, Serializable {
     public static AsyncTask<NostrRelayInfo> get(String relayUrl) {
         Map<String, String> headers = new HashMap<>();
         headers.put("Accept", "application/nostr+json");
-        Platform platform = NostrUtils.getPlatform();
+        NGEPlatform platform = NGEUtils.getPlatform();
         String httpUrl = relayUrl.startsWith("wss://")
             ? relayUrl.replace("wss://", "https://")
             : relayUrl.replace("ws://", "http://");
@@ -114,35 +114,35 @@ public class NostrRelayInfo implements Cloneable, Serializable {
 
     public String getName() {
         if (name == null) {
-            name = NostrUtils.safeString(map.get("name"));
+            name = NGEUtils.safeString(map.get("name"));
         }
         return name;
     }
 
     public String getDescription() {
         if (description == null) {
-            description = NostrUtils.safeString(map.get("description"));
+            description = NGEUtils.safeString(map.get("description"));
         }
         return description;
     }
 
     public String getBanner() {
         if (banner == null) {
-            banner = NostrUtils.safeString(map.get("banner"));
+            banner = NGEUtils.safeString(map.get("banner"));
         }
         return banner;
     }
 
     public String getIcon() {
         if (icon == null) {
-            icon = NostrUtils.safeString(map.get("icon"));
+            icon = NGEUtils.safeString(map.get("icon"));
         }
         return icon;
     }
 
     public NostrPublicKey getPubkey() {
         if (pubkey == null) {
-            String k = NostrUtils.safeString(map.get("pubkey"));
+            String k = NGEUtils.safeString(map.get("pubkey"));
             if (k.startsWith("npub")) {
                 pubkey = NostrPublicKey.fromBech32(k);
             } else {
@@ -154,42 +154,42 @@ public class NostrRelayInfo implements Cloneable, Serializable {
 
     public String getContact() {
         if (contact == null) {
-            contact = NostrUtils.safeString(map.get("contact"));
+            contact = NGEUtils.safeString(map.get("contact"));
         }
         return contact;
     }
 
     public List<Integer> getSupportedNips() {
         if (supportedNips == null) {
-            supportedNips = Collections.unmodifiableList(NostrUtils.safeIntList(map.getOrDefault("supported_nips", List.of())));
+            supportedNips = Collections.unmodifiableList(NGEUtils.safeIntList(map.getOrDefault("supported_nips", List.of())));
         }
         return supportedNips;
     }
 
     public String getSoftware() {
         if (software == null) {
-            software = NostrUtils.safeString(map.get("software"));
+            software = NGEUtils.safeString(map.get("software"));
         }
         return software;
     }
 
     public String getVersion() {
         if (version == null) {
-            version = NostrUtils.safeString(map.get("version"));
+            version = NGEUtils.safeString(map.get("version"));
         }
         return version;
     }
 
     public String getPrivacyPolicy() {
         if (privacyPolicy == null) {
-            privacyPolicy = NostrUtils.safeString(map.get("privacy_policy"));
+            privacyPolicy = NGEUtils.safeString(map.get("privacy_policy"));
         }
         return privacyPolicy;
     }
 
     public String getTermsOfService() {
         if (termsOfService == null) {
-            termsOfService = NostrUtils.safeString(map.get("terms_of_service"));
+            termsOfService = NGEUtils.safeString(map.get("terms_of_service"));
         }
         return termsOfService;
     }
@@ -211,7 +211,7 @@ public class NostrRelayInfo implements Cloneable, Serializable {
             if (nip.startsWith("nip")) {
                 nip = nip.substring(3);
             }
-            return isNipSupported(NostrUtils.safeInt(nip));
+            return isNipSupported(NGEUtils.safeInt(nip));
         } catch (NumberFormatException e) {
             return false;
         }
@@ -229,21 +229,21 @@ public class NostrRelayInfo implements Cloneable, Serializable {
 
     public int getLimitation(String key, int defaultValue) {
         if (getLimitations().containsKey(key)) {
-            return NostrUtils.safeInt(getLimitations().get(key));
+            return NGEUtils.safeInt(getLimitations().get(key));
         }
         return defaultValue;
     }
 
     public boolean getLimitation(String key, boolean defaultValue) {
         if (getLimitations().containsKey(key)) {
-            return NostrUtils.safeBool(getLimitations().get(key));
+            return NGEUtils.safeBool(getLimitations().get(key));
         }
         return defaultValue;
     }
 
     public List<String> getCountries() {
         if (relayCountries == null) {
-            relayCountries = Collections.unmodifiableList(NostrUtils.safeStringList(map.getOrDefault("countries", List.of())));
+            relayCountries = Collections.unmodifiableList(NGEUtils.safeStringList(map.getOrDefault("countries", List.of())));
         }
         return relayCountries;
     }
@@ -251,7 +251,7 @@ public class NostrRelayInfo implements Cloneable, Serializable {
     public List<Locale> getLanguageTags() {
         if (languageTags == null) {
             List<Locale> languageTags = new ArrayList<>();
-            List<String> tags = NostrUtils.safeStringList(map.getOrDefault("language_tags", List.of()));
+            List<String> tags = NGEUtils.safeStringList(map.getOrDefault("language_tags", List.of()));
             for (String tag : tags) {
                 try {
                     languageTags.add(Locale.forLanguageTag(tag));
@@ -266,14 +266,14 @@ public class NostrRelayInfo implements Cloneable, Serializable {
 
     public List<String> getTags() {
         if (tags == null) {
-            tags = Collections.unmodifiableList(NostrUtils.safeStringList(map.getOrDefault("tags", List.of())));
+            tags = Collections.unmodifiableList(NGEUtils.safeStringList(map.getOrDefault("tags", List.of())));
         }
         return tags;
     }
 
     public String getPostingPolicy() {
         if (postingPolicy == null) {
-            postingPolicy = NostrUtils.safeString(map.get("posting_policy"));
+            postingPolicy = NGEUtils.safeString(map.get("posting_policy"));
         }
         return postingPolicy;
     }
@@ -283,7 +283,7 @@ public class NostrRelayInfo implements Cloneable, Serializable {
     @Override
     public String toString() {
         if (toStringCache == null) {
-            toStringCache = NostrUtils.getPlatform().toJSON(get());
+            toStringCache = NGEUtils.getPlatform().toJSON(get());
         }
         return toStringCache;
     }

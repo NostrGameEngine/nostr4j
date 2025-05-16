@@ -34,7 +34,7 @@ import java.time.Instant;
 import java.util.Map;
 import org.ngengine.nostr4j.NostrFilter;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
-import org.ngengine.nostr4j.utils.NostrUtils;
+import org.ngengine.platform.NGEUtils;
 
 public class NostrSearchFilter extends NostrFilter {
 
@@ -58,7 +58,7 @@ public class NostrSearchFilter extends NostrFilter {
     public NostrSearchFilter(Map<String, Object> map) {
         super(map);
         if (map.containsKey("search")) {
-            String search = NostrUtils.safeString(map.get("search"));
+            String search = NGEUtils.safeString(map.get("search"));
             if (!search.isEmpty()) {
                 this.search = search;
             }

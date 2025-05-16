@@ -28,28 +28,14 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package org.ngengine.nostr4j.platform.transport;
+package org.ngengine.platform.transport;
 
-import java.io.Closeable;
-import java.nio.ByteBuffer;
-import java.util.Collection;
-import org.ngengine.nostr4j.platform.AsyncTask;
-import org.ngengine.nostr4j.platform.RTCSettings;
-import org.ngengine.nostr4j.platform.AsyncExecutor;
+public interface WebsocketTransportListener {
+    void onConnectionClosedByServer(String reason);
+    void onConnectionOpen();
+    void onConnectionMessage(String msg);
 
-public interface RTCTransport extends Closeable {
-    void close();
-    boolean isConnected();
+    void onConnectionClosedByClient(String reason);
 
-    AsyncTask<Void> start(RTCSettings settings, AsyncExecutor executor, String connId, Collection<String> stunServers);
-    AsyncTask<String> connectToChannel(String offerOrAnswer);
-    AsyncTask<String> initiateChannel();
-
-    void addRemoteIceCandidates(Collection<String> candidates);
-
-    void addListener(RTCTransportListener listener);
-
-    void removeListener(RTCTransportListener listener);
-
-    AsyncTask<Void> write(ByteBuffer message);
+    void onConnectionError(Throwable e);
 }

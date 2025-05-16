@@ -42,11 +42,11 @@ import org.ngengine.nostr4j.event.NostrEvent;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.event.UnsignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
-import org.ngengine.nostr4j.platform.AsyncTask;
-import org.ngengine.nostr4j.platform.Platform;
 import org.ngengine.nostr4j.proto.NostrMessageAck;
 import org.ngengine.nostr4j.signer.NostrSigner;
-import org.ngengine.nostr4j.utils.NostrUtils;
+import org.ngengine.platform.AsyncTask;
+import org.ngengine.platform.NGEPlatform;
+import org.ngengine.platform.NGEUtils;
 
 public class Nip24Metadata implements Serializable {
 
@@ -57,7 +57,7 @@ public class Nip24Metadata implements Serializable {
 
     public Nip24Metadata(NostrEvent source) {
         this.sourceEvent = source;
-        Platform platform = NostrUtils.getPlatform();
+        NGEPlatform platform = NGEUtils.getPlatform();
         String content = sourceEvent.getContent();
         Map<String, Object> meta = platform.fromJSON(content, Map.class);
         if (meta == null) throw new IllegalArgumentException("Invalid metadata");
@@ -68,7 +68,7 @@ public class Nip24Metadata implements Serializable {
         UnsignedNostrEvent event = new UnsignedNostrEvent();
         event.withKind(0);
         event.createdAt(Instant.now());
-        event.withContent(NostrUtils.getPlatform().toJSON(metadata));
+        event.withContent(NGEUtils.getPlatform().toJSON(metadata));
         return event;
     }
 
@@ -77,12 +77,12 @@ public class Nip24Metadata implements Serializable {
     }
 
     public String getDisplayName() {
-        String v = NostrUtils.safeString(metadata.get("display_name"));
+        String v = NGEUtils.safeString(metadata.get("display_name"));
         if (v.isEmpty()) {
-            v = NostrUtils.safeString(metadata.get("displayName"));
+            v = NGEUtils.safeString(metadata.get("displayName"));
         }
         if (v.isEmpty()) return null;
-        return NostrUtils.safeString(v);
+        return NGEUtils.safeString(v);
     }
 
     public void setDisplayName(String name) {
@@ -90,12 +90,12 @@ public class Nip24Metadata implements Serializable {
     }
 
     public String getName() {
-        String v = NostrUtils.safeString(metadata.get("name"));
+        String v = NGEUtils.safeString(metadata.get("name"));
         if (v.isEmpty()) {
-            v = NostrUtils.safeString(metadata.get("username"));
+            v = NGEUtils.safeString(metadata.get("username"));
         }
         if (v.isEmpty()) return null;
-        return NostrUtils.safeString(v);
+        return NGEUtils.safeString(v);
     }
 
     public void setName(String name) {
@@ -105,7 +105,7 @@ public class Nip24Metadata implements Serializable {
     public String getAbout() {
         Object v = metadata.get("about");
         if (v == null) return null;
-        return NostrUtils.safeString(v);
+        return NGEUtils.safeString(v);
     }
 
     public void setAbout(String about) {
@@ -115,7 +115,7 @@ public class Nip24Metadata implements Serializable {
     public String getPicture() {
         Object v = metadata.get("picture");
         if (v == null) return null;
-        return NostrUtils.safeString(v);
+        return NGEUtils.safeString(v);
     }
 
     public void setPicture(String picture) {
@@ -125,7 +125,7 @@ public class Nip24Metadata implements Serializable {
     public String getWebsite() {
         Object v = metadata.get("website");
         if (v == null) return null;
-        return NostrUtils.safeString(v);
+        return NGEUtils.safeString(v);
     }
 
     public void setWebsite(String website) {
@@ -135,7 +135,7 @@ public class Nip24Metadata implements Serializable {
     public String getBanner() {
         Object v = metadata.get("banner");
         if (v == null) return null;
-        return NostrUtils.safeString(v);
+        return NGEUtils.safeString(v);
     }
 
     public void setBanner(String banner) {
@@ -145,7 +145,7 @@ public class Nip24Metadata implements Serializable {
     public boolean isBot() {
         Object v = metadata.get("bot");
         if (v == null) return false;
-        return NostrUtils.safeBool(v);
+        return NGEUtils.safeBool(v);
     }
 
     public void setBot(boolean bot) {
@@ -159,15 +159,15 @@ public class Nip24Metadata implements Serializable {
     public String getUsername() {
         Object v = metadata.get("username");
         if (v == null) return null;
-        return NostrUtils.safeString(v);
+        return NGEUtils.safeString(v);
     }
 
     public Date getBirthday() {
         Map<String, Object> birthday = (Map<String, Object>) metadata.get("birthday");
         if (birthday == null) return null;
-        int year = NostrUtils.safeInt(birthday.get("year"));
-        int month = NostrUtils.safeInt(birthday.get("month"));
-        int day = NostrUtils.safeInt(birthday.get("day"));
+        int year = NGEUtils.safeInt(birthday.get("year"));
+        int month = NGEUtils.safeInt(birthday.get("month"));
+        int day = NGEUtils.safeInt(birthday.get("day"));
         if (year == 0 || month == 0 || day == 0) return null;
         Calendar cal = Calendar.getInstance();
         cal.set(Calendar.YEAR, year);

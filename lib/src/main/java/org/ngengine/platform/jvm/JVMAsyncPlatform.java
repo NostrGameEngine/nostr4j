@@ -28,7 +28,7 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package org.ngengine.nostr4j.platform.jvm;
+package org.ngengine.platform.jvm;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -69,23 +69,21 @@ import javax.crypto.spec.SecretKeySpec;
 import org.bouncycastle.jce.ECNamedCurveTable;
 import org.bouncycastle.jce.spec.ECParameterSpec;
 import org.bouncycastle.math.ec.ECPoint;
-import org.ngengine.nostr4j.keypair.NostrPrivateKey;
-import org.ngengine.nostr4j.keypair.NostrPublicKey;
-import org.ngengine.nostr4j.platform.AsyncTask;
-import org.ngengine.nostr4j.platform.RTCSettings;
-import org.ngengine.nostr4j.platform.transport.WebsocketTransport;
-import org.ngengine.nostr4j.platform.transport.RTCTransport;
-import org.ngengine.nostr4j.platform.AsyncExecutor;
-import org.ngengine.nostr4j.platform.Platform;
-import org.ngengine.nostr4j.signer.FailedToSignException;
-import org.ngengine.nostr4j.utils.NostrUtils;
+import org.ngengine.platform.AsyncExecutor;
+import org.ngengine.platform.AsyncTask;
+import org.ngengine.platform.FailedToSignException;
+import org.ngengine.platform.NGEPlatform;
+import org.ngengine.platform.NGEUtils;
+import org.ngengine.platform.RTCSettings;
+import org.ngengine.platform.transport.RTCTransport;
+import org.ngengine.platform.transport.WebsocketTransport;
 
 import java.awt.Toolkit;
 import java.awt.datatransfer.Clipboard;
 import java.awt.datatransfer.DataFlavor;
 
 // thread-safe
-public class JVMAsyncPlatform implements Platform {
+public class JVMAsyncPlatform extends NGEPlatform {
     static {
         if (Security.getProvider("BC") == null) {
             Security.addProvider(new org.bouncycastle.jce.provider.BouncyCastleProvider());
@@ -151,7 +149,7 @@ public class JVMAsyncPlatform implements Platform {
     @Override
     public String sha256(String data) {
         byte[] bytes = data.getBytes(StandardCharsets.UTF_8);
-        return NostrUtils.bytesToHex(sha256(bytes));
+        return NGEUtils.bytesToHex(sha256(bytes));
     }
 
     @Override
@@ -176,17 +174,16 @@ public class JVMAsyncPlatform implements Platform {
 
     @Override
     public String sign(String data, byte priv[]) throws FailedToSignException {
-        byte dataB[] = NostrUtils.hexToByteArray(data);
+        byte dataB[] = NGEUtils.hexToByteArray(data);
         byte sigB[] = Schnorr.sign(dataB, priv, _NO_AUX_RANDOM ? null : randomBytes(32));
-        String sig = NostrUtils.bytesToHex(sigB);
+        String sig = NGEUtils.bytesToHex(sigB);
         return sig;
     }
 
     @Override
-    public boolean verify(String data, String sign, NostrPublicKey pubKey) {
-        byte dataB[] = NostrUtils.hexToByteArray(data);
-        byte sig[] = NostrUtils.hexToByteArray(sign);
-        byte pub[] = pubKey._array();
+    public boolean verify(String data, String sign, byte pub[]) {
+        byte dataB[] = NGEUtils.hexToByteArray(data);
+        byte sig[] = NGEUtils.hexToByteArray(sign);
         return Schnorr.verify(dataB, pub, sig);
     }
 
@@ -217,7 +214,7 @@ public class JVMAsyncPlatform implements Platform {
 
     @Override
     public byte[] hkdf_extract(byte[] salt, byte[] ikm) {
-        assert NostrUtils.allZeroes(EMPTY32);
+        assert NGEUtils.allZeroes(EMPTY32);
         if (salt == null || salt.length == 0) salt = EMPTY32;
         return hmac(salt, ikm, null);
     }
@@ -679,7 +676,7 @@ public class JVMAsyncPlatform implements Platform {
     }
 
     @Override
-    public AsyncTask<Boolean> verifyAsync(String data, String sign, NostrPublicKey pubKey) {
+    public AsyncTask<Boolean> verifyAsync(String data, String sign, byte pubKey[]) {
         return wrapPromise((res, rej) -> {
             CompletableFuture.runAsync(() -> {
                 try {

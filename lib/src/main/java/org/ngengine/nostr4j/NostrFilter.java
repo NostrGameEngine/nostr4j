@@ -38,7 +38,7 @@ import java.util.List;
 import java.util.Map;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.proto.NostrMessageFragment;
-import org.ngengine.nostr4j.utils.NostrUtils;
+import org.ngengine.platform.NGEUtils;
 
 public class NostrFilter extends NostrMessageFragment {
 
@@ -54,28 +54,28 @@ public class NostrFilter extends NostrMessageFragment {
 
     public NostrFilter(Map<String, Object> map) {
         if (map.containsKey("ids")) {
-            ids = NostrUtils.safeStringList(map.get("ids"));
+            ids = NGEUtils.safeStringList(map.get("ids"));
         }
         if (map.containsKey("authors")) {
-            authors = NostrUtils.safeStringList(map.get("authors"));
+            authors = NGEUtils.safeStringList(map.get("authors"));
         }
         if (map.containsKey("kinds")) {
-            kinds = NostrUtils.safeIntList(map.get("kinds"));
+            kinds = NGEUtils.safeIntList(map.get("kinds"));
         }
         if (map.containsKey("since")) {
-            since = Instant.ofEpochSecond(NostrUtils.safeLong(map.get("since")));
+            since = Instant.ofEpochSecond(NGEUtils.safeLong(map.get("since")));
         }
         if (map.containsKey("until")) {
-            until = Instant.ofEpochSecond(NostrUtils.safeLong(map.get("until")));
+            until = Instant.ofEpochSecond(NGEUtils.safeLong(map.get("until")));
         }
         if (map.containsKey("limit")) {
-            limit = NostrUtils.safeInt(map.get("limit"));
+            limit = NGEUtils.safeInt(map.get("limit"));
         }
         for (Map.Entry<String, Object> entry : map.entrySet()) {
             String key = entry.getKey();
             if (key.startsWith("#")) {
                 String tagKey = key.substring(1);
-                List<String> value = NostrUtils.safeStringList(entry.getValue());
+                List<String> value = NGEUtils.safeStringList(entry.getValue());
                 if (tags == null) tags = new HashMap<>();
                 tags.put(tagKey, value);
             }

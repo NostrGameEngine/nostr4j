@@ -1,4 +1,4 @@
-package org.ngengine.nostr4j.platform.transport;
+package org.ngengine.platform.transport;
 
 import java.nio.ByteBuffer;
 

@@ -31,8 +31,9 @@
 package org.ngengine.nostr4j.proto;
 
 import java.util.Map;
-import org.ngengine.nostr4j.platform.Platform;
-import org.ngengine.nostr4j.utils.NostrUtils;
+
+import org.ngengine.platform.NGEPlatform;
+import org.ngengine.platform.NGEUtils;
 
 public abstract class NostrMessageFragment {
 
@@ -40,7 +41,7 @@ public abstract class NostrMessageFragment {
 
     public String toString() {
         try {
-            Platform platform = NostrUtils.getPlatform();
+            NGEPlatform platform = NGEUtils.getPlatform();
             Map<String, Object> map = toMap();
             return platform.toJSON(map);
         } catch (Exception e) {
