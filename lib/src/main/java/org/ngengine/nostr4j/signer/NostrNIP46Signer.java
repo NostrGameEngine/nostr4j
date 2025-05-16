@@ -170,13 +170,6 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
         this.requestsTimeout = timeout;
     }
 
-    /**
-     * Get the nostrconnect url for this signer.
-     * @return the nostrconnect url
-     */
-    public NostrconnectUrl getNostrconnectUrl() {
-        return connectUrl;
-    }
 
     // internal loop (runs in signer executor)
     private void loop() {
