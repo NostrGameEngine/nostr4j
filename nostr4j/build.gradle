@@ -1,0 +1,29 @@
+plugins {
+    id 'java-library'
+}
+
+dependencies {
+    testImplementation "junit:junit:4.13.2"
+    implementation "org.ngengine:nge-platform-common:${project.ext.ngePlatformVersion}"
+    testImplementation "org.ngengine:nge-platform-jvm:${project.ext.ngePlatformVersion}"
+    testImplementation 'com.google.code.gson:gson:2.12.1'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+tasks.named('test') {
+    useJUnit()
+    testLogging {
+        events "passed", "skipped", "failed"
+        exceptionFormat "full"
+    }
+}
+
+tasks.withType(JavaCompile) {
+    sourceCompatibility = '21'
+    targetCompatibility = '21'
+}

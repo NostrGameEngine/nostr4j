@@ -1,0 +1,65 @@
+name: Build and Publish
+
+on:
+  push: 
+  pull_request:
+  release:
+    types: [published] 
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write 
+      id-token: write
+      pages: write
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+      
+      
+    - name: Set up JDK 21
+      uses: actions/setup-java@v3
+      with:
+        java-version: '21'
+        distribution: 'temurin'
+        cache: 'gradle'
+        
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+      
+    - name: Build and publish
+      if: github.event_name != 'pull_request'
+      run: |
+        export VERSION=""
+        if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            export VERSION=${GITHUB_REF#refs/tags/}
+            echo "Publishing release $VERSION"
+        else
+            echo "Publishing snapshot"
+        fi
+        export GITHUB_REGISTRY=${{ github.repository }}
+        export GITHUB_USERNAME=${{ github.actor }}
+        export GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
+        ./gradlew --no-daemon build javadoc publishAllPublicationsToLocalRepository publishAllPublicationsToGitHubPackagesRepository
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-artifacts
+        path: dist
+
+    - name: Upload pages artifact
+      uses: actions/upload-pages-artifact@v3
+      with:
+        path: 'dist/javadoc/nostr4j'
+
+    - name: Deploy to GitHub Pages
+      if: github.event_name == 'release'  
+      id: deployment
+      uses: actions/deploy-pages@v4
+      
+ 
+ 
