@@ -35,11 +35,32 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.Collections;
+import org.ngengine.nostr4j.nip49.Nip49;
+import org.ngengine.nostr4j.nip49.Nip49FailedException;
 import org.ngengine.nostr4j.utils.Bech32;
 import org.ngengine.nostr4j.utils.ByteBufferList;
 import org.ngengine.platform.NGEUtils;
 
 public final class NostrPrivateKey implements NostrKey {
+
+    // nip-49
+    public enum KeySecurity {
+        /**
+         * If the key has been known to have been handled insecurely (stored
+         * unencrypted, cut and paste unencrypted, etc) (0x00)
+         */
+        UNTRUSTED,
+        /**
+         * if the key has NOT been known to have been handled insecurely (stored
+         * unencrypted, cut and paste unencrypted, etc) (0x01)
+         */
+        NORMAL,
+        /**
+         * if the client does not track this data (0x02)
+         * (default)
+         */
+        UNKNOWN,
+    }
 
     private static final long serialVersionUID = 1L;
 
@@ -48,6 +69,7 @@ public final class NostrPrivateKey implements NostrKey {
     private String bech32;
     private String hex;
     private NostrPublicKey publicKey;
+    private KeySecurity keySecurity = KeySecurity.UNKNOWN;
 
     private transient Collection<Byte> readOnlyData;
     private transient ByteBuffer data;
@@ -127,6 +149,19 @@ public final class NostrPrivateKey implements NostrKey {
         } catch (Exception e) {
             throw new IllegalArgumentException("Invalid nsec key", e);
         }
+    }
+
+    /**
+     * Creates a new NostrPrivateKey from the given ncryptsec string encrypted with
+     * nip-49 and a passphrase.
+     *
+     * @param ncryptsec  the ncryptsec string containing the public key data
+     * @param passphrase the password used to encrypt the ncryptsec string
+     * @return a new unencrypted NostrPrivateKey instance
+     * @throws Nip49FailedException
+     */
+    public static NostrPrivateKey fromNcryptsec(String ncryptsec, String passphrase) throws Nip49FailedException {
+        return Nip49.decrypt(ncryptsec, passphrase);
     }
 
     public static NostrPrivateKey generate() {
@@ -285,5 +320,31 @@ public final class NostrPrivateKey implements NostrKey {
         bech32 = (String) in.readObject();
         publicKey = (NostrPublicKey) in.readObject();
         assert data.position() == 0 : "Data position must be 0";
+    }
+
+    /**
+     * Set how much the key security is trusted. (defined in nip-49)
+     * @param keySecurity the key security
+     */
+    public void setKeySecurity(KeySecurity keySecurity) {
+        this.keySecurity = keySecurity;
+    }
+
+    /**
+     * Get how much the key security is trusted. (defined in nip-49)
+     * @return the key security (default is UNKNOWN)
+     */
+    public KeySecurity getKeySecurity() {
+        return keySecurity;
+    }
+
+    /**
+     * Encrypt the private key using nip-49 and a passphrase.
+     * @param passphrase the password used to encrypt the private key
+     * @return the encrypted private key as a bech32 string
+     * @throws Nip49FailedException
+     */
+    public String asNcryptsec(String passphrase) throws Nip49FailedException {
+        return Nip49.encrypt(this, passphrase);
     }
 }
