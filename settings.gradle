@@ -16,10 +16,10 @@ rootProject.name = 'nostr4j'
 
 gradle.allprojects { proj ->
     def DEFAULT_GROUP = 'org.ngengine'
-    def DEFAULT_VERSION = '0.x-SNAPSHOT'
+    def DEFAULT_VERSION = '0.0.0-SNAPSHOT'
 
     def NGE_PLATFORM_VERSION = '0.0.1'
-    def NGE_PLATFORM_SNAPSHOT = '0.x-SNAPSHOT'
+    def NGE_PLATFORM_SNAPSHOT = '0.0.0-SNAPSHOT'
 
 
     def projectVersion = System.getenv("VERSION") 
