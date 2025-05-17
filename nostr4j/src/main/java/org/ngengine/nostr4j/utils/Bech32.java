@@ -149,8 +149,8 @@ public class Bech32 {
     public static ByteBuffer bech32Decode(String bech)
         throws Bech32DecodingException, Bech32InvalidChecksumException, Bech32InvalidRangeException {
         byte[] bytes = getLowerCaseBytes(bech);
-        if (bytes.length > 90) throw new Bech32DecodingException("invalid bech32 string - too long");
-        if (bytes.length < 8) throw new Bech32DecodingException("invalid bech32 string - too short");
+        // if (bytes.length > 90) throw new Bech32DecodingException("invalid bech32 string - too long");
+        // if (bytes.length < 8) throw new Bech32DecodingException("invalid bech32 string - too short");
 
         int hrpLength = 0;
 
@@ -162,9 +162,9 @@ public class Bech32 {
             }
         }
 
-        if (hrpLength > 90 - 7) {
-            throw new Bech32DecodingException("invalid bech32 string - hrp is too long " + hrpLength);
-        }
+        // if (hrpLength > 90 - 7) {
+        //     throw new Bech32DecodingException("invalid bech32 string - hrp is too long " + hrpLength);
+        // }
 
         if (hrpLength == 0 || hrpLength == bytes.length) {
             throw new Bech32DecodingException("invalid bech32 string");
