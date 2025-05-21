@@ -52,6 +52,10 @@ public class Nip49 {
         return encrypt(priv, password, DEFAULT_LOGN, DEFAULT_MEMORY_LIMIT);
     }
 
+    public static boolean isEncrypted(String bech32) {
+        return bech32.startsWith("ncryptsec");
+    }
+
     public static String encrypt(NostrPrivateKey priv, String password, int logn, int memoryLimitBytes)
         throws Nip49FailedException {
         try {
