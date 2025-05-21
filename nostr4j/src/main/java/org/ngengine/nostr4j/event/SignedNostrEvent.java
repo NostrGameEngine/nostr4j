@@ -43,6 +43,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.proto.NostrMessage;
 import org.ngengine.nostr4j.utils.Bech32;
@@ -83,8 +84,8 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
 
     private final int kind;
     private final String content;
-    private final Map<String, List<String>> tags;
-    private final Collection<List<String>> tagRows;
+    private Map<String, List<TagValue>> tags;
+    private final List<List<String>> tagRows;
     private final String signature;
     private final String pubkey;
     private final Identifier identifier;
@@ -100,7 +101,7 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
         String content,
         Instant created_at,
         String signature,
-        Collection<List<String>> tags
+        List<List<String>> tags
     ) {
         this.kind = kind;
         this.content = content;
@@ -108,18 +109,25 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
         this.pubkey = pubkey.asHex();
         this.identifier = new Identifier(id, created_at);
 
-        LinkedHashMap<String, List<String>> tagsMap = new LinkedHashMap<>();
+        Map<String, List<TagValue>> tagsMap = new LinkedHashMap<>();
 
         for (List<String> tag : tags) {
             ArrayList<String> values = new ArrayList<>();
             for (int i = 1; i < tag.size(); i++) {
                 values.add(tag.get(i));
             }
-            tagsMap.put(tag.get(0), values);
+            TagValue tagValue = new TagValue(values);
+            List<TagValue> tagValues = tagsMap.computeIfAbsent(tag.get(0), k -> new ArrayList<>());
+            tagValues.add(tagValue);
+        }
+
+        // seal all tag entries by making the List<TagValue> immutable
+        for (Entry<String, List<TagValue>> entry : tagsMap.entrySet()) {
+            entry.setValue(Collections.unmodifiableList(entry.getValue()));
         }
 
         this.tags = Collections.unmodifiableMap(tagsMap);
-        this.tagRows = Collections.unmodifiableCollection(tags);
+        this.tagRows = Collections.unmodifiableList(tags);
     }
 
     public SignedNostrEvent(Map<String, Object> map) {
@@ -136,7 +144,8 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
             map.getOrDefault("tags", new ArrayList<Collection<String>>())
         );
 
-        LinkedHashMap<String, List<String>> tagsMap = new LinkedHashMap<>();
+        Map<String, List<TagValue>> tagsMap = new LinkedHashMap<>();
+        ArrayList<List<String>> tagRows = new ArrayList<>();
 
         for (String tag[] : tags) {
             if (tag.length == 0) continue;
@@ -144,29 +153,14 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
             for (int i = 1; i < tag.length; i++) {
                 values.add(tag[i]);
             }
-            tagsMap.put(tag[0], values);
+            TagValue tagValue = new TagValue(values);
+            List<TagValue> tagValues = tagsMap.computeIfAbsent(tag[0], k -> new ArrayList<>());
+            tagValues.add(tagValue);
+            tagRows.add(Arrays.asList(tag));
         }
 
         this.tags = Collections.unmodifiableMap(tagsMap);
-
-        ArrayList<List<String>> tagRows = new ArrayList<>();
-        for (Entry<String, List<String>> entry : tagsMap.entrySet()) {
-            ArrayList<String> tagRow = new ArrayList<>();
-            tagRow.add(entry.getKey());
-            tagRow.addAll(entry.getValue());
-            tagRows.add(tagRow);
-        }
-        this.tagRows = Collections.unmodifiableCollection(tagRows);
-    }
-
-    @Override
-    public Map<String, List<String>> getTags() {
-        return this.tags;
-    }
-
-    @Override
-    public Collection<List<String>> getTagRows() {
-        return this.tagRows;
+        this.tagRows = Collections.unmodifiableList(tagRows);
     }
 
     @Override
@@ -246,11 +240,6 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
         }
     }
 
-    @Override
-    public List<String> getTagValues(String key) {
-        return tags.get(key);
-    }
-
     public boolean verify() throws Exception {
         return NGEUtils.getPlatform().verify(this.identifier.id, this.signature, this.getPubkey()._array());
     }
@@ -328,9 +317,9 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
     @Override
     public Instant getExpiration() {
         if (expiresAt != null) return expiresAt;
-        List<String> tag = getTagValues("expiration");
+        String tag = getFirstTag("expiration").get(0);
         if (tag != null) {
-            long expires = NGEUtils.safeLong(tag.get(0));
+            long expires = NGEUtils.safeLong(tag);
             expiresAt = Instant.ofEpochSecond(expires);
         } else {
             expiresAt = Instant.now().plusSeconds(60 * 60 * 24 * 365 * 2100);
@@ -342,5 +331,33 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
     public boolean hasTag(String tag) {
         if (tag == null) return false;
         return tags.get(tag) != null;
+    }
+
+    @Override
+    public Collection<TagValue> getTag(String key) {
+        List<TagValue> values = tags.get(key);
+        if (values != null && values.isEmpty()) {
+            return null;
+        }
+        return values;
+    }
+
+    @Override
+    public TagValue getFirstTag(String key) {
+        List<TagValue> values = tags.get(key);
+        if (values == null || values.isEmpty()) {
+            return null;
+        }
+        return values.get(0);
+    }
+
+    @Override
+    public Set<String> listTagKeys() {
+        return tags.keySet();
+    }
+
+    @Override
+    public List<List<String>> getTagRows() {
+        return tagRows;
     }
 }

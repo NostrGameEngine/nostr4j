@@ -117,7 +117,7 @@ public class TestForwardSlidingWindowEventTracker {
                 "",
                 Instant.ofEpochSecond(timestampSeconds),
                 "",
-                (Collection<List<String>>) new ArrayList<List<String>>()
+                (List<List<String>>) new ArrayList<List<String>>()
             );
             return event;
         } catch (Exception e) {

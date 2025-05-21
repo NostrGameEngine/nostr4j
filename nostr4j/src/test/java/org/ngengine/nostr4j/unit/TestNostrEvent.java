@@ -98,21 +98,21 @@ public class TestNostrEvent {
     public void assertVerify(NostrEvent event) {
         assertEquals(event.getKind(), 1);
         assertEquals(event.getContent(), "test123");
-        assertEquals(event.getTags().get("a").get(0), "1");
+        assertEquals(event.getFirstTag("a").get(0), "1");
 
-        assertEquals(event.getTags().get("b").get(0), "1");
-        assertEquals(event.getTags().get("b").get(1), "2");
-        assertEquals(event.getTags().get("b").get(2), "3");
+        assertEquals(event.getFirstTag("b").get(0), "1");
+        assertEquals(event.getFirstTag("b").get(1), "2");
+        assertEquals(event.getFirstTag("b").get(2), "3");
 
-        assertEquals(event.getTags().get("c"), null);
+        assertEquals(event.getFirstTag("c"), null);
 
-        assertEquals(event.getTagValues("b").get(0), "1");
-        assertEquals(event.getTagValues("b").get(1), "2");
-        assertEquals(event.getTagValues("b").get(2), "3");
+        assertEquals(event.getFirstTag("b").get(0), "1");
+        assertEquals(event.getFirstTag("b").get(1), "2");
+        assertEquals(event.getFirstTag("b").get(2), "3");
 
-        assertEquals(event.getTagValues("c"), null);
+        assertEquals(event.getFirstTag("c"), null);
 
-        assertEquals(event.getTagValues("expiration").get(0), "1742147457");
+        assertEquals(event.getFirstTag("expiration").get(0), "1742147457");
 
         assertEquals(event.getCreatedAt().getEpochSecond(), 1742147457);
 
@@ -144,7 +144,7 @@ public class TestNostrEvent {
             .withTag("a", "1")
             .withTag("b", "1", "2", "3")
             .withTag("c", "3")
-            .withoutTag("c")
+            .clearTags("c")
             .withExpiration(Instant.ofEpochSecond(1742147457))
             .createdAt(Instant.ofEpochSecond(1742147457));
 

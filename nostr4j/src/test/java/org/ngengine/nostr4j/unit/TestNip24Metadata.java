@@ -36,6 +36,7 @@ import java.util.Calendar;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.junit.Assert;
 import org.junit.Test;
 import org.ngengine.nostr4j.event.NostrEvent;
@@ -72,30 +73,36 @@ public class TestNip24Metadata {
             throw new UnsupportedOperationException("Unimplemented method 'getKind'");
         }
 
-        @Override
-        public Map<String, List<String>> getTags() {
-            // TODO Auto-generated method stub
-            throw new UnsupportedOperationException("Unimplemented method 'getTags'");
-        }
-
-        @Override
-        public List<String> getTagValues(String key) {
-            // TODO Auto-generated method stub
-            throw new UnsupportedOperationException("Unimplemented method 'getTagValues'");
-        }
-
-        @Override
-        public Collection<List<String>> getTagRows() {
-            // TODO Auto-generated method stub
-            throw new UnsupportedOperationException("Unimplemented method 'getTagRows'");
-        }
-
         // Other methods can be stubbed or throw UnsupportedOperationException
 
         @Override
         public boolean hasTag(String tag) {
             // TODO Auto-generated method stub
             throw new UnsupportedOperationException("Unimplemented method 'hasTag'");
+        }
+
+        @Override
+        public Collection<TagValue> getTag(String key) {
+            // TODO Auto-generated method stub
+            throw new UnsupportedOperationException("Unimplemented method 'getTag'");
+        }
+
+        @Override
+        public TagValue getFirstTag(String key) {
+            // TODO Auto-generated method stub
+            throw new UnsupportedOperationException("Unimplemented method 'getFirstTag'");
+        }
+
+        @Override
+        public Set<String> listTagKeys() {
+            // TODO Auto-generated method stub
+            throw new UnsupportedOperationException("Unimplemented method 'listTagKeys'");
+        }
+
+        @Override
+        public List<List<String>> getTagRows() {
+            // TODO Auto-generated method stub
+            throw new UnsupportedOperationException("Unimplemented method 'getTagRows'");
         }
     }
 

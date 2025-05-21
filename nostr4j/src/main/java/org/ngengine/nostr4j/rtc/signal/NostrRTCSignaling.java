@@ -137,7 +137,7 @@ public class NostrRTCSignaling implements Closeable {
         if (closed) return;
         if (event.getPubkey().equals(this.localPeer.getPubkey())) return;
         this.executor.run(() -> {
-                String type = event.getTagValues("t").get(0);
+                String type = event.getFirstTag("t").get(0);
                 switch (type) {
                     case "connect":
                         {
