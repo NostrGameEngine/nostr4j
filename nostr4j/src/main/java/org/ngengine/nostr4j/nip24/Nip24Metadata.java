@@ -202,23 +202,6 @@ public class Nip24Metadata implements Serializable {
         return new Nip24Metadata(event);
     }
 
-    public static AsyncTask<List<Nip24Metadata>> fetchAll(NostrPool pool) {
-        return pool
-            .fetch(new Nip24MetadataFilter(null))
-            .then(evs -> {
-                return evs
-                    .stream()
-                    .map(e -> {
-                        try {
-                            return new Nip24Metadata(e);
-                        } catch (Exception ex) {
-                            throw new RuntimeException(ex);
-                        }
-                    })
-                    .toList();
-            });
-    }
-
     public static AsyncTask<Nip24Metadata> fetch(NostrPool pool, NostrPublicKey pubkey) {
         return pool
             .fetch(new Nip24MetadataFilter(pubkey))
