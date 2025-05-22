@@ -44,7 +44,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
@@ -60,6 +59,7 @@ import org.ngengine.nostr4j.proto.impl.NostrClosedMessage;
 import org.ngengine.nostr4j.proto.impl.NostrEOSEMessage;
 import org.ngengine.nostr4j.proto.impl.NostrNoticeMessage;
 import org.ngengine.nostr4j.utils.ScheduledAction;
+import org.ngengine.nostr4j.utils.UniqueId;
 import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEPlatform;
 import org.ngengine.platform.NGEUtils;
@@ -67,7 +67,6 @@ import org.ngengine.platform.NGEUtils;
 public class NostrPool {
 
     private static final Logger logger = Logger.getLogger(NostrPool.class.getName());
-    private static final AtomicLong subCounter = new AtomicLong(0);
     private final Map<String, NostrSubscription> subscriptions = new ConcurrentHashMap<>();
     private final List<NostrNoticeListener> noticeListener = new CopyOnWriteArrayList<>();
     private final CopyOnWriteArrayList<NostrRelay> relays = new CopyOnWriteArrayList<>();
@@ -233,7 +232,7 @@ public class NostrPool {
     }
 
     public NostrSubscription subscribe(Collection<NostrFilter> filters, Class<? extends EventTracker> eventTracker) {
-        String subId = "nostr4j-" + subCounter.incrementAndGet();
+        String subId = UniqueId.getNext();
         EventTracker tracker;
         try {
             tracker = eventTracker.getDeclaredConstructor().newInstance();

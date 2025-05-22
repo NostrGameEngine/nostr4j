@@ -65,6 +65,7 @@ import org.ngengine.nostr4j.nip46.BunkerUrl;
 import org.ngengine.nostr4j.nip46.Nip46AppMetadata;
 import org.ngengine.nostr4j.nip46.NostrconnectUrl;
 import org.ngengine.nostr4j.proto.NostrMessageAck;
+import org.ngengine.nostr4j.utils.UniqueId;
 import org.ngengine.platform.AsyncExecutor;
 import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEPlatform;
@@ -129,7 +130,6 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
     private final Nip46AppMetadata metadata;
     private final NostrPublicKey transportPubkey;
     private final NostrKeyPairSigner transportSigner;
-    private final AtomicLong lastRequestId = new AtomicLong(0);
 
     private transient volatile NostrPool pool;
     private transient volatile Map<String, ResponseListener> listeners;
@@ -598,7 +598,7 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
             .compose(r -> {
                 try {
                     NGEPlatform platform = NGEUtils.getPlatform();
-                    String requestId = "nostr4j-nip46-" + lastRequestId.incrementAndGet();
+                    String requestId = UniqueId.getNext();
 
                     Map<String, Object> reqBody = new HashMap<>();
                     reqBody.put("id", requestId);
