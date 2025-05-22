@@ -112,7 +112,7 @@ public class BunkerUrl implements Serializable, Cloneable {
                 if (idx > 0) {
                     String key = pair.substring(0, idx);
                     String value = urlDecode(pair.substring(idx + 1));
-                    if (value.equals("secret")) {
+                    if (key.equals("secret")) {
                         secret = value;
                     } else if (key.equals("relay")) {
                         relayUrls.add(value);
