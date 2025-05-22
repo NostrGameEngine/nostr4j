@@ -41,7 +41,7 @@ import org.junit.Assert;
 import org.junit.Test;
 import org.ngengine.nostr4j.event.NostrEvent;
 import org.ngengine.nostr4j.event.UnsignedNostrEvent;
-import org.ngengine.nostr4j.nip24.Nip24Metadata;
+import org.ngengine.nostr4j.nip24.Nip24ExtraMetadata;
 import org.ngengine.platform.NGEUtils;
 
 public class TestNip24Metadata {
@@ -120,7 +120,7 @@ public class TestNip24Metadata {
             "\"birthday\": {\"year\":1990, \"month\":5, \"day\":10}" +
             "}";
         DummyNostrEvent event = new DummyNostrEvent(json);
-        Nip24Metadata metadata = new Nip24Metadata(event);
+        Nip24ExtraMetadata metadata = new Nip24ExtraMetadata(event);
 
         Assert.assertEquals("Test Display", metadata.getDisplayName());
         Assert.assertEquals("TestName", metadata.getName());
@@ -154,7 +154,7 @@ public class TestNip24Metadata {
     public void testUpdateEvent() throws Exception {
         String json = "{\"display_name\": \"Test Display\", \"name\": \"TestName\"}";
         DummyNostrEvent event = new DummyNostrEvent(json);
-        Nip24Metadata metadata = new Nip24Metadata(event);
+        Nip24ExtraMetadata metadata = new Nip24ExtraMetadata(event);
         UnsignedNostrEvent updateEvent = metadata.toUpdateEvent();
 
         // The update event content should be the JSON representation of the metadata
@@ -169,7 +169,7 @@ public class TestNip24Metadata {
     public void testSerialization() throws Exception {
         String json = "{\"display_name\": \"SerializeTest\", \"name\": \"SerializeName\"}";
         DummyNostrEvent event = new DummyNostrEvent(json);
-        Nip24Metadata original = new Nip24Metadata(event);
+        Nip24ExtraMetadata original = new Nip24ExtraMetadata(event);
 
         // Serialize the metadata object to a byte array
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -178,9 +178,9 @@ public class TestNip24Metadata {
         }
 
         // Deserialize from the byte array
-        Nip24Metadata deserialized;
+        Nip24ExtraMetadata deserialized;
         try (ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(baos.toByteArray()))) {
-            deserialized = (Nip24Metadata) ois.readObject();
+            deserialized = (Nip24ExtraMetadata) ois.readObject();
         }
 
         // Verify that selected fields remain equal

@@ -62,7 +62,7 @@ import org.ngengine.nostr4j.TestLogger;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.event.tracker.FailOnDoubleTracker;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
-import org.ngengine.nostr4j.nip24.Nip24Metadata;
+import org.ngengine.nostr4j.nip24.Nip24ExtraMetadata;
 import org.ngengine.nostr4j.nip50.NostrSearchFilter;
 import org.ngengine.platform.AsyncTask;
 
@@ -72,7 +72,7 @@ public class NostrClient extends JFrame {
     private static final Logger rootLogger = TestLogger.getRoot(Level.FINEST);
 
     // Metadata cache
-    private static final Map<String, AsyncTask<Nip24Metadata>> metadataCache = new ConcurrentHashMap<>();
+    private static final Map<String, AsyncTask<Nip24ExtraMetadata>> metadataCache = new ConcurrentHashMap<>();
     private static final Map<String, String> nameCache = new ConcurrentHashMap<>();
 
     // UI Components

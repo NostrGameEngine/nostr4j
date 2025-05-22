@@ -28,21 +28,61 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package org.ngengine.nostr4j.nip24;
+package org.ngengine.nostr4j.nip39;
 
-import org.ngengine.nostr4j.NostrFilter;
-import org.ngengine.nostr4j.keypair.NostrPublicKey;
+import java.util.List;
 
-public class Nip24MetadataFilter extends NostrFilter {
+public abstract class ExternalIdentity {
 
-    public Nip24MetadataFilter(NostrPublicKey pubkey) {
-        super();
-        if (pubkey != null) this.withAuthor(pubkey.asHex());
-        this.withKind(0);
-        this.limit(1);
+    private final String platform;
+    private final String identity;
+    private final List<String> proof;
+
+    protected ExternalIdentity(String platform, String identity, List<String> proof) {
+        if (!Nip39.isValidPlatform(platform)) {
+            throw new IllegalArgumentException("Invalid platform: " + platform);
+        }
+        this.platform = platform;
+        this.identity = identity;
+        this.proof = proof != null ? proof : List.of();
     }
 
-    public Nip24MetadataFilter() {
-        this(null);
+    public String getPlatform() {
+        return platform;
+    }
+
+    public String getIdentity() {
+        return identity;
+    }
+
+    public List<String> getProof() {
+        return proof;
+    }
+
+    @Override
+    public String toString() {
+        return (
+            "ExternalIdentity{" + "platform='" + platform + '\'' + ", identity='" + identity + '\'' + ", proof=" + proof + '}'
+        );
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) return true;
+        if (obj == null || getClass() != obj.getClass()) return false;
+
+        ExternalIdentity that = (ExternalIdentity) obj;
+
+        if (!platform.equals(that.platform)) return false;
+        if (!identity.equals(that.identity)) return false;
+        return proof.equals(that.proof);
+    }
+
+    @Override
+    public int hashCode() {
+        int result = platform.hashCode();
+        result = 31 * result + identity.hashCode();
+        result = 31 * result + proof.hashCode();
+        return result;
     }
 }

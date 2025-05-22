@@ -28,43 +28,45 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package org.ngengine.nostr4j.nip24;
+package org.ngengine.nostr4j.nip01;
 
-import java.util.function.Consumer;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import java.util.List;
+import org.ngengine.nostr4j.NostrPool;
+import org.ngengine.nostr4j.event.NostrEvent;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
+import org.ngengine.nostr4j.event.UnsignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
-import org.ngengine.nostr4j.listeners.sub.NostrSubEventListener;
+import org.ngengine.nostr4j.proto.NostrMessageAck;
+import org.ngengine.nostr4j.signer.NostrSigner;
+import org.ngengine.platform.AsyncTask;
 
-public class Nip24MetadataListener implements NostrSubEventListener {
+public class Nip01 {
 
-    private static final Logger logger = Logger.getLogger(Nip24MetadataListener.class.getName());
-    private final NostrPublicKey pubkey;
-    private Consumer<Nip24Metadata> consumer;
-
-    public Nip24MetadataListener(NostrPublicKey pubkey, Consumer<Nip24Metadata> consumer) {
-        this.pubkey = pubkey;
-        this.consumer = consumer;
+    public static Nip01UserMetadata from(NostrEvent event) {
+        return new Nip01UserMetadata(event);
     }
 
-    public Nip24MetadataListener(Consumer<Nip24Metadata> consumer) {
-        this(null, consumer);
+    public static AsyncTask<Nip01UserMetadata> fetch(NostrPool pool, NostrPublicKey pubkey) {
+        Nip01UserMetadataFilter filter = new Nip01UserMetadataFilter(pubkey);
+        return fetch(pool, filter);
     }
 
-    public Nip24MetadataListener() {
-        this.pubkey = null;
+    public static AsyncTask<Nip01UserMetadata> fetch(NostrPool pool, Nip01UserMetadataFilter filter) {
+        return pool
+            .fetch(filter)
+            .then(evs -> {
+                SignedNostrEvent event = (SignedNostrEvent) evs.get(0);
+                try {
+                    return new Nip01UserMetadata(event);
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            });
     }
 
-    @Override
-    public void onSubEvent(SignedNostrEvent event, boolean stored) {
-        try {
-            if (event.getKind() != 0 || (pubkey != null && !pubkey.equals(event.getPubkey()))) return;
-            Nip24Metadata profile = new Nip24Metadata(event);
-            if (consumer != null) consumer.accept(profile);
-        } catch (Exception e) {
-            logger.log(Level.WARNING, "Error processing NIP-24 metadata", e);
-            // e.printStackTrace();
-        }
+    public static AsyncTask<List<NostrMessageAck>> update(NostrPool pool, NostrSigner signer, Nip01UserMetadata newMetadata) {
+        UnsignedNostrEvent event = newMetadata.toUpdateEvent();
+        AsyncTask<SignedNostrEvent> signedP = signer.sign(event);
+        return signedP.compose(signed -> pool.send(signed));
     }
 }

@@ -30,50 +30,22 @@
  */
 package org.ngengine.nostr4j.nip24;
 
-import java.io.Serializable;
-import java.time.Instant;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import org.ngengine.nostr4j.NostrPool;
 import org.ngengine.nostr4j.event.NostrEvent;
-import org.ngengine.nostr4j.event.SignedNostrEvent;
-import org.ngengine.nostr4j.event.UnsignedNostrEvent;
-import org.ngengine.nostr4j.keypair.NostrPublicKey;
-import org.ngengine.nostr4j.proto.NostrMessageAck;
-import org.ngengine.nostr4j.signer.NostrSigner;
-import org.ngengine.platform.AsyncTask;
-import org.ngengine.platform.NGEPlatform;
+import org.ngengine.nostr4j.nip01.Nip01UserMetadata;
 import org.ngengine.platform.NGEUtils;
 
-public class Nip24Metadata implements Serializable {
+public class Nip24ExtraMetadata extends Nip01UserMetadata {
 
-    private static final long serialVersionUID = 1L;
-
-    public final Map<String, Object> metadata;
-    protected final NostrEvent sourceEvent;
-
-    public Nip24Metadata(NostrEvent source) {
-        this.sourceEvent = source;
-        NGEPlatform platform = NGEUtils.getPlatform();
-        String content = sourceEvent.getContent();
-        Map<String, Object> meta = platform.fromJSON(content, Map.class);
-        if (meta == null) throw new IllegalArgumentException("Invalid metadata");
-        this.metadata = meta;
+    public Nip24ExtraMetadata(Nip01UserMetadata nip01) {
+        super(nip01.getSourceEvent());
     }
 
-    public UnsignedNostrEvent toUpdateEvent() {
-        UnsignedNostrEvent event = new UnsignedNostrEvent();
-        event.withKind(0);
-        event.createdAt(Instant.now());
-        event.withContent(NGEUtils.getPlatform().toJSON(metadata));
-        return event;
-    }
-
-    public NostrEvent getSourceEvent() {
-        return sourceEvent;
+    public Nip24ExtraMetadata(NostrEvent source) {
+        super(source);
     }
 
     public String getDisplayName() {
@@ -89,37 +61,13 @@ public class Nip24Metadata implements Serializable {
         metadata.put("display_name", name);
     }
 
+    @Override
     public String getName() {
-        String v = NGEUtils.safeString(metadata.get("name"));
-        if (v.isEmpty()) {
-            v = NGEUtils.safeString(metadata.get("username"));
-        }
+        String v = super.getName();
+        if (v != null) return v;
+        v = NGEUtils.safeString(metadata.get("username"));
         if (v.isEmpty()) return null;
         return NGEUtils.safeString(v);
-    }
-
-    public void setName(String name) {
-        metadata.put("name", name);
-    }
-
-    public String getAbout() {
-        Object v = metadata.get("about");
-        if (v == null) return null;
-        return NGEUtils.safeString(v);
-    }
-
-    public void setAbout(String about) {
-        metadata.put("about", about);
-    }
-
-    public String getPicture() {
-        Object v = metadata.get("picture");
-        if (v == null) return null;
-        return NGEUtils.safeString(v);
-    }
-
-    public void setPicture(String picture) {
-        metadata.put("picture", picture);
     }
 
     public String getWebsite() {
@@ -196,29 +144,5 @@ public class Nip24Metadata implements Serializable {
         b.put("month", month);
         b.put("day", day);
         metadata.put("birthday", b);
-    }
-
-    public static Nip24Metadata fromEvent(NostrEvent event) {
-        return new Nip24Metadata(event);
-    }
-
-    public static AsyncTask<Nip24Metadata> fetch(NostrPool pool, NostrPublicKey pubkey) {
-        return pool
-            .fetch(new Nip24MetadataFilter(pubkey))
-            .then(evs -> {
-                SignedNostrEvent event = (SignedNostrEvent) evs.get(0);
-                try {
-                    return new Nip24Metadata(event);
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
-            });
-    }
-
-    public static AsyncTask<List<NostrMessageAck>> update(NostrPool pool, NostrSigner signer, Nip24Metadata newMetadata) {
-        UnsignedNostrEvent event = newMetadata.toUpdateEvent();
-
-        AsyncTask<SignedNostrEvent> signedP = signer.sign(event);
-        return signedP.compose(signed -> pool.send(signed));
     }
 }

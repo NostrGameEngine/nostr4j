@@ -45,7 +45,7 @@ import org.ngengine.platform.NGEUtils;
 public interface NostrEvent extends Cloneable, Serializable {
     class TagValue {
 
-        protected final List<String> values;
+        private final List<String> values;
 
         public TagValue(List<String> values) {
             this.values = Collections.unmodifiableList(values);
