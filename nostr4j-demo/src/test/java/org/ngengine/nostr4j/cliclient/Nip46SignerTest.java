@@ -47,7 +47,7 @@ import org.ngengine.nostr4j.signer.NostrNIP46Signer;
 
 public class Nip46SignerTest {
 
-    private static final Logger logger = TestLogger.getRoot(Level.INFO);
+    private static final Logger logger = TestLogger.getRoot(Level.FINEST);
     private static final Scanner scanner = new Scanner(System.in);
     private static final List<String> DEFAULT_RELAYS = Arrays.asList("wss://relay.nsec.app");
 

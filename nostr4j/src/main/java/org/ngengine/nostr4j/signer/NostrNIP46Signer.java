@@ -139,10 +139,12 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
     private transient volatile boolean closed = false;
 
     private Set<String> relays = new HashSet<>();
-    private NostrPublicKey signerPubkey;
-    private NostrconnectUrl connectUrl;
     private Duration requestsTimeout = Duration.ofSeconds(30);
     private Duration challengesTimeout = Duration.ofSeconds(30);
+
+    private volatile NostrPublicKey signerPubkey;
+    private volatile NostrconnectUrl connectUrl;
+    private volatile boolean connected = false;
 
     public NostrNIP46Signer(Nip46AppMetadata metadata, NostrKeyPair clientKeyPair) {
         // this.challengeHandler = challengeHandler;
@@ -260,6 +262,12 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
      * @return an async tasks that will complete with this signer after the connection is established
      */
     public AsyncTask<NostrNIP46Signer> connect(BunkerUrl bunker) {
+        if (connected) return NGEPlatform
+            .get()
+            .wrapPromise((res, rej) -> {
+                rej.accept(new Exception("Already connected"));
+            });
+
         for (String relay : bunker.relays) {
             this.relays.add(relay);
         }
@@ -275,6 +283,7 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
         return sendRPC("connect", params, requestsTimeout)
             .then(r -> {
                 logger.fine("Connected to bunker: " + bunker + " relays: " + this.relays);
+                connected = true;
                 // cancel every other remaining connect attempt
                 Iterator<Entry<String, ResponseListener>> it = listeners.entrySet().iterator();
                 while (it.hasNext()) {
@@ -299,44 +308,50 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
     public AsyncTask<NostrNIP46Signer> listen(List<String> relays, Consumer<NostrconnectUrl> onUrl, Duration timeout) {
         NGEPlatform platform = NGEUtils.getPlatform();
 
+        if (connected) return platform.wrapPromise((res, rej) -> {
+            rej.accept(new Exception("Already connected"));
+        });
+
         String secret = NGEUtils.bytesToHex(platform.randomBytes(32));
         for (String relay : relays) {
             this.relays.add(relay);
         }
-        this.signerPubkey = null;
 
         connectUrl = new NostrconnectUrl(this.transportPubkey, relays, secret, this.metadata);
 
         onUrl.accept(connectUrl);
         logger.fine("Listening for nostrconnect: " + connectUrl + " relays: " + this.relays);
 
-        AsyncTask<NostrNIP46Signer> out = waitForResponse(
-            "connect",
-            "nostrconnect",
-            payload -> {
-                boolean v = payload.equals(secret); // nostr connect requires the payload to be == secret
-                assert dbg(() ->
-                    logger.fine("Received nostrconnect payload: " + payload + " secret: " + secret + " valid: " + v)
-                );
-                return v;
-            },
-            timeout
-        )
-            .then(s -> {
-                logger.fine("Received nostrconnect payload: " + s + " relays: " + this.relays);
-                // cancel every other remaining connect attempt
-                Iterator<Entry<String, ResponseListener>> it = listeners.entrySet().iterator();
-                while (it.hasNext()) {
-                    Entry<String, ResponseListener> entry = it.next();
-                    if (entry.getValue().method.equals("connect")) {
-                        logger.finer("Cancelling other connect request: " + entry.getValue());
-                        entry.getValue().cancel("connected via nostrconnect");
-                        it.remove();
-                    }
-                }
-                return this;
+        AsyncTask<NostrNIP46Signer> out = check()
+            .compose(r -> {
+                return waitForResponse(
+                    "connect",
+                    "nostrconnect",
+                    payload -> {
+                        boolean v = payload.equals(secret); // nostr connect requires the payload to be == secret
+                        assert dbg(() ->
+                            logger.fine("Received nostrconnect payload: " + payload + " secret: " + secret + " valid: " + v)
+                        );
+                        return v;
+                    },
+                    timeout
+                )
+                    .then(s -> {
+                        logger.fine("Received nostrconnect payload: " + s + " relays: " + this.relays);
+                        connected = true;
+                        // cancel every other remaining connect attempt
+                        Iterator<Entry<String, ResponseListener>> it = listeners.entrySet().iterator();
+                        while (it.hasNext()) {
+                            Entry<String, ResponseListener> entry = it.next();
+                            if (entry.getValue().method.equals("connect")) {
+                                logger.finer("Cancelling other connect request: " + entry.getValue());
+                                entry.getValue().cancel("connected via nostrconnect");
+                                it.remove();
+                            }
+                        }
+                        return this;
+                    });
             });
-        check();
         return out;
     }
 
@@ -448,20 +463,30 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
 
             NostrPublicKey pubkey = null;
             boolean isSpontaneousConnection = false;
-            // if we are receiving an event from an unknown signer, we assume it is a spontaneous connection
-            if (this.signerPubkey == null || !event.getPubkey().equals(this.signerPubkey)) {
-                assert dbg(() ->
-                    logger.fine(
+            if (!event.getPubkey().equals(this.signerPubkey)) {
+                // if we are receiving an event from an unknown signer, we assume it is a spontaneous connection
+                // but only if we are not already connected
+                if (!this.connected) {
+                    assert dbg(() ->
+                        logger.fine(
+                            "Received event from unknown signer: " +
+                            event.getPubkey() +
+                            " != " +
+                            this.signerPubkey +
+                            " initializing spontaneous connection flow"
+                        )
+                    );
+
+                    pubkey = event.getPubkey(); // from unknown signer
+                    isSpontaneousConnection = true;
+                } else {
+                    // we got connected in the meantime, so we need to bail
+                    throw new Exception(
                         "Received event from unknown signer: " +
                         event.getPubkey() +
-                        " != " +
-                        this.signerPubkey +
-                        " initializing spontaneous connection flow"
-                    )
-                );
-
-                pubkey = event.getPubkey(); // from unknown signer
-                isSpontaneousConnection = true;
+                        " but spontaneous connection is not allowed since we are already connected"
+                    );
+                }
             } else {
                 assert dbg(() ->
                     logger.fine("Received event from known signer: " + event.getPubkey() + " == " + this.signerPubkey)
@@ -499,9 +524,14 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
             // to ensure the payload is what we expect
             if (listener.verifyPayload != null) {
                 assert dbg(() -> logger.fine("Verifying payload " + id + " with method: " + listener.method));
-                if (!listener.verifyPayload.test(result)) { // this is used e.g. to verify the secret of spontaneous connections
+                if (!listener.verifyPayload.test(result)) { // this is used e.g. to verify the secret of spontaneous
+                    // connections
                     logger.warning("Invalid payload for id: " + id + " with method: " + listener.method);
                     throw new Exception("Invalid payload for id: " + id);
+                }
+            } else {
+                if (isSpontaneousConnection) {
+                    throw new Exception("Spontaneous connection without payload verification are forbidden");
                 }
             }
 
@@ -550,11 +580,22 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
                     assert dbg(() -> logger.finest("Success for id: " + id + " with method: " + listener.method + " " + result)
                     );
                     if (isSpontaneousConnection) {
-                        logger.fine("Registering signer pubkey for spontaneous connection: " + pubkey);
-                        // if we are registering a spontaneous connection, we need to set the signer pubkey
-                        this.signerPubkey = pubkey;
+                        if (this.connected) {
+                            // we almost connected, but a bunker connection was triggered in the meantime, so we need to bail
+                            logger.warning(
+                                "Received spontaneous connection response, but we are already got connected in the meantime"
+                            );
+                            listener.onError.accept(new Exception("Already connected"));
+                        } else {
+                            // if we are registering a spontaneous connection, we need to set the signer
+                            // pubkey
+                            logger.fine("Registering signer pubkey for spontaneous connection: " + pubkey);
+                            this.signerPubkey = pubkey;
+                            listener.onSuccess.accept(result);
+                        }
+                    } else {
+                        listener.onSuccess.accept(result);
                     }
-                    listener.onSuccess.accept(result);
                 }
             }
         } catch (Exception e) {
@@ -568,9 +609,6 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
      */
     private AsyncTask<String> waitForResponse(String method, String id, Predicate<String> verifyPayload, Duration timeout) {
         NGEPlatform platform = NGEUtils.getPlatform();
-        if (this.listeners == null) {
-            this.listeners = new ConcurrentHashMap<>();
-        }
         assert dbg(() -> logger.finest("Waiting for response: " + method + " id: " + id + " timeout: " + timeout));
         return platform.wrapPromise((res, rej) -> {
             ResponseListener listener = new ResponseListener(method, res, rej, timeout);

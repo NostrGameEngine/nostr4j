@@ -154,6 +154,9 @@ public final class NostrPublicKey implements NostrKey {
      */
     public NostrPublicKey(ByteBuffer data) {
         assert data.position() == 0 : "data should be at position 0";
+        if (data.remaining() != 32) {
+            throw new IllegalArgumentException("Invalid public key length");
+        }
         this.data = data;
     }
 
