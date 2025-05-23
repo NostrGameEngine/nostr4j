@@ -31,15 +31,10 @@
 package org.ngengine.nostr4j.unit;
 
 import java.io.*;
-import java.time.Instant;
 import java.util.Calendar;
-import java.util.Collection;
-import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import org.junit.Assert;
 import org.junit.Test;
-import org.ngengine.nostr4j.event.NostrEvent;
 import org.ngengine.nostr4j.event.UnsignedNostrEvent;
 import org.ngengine.nostr4j.nip24.Nip24ExtraMetadata;
 import org.ngengine.platform.NGEUtils;
@@ -47,62 +42,12 @@ import org.ngengine.platform.NGEUtils;
 public class TestNip24Metadata {
 
     // Dummy implementation of NostrEvent for testing purposes.
-    private static class DummyNostrEvent implements NostrEvent, Serializable {
-
-        private final String content;
-        private final Instant createdAt;
+    private static class DummyNostrEvent extends UnsignedNostrEvent {
 
         public DummyNostrEvent(String content) {
-            this.content = content;
-            this.createdAt = Instant.now();
-        }
-
-        @Override
-        public String getContent() {
-            return content;
-        }
-
-        @Override
-        public Instant getCreatedAt() {
-            return createdAt;
-        }
-
-        @Override
-        public int getKind() {
-            // TODO Auto-generated method stub
-            throw new UnsupportedOperationException("Unimplemented method 'getKind'");
-        }
-
-        // Other methods can be stubbed or throw UnsupportedOperationException
-
-        @Override
-        public boolean hasTag(String tag) {
-            // TODO Auto-generated method stub
-            throw new UnsupportedOperationException("Unimplemented method 'hasTag'");
-        }
-
-        @Override
-        public Collection<TagValue> getTag(String key) {
-            // TODO Auto-generated method stub
-            throw new UnsupportedOperationException("Unimplemented method 'getTag'");
-        }
-
-        @Override
-        public TagValue getFirstTag(String key) {
-            // TODO Auto-generated method stub
-            throw new UnsupportedOperationException("Unimplemented method 'getFirstTag'");
-        }
-
-        @Override
-        public Set<String> listTagKeys() {
-            // TODO Auto-generated method stub
-            throw new UnsupportedOperationException("Unimplemented method 'listTagKeys'");
-        }
-
-        @Override
-        public List<List<String>> getTagRows() {
-            // TODO Auto-generated method stub
-            throw new UnsupportedOperationException("Unimplemented method 'getTagRows'");
+            super();
+            withKind(0);
+            withContent(content);
         }
     }
 
