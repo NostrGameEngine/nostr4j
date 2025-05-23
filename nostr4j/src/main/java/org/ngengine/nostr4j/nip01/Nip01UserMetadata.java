@@ -106,4 +106,27 @@ public class Nip01UserMetadata implements Serializable {
     public void setPicture(String picture) {
         metadata.put("picture", picture);
     }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj == null || !(obj instanceof Nip01UserMetadata)) {
+            return false;
+        }
+        if (obj == this) {
+            return true;
+        }
+        Nip01UserMetadata other = (Nip01UserMetadata) obj;
+        return sourceEvent.equals(other.sourceEvent);
+    }
+
+    @Override
+    public int hashCode() {
+        if (sourceEvent == null) return 0;
+        return sourceEvent.hashCode();
+    }
+
+    @Override
+    public String toString() {
+        return sourceEvent.toString();
+    }
 }
