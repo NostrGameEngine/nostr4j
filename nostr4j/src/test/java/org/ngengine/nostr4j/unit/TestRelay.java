@@ -106,6 +106,16 @@ public class TestRelay {
                 public boolean onRelayDisconnectRequest(NostrRelay relay, String reason) {
                     return true;
                 }
+
+                @Override
+                public boolean onRelayBeforeSend(NostrRelay relay, NostrMessage message) {
+                    return true;
+                }
+
+                @Override
+                public boolean onRelayAfterSend(NostrRelay relay, NostrMessage message) {
+                    return true;
+                }
             }
         );
 
@@ -165,6 +175,16 @@ public class TestRelay {
 
                 @Override
                 public boolean onRelayDisconnectRequest(NostrRelay relay, String reason) {
+                    return true;
+                }
+
+                @Override
+                public boolean onRelayBeforeSend(NostrRelay relay, NostrMessage message) {
+                    return true;
+                }
+
+                @Override
+                public boolean onRelayAfterSend(NostrRelay relay, NostrMessage message) {
                     return true;
                 }
             }
@@ -265,6 +285,16 @@ public class TestRelay {
                         public boolean onRelayDisconnectRequest(NostrRelay relay, String reason) {
                             return true;
                         }
+
+                        @Override
+                        public boolean onRelayBeforeSend(NostrRelay relay, NostrMessage message) {
+                            return true;
+                        }
+
+                        @Override
+                        public boolean onRelayAfterSend(NostrRelay relay, NostrMessage message) {
+                            return true;
+                        }
                     }
                 );
         }
@@ -343,6 +373,16 @@ public class TestRelay {
 
             @Override
             public boolean onRelayDisconnectRequest(NostrRelay relay, String reason) {
+                return true;
+            }
+
+            @Override
+            public boolean onRelayBeforeSend(NostrRelay relay, NostrMessage message) {
+                return true;
+            }
+
+            @Override
+            public boolean onRelayAfterSend(NostrRelay relay, NostrMessage message) {
                 return true;
             }
         };

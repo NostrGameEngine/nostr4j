@@ -250,6 +250,42 @@ public final class NostrRelay {
         return (this.connected || (!this.disconnectedByClient && this.reconnectOnDrop && this.firstConnection));
     }
 
+    public void beforeSendMessage(NostrMessage message) {
+        for (NostrRelayComponent listener : this.listeners) {
+            try {
+                if (!listener.onRelayBeforeSend(this, message)) {
+                    assert dbg(() -> {
+                        logger.finer("Message ignored by component: " + this.url);
+                    });
+                    return;
+                }
+            } catch (Throwable e) {
+                assert dbg(() -> {
+                    logger.finer("Message cancelled by component: " + e.getMessage());
+                });
+                return;
+            }
+        }
+    }
+
+    public void afterSendMessage(NostrMessage message) {
+        for (NostrRelayComponent listener : this.listeners) {
+            try {
+                if (!listener.onRelayAfterSend(this, message)) {
+                    assert dbg(() -> {
+                        logger.finer("Message ignored by component: " + this.url);
+                    });
+                    return;
+                }
+            } catch (Throwable e) {
+                assert dbg(() -> {
+                    logger.finer("Message cancelled by component: " + e.getMessage());
+                });
+                return;
+            }
+        }
+    }
+
     // await for order
     public AsyncTask<NostrMessageAck> sendMessage(NostrMessage message) {
         NGEPlatform platform = NGEUtils.getPlatform();

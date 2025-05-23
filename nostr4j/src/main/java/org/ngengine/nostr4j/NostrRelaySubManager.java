@@ -118,11 +118,22 @@ public class NostrRelaySubManager implements NostrRelayComponent {
     }
 
     @Override
-    public boolean onRelaySend(NostrRelay relay, NostrMessage message) {
+    public boolean onRelayBeforeSend(NostrRelay relay, NostrMessage message) {
         if (message instanceof NostrSubscription) {
             String subId = ((NostrSubscription) message).getSubId();
             subTracker.computeIfAbsent(subId, k -> new SubAttachment());
-        } else if (message instanceof NostrSubscription.NostrSubCloseMessage) {
+        }
+        return true;
+    }
+
+    @Override
+    public boolean onRelaySend(NostrRelay relay, NostrMessage message) {
+        return true;
+    }
+
+    @Override
+    public boolean onRelayAfterSend(NostrRelay relay, NostrMessage message) {
+        if (message instanceof NostrSubscription.NostrSubCloseMessage) {
             String subId = ((NostrSubscription.NostrSubCloseMessage) message).getId();
             subTracker.remove(subId);
         }

@@ -47,7 +47,11 @@ public interface NostrRelayComponent {
 
     boolean onRelayDisconnect(NostrRelay relay, String reason, boolean byClient);
 
+    boolean onRelayBeforeSend(NostrRelay relay, NostrMessage message);
+
     boolean onRelaySend(NostrRelay relay, NostrMessage message);
+
+    boolean onRelayAfterSend(NostrRelay relay, NostrMessage message);
 
     boolean onRelayDisconnectRequest(NostrRelay relay, String reason);
 }

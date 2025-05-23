@@ -114,6 +114,16 @@ public class NostrPool {
         public boolean onRelayDisconnectRequest(NostrRelay relay, String reason) {
             return NostrPool.this.onRelayDisconnectRequest(relay, reason);
         }
+
+        @Override
+        public boolean onRelayBeforeSend(NostrRelay relay, NostrMessage message) {
+            return NostrPool.this.onBeforeRelaySend(relay, message);
+        }
+
+        @Override
+        public boolean onRelayAfterSend(NostrRelay relay, NostrMessage message) {
+            return NostrPool.this.onAfterRelaySend(relay, message);
+        }
     };
 
     public NostrPool() {
@@ -141,10 +151,16 @@ public class NostrPool {
     protected AsyncTask<List<NostrMessageAck>> sendMessage(NostrMessage message) {
         List<AsyncTask<NostrMessageAck>> promises = new ArrayList<>();
         for (NostrRelay relay : relays) {
+            relay.beforeSendMessage(message);
+        }
+        for (NostrRelay relay : relays) {
             assert dbg(() -> {
                 logger.finer("sending message to relay " + relay.getUrl() + " " + message);
             });
             promises.add(relay.sendMessage(message));
+        }
+        for (NostrRelay relay : relays) {
+            relay.afterSendMessage(message);
         }
         NGEPlatform platform = NGEUtils.getPlatform();
         return platform
@@ -443,7 +459,7 @@ public class NostrPool {
                     );
                     sub.callEoseListeners(isEOSEEverywhere);
                 } else {
-                    logger.warning("received invalid eose for subscription " + subId);
+                    logger.warning("received invalid eose for subscription " + subId + " from relay " + relay.getUrl());
                 }
             } else if (rcv instanceof NostrNoticeMessage) {
                 NostrNoticeMessage msg = (NostrNoticeMessage) rcv;
@@ -559,6 +575,14 @@ public class NostrPool {
     }
 
     protected boolean onRelayDisconnectRequest(NostrRelay relay, String reason) {
+        return true;
+    }
+
+    protected boolean onBeforeRelaySend(NostrRelay relay, NostrMessage message) {
+        return true;
+    }
+
+    protected boolean onAfterRelaySend(NostrRelay relay, NostrMessage message) {
         return true;
     }
 }

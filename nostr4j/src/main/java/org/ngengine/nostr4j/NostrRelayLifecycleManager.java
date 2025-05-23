@@ -149,4 +149,14 @@ public class NostrRelayLifecycleManager implements NostrRelayComponent {
         this.keepAlive();
         return true;
     }
+
+    @Override
+    public boolean onRelayBeforeSend(NostrRelay relay, NostrMessage message) {
+        return true;
+    }
+
+    @Override
+    public boolean onRelayAfterSend(NostrRelay relay, NostrMessage message) {
+        return true;
+    }
 }
