@@ -52,6 +52,7 @@ import org.ngengine.nostr4j.proto.NostrMessage;
 import org.ngengine.nostr4j.proto.NostrMessageAck;
 import org.ngengine.nostr4j.proto.impl.NostrClosedMessage;
 import org.ngengine.nostr4j.proto.impl.NostrEOSEMessage;
+import org.ngengine.nostr4j.proto.impl.NostrNoticeMessage;
 import org.ngengine.nostr4j.proto.impl.NostrOKMessage;
 import org.ngengine.nostr4j.utils.ExponentialBackoff;
 import org.ngengine.platform.AsyncExecutor;
@@ -565,6 +566,7 @@ public final class NostrRelay {
             if (rcv == null) rcv = NostrClosedMessage.parse(data);
             if (rcv == null) rcv = NostrEOSEMessage.parse(data);
             if (rcv == null) rcv = NostrOKMessage.parse(data);
+            if (rcv == null) rcv = NostrNoticeMessage.parse(data);
             if (rcv == null) throw new Exception("Unknown message type: " + prefix);
             final NostrMessage message = rcv;
 
