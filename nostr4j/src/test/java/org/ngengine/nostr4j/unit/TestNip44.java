@@ -77,7 +77,7 @@ public class TestNip44 {
             NostrPublicKey publicKey = NostrPublicKey.fromHex(pub2Hex);
 
             // Get conversation key
-            byte[] conversationKey = Nip44.getConversationKey(privateKey, publicKey);
+            byte[] conversationKey = Nip44.getConversationKey(privateKey, publicKey).await();
 
             // Assert equality with expected key
             assertEquals(
@@ -107,20 +107,20 @@ public class TestNip44 {
 
             // Generate conversation key
             NostrPrivateKey privKey1 = NostrPrivateKey.fromHex(sec1Hex);
-            byte[] conversationKey = Nip44.getConversationKey(privKey1, pubKey2);
+            byte[] conversationKey = Nip44.getConversationKey(privKey1, pubKey2).await();
 
             // Verify conversation key matches expected
             assertEquals("Conversation key mismatch for test case: " + plaintext, expectedConvKey, bytesToHex(conversationKey));
 
             // Encrypt with provided nonce
             byte[] nonce = hexToBytes(nonceHex);
-            String ciphertext = Nip44.encrypt(plaintext, conversationKey, nonce);
+            String ciphertext = Nip44.encrypt(plaintext, conversationKey, nonce).await();
 
             // Verify ciphertext matches expected payload
             assertEquals("Encrypted payload mismatch for plaintext: " + plaintext, expectedPayload, ciphertext);
 
             // Decrypt and verify
-            String decrypted = Nip44.decrypt(ciphertext, conversationKey);
+            String decrypted = Nip44.decrypt(ciphertext, conversationKey).await();
             assertEquals("Decrypted text doesn't match original for: " + plaintext, plaintext, decrypted);
         }
     }
@@ -165,7 +165,7 @@ public class TestNip44 {
             final byte[] conversationKey = hexToBytes(convKeyHex);
 
             try {
-                Nip44.decrypt(payload, conversationKey);
+                Nip44.decrypt(payload, conversationKey).await();
                 fail("Expected exception for invalid payload: " + note);
             } catch (Exception e) {
                 // Check that the exception message contains the expected note
@@ -205,7 +205,7 @@ public class TestNip44 {
             try {
                 NostrPrivateKey privateKey = NostrPrivateKey.fromHex(sec1Hex);
                 NostrPublicKey publicKey = NostrPublicKey.fromHex(pub2Hex);
-                Nip44.getConversationKey(privateKey, publicKey);
+                Nip44.getConversationKey(privateKey, publicKey).await();
                 fail("Expected exception for invalid keys: sec1=" + sec1Hex + ", pub2=" + pub2Hex);
             } catch (Exception e) {
                 // Expected exception - test passes

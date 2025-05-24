@@ -34,6 +34,8 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import org.ngengine.nostr4j.keypair.NostrPrivateKey;
 import org.ngengine.nostr4j.utils.Bech32;
+import org.ngengine.platform.AsyncExecutor;
+import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEPlatform;
 
 public class Nip49 {
@@ -41,6 +43,7 @@ public class Nip49 {
     private static final byte[] HRP = "ncryptsec".getBytes(StandardCharsets.UTF_8);
     private static final int DEFAULT_MEMORY_LIMIT = 1024 * 1024 * 257;
     private static final int DEFAULT_LOGN = 16;
+    private static final AsyncExecutor executor = NGEPlatform.get().newAsyncExecutor(Nip49.class);
 
     public static long getApproximatedMemoryRequirement(int logn) {
         long n = 1 << logn;
@@ -48,15 +51,15 @@ public class Nip49 {
         return bytes;
     }
 
-    public static String encrypt(NostrPrivateKey priv, String password) throws Nip49FailedException {
-        return encrypt(priv, password, DEFAULT_LOGN, DEFAULT_MEMORY_LIMIT);
+    public static String encryptSync(NostrPrivateKey priv, String password) throws Nip49FailedException {
+        return encryptSync(priv, password, DEFAULT_LOGN, DEFAULT_MEMORY_LIMIT);
     }
 
     public static boolean isEncrypted(String bech32) {
         return bech32.startsWith("ncryptsec");
     }
 
-    public static String encrypt(NostrPrivateKey priv, String password, int logn, int memoryLimitBytes)
+    public static String encryptSync(NostrPrivateKey priv, String password, int logn, int memoryLimitBytes)
         throws Nip49FailedException {
         try {
             NGEPlatform platform = NGEPlatform.get();
@@ -103,11 +106,12 @@ public class Nip49 {
         }
     }
 
-    public static NostrPrivateKey decrypt(String ncryptsec, String password) throws Nip49FailedException {
-        return decrypt(ncryptsec, password, DEFAULT_MEMORY_LIMIT);
+    public static NostrPrivateKey decryptSync(String ncryptsec, String password) throws Nip49FailedException {
+        return decryptSync(ncryptsec, password, DEFAULT_MEMORY_LIMIT);
     }
 
-    public static NostrPrivateKey decrypt(String ncryptsec, String password, int memoryLimitBytes) throws Nip49FailedException {
+    public static NostrPrivateKey decryptSync(String ncryptsec, String password, int memoryLimitBytes)
+        throws Nip49FailedException {
         try {
             NGEPlatform platform = NGEPlatform.get();
             if (!ncryptsec.startsWith("ncryptsec")) {
@@ -158,5 +162,25 @@ public class Nip49 {
         } catch (Exception e) {
             throw new Nip49FailedException("Failed to decrypt", e);
         }
+    }
+
+    public static AsyncTask<String> encrypt(NostrPrivateKey priv, String password) {
+        return encrypt(priv, password, DEFAULT_LOGN, DEFAULT_MEMORY_LIMIT);
+    }
+
+    public static AsyncTask<NostrPrivateKey> decrypt(String ncryptsec, String password) {
+        return decrypt(ncryptsec, password, DEFAULT_MEMORY_LIMIT);
+    }
+
+    public static AsyncTask<NostrPrivateKey> decrypt(String ncryptsec, String password, int memoryLimitBytes) {
+        return executor.run(() -> {
+            return decryptSync(ncryptsec, password, memoryLimitBytes);
+        });
+    }
+
+    public static AsyncTask<String> encrypt(NostrPrivateKey priv, String password, int logn, int memoryLimitBytes) {
+        return executor.run(() -> {
+            return encryptSync(priv, password, logn, memoryLimitBytes);
+        });
     }
 }

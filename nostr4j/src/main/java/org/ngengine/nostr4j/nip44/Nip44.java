@@ -34,6 +34,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import org.ngengine.nostr4j.keypair.NostrPrivateKey;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
+import org.ngengine.platform.AsyncExecutor;
+import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEUtils;
 
 /**
@@ -50,8 +52,9 @@ public class Nip44 {
     private static final int CONVERSATION_KEY_SIZE = 32;
     private static final int VERSION_SIZE = 1;
     private static final byte[] NIP44_V2_BYTES = "nip44-v2".getBytes(StandardCharsets.UTF_8);
+    private static final AsyncExecutor executor = NGEUtils.getPlatform().newAsyncExecutor(Nip44.class);
 
-    public static byte[] getConversationKey(NostrPrivateKey privateKey, NostrPublicKey publicKey) {
+    public static byte[] getConversationKeySync(NostrPrivateKey privateKey, NostrPublicKey publicKey) {
         byte pub[] = concatBytes(0x02, Integer.MIN_VALUE, publicKey._array(), null, null, -1);
         byte[] shared = NGEUtils.getPlatform().secp256k1SharedSecret(privateKey._array(), pub);
         byte sharedX[] = Arrays.copyOfRange(shared, 1, 33);
@@ -98,7 +101,7 @@ public class Nip44 {
         return concatBytes((unpaddedLen >> 8) & 0xFF, unpaddedLen & 0xFF, unpadded, null, null, paddedLen + 2);
     }
 
-    public static String encrypt(String plaintext, byte[] conversationKey, byte[] nonce) {
+    public static String encryptSync(String plaintext, byte[] conversationKey, byte[] nonce) {
         if (conversationKey == null || conversationKey.length != CONVERSATION_KEY_SIZE) throw new IllegalArgumentException(
             "Conversation key must be 32 bytes"
         );
@@ -117,8 +120,8 @@ public class Nip44 {
         return NGEUtils.getPlatform().base64encode(out);
     }
 
-    public static String encrypt(String plaintext, byte[] conversationKey) {
-        return encrypt(plaintext, conversationKey, null);
+    public static String encryptSync(String plaintext, byte[] conversationKey) {
+        return encryptSync(plaintext, conversationKey, null);
     }
 
     private static byte[][] decodePayload(String payload) {
@@ -142,7 +145,7 @@ public class Nip44 {
         return new byte[][] { nonce, ciphertext, mac };
     }
 
-    public static String decrypt(String payload, byte[] conversationKey) {
+    public static String decryptSync(String payload, byte[] conversationKey) {
         if (conversationKey == null || conversationKey.length != CONVERSATION_KEY_SIZE) throw new IllegalArgumentException(
             "Conversation key must be 32 bytes"
         );
@@ -234,5 +237,29 @@ public class Nip44 {
         }
         assert i == l;
         return out;
+    }
+
+    public static AsyncTask<String> encrypt(String plaintext, byte[] conversationKey, byte[] nonce) {
+        return executor.run(() -> {
+            return encryptSync(plaintext, conversationKey, nonce);
+        });
+    }
+
+    public static AsyncTask<String> encrypt(String plaintext, byte[] conversationKey) {
+        return executor.run(() -> {
+            return encryptSync(plaintext, conversationKey);
+        });
+    }
+
+    public static AsyncTask<String> decrypt(String payload, byte[] conversationKey) {
+        return executor.run(() -> {
+            return decryptSync(payload, conversationKey);
+        });
+    }
+
+    public static AsyncTask<byte[]> getConversationKey(NostrPrivateKey privateKey, NostrPublicKey publicKey) {
+        return executor.run(() -> {
+            return getConversationKeySync(privateKey, publicKey);
+        });
     }
 }

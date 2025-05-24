@@ -496,8 +496,8 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
 
             // decrypt content
             String content = event.getContent();
-            byte[] conversationKey = Nip44.getConversationKey(this.transportSigner.getKeyPair().getPrivateKey(), pubkey);
-            String decryptedContent = Nip44.decrypt(content, conversationKey);
+            byte[] conversationKey = Nip44.getConversationKeySync(this.transportSigner.getKeyPair().getPrivateKey(), pubkey);
+            String decryptedContent = Nip44.decryptSync(content, conversationKey);
 
             assert dbg(() -> logger.finer("Received response: " + decryptedContent));
             // parse content
@@ -650,23 +650,26 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
 
                     assert dbg(() -> logger.finer("Sending request: " + event));
 
-                    // TODO: async?
-                    byte conversationKey[] = Nip44.getConversationKey(
-                        this.transportSigner.getKeyPair().getPrivateKey(),
-                        this.signerPubkey
-                    );
-                    event.withContent(Nip44.encrypt(event.getContent(), conversationKey));
+                    AsyncTask<String> response = Nip44
+                        .getConversationKey(this.transportSigner.getKeyPair().getPrivateKey(), this.signerPubkey)
+                        .compose(conversationKey -> {
+                            return Nip44.encrypt(event.getContent(), conversationKey);
+                        })
+                        .compose(encryptedContent -> {
+                            event.withContent(encryptedContent);
 
-                    // we need to start waiting for the response before we publish the event
-                    // to make sure we don't miss the response if it comes in before we have a chance to wait for it
-                    AsyncTask<String> response = this.waitForResponse(method, requestId, timeout);
+                            // we need to start waiting for the response before we publish the event
+                            // to make sure we don't miss the response if it comes in before we have a
+                            // chance to wait for it
+                            AsyncTask<String> res = this.waitForResponse(method, requestId, timeout);
 
-                    this.transportSigner.sign(event)
-                        .then(signed -> {
-                            this.pool.send(signed);
-                            return null;
+                            this.transportSigner.sign(event)
+                                .then(signed -> {
+                                    this.pool.send(signed);
+                                    return null;
+                                });
+                            return res;
                         });
-
                     return response;
                 } catch (Exception e) {
                     throw new RuntimeException("Failed to send RPC request", e);

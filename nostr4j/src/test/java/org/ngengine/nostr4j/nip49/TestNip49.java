@@ -37,6 +37,7 @@ import com.google.gson.JsonArray;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.ExecutionException;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.ngengine.nostr4j.keypair.NostrPrivateKey;
@@ -56,7 +57,7 @@ public class TestNip49 {
     }
 
     @Test
-    public void encryptDecrypt() throws Nip49FailedException {
+    public void encryptDecrypt() throws Nip49FailedException, InterruptedException, ExecutionException {
         for (int i = 0; i < testVectors.size(); i++) {
             JsonArray testVector = testVectors.get(i).getAsJsonArray();
             String password = testVector.get(0).getAsString();
@@ -66,12 +67,12 @@ public class TestNip49 {
             String ncryptsec = testVector.get(4).getAsString();
             NostrPrivateKey sec = NostrPrivateKey.fromHex(secretHex);
             sec.setKeySecurity(NostrPrivateKey.KeySecurity.values()[ksb]);
-            String there = Nip49.encrypt(sec, password, logn, 1024 * 1024 * 128);
-            NostrPrivateKey back = Nip49.decrypt(there, password, 1024 * 1024 * 128);
-            NostrPrivateKey again = Nip49.decrypt(ncryptsec, password, 1024 * 1024 * 128);
-            NostrPrivateKey again2 = NostrPrivateKey.fromNcryptsec(ncryptsec, password);
-            String there2 = again2.asNcryptsec(password);
-            NostrPrivateKey back2 = NostrPrivateKey.fromNcryptsec(there2, password);
+            String there = Nip49.encrypt(sec, password, logn, 1024 * 1024 * 128).await();
+            NostrPrivateKey back = Nip49.decrypt(there, password, 1024 * 1024 * 128).await();
+            NostrPrivateKey again = Nip49.decrypt(ncryptsec, password, 1024 * 1024 * 128).await();
+            NostrPrivateKey again2 = NostrPrivateKey.fromNcryptsec(ncryptsec, password).await();
+            String there2 = again2.asNcryptsec(password).await();
+            NostrPrivateKey back2 = NostrPrivateKey.fromNcryptsec(there2, password).await();
 
             assertEquals(sec, back);
             assertEquals(sec, again);

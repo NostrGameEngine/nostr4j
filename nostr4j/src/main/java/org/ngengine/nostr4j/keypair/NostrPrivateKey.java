@@ -39,6 +39,7 @@ import org.ngengine.nostr4j.nip49.Nip49;
 import org.ngengine.nostr4j.nip49.Nip49FailedException;
 import org.ngengine.nostr4j.utils.Bech32;
 import org.ngengine.nostr4j.utils.ByteBufferList;
+import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEUtils;
 
 public final class NostrPrivateKey implements NostrKey {
@@ -160,7 +161,7 @@ public final class NostrPrivateKey implements NostrKey {
      * @return a new unencrypted NostrPrivateKey instance
      * @throws Nip49FailedException
      */
-    public static NostrPrivateKey fromNcryptsec(String ncryptsec, String passphrase) throws Nip49FailedException {
+    public static AsyncTask<NostrPrivateKey> fromNcryptsec(String ncryptsec, String passphrase) throws Nip49FailedException {
         return Nip49.decrypt(ncryptsec, passphrase);
     }
 
@@ -344,7 +345,7 @@ public final class NostrPrivateKey implements NostrKey {
      * @return the encrypted private key as a bech32 string
      * @throws Nip49FailedException
      */
-    public String asNcryptsec(String passphrase) throws Nip49FailedException {
+    public AsyncTask<String> asNcryptsec(String passphrase) throws Nip49FailedException {
         return Nip49.encrypt(this, passphrase);
     }
 }

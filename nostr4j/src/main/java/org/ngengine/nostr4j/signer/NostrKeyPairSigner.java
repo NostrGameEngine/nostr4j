@@ -73,29 +73,25 @@ public class NostrKeyPairSigner implements NostrSigner {
 
     @Override
     public AsyncTask<String> encrypt(String message, NostrPublicKey publicKey) {
-        NGEPlatform platform = NGEUtils.getPlatform();
-        return platform.wrapPromise((res, rej) -> {
-            try {
-                byte[] sharedKey = Nip44.getConversationKey(keyPair.getPrivateKey(), publicKey);
-                res.accept(Nip44.encrypt(message, sharedKey));
-            } catch (Exception e) {
-                rej.accept(e);
-            }
-        });
+        return Nip44
+            .getConversationKey(keyPair.getPrivateKey(), publicKey)
+            .compose(sharedKey -> {
+                return Nip44.encrypt(message, sharedKey);
+            })
+            .then(encrypt -> {
+                return encrypt;
+            });
     }
 
     @Override
     public AsyncTask<String> decrypt(String message, NostrPublicKey publicKey) {
         NGEPlatform platform = NGEUtils.getPlatform();
 
-        return platform.wrapPromise((res, rej) -> {
-            try {
-                byte[] sharedKey = Nip44.getConversationKey(keyPair.getPrivateKey(), publicKey);
-                res.accept(Nip44.decrypt(message, sharedKey));
-            } catch (Exception e) {
-                rej.accept(e);
-            }
-        });
+        return Nip44
+            .getConversationKey(keyPair.getPrivateKey(), publicKey)
+            .compose(sharedKey -> {
+                return Nip44.decrypt(message, sharedKey);
+            });
     }
 
     @Override
