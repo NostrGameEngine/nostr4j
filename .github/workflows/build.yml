@@ -29,8 +29,8 @@ jobs:
         
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
-      
-    - name: Build and publish
+
+    - name: Build
       if: github.event_name != 'pull_request'
       run: |
         export VERSION=""
@@ -44,6 +44,33 @@ jobs:
         export GITHUB_USERNAME=${{ github.actor }}
         export GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
         ./gradlew --no-daemon build javadoc publishAllPublicationsToLocalRepository publishAllPublicationsToGitHubPackagesRepository
+
+
+    - name: Delete all -SNAPSHOT versions
+      if: github.event_name != 'pull_request' && github.event_name != 'release'
+      uses: actions/delete-package-versions@v5
+      with:
+        owner: ${{ github.repository_owner }}
+        package-name: org.ngengine.nostr4j
+        package-type: maven
+        min-versions-to-keep: 0
+        ignore-versions: '^(?!.*-SNAPSHOT$).*'
+        token: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Publish
+      if: github.event_name != 'pull_request'
+      run: |
+        export VERSION=""
+        if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            export VERSION=${GITHUB_REF#refs/tags/}
+            echo "Publishing release $VERSION"
+        else
+            echo "Publishing snapshot"
+        fi
+        export GITHUB_REGISTRY=${{ github.repository }}
+        export GITHUB_USERNAME=${{ github.actor }}
+        export GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
+        ./gradlew --no-daemon publishAllPublicationsToLocalRepository publishAllPublicationsToGitHubPackagesRepository
 
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
