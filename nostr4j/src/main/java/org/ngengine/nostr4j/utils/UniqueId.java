@@ -38,8 +38,8 @@ public class UniqueId {
     private static final String INSTANCE_ID = System.currentTimeMillis() + "j" + random();
 
     public static String getNext() {
-        long current = COUNTER.getAndIncrement();
-        return "nostr4j" + INSTANCE_ID + "j" + random() + "j" + current;
+        long current = COUNTER.incrementAndGet();
+        return "nostr4j" + current + "j" + INSTANCE_ID + "j" + random();
     }
 
     private static String random() {
