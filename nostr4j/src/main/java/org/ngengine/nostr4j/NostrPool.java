@@ -193,7 +193,7 @@ public class NostrPool {
 
     public AsyncTask<NostrRelay> connectRelay(NostrRelay relay) {
         if (!relays.contains(relay)) {
-            relays.add(relay);
+            relays.addIfAbsent(relay);
             if (relay.getComponent(NostrRelaySubManager.class) == null) {
                 relay.addComponent(new NostrRelaySubManager());
             }
