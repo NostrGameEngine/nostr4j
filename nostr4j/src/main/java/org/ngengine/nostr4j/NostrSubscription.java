@@ -87,7 +87,7 @@ public class NostrSubscription extends NostrMessage {
     private final BiFunction<NostrSubscription, NostrSubCloseMessage, AsyncTask<List<NostrMessageAck>>> onClose;
     private final List<String> closeReasons = new ArrayList<>();
 
-    private boolean opened = false;
+    private volatile boolean opened = false;
 
     /**
      * Creates a new subscription with the specified parameters.
