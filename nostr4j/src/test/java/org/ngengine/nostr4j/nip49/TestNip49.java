@@ -82,6 +82,14 @@ public class TestNip49 {
         }
     }
 
+    @Test(expected = ExecutionException.class)
+    public void badDecrypt() throws Nip49FailedException, InterruptedException, ExecutionException {
+        int i = 0;
+        JsonArray testVector = testVectors.get(i).getAsJsonArray();
+        String ncryptsec = testVector.get(4).getAsString();
+        Nip49.decrypt(ncryptsec, "bad", 1024 * 1024 * 128).await();
+    }
+
     @Test
     public void testMemoryRequirement() {
         // logn | memory MB
