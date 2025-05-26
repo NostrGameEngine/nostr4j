@@ -35,15 +35,19 @@ import java.net.MalformedURLException;
 import java.net.URISyntaxException;
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Scanner;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.TestLogger;
+import org.ngengine.nostr4j.event.UnsignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
 import org.ngengine.nostr4j.nip46.BunkerUrl;
 import org.ngengine.nostr4j.nip46.Nip46AppMetadata;
 import org.ngengine.nostr4j.signer.NostrNIP46Signer;
+import org.ngengine.platform.NGEPlatform;
 
 public class Nip46SignerTest {
 
@@ -141,6 +145,23 @@ public class Nip46SignerTest {
             .then(pubKey -> {
                 System.out.println("Retrieved public key: " + pubKey.asHex());
 
+                return null;
+            });
+
+        Map<String, Object> params = new HashMap<>();
+        params.put("key", keyPair.getPublicKey().asHex());
+        params.put("name", "nostr4j");
+
+        UnsignedNostrEvent event = new UnsignedNostrEvent()
+            .withContent(NGEPlatform.get().toJSON(
+                        params))
+             .withTag("a", "b");
+        signer.sign(event)
+            .catchException(ex -> {
+                System.out.println("Error signing event: " + ex.getMessage());
+            })
+            .then(signedEvent -> {
+                System.out.println("Signed event: " + signedEvent);
                 return null;
             });
     }

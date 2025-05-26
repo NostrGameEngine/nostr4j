@@ -137,6 +137,7 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
     private transient volatile Map<String, PendingChallenge> pendingChallenges;
     private transient volatile AsyncExecutor executor;
     private transient volatile boolean closed = false;
+    private transient volatile NostrPublicKey cachedPublicKey = null;
 
     private Set<String> relays = new HashSet<>();
     private Duration requestsTimeout = Duration.ofSeconds(30);
@@ -396,46 +397,68 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
             (res, rej) -> {
                 try {
                     if (this.listeners == null) {
-                        logger.finest("Creating listeners map");
-                        this.listeners = new ConcurrentHashMap<>();
+                        synchronized (this) {
+                            if (this.listeners == null) {
+                                logger.finest("Creating listeners map");
+                                this.listeners = new ConcurrentHashMap<>();
+                            }
+                        }
                     }
 
                     if (this.pendingChallenges == null) {
-                        logger.finest("Creating pending challenges map");
-                        this.pendingChallenges = new ConcurrentHashMap<>();
+                        synchronized (this) {
+                            if (this.pendingChallenges == null) {
+                                logger.finest("Creating pending challenges map");
+                                this.pendingChallenges = new ConcurrentHashMap<>();
+                            }
+                        }
                     }
 
                     if (this.pool == null) {
-                        logger.finest("Creating pool");
-                        this.pool = new NostrPool();
+                        synchronized (this) {
+                            if (this.pool == null) {
+                                logger.finest("Creating pool");
+                                this.pool = new NostrPool();
+                            }
+                        }
                     }
+
                     for (String relay : relays) {
                         if (!this.pool.getRelays().stream().anyMatch(s -> s.getUrl().equals(relay))) {
                             this.pool.connectRelay(new NostrRelay(relay));
                         }
                     }
+
                     if (this.subscription == null) {
-                        NostrFilter filter = new NostrFilter()
-                            .withKind(24133)
-                            .withTag("p", this.transportPubkey.asHex())
-                            .limit(100)
-                            .since(Instant.now().minusSeconds(60));
-                        logger.finest("Creating subscription for filter: " + filter);
-                        this.subscription = this.pool.subscribe(filter);
-                        this.subscription.addListener(this);
+                        synchronized (this) {
+                            if (this.subscription == null) {
+                                NostrFilter filter = new NostrFilter()
+                                    .withKind(24133)
+                                    .withTag("p", this.transportPubkey.asHex())
+                                    .limit(100)
+                                    .since(Instant.now().minusSeconds(60));
+                                logger.finest("Creating subscription for filter: " + filter);
+                                this.subscription = this.pool.subscribe(filter);
+                                this.subscription.addListener(this);
+                            }
+                        }
                     }
 
                     if (!this.subscription.isOpened()) {
-                        logger.finest("Opening subscription: " + this.subscription);
-                        this.subscription.open()
-                            .catchException(exc -> {
-                                rej.accept(exc);
-                            })
-                            .then(all -> {
-                                logger.fine("Subscription opened: " + this.subscription);
-                                res.accept(all);
-                                return null;
-                            });
+                        synchronized (this) {
+                            if (!this.subscription.isOpened()) {
+                                logger.finest("Opening subscription: " + this.subscription);
+                                this.subscription.open()
+                                    .catchException(exc -> {
+                                        rej.accept(exc);
+                                    })
+                                    .then(all -> {
+                                        logger.fine("Subscription opened: " + this.subscription);
+                                        res.accept(all);
+                                        return null;
+                                    });
+                            }
+                        }
                     } else {
                         assert dbg(() -> logger.finest("Subscription already opened: " + this.subscription));
                     }
@@ -680,15 +703,16 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
     @Override
     public AsyncTask<SignedNostrEvent> sign(UnsignedNostrEvent event) {
         String method = "sign_event";
-        Collection<Object> params = new ArrayList<>();
-        params.add(event.getKind());
-        params.add(event.getContent());
-        params.add(event.getTagRows());
-        params.add(event.getCreatedAt().getEpochSecond());
-        return sendRPC(method, params, requestsTimeout)
+        NGEPlatform platform = NGEUtils.getPlatform();
+
+        Map<String, Object> params = new HashMap<>();
+        params.put("kind", event.getKind());
+        params.put("content", event.getContent());
+        params.put("tags", event.getTagRows());
+        params.put("created_at", event.getCreatedAt().getEpochSecond());
+        return sendRPC(method, List.of(platform.toJSON(params)), requestsTimeout)
             .then(signed -> {
                 try {
-                    NGEPlatform platform = NGEUtils.getPlatform();
                     return new SignedNostrEvent(platform.fromJSON(signed, Map.class));
                 } catch (Exception e) {
                     throw new RuntimeException("Failed to sign event", e);
@@ -716,11 +740,19 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
 
     @Override
     public AsyncTask<NostrPublicKey> getPublicKey() {
+        if (cachedPublicKey != null) {
+            return NGEPlatform
+                .get()
+                .wrapPromise((res, rej) -> {
+                    res.accept(cachedPublicKey);
+                });
+        }
         String method = "get_public_key";
         Collection<Object> params = new ArrayList<>();
         return sendRPC(method, params, requestsTimeout)
             .then(publicKey -> {
-                return NostrPublicKey.fromHex(publicKey);
+                cachedPublicKey = NostrPublicKey.fromHex(publicKey);
+                return cachedPublicKey;
             });
     }
 }
