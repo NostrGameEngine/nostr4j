@@ -83,8 +83,8 @@ public class NostrSubscription extends NostrMessage {
     private final Collection<NostrFilter> filters;
     private final Collection<NostrFilter> filtersRO;
 
-    private final Function<NostrSubscription, AsyncTask<List<NostrMessageAck>>> onOpen;
-    private final BiFunction<NostrSubscription, NostrSubCloseMessage, AsyncTask<List<NostrMessageAck>>> onClose;
+    private final Function<NostrSubscription, AsyncTask<List<AsyncTask<NostrMessageAck>>>> onOpen;
+    private final BiFunction<NostrSubscription, NostrSubCloseMessage, AsyncTask<List<AsyncTask<NostrMessageAck>>>> onClose;
     private final List<String> closeReasons = new ArrayList<>();
 
     private volatile boolean opened = false;
@@ -102,8 +102,8 @@ public class NostrSubscription extends NostrMessage {
         String subId,
         Collection<NostrFilter> filters,
         EventTracker eventTracker,
-        Function<NostrSubscription, AsyncTask<List<NostrMessageAck>>> onOpen,
-        BiFunction<NostrSubscription, NostrSubCloseMessage, AsyncTask<List<NostrMessageAck>>> onClose
+        Function<NostrSubscription, AsyncTask<List<AsyncTask<NostrMessageAck>>>> onOpen,
+        BiFunction<NostrSubscription, NostrSubCloseMessage, AsyncTask<List<AsyncTask<NostrMessageAck>>>> onClose
     ) {
         this.subId = subId;
         this.eventTracker = eventTracker;
@@ -161,7 +161,7 @@ public class NostrSubscription extends NostrMessage {
      *
      * @return An async task representing the open operation
      */
-    public AsyncTask<List<NostrMessageAck>> open() {
+    public AsyncTask<List<AsyncTask<NostrMessageAck>>> open() {
         if (opened) {
             throw new IllegalStateException("Subscription already opened");
         }
@@ -180,14 +180,14 @@ public class NostrSubscription extends NostrMessage {
      *
      * @return An async task representing the close operation
      */
-    public AsyncTask<List<NostrMessageAck>> close() {
+    public AsyncTask<List<AsyncTask<NostrMessageAck>>> close() {
         NGEPlatform platform = NGEUtils.getPlatform();
         if (!opened) return platform.wrapPromise((res, rej) -> {
             res.accept(Collections.emptyList());
         });
         opened = false;
         this.exc.close();
-        AsyncTask<List<NostrMessageAck>> out = this.onClose.apply(this, getCloseMessage());
+        AsyncTask<List<AsyncTask<NostrMessageAck>>> out = this.onClose.apply(this, getCloseMessage());
         registerClosure("closed by client");
         callCloseListeners();
         return out;

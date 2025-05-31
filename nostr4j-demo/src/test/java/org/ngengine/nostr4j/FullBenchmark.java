@@ -75,7 +75,7 @@ public class FullBenchmark {
 
         long sendStarted = System.currentTimeMillis();
 
-        List<AsyncTask<List<NostrMessageAck>>> sent = new ArrayList<>();
+        List<AsyncTask<List<AsyncTask<NostrMessageAck>>>> sent = new ArrayList<>();
 
         for (int i = 0; i < EVENTS; i++) {
             UnsignedNostrEvent event = new UnsignedNostrEvent();
@@ -87,7 +87,7 @@ public class FullBenchmark {
             signer
                 .sign(event)
                 .then(signed -> {
-                    sent.add(writer.send(signed));
+                    sent.add(writer.publish(signed));
                     return null;
                 });
             // System.out.println("Sending "+i+"/"+EVENTS);

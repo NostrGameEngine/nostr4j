@@ -64,9 +64,13 @@ public class Nip01 {
             });
     }
 
-    public static AsyncTask<List<NostrMessageAck>> update(NostrPool pool, NostrSigner signer, Nip01UserMetadata newMetadata) {
+    public static AsyncTask<List<AsyncTask<NostrMessageAck>>> update(
+        NostrPool pool,
+        NostrSigner signer,
+        Nip01UserMetadata newMetadata
+    ) {
         UnsignedNostrEvent event = newMetadata.toUpdateEvent();
         AsyncTask<SignedNostrEvent> signedP = signer.sign(event);
-        return signedP.compose(signed -> pool.send(signed));
+        return signedP.compose(signed -> pool.publish(signed));
     }
 }

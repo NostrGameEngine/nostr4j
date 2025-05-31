@@ -53,6 +53,8 @@ import org.ngengine.nostr4j.event.tracker.ForwardSlidingWindowEventTracker;
 import org.ngengine.nostr4j.event.tracker.NaiveEventTracker;
 import org.ngengine.nostr4j.listeners.NostrNoticeListener;
 import org.ngengine.nostr4j.listeners.NostrRelayComponent;
+import org.ngengine.nostr4j.pool.NostrPoolAckPolicy;
+import org.ngengine.nostr4j.pool.NostrPoolAnyAckPolicy;
 import org.ngengine.nostr4j.proto.NostrMessage;
 import org.ngengine.nostr4j.proto.NostrMessageAck;
 import org.ngengine.nostr4j.proto.impl.NostrClosedMessage;
@@ -144,11 +146,27 @@ public class NostrPool {
         return this;
     }
 
-    public AsyncTask<List<NostrMessageAck>> send(SignedNostrEvent ev) {
-        return sendMessage(ev);
+    public AsyncTask<List<AsyncTask<NostrMessageAck>>> publish(SignedNostrEvent ev) {
+        return sendMessage(ev, NostrPoolAnyAckPolicy.get());
     }
 
-    protected AsyncTask<List<NostrMessageAck>> sendMessage(NostrMessage message) {
+    public AsyncTask<List<AsyncTask<NostrMessageAck>>> publish(SignedNostrEvent ev, NostrPoolAckPolicy ackPolicy) {
+        return sendMessage(ev, ackPolicy);
+    }
+
+    /**
+     * @deprecated Use {@link #publish(SignedNostrEvent)} instead.
+     */
+    @Deprecated
+    public AsyncTask<List<AsyncTask<NostrMessageAck>>> send(SignedNostrEvent ev) {
+        return publish(ev);
+    }
+
+    protected AsyncTask<List<AsyncTask<NostrMessageAck>>> sendMessage(NostrMessage message) {
+        return sendMessage(message, NostrPoolAnyAckPolicy.get());
+    }
+
+    protected AsyncTask<List<AsyncTask<NostrMessageAck>>> sendMessage(NostrMessage message, NostrPoolAckPolicy ackPolicy) {
         List<AsyncTask<NostrMessageAck>> promises = new ArrayList<>();
         for (NostrRelay relay : relays) {
             relay.beforeSendMessage(message);
@@ -162,33 +180,29 @@ public class NostrPool {
         for (NostrRelay relay : relays) {
             relay.afterSendMessage(message);
         }
+
         NGEPlatform platform = NGEUtils.getPlatform();
-        return platform
-            .awaitAll(promises)
-            .compose(acks -> {
-                return platform.wrapPromise((r, e) -> {
-                    List<String> fails = new ArrayList<>();
-                    boolean atLeastOneSuccess = false;
-                    for (NostrMessageAck ack : acks) {
-                        if (ack.isSuccess()) {
-                            atLeastOneSuccess = true;
-                        } else {
-                            logger.warning(
-                                "Failed to send message " +
-                                message +
-                                " to relay " +
-                                ack.getRelay().getUrl() +
-                                ": " +
-                                ack.getMessage()
-                            );
-                            fails.add(ack.getMessage());
-                        }
+        return platform.wrapPromise((res, rej) -> {
+            for (AsyncTask<NostrMessageAck> ack : promises) {
+                ack.then(msg -> {
+                    NostrMessageAck.Status status = ackPolicy.apply(promises);
+                    if (status == NostrMessageAck.Status.SUCCESS) {
+                        res.accept(promises);
+                    } else if (status == NostrMessageAck.Status.FAILURE) {
+                        logger.warning(
+                            "Failed to send message " +
+                            message +
+                            " to relay " +
+                            msg.getRelay().getUrl() +
+                            ": " +
+                            msg.getMessage()
+                        );
+                        rej.accept(new Exception("Failed to send message to all relays. (" + msg.getMessage() + ")"));
                     }
-                    if (atLeastOneSuccess) r.accept(acks); else e.accept(
-                        new Exception("Failed to send message to all relays: " + String.join(", ", fails))
-                    );
+                    return null;
                 });
-            });
+            }
+        });
     }
 
     public AsyncTask<NostrRelay> connectRelay(NostrRelay relay) {

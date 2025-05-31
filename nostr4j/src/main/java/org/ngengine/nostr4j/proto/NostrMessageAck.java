@@ -36,9 +36,15 @@ import org.ngengine.nostr4j.NostrRelay;
 
 public class NostrMessageAck {
 
+    public enum Status {
+        SUCCESS,
+        FAILURE,
+        PENDING,
+    }
+
     private final String id;
     private final Instant sentAt;
-    private boolean success;
+    private Status status = Status.PENDING;
     private String message;
     private final NostrRelay relay;
     private final BiConsumer<NostrMessageAck, String> successCallback;
@@ -59,32 +65,35 @@ public class NostrMessageAck {
     }
 
     public void callSuccessCallback(String message) {
+        this.status = Status.SUCCESS;
+        this.message = message;
+
         if (successCallback != null) {
             successCallback.accept(this, message);
         }
     }
 
     public void callFailureCallback(String message) {
+        this.status = Status.FAILURE;
+        this.message = message;
         if (failureCallback != null) {
             failureCallback.accept(this, message);
         }
     }
 
-    public void setSuccess(boolean success) {
-        this.success = success;
-    }
-
-    public void setMessage(String message) {
+    protected void setRemoteStatus(Status status, String message) {
+        this.status = status;
         this.message = message;
     }
 
-    public NostrRelay get() throws Exception {
-        if (success) return relay;
-        throw new Exception(message);
+    public Status getStatus() {
+        return status;
     }
 
-    public boolean isSuccess() {
-        return success;
+    public NostrRelay get() throws Exception {
+        if (status == Status.PENDING) return null;
+        if (status == Status.SUCCESS) return relay;
+        throw new Exception(message);
     }
 
     public String getMessage() {

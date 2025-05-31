@@ -263,7 +263,7 @@ public class NostrRTCSignaling implements Closeable {
     }
 
     public AsyncTask<Void> start(boolean signaling) {
-        List<AsyncTask<List<NostrMessageAck>>> waitQueue = new ArrayList<>();
+        List<AsyncTask<List<AsyncTask<NostrMessageAck>>>> waitQueue = new ArrayList<>();
         if (!this.isDiscoveryStarted()) {
             this.discoverySub = // listen for connect and disconnect events directed to the room
                 this.pool.subscribe(
@@ -345,7 +345,7 @@ public class NostrRTCSignaling implements Closeable {
             );
     }
 
-    public AsyncTask<List<NostrMessageAck>> sendAnnounce() {
+    public AsyncTask<List<AsyncTask<NostrMessageAck>>> sendAnnounce() {
         if (this.closed) throw new IllegalStateException("Already closed");
         if (!this.isSignalingStarted()) throw new IllegalStateException("Signaling not started");
         UnsignedNostrEvent connectEvent = new UnsignedNostrEvent();
@@ -358,7 +358,7 @@ public class NostrRTCSignaling implements Closeable {
         return this.localPeer.getSigner()
             .sign(connectEvent)
             .compose(ev -> {
-                return pool.send(ev);
+                return pool.publish(ev);
             });
     }
 
@@ -369,7 +369,7 @@ public class NostrRTCSignaling implements Closeable {
      * @return the async task that will be completed when the message is sent
      
      */
-    public AsyncTask<List<NostrMessageAck>> sendOffer(NostrRTCOffer offer, NostrPublicKey recipient) {
+    public AsyncTask<List<AsyncTask<NostrMessageAck>>> sendOffer(NostrRTCOffer offer, NostrPublicKey recipient) {
         if (this.closed) throw new IllegalStateException("Already closed");
         if (!this.isSignalingStarted()) throw new IllegalStateException("Signaling not started");
 
@@ -393,7 +393,7 @@ public class NostrRTCSignaling implements Closeable {
                 return this.localPeer.getSigner()
                     .sign(event)
                     .compose(ev -> {
-                        return pool.send(ev);
+                        return pool.publish(ev);
                     });
             });
     }
@@ -404,7 +404,7 @@ public class NostrRTCSignaling implements Closeable {
      * @param recipient the recipient peer
      * @return the async task that will be completed when the message is sent
      */
-    public AsyncTask<List<NostrMessageAck>> sendAnswer(NostrRTCAnswer answer, NostrPublicKey recipient) {
+    public AsyncTask<List<AsyncTask<NostrMessageAck>>> sendAnswer(NostrRTCAnswer answer, NostrPublicKey recipient) {
         if (this.closed) throw new IllegalStateException("Already closed");
         if (!this.isSignalingStarted()) throw new IllegalStateException("Signaling not started");
         UnsignedNostrEvent event = new UnsignedNostrEvent();
@@ -427,7 +427,7 @@ public class NostrRTCSignaling implements Closeable {
                 return this.localPeer.getSigner()
                     .sign(event)
                     .compose(ev -> {
-                        return pool.send(ev);
+                        return pool.publish(ev);
                     });
             });
     }
@@ -438,7 +438,10 @@ public class NostrRTCSignaling implements Closeable {
      * @param recipient the recipient peer
      * @return the async task that will be completed when the message is sent
      */
-    public AsyncTask<List<NostrMessageAck>> sendCandidates(NostrRTCIceCandidate candidate, NostrPublicKey recipient) {
+    public AsyncTask<List<AsyncTask<NostrMessageAck>>> sendCandidates(
+        NostrRTCIceCandidate candidate,
+        NostrPublicKey recipient
+    ) {
         if (this.closed) throw new IllegalStateException("Already closed");
         if (!this.isSignalingStarted()) throw new IllegalStateException("Signaling not started");
 
@@ -460,7 +463,7 @@ public class NostrRTCSignaling implements Closeable {
                 return this.localPeer.getSigner()
                     .sign(event)
                     .compose(ev -> {
-                        return pool.send(ev);
+                        return pool.publish(ev);
                     });
             });
     }
@@ -481,7 +484,7 @@ public class NostrRTCSignaling implements Closeable {
         this.localPeer.getSigner()
             .sign(connectEvent)
             .compose(ev -> {
-                return pool.send(ev);
+                return pool.publish(ev);
             });
 
         if (isDiscoveryStarted()) this.discoverySub.close();

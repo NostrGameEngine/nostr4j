@@ -319,8 +319,6 @@ public final class NostrRelay {
                                 assert dbg(() -> {
                                     logger.finest("ack: " + msg + " " + eventId);
                                 });
-                                rr.setMessage(msg);
-                                rr.setSuccess(true);
                                 ores.accept(rr);
                             },
                             (rr, msg) -> {
@@ -330,8 +328,6 @@ public final class NostrRelay {
                                 assert dbg(() -> {
                                     logger.finest("ack (rejected): " + msg + " " + eventId);
                                 });
-                                rr.setMessage(msg);
-                                rr.setSuccess(false);
                                 ores.accept(rr);
                             }
                         );
@@ -595,8 +591,7 @@ public final class NostrRelay {
                                         eventMessage
                                     );
                                 });
-                                ack.setSuccess(success);
-                                ack.setMessage(eventMessage);
+
                                 if (success) {
                                     ack.callSuccessCallback(eventMessage);
                                 } else {

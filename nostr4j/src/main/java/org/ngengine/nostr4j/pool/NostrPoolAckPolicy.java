@@ -28,43 +28,11 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package org.ngengine.nostr4j.nip24;
+package org.ngengine.nostr4j.pool;
 
 import java.util.List;
-import org.ngengine.nostr4j.NostrPool;
-import org.ngengine.nostr4j.event.NostrEvent;
-import org.ngengine.nostr4j.keypair.NostrPublicKey;
-import org.ngengine.nostr4j.nip01.Nip01;
-import org.ngengine.nostr4j.nip01.Nip01UserMetadata;
-import org.ngengine.nostr4j.nip01.Nip01UserMetadataFilter;
+import java.util.function.Function;
 import org.ngengine.nostr4j.proto.NostrMessageAck;
-import org.ngengine.nostr4j.signer.NostrSigner;
 import org.ngengine.platform.AsyncTask;
 
-public class Nip24 {
-
-    public static Nip24ExtraMetadata from(NostrEvent event) {
-        return new Nip24ExtraMetadata(event);
-    }
-
-    public static Nip24ExtraMetadata from(Nip01UserMetadata nip01) {
-        return new Nip24ExtraMetadata(nip01);
-    }
-
-    public static AsyncTask<Nip24ExtraMetadata> fetch(NostrPool pool, NostrPublicKey pubkey) {
-        Nip01UserMetadataFilter filter = new Nip01UserMetadataFilter(pubkey);
-        return fetch(pool, filter);
-    }
-
-    public static AsyncTask<Nip24ExtraMetadata> fetch(NostrPool pool, Nip01UserMetadataFilter filter) {
-        return (AsyncTask<Nip24ExtraMetadata>) Nip01
-            .fetch(pool, filter)
-            .then(v -> {
-                return from(v);
-            });
-    }
-
-    public static AsyncTask<List<AsyncTask<NostrMessageAck>>> update(NostrPool pool, NostrSigner signer, Nip24ExtraMetadata newMetadata) {
-        return Nip01.update(pool, signer, newMetadata);
-    }
-}
+public interface NostrPoolAckPolicy extends Function<List<AsyncTask<NostrMessageAck>>, NostrMessageAck.Status> {}
