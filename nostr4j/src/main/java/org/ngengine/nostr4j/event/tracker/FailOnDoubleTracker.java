@@ -42,19 +42,21 @@ public class FailOnDoubleTracker implements EventTracker {
 
     @Override
     public boolean seen(SignedNostrEvent event) {
-        if (seenEvents.putIfAbsent(event.getIdentifier().id, new Exception().getStackTrace()) == null) {
-            return false;
-        } else {
-            throw new RuntimeException(
-                "Events was already seen: " +
-                event.getIdentifier().id +
-                "\n" +
-                "First seen stacktrace: " +
-                stackTraceToString(seenEvents.get(event.getIdentifier().id)) +
-                "\n" +
-                "Event: " +
-                event.toString()
-            );
+        synchronized(seenEvents){
+            if (seenEvents.putIfAbsent(event.getIdentifier().id, new Exception().getStackTrace()) == null) {
+                return false;
+            } else {
+                throw new RuntimeException(
+                    "Events was already seen: " +
+                    event.getIdentifier().id +
+                    "\n" +
+                    "First seen stacktrace: " +
+                    stackTraceToString(seenEvents.get(event.getIdentifier().id)) +
+                    "\n" +
+                    "Event: " +
+                    event.toString()
+                );
+            }
         }
     }
 
