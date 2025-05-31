@@ -64,7 +64,11 @@ public class Nip24 {
             });
     }
 
-    public static AsyncTask<List<AsyncTask<NostrMessageAck>>> update(NostrPool pool, NostrSigner signer, Nip24ExtraMetadata newMetadata) {
+    public static AsyncTask<List<AsyncTask<NostrMessageAck>>> update(
+        NostrPool pool,
+        NostrSigner signer,
+        Nip24ExtraMetadata newMetadata
+    ) {
         return Nip01.update(pool, signer, newMetadata);
     }
 }

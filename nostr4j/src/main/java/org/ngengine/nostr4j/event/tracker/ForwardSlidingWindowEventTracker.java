@@ -69,7 +69,7 @@ public class ForwardSlidingWindowEventTracker implements EventTracker {
 
     @Override
     public boolean seen(SignedNostrEvent event) {
-        synchronized(seenEvents){
+        synchronized (seenEvents) {
             if (event.getCreatedAt().getEpochSecond() < cutOffS) {
                 return true;
             }
@@ -116,7 +116,7 @@ public class ForwardSlidingWindowEventTracker implements EventTracker {
         if (seenEvents.size() <= minTrackedEvents) {
             return;
         }
-        synchronized(seenEvents){
+        synchronized (seenEvents) {
             int toRemove = seenEvents.size() - maxTrackedEvents;
             if (toRemove < 0) toRemove = 0;
 
@@ -126,7 +126,10 @@ public class ForwardSlidingWindowEventTracker implements EventTracker {
             if (t - cutOffS > trackingWindowS) {
                 cutOffUpdate = true;
                 cutOffS = t - (trackingWindowS - trackingWindowsMarginS);
-                assert cutOffS <= currentTimeSeconds() : "Cut off time is in the future " + cutOffS + " > " + currentTimeSeconds();
+                assert cutOffS <= currentTimeSeconds() : "Cut off time is in the future " +
+                cutOffS +
+                " > " +
+                currentTimeSeconds();
             }
 
             assert checkOrder() : "Events are not in order";

@@ -42,7 +42,7 @@ public class FailOnDoubleTracker implements EventTracker {
 
     @Override
     public boolean seen(SignedNostrEvent event) {
-        synchronized(seenEvents){
+        synchronized (seenEvents) {
             if (seenEvents.putIfAbsent(event.getIdentifier().id, new Exception().getStackTrace()) == null) {
                 return false;
             } else {
