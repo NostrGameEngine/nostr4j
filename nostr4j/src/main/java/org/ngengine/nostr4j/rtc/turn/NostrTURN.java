@@ -429,7 +429,7 @@ public class NostrTURN {
                                 event.createdAt(Instant.now());
                                 event.withContent(encrypted);
                                 event.withTag("d", "turn-" + this.connectionId);
-                                event.withExpiration(Instant.now().plus(this.config.getPacketTimeout()));
+                                // event.withExpiration(Instant.now().plus(this.config.getPacketTimeout()));
 
                                 SignedNostrEvent signed = this.localPeer.getSigner().sign(event).await();
 
