@@ -91,6 +91,7 @@ public class NostrRTCSocket implements RTCTransportListener, NostrTURN.Listener,
     private NostrRTCPeer remotePeer;
 
     private volatile boolean useTURN = false;
+    private volatile boolean forceTURN = false;
     private volatile boolean connected = false;
     private volatile AsyncTask<Void> delayedCandidateEmission;
 
@@ -334,9 +335,14 @@ public class NostrRTCSocket implements RTCTransportListener, NostrTURN.Listener,
      * @param use
      */
     public void useTURN(boolean use) {
+        if(forceTURN) use = true;
         if (use == useTURN) return;
         logger.fine("Using TURN: " + use);
         this.useTURN = use;
+    }
+
+    public boolean isUsingTURN() {
+        return useTURN;
     }
 
     @Override
@@ -386,4 +392,18 @@ public class NostrRTCSocket implements RTCTransportListener, NostrTURN.Listener,
     public void onRTCChannelError(Throwable e) {
         logger.severe("RTC Channel Error " + e);
     }
+
+
+    /**
+     * Force the usage of TURN server.
+     * @param forceTURN
+     */
+    public void setForceTURN(boolean forceTURN) {
+        this.forceTURN = forceTURN;
+        if(!useTURN&&forceTURN) {
+            logger.fine("Forcing TURN usage");
+            useTURN(true);
+        }
+    }
+
 }
