@@ -82,8 +82,7 @@ public final class NostrRelay {
         public boolean equals(Object obj) {
             if (this == obj) return true;
             if (obj == null || getClass() != obj.getClass()) return false;
-            QueuedMessage that = (QueuedMessage) obj;
-            return message.equals(that.message);
+            return false;
         }
 
         @Override
