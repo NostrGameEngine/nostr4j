@@ -73,13 +73,12 @@ public class NostrNoticeMessage extends NostrMessage {
         return List.of(this.message);
     }
 
-    public static NostrClosedMessage parse(List<Object> data) {
+    public static NostrNoticeMessage parse(List<Object> data) {
         String prefix = NGEUtils.safeString(data.get(0));
-        if (data.size() < 3 || !prefix.equals("NOTICE")) {
+        if (data.size() < 2 || !prefix.equals("NOTICE")) {
             return null;
         }
-        String subId = NGEUtils.safeString(data.get(1));
-        String reason = NGEUtils.safeString(data.get(2));
-        return new NostrClosedMessage(subId, reason);
+        String msg = NGEUtils.safeString(data.get(1));
+        return new NostrNoticeMessage(msg);
     }
 }
