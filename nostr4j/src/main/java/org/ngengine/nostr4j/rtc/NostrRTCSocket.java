@@ -335,7 +335,7 @@ public class NostrRTCSocket implements RTCTransportListener, NostrTURN.Listener,
      * @param use
      */
     public void useTURN(boolean use) {
-        if(forceTURN) use = true;
+        if (forceTURN) use = true;
         if (use == useTURN) return;
         logger.fine("Using TURN: " + use);
         this.useTURN = use;
@@ -393,17 +393,15 @@ public class NostrRTCSocket implements RTCTransportListener, NostrTURN.Listener,
         logger.severe("RTC Channel Error " + e);
     }
 
-
     /**
      * Force the usage of TURN server.
      * @param forceTURN
      */
     public void setForceTURN(boolean forceTURN) {
         this.forceTURN = forceTURN;
-        if(!useTURN&&forceTURN) {
+        if (!useTURN && forceTURN) {
             logger.fine("Forcing TURN usage");
             useTURN(true);
         }
     }
-
 }
