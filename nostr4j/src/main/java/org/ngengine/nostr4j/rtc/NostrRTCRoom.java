@@ -275,6 +275,7 @@ public class NostrRTCRoom implements Closeable {
                                 .listen()
                                 .then(offer -> {
                                     try {
+                                        logger.fine("Sending offer to remote peer: " + remotePubkey);
                                         this.signaling.sendOffer(offer, remotePubkey);
                                     } catch (Exception e) {
                                         // e.printStackTrace();

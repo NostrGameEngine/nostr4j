@@ -180,7 +180,7 @@ public class NostrRTCSocket implements RTCTransportListener, NostrTURN.Listener,
         delayedCandidateEmission =
             this.executor.runLater(
                     () -> {
-                        // logger.fine("Emitting ICE candidates " + localIceCandidates);
+                        logger.fine("Emitting ICE candidates " + localIceCandidates);
                         NostrRTCIceCandidate iceCandidate = new NostrRTCIceCandidate(
                             localPeer.getPubkey(),
                             new ArrayList<String>(localIceCandidates),
@@ -206,27 +206,38 @@ public class NostrRTCSocket implements RTCTransportListener, NostrTURN.Listener,
      * @throws IllegalStateException If the socket is already connected.
      */
     AsyncTask<NostrRTCOffer> listen() {
-        if (this.transport != null) throw new IllegalStateException("Already connected");
+        try {
+            if (this.transport != null)
+                throw new IllegalStateException("Already connected");
 
-        // logger.fine("Listening for RTC connections");
-        useTURN(false);
+            logger.fine("Listening for RTC connections on connection ID: " + connectionId);
+            useTURN(false);
 
-        NGEPlatform platform = NGEUtils.getPlatform();
-        this.transport = platform.newRTCTransport(settings, connectionId, localPeer.getStunServers());
-        this.transport.addListener(this);
+            NGEPlatform platform = NGEUtils.getPlatform();
+            logger.fine("Creating RTC transport for connection ID: " + connectionId);
 
-        return this.transport.initiateChannel()
-            .then(offerString -> {
-                NostrRTCOffer offer = new NostrRTCOffer(
-                    localPeer.getPubkey(),
-                    offerString,
-                    this.localPeer.getTurnServer(),
-                    this.localPeer.getMisc()
-                );
-                // logger.fine("Preparing offer " + offer);
+            this.transport = platform.newRTCTransport(settings, connectionId, localPeer.getStunServers());
+            this.transport.addListener(this);
 
-                return offer;
-            });
+            logger.fine("Initiating RTC channel for connection ID: " + connectionId);
+
+            return this.transport.initiateChannel()
+                    .then(offerString -> {
+                        logger.fine(
+                                "Use offer string: " + offerString + " to connect with connection ID: " + connectionId);
+                        NostrRTCOffer offer = new NostrRTCOffer(
+                                localPeer.getPubkey(),
+                                offerString,
+                                this.localPeer.getTurnServer(),
+                                this.localPeer.getMisc());
+                        logger.fine("Ready to send offer " + offer + " to connection ID: " + connectionId);
+
+                        return offer;
+                    });
+        } catch (Exception e) {
+            logger.severe("Error while listening for RTC connections: " + e.getMessage());
+            throw new IllegalStateException("Error while listening for RTC connections", e);
+        }
     }
 
     /**
@@ -239,7 +250,7 @@ public class NostrRTCSocket implements RTCTransportListener, NostrTURN.Listener,
      */
     AsyncTask<NostrRTCAnswer> connect(NostrRTCSignal offerOrAnswer) {
         Objects.requireNonNull(offerOrAnswer);
-        // logger.fine("Connecting to RTC socket " + offerOrAnswer);
+        logger.fine("Connecting to RTC socket " + offerOrAnswer);
         useTURN(false);
 
         NGEPlatform platform = NGEUtils.getPlatform();
@@ -249,7 +260,7 @@ public class NostrRTCSocket implements RTCTransportListener, NostrTURN.Listener,
             if (this.transport != null) throw new IllegalStateException("Already connected");
             this.transport = platform.newRTCTransport(settings, connectionId, localPeer.getStunServers());
             this.transport.addListener(this);
-            // logger.fine("Use offer to connect");
+            logger.fine("Use offer to connect");
             this.remotePeer =
                 Objects.requireNonNull(((NostrRTCOffer) offerOrAnswer).getPeerInfo(), "Remote Peer cannot be null");
             emitCandidates();
@@ -266,7 +277,7 @@ public class NostrRTCSocket implements RTCTransportListener, NostrTURN.Listener,
             throw new IllegalArgumentException("Invalid RTC signal type");
         }
 
-        // logger.fine("Initializing TURN connection");
+        logger.fine("Initializing TURN connection");
         if (!this.remotePeer.getTurnServer().isEmpty()) {
             this.turn = new NostrTURN(connectionId, localPeer, remotePeer, turnSettings);
             this.turn.addListener(this);
@@ -278,10 +289,10 @@ public class NostrRTCSocket implements RTCTransportListener, NostrTURN.Listener,
         return this.transport.connectToChannel(connectString)
             .then(answerString -> {
                 if (answerString == null) {
-                    // logger.fine("Connected to RTC socket");
+                    logger.fine("Connected to RTC socket");
                     return null;
                 }
-                // logger.fine("Connected to RTC socket, received answer " + answerString);
+                logger.fine("Connected to RTC socket, received answer " + answerString);
                 NostrRTCAnswer answer = new NostrRTCAnswer(
                     localPeer.getPubkey(),
                     answerString,
@@ -305,7 +316,7 @@ public class NostrRTCSocket implements RTCTransportListener, NostrTURN.Listener,
 
     @Override
     public void onLocalRTCIceCandidate(String candidateString) {
-        // logger.fine("Received local ICE candidate: " + candidateString);
+        logger.fine("Received local ICE candidate: " + candidateString);
         localIceCandidates.addIfAbsent(candidateString);
         emitCandidates();
     }
