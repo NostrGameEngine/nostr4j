@@ -207,8 +207,7 @@ public class NostrRTCSocket implements RTCTransportListener, NostrTURN.Listener,
      */
     AsyncTask<NostrRTCOffer> listen() {
         try {
-            if (this.transport != null)
-                throw new IllegalStateException("Already connected");
+            if (this.transport != null) throw new IllegalStateException("Already connected");
 
             logger.fine("Listening for RTC connections on connection ID: " + connectionId);
             useTURN(false);
@@ -222,18 +221,18 @@ public class NostrRTCSocket implements RTCTransportListener, NostrTURN.Listener,
             logger.fine("Initiating RTC channel for connection ID: " + connectionId);
 
             return this.transport.initiateChannel()
-                    .then(offerString -> {
-                        logger.fine(
-                                "Use offer string: " + offerString + " to connect with connection ID: " + connectionId);
-                        NostrRTCOffer offer = new NostrRTCOffer(
-                                localPeer.getPubkey(),
-                                offerString,
-                                this.localPeer.getTurnServer(),
-                                this.localPeer.getMisc());
-                        logger.fine("Ready to send offer " + offer + " to connection ID: " + connectionId);
+                .then(offerString -> {
+                    logger.fine("Use offer string: " + offerString + " to connect with connection ID: " + connectionId);
+                    NostrRTCOffer offer = new NostrRTCOffer(
+                        localPeer.getPubkey(),
+                        offerString,
+                        this.localPeer.getTurnServer(),
+                        this.localPeer.getMisc()
+                    );
+                    logger.fine("Ready to send offer " + offer + " to connection ID: " + connectionId);
 
-                        return offer;
-                    });
+                    return offer;
+                });
         } catch (Exception e) {
             logger.severe("Error while listening for RTC connections: " + e.getMessage());
             throw new IllegalStateException("Error while listening for RTC connections", e);
