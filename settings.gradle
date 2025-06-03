@@ -18,7 +18,7 @@ gradle.allprojects { proj ->
     def DEFAULT_GROUP = 'org.ngengine'
     def DEFAULT_VERSION = '0.0.0-SNAPSHOT'
 
-    def NGE_PLATFORM_VERSION = '0.0.3'
+    def NGE_PLATFORM_VERSION = '0.0.4'
     def NGE_PLATFORM_SNAPSHOT = '0.0.0-SNAPSHOT'
 
 

@@ -3,8 +3,7 @@ name: Build and Publish
 on:
   push: 
   pull_request:
-  release:
-    types: [published] 
+
 
 jobs:
   build:
@@ -43,7 +42,7 @@ jobs:
         export GITHUB_REGISTRY=${{ github.repository }}
         export GITHUB_USERNAME=${{ github.actor }}
         export GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
-        ./gradlew --no-daemon build javadoc publishAllPublicationsToLocalRepository publishAllPublicationsToGitHubPackagesRepository
+        ./gradlew --no-daemon build javadoc
 
 
     - name: Delete all -SNAPSHOT versions
