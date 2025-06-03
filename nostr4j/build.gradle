@@ -7,6 +7,7 @@ dependencies {
     implementation "org.ngengine:nge-platform-common:${project.ext.ngePlatformVersion}"
     testImplementation "org.ngengine:nge-platform-jvm:${project.ext.ngePlatformVersion}"
     testImplementation 'com.google.code.gson:gson:2.12.1'
+    implementation 'org.slf4j:slf4j-jdk14:2.0.12'
 }
 
 java {
