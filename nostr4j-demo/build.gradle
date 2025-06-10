@@ -78,7 +78,7 @@ task buildBenchmarksNative(type: Exec) {
         '-cp', combinedClasspath.asPath,
         '-H:Name=benchmarks', 
         '-H:Path=' + outputDir, 
-        "-H:ReflectionConfigurationFiles=${project.rootDir}/reflect-config.json",
+        "-H:ReflectionConfigurationFiles=${projectDir}/reflect-config.json",
         '-H:+UnlockExperimentalVMOptions',
         '--enable-native-access=ALL-UNNAMED',
         '--link-at-build-time',     

@@ -27,7 +27,7 @@ ext {
     license="BSD 3-Clause License"
     licenseUrl="https://opensource.org/licenses/BSD-3-Clause"
     ngePlatformVersionSnapshot = "0.0.0-SNAPSHOT"
-    ngePlatformVersion = "0.0.6"
+    ngePlatformVersion = "0.0.5"
 }
 
 if(System.getenv("SONATYPE_USERNAME") || project.findProperty("sonatypeUsername")){
@@ -73,16 +73,15 @@ allprojects {
     }
 }
 
-def applyConf(proj, isAndroid){
-    // java only
-    if(!isAndroid){
-        proj.java {
-            withJavadocJar()
-            withSourcesJar()
-        }
-        proj.apply plugin: "com.github.spotbugs"
-
+def applyConf(proj){
+    
+    proj.java {
+        withJavadocJar()
+        withSourcesJar()
     }
+    proj.apply plugin: "com.github.spotbugs"
+
+    
     
     // common    
     proj.apply plugin: "com.diffplug.spotless"
@@ -98,12 +97,8 @@ def applyConf(proj, isAndroid){
         proj.publishing {
             publications {
                 mavenJava(MavenPublication) {
-                    if (proj.plugins.hasPlugin("java-library")) {
-                        from(proj.components.java)
-                    }
-                    else if (proj.plugins.hasPlugin("com.android.library")) {
-                        from(proj.components["release"])
-                    }
+                    from(proj.components.java)
+                    
 
                     groupId    = proj.group.toString()
                     artifactId = proj.name
@@ -201,15 +196,14 @@ def applyConf(proj, isAndroid){
             }
         }
 
-        if(!isAndroid){
-            proj.tasks.named("processResources").configure { copySpec ->
-                dependsOn(proj.tasks.named("generateBuildDate"))
-                copySpec.duplicatesStrategy = DuplicatesStrategy.INCLUDE
-                copySpec.from("${proj.buildDir}/generated-resources/build-date") {
-                    into("") 
-                }
+        proj.tasks.named("processResources").configure { copySpec ->
+            dependsOn(proj.tasks.named("generateBuildDate"))
+            copySpec.duplicatesStrategy = DuplicatesStrategy.INCLUDE
+            copySpec.from("${proj.buildDir}/generated-resources/build-date") {
+                into("") 
             }
         }
+    
     }
 
 } 
@@ -217,9 +211,8 @@ def applyConf(proj, isAndroid){
 
 subprojects { proj ->
   
-    
     proj.plugins.withId('java-library') {
-        applyConf(proj, false);     
+        applyConf(proj);     
     }
 
     proj.plugins.withId("com.github.spotbugs") {
@@ -264,7 +257,7 @@ subprojects { proj ->
                 def licenseText = file("${proj.rootDir}/LICENSE").text
                 def wrapped     = licenseText.readLines().collect { " * " + it }.join("\n")
                 def header      = "/**\n" + wrapped + "\n */"
-                licenseHeader(header, "package ")
+                licenseHeader(header, /(?s)^(\/\*\*.*Copyright.*\*\/\s+)?package /)
             }
         }
     }
