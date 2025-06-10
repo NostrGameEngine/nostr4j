@@ -38,7 +38,7 @@ gradle.allprojects { proj ->
             mavenLocal()
             mavenCentral()
             maven {
-                url "https://maven.rblb.it/NostrGameEngine/nge-platforms/"
+                url "https://maven.ngengine.org/NostrGameEngine/nge-platforms/"
             }
             
         }
