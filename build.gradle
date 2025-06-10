@@ -1,0 +1,273 @@
+
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath "com.android.tools.build:gradle:8.2.2"
+    }
+ }
+
+
+plugins {
+    id "org.gradle.toolchains.foojay-resolver-convention" version "0.9.0" apply false
+    id "com.github.spotbugs"                            version "5.1.3" apply false
+    id "com.diffplug.spotless"                          version "7.0.2" apply false
+    id "io.github.gradle-nexus.publish-plugin"          version "2.0.0" 
+}
+
+ext {
+    repo="NostrGameEngine/nostr4j"
+    website="https://github.com/NostrGameEngine/nostr4j"
+    baseVersion="0.0.0-SNAPSHOT"
+    baseGroup="org.ngengine"
+    description="High-performance Nostr client library with RTC support"
+    author="Riccardo Balbo"
+    authorAlias="rblb"
+    authorEmail="os@rblb.it"
+    license="BSD 3-Clause License"
+    licenseUrl="https://opensource.org/licenses/BSD-3-Clause"
+    ngePlatformVersionSnapshot = "0.0.0-SNAPSHOT"
+    ngePlatformVersion = "0.0.6"
+}
+
+if(System.getenv("SONATYPE_USERNAME") || project.findProperty("sonatypeUsername")){
+    nexusPublishing {
+        repositories {
+            sonatype {
+                nexusUrl.set(uri("https://ossrh-staging-api.central.sonatype.com/service/local/"))
+                snapshotRepositoryUrl.set(uri("https://central.sonatype.com/repository/maven-snapshots/"))
+
+                username = System.getenv("SONATYPE_USERNAME") ?: project.findProperty("sonatypeUsername") ?: ""
+                password = System.getenv("SONATYPE_PASSWORD") ?: project.findProperty("sonatypePassword") ?: ""
+            }
+        }
+    }
+}
+
+
+
+allprojects {
+
+    def projectVersion = System.getenv("VERSION")
+    if (projectVersion == null || projectVersion.trim().isEmpty()) {
+        projectVersion = rootProject.ext.baseVersion
+    }
+    def projectGroup = System.getenv("GROUP") ?: rootProject.ext.baseGroup 
+    
+    println "Using project version: ${projectVersion}"
+    println "Using project group: ${projectGroup}"
+
+    version = projectVersion
+    group   = projectGroup
+
+
+    repositories {
+        mavenLocal()
+        mavenCentral()
+        maven {
+            url = uri("https://central.sonatype.com/repository/maven-snapshots")
+        }
+        maven {
+            url = "https://maven.rblb.it/NostrGameEngine/libdatachannel-java"
+        }
+    }
+}
+
+def applyConf(proj, isAndroid){
+    // java only
+    if(!isAndroid){
+        proj.java {
+            withJavadocJar()
+            withSourcesJar()
+        }
+        proj.apply plugin: "com.github.spotbugs"
+
+    }
+    
+    // common    
+    proj.apply plugin: "com.diffplug.spotless"
+    proj.apply plugin: "maven-publish"
+    proj.apply plugin: "signing"  
+
+    proj.tasks.withType(Javadoc).configureEach { Javadoc javadocTask ->
+        javadocTask.options.encoding   = "UTF-8"
+        javadocTask.destinationDir     = file("${proj.rootDir}/dist/javadoc/${proj.name}")
+    }
+
+    proj.afterEvaluate {
+        proj.publishing {
+            publications {
+                mavenJava(MavenPublication) {
+                    if (proj.plugins.hasPlugin("java-library")) {
+                        from(proj.components.java)
+                    }
+                    else if (proj.plugins.hasPlugin("com.android.library")) {
+                        from(proj.components["release"])
+                    }
+
+                    groupId    = proj.group.toString()
+                    artifactId = proj.name
+                    version    = proj.version.toString()
+
+                    pom {
+                        name        = proj.name
+                        description = rootProject.ext.description
+                        url         = rootProject.ext.website
+                        licenses {
+                            license {
+                                name = rootProject.ext.license
+                                url  = rootProject.ext.licenseUrl
+                            }
+                        }
+                        developers {
+                            developer {
+                                id = rootProject.ext.authorAlias
+                                name = rootProject.ext.author
+                                email = rootProject.ext.authorEmail
+                            }
+                        }
+                        scm {
+                            connection = "scm:git:git://github.com/${rootProject.ext.repo}.git"
+                            developerConnection = "scm:git:ssh://github.com:${rootProject.ext.repo}.git"
+                            url = "https://github.com/${rootProject.ext.repo}"
+                        }
+                    }
+                }
+            }
+            repositories {
+                mavenLocal()
+                maven {
+                    name = "distFolder"
+                    url  = uri("file://${proj.rootDir}/dist")
+                }
+                if (System.getenv("GITHUB_REGISTRY") != null) {
+                    maven {
+                        name = "GitHubPackages"
+                        url  = uri(
+                            "https://maven.pkg.github.com/" + System.getenv("GITHUB_REGISTRY")
+                        )
+                        credentials {
+                            username = System.getenv("GITHUB_USERNAME") ?: ""
+                            password = System.getenv("GITHUB_TOKEN")   ?: ""
+                        }
+                    }
+                }
+            }
+
+            if (System.getenv("GPG_PRIVATE_KEY") != null && System.getenv("GPG_PASSPHRASE") != null) {
+                proj.signing {
+                    def signingKey = System.getenv("GPG_PRIVATE_KEY")
+                    def signingPassword = System.getenv("GPG_PASSPHRASE")
+                    useInMemoryPgpKeys(signingKey, signingPassword)
+                    sign proj.publishing.publications.mavenJava
+                }
+            }
+        }
+
+        proj.tasks.register("outputCoordinates") {      
+            doLast {
+                proj.publishing.publications.forEach { publication ->
+                    if (publication instanceof MavenPublication) {
+                        println ""
+                        println "=========== Published Artifact Coordinates ==========="
+                        println "Group ID:    ${publication.groupId}"
+                        println "Artifact ID: ${publication.artifactId}"
+                        println "Version:     ${publication.version}"
+                        println "Maven:       ${publication.groupId}:${publication.artifactId}:${publication.version}"
+                        println "Gradle:      implementation '${publication.groupId}:${publication.artifactId}:${publication.version}'"
+                        println "===================================================="
+                        println ""
+                    }
+                }
+            }
+        }
+
+        proj.tasks.withType(PublishToMavenRepository).configureEach { publishTask ->
+            publishTask.finalizedBy(proj.tasks.named("outputCoordinates"))
+        }
+        proj.tasks.withType(PublishToMavenLocal).configureEach { publishLocalTask ->
+            publishLocalTask.finalizedBy(proj.tasks.named("outputCoordinates"))
+        }
+
+        proj.tasks.register("generateBuildDate") {
+            def outputDir  = file("${proj.buildDir}/generated-resources/build-date/${proj.name}")
+            def outputFile = file("${outputDir}/build.date")
+
+            outputs.file(outputFile)
+
+            doLast {
+                outputDir.mkdirs()
+                outputFile.text = java.time.LocalDate.now().toString()
+            }
+        }
+
+        if(!isAndroid){
+            proj.tasks.named("processResources").configure { copySpec ->
+                dependsOn(proj.tasks.named("generateBuildDate"))
+                copySpec.duplicatesStrategy = DuplicatesStrategy.INCLUDE
+                copySpec.from("${proj.buildDir}/generated-resources/build-date") {
+                    into("") 
+                }
+            }
+        }
+    }
+
+} 
+
+
+subprojects { proj ->
+  
+    
+    proj.plugins.withId('java-library') {
+        applyConf(proj, false);     
+    }
+
+    proj.plugins.withId("com.github.spotbugs") {
+        proj.spotbugs {
+            ignoreFailures = true
+            reportLevel     = com.github.spotbugs.snom.Confidence.valueOf("MEDIUM")
+            toolVersion     = "4.9.3"
+            excludeFilter   = file("${proj.rootDir}/spotbugs-exclude.xml")
+        }
+        proj.spotbugsTest {
+            enabled = false
+        }
+        proj.dependencies {
+            spotbugsPlugins "com.h3xstream.findsecbugs:findsecbugs-plugin:1.12.0"
+        }
+        proj.tasks.withType(com.github.spotbugs.snom.SpotBugsTask).configureEach { task ->
+            task.reports {
+                html {
+                    enabled     = true
+                    destination = file("${proj.rootDir}/reports/spotbugs/${task.name}.html")
+                }
+                sarif {
+                    enabled     = true
+                    destination = file("${proj.rootDir}/reports/spotbugs/${task.name}.sarif")
+                }
+            }
+        }
+    }
+
+  
+    proj.plugins.withId("com.diffplug.spotless") {
+        proj.spotless {
+            java {
+                importOrder()
+                removeUnusedImports()
+                cleanthat()
+                prettier(["prettier": "2.8.8", "prettier-plugin-java": "2.2.0"])
+                    .config(["parser": "java", "tabWidth": 4, "printWidth": 128])
+                formatAnnotations()
+
+                // Insert the LICENSE text (root/LICENSE) as a Javadoc‑style header
+                def licenseText = file("${proj.rootDir}/LICENSE").text
+                def wrapped     = licenseText.readLines().collect { " * " + it }.join("\n")
+                def header      = "/**\n" + wrapped + "\n */"
+                licenseHeader(header, "package ")
+            }
+        }
+    }
+} 

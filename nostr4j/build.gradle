@@ -4,8 +4,8 @@ plugins {
 
 dependencies {
     testImplementation "junit:junit:4.13.2"
-    implementation "org.ngengine:nge-platform-common:${project.ext.ngePlatformVersion}"
-    testImplementation "org.ngengine:nge-platform-jvm:${project.ext.ngePlatformVersion}"
+    implementation "org.ngengine:nge-platform-common:${project.version.endsWith('-SNAPSHOT') ? rootProject.ext.ngePlatformVersionSnapshot : rootProject.ext.ngePlatformVersion}"
+    testImplementation "org.ngengine:nge-platform-jvm:${project.version.endsWith('-SNAPSHOT') ? rootProject.ext.ngePlatformVersionSnapshot : rootProject.ext.ngePlatformVersion}"
     testImplementation 'com.google.code.gson:gson:2.12.1'
     implementation 'org.slf4j:slf4j-jdk14:2.0.12'
 }

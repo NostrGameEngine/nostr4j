@@ -11,8 +11,8 @@
 dependencies {
     testImplementation "junit:junit:4.13.2"
     implementation project(":nostr4j")
-    implementation "org.ngengine:nge-platform-common:${project.ext.ngePlatformVersion}"
-    implementation "org.ngengine:nge-platform-jvm:${project.ext.ngePlatformVersion}"   
+    implementation "org.ngengine:nge-platform-common:${project.version.endsWith('-SNAPSHOT') ? rootProject.ext.ngePlatformVersionSnapshot : rootProject.ext.ngePlatformVersion}"
+    implementation "org.ngengine:nge-platform-jvm:${project.version.endsWith('-SNAPSHOT') ? rootProject.ext.ngePlatformVersionSnapshot : rootProject.ext.ngePlatformVersion}"   
 
 }
 
