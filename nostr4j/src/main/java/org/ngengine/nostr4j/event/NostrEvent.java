@@ -43,6 +43,11 @@ import java.util.logging.Logger;
 import org.ngengine.platform.NGEUtils;
 
 public interface NostrEvent extends Cloneable, Serializable {
+    public static record Coordinates(
+            String type,
+            String kind,
+            String coords) { }
+
     class TagValue {
 
         private final List<String> values;

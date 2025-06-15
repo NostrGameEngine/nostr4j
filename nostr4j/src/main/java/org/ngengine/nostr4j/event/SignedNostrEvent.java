@@ -360,4 +360,38 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
     public List<List<String>> getTagRows() {
         return tagRows;
     }
+
+
+    /**
+     * Get coordinates to this event.
+     * <p>
+     * If the event is addressable or replaceable, it returns a coordinates object with type "a".
+     * If the event is not addressable or replaceable, it returns a coordinates object with type "e".
+     * 
+     * Type matches the tag key used to refer to this event as detailed in NIP-01
+     * </p>
+     * 
+     * @return
+     */
+    public NostrEvent.Coordinates getCoordinates() {
+        String kind = String.valueOf(getKind());
+        if (isAddressable() || isReplaceable()) {
+            String pub = getPubkey().asHex();
+            TagValue d = getFirstTag("d");
+            String coords = kind + ":" + pub + ":" + (d != null ? d.get(0) : "");
+            return new NostrEvent.Coordinates(
+                    "a",
+                    String.valueOf(getKind()),
+                    coords);
+        } else {
+            String id = getId();
+            return new NostrEvent.Coordinates(
+                    "e",
+                    kind,
+                    id
+            );
+        }
+    }
+
+
 }
