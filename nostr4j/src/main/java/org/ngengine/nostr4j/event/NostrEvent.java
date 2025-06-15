@@ -133,4 +133,59 @@ public interface NostrEvent extends Cloneable, Serializable {
         }
         return expiresAt;
     }
+
+
+
+    default  boolean isReplaceable() {
+        return isReplaceable(this);
+    }
+    
+    default boolean isAddressable() {
+        return isAddressable(this);
+    }
+
+    default boolean isEphemeral() {
+        return isEphemeral(this);
+    }
+
+    default boolean isRegular() {
+        return isRegular(this);
+    }
+    
+
+    public static boolean isReplaceable(NostrEvent event) {
+        if (event == null) {
+            return false;
+        }
+        int n = event.getKind();
+        // 10000 <= n < 20000 || n == 0 || n == 3
+        return (n >= 10000 && n < 20000) || n == 0 || n == 3;
+    }
+
+    public static boolean isAddressable(NostrEvent event) {
+        if (event == null) {
+            return false;
+        }
+        int n = event.getKind();
+        // 30000 <= n < 40000
+        return (n >= 30000 && n < 40000);
+    }
+
+    public static boolean isEphemeral(NostrEvent event) {
+        if (event == null) {
+            return false;
+        }
+        int n = event.getKind();
+        // 20000 <= n < 30000
+        return (n >= 20000 && n < 30000);
+    }
+
+    public static boolean isRegular(NostrEvent event) {
+        if (event == null) {
+            return false;
+        }
+        int n = event.getKind();
+        // 1000 <= n < 10000 || 4 <= n < 45 || n == 1 || n == 2
+        return (n >= 1000 && n < 10000) || (n >= 4 && n < 45) || n == 1 || n == 2;
+    }
 }
