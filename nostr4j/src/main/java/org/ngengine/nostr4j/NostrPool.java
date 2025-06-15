@@ -44,6 +44,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
@@ -375,6 +376,12 @@ public class NostrPool {
                 }
             );
 
+            Consumer<List<SignedNostrEvent>> done = (evs)->{
+                res.accept(evs);
+                ended.set(true);
+                scheduledActions.remove(scheduled);
+            };
+
             scheduledActions.add(scheduled);
             sub
                 .addEoseListener(all -> {
@@ -382,9 +389,7 @@ public class NostrPool {
                         assert dbg(() -> {
                             logger.fine("fetch eose for fetch " + sub.getId() + " with received events: " + events);
                         });
-                        res.accept(events);
-                        ended.set(true);
-                        scheduledActions.remove(scheduled);
+                        done.accept(events);
                         sub.close();
                     }
                 })
@@ -399,6 +404,8 @@ public class NostrPool {
                     assert dbg(() -> {
                         logger.fine("fetch close " + reason + " for subscription " + sub.getId());
                     });
+                    if( ended.get()) return;
+                    done.accept(events);
                 })
                 .open();
         });
