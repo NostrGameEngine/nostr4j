@@ -40,7 +40,7 @@ import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.proto.NostrMessageFragment;
 import org.ngengine.platform.NGEUtils;
 
-public class NostrFilter extends NostrMessageFragment {
+public class NostrFilter extends NostrMessageFragment implements Cloneable {
 
     private List<String> ids;
     private List<String> authors;
@@ -82,7 +82,21 @@ public class NostrFilter extends NostrMessageFragment {
         }
     }
 
-    public NostrFilter id(String id) {
+    @Override
+    public NostrFilter clone() {
+        try {
+            NostrFilter cl =  (NostrFilter) super.clone();
+            cl.ids = ids != null ? new ArrayList<>(ids) : null;
+            cl.authors = authors != null ? new ArrayList<>(authors) : null;
+            cl.kinds = kinds != null ? new ArrayList<>(kinds) : null;
+            cl.tags = tags != null ? new HashMap<>(tags) : null;
+            return cl;
+        } catch (CloneNotSupportedException e) {
+            throw new RuntimeException("Clone not supported for NostrFilter", e);
+        }
+    }
+
+    public NostrFilter withId(String id) {
         if (ids == null) ids = new ArrayList<>();
         ids.add(id);
         return this;
