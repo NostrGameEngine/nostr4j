@@ -1,4 +1,4 @@
-package org.ngengine.nostr4j.sdan;
+package org.ngengine.nostr4j.ads;
 
 import java.io.BufferedInputStream;
 import java.io.IOException;
@@ -12,24 +12,24 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public final class SdanTaxonomy implements Serializable{
-    public static record SdanTaxonomyTerm (
+    public static record Term (
             String id,
             String parent,
             String name,
-            String tier1,
-            String tier2,
-            String tier3,
-            String tier4,
-            String extension) implements Serializable {
-        public String term() {
-             return Stream.of(tier1, tier2, tier3, tier4)
-                .filter(tier -> tier != null && !tier.isEmpty())
-                .collect(Collectors.joining("/"));
+            String tier1Name,
+            String tier2Name,
+            String tier3Name,
+            String tier4Name,
+            String path,
+            String extension) implements Serializable {      
+        @Override
+        public String toString(){
+            return path;
         }
     }
 
     private static record TreeNode(
-        SdanTaxonomyTerm taxonomy,
+        Term taxonomy,
         Map<String, TreeNode> children
     ) implements Serializable {}
 
@@ -72,9 +72,19 @@ public final class SdanTaxonomy implements Serializable{
             String tier4 = parts[6].trim();
             String extension = parts[7].trim();
 
-            SdanTaxonomyTerm taxonomy = new SdanTaxonomyTerm(id, parent, name, tier1, tier2, tier3, tier4, extension);
-            
 
+            Term taxonomy = new Term(
+                id, 
+                parent, 
+                name, 
+                tier1, 
+                tier2, 
+                tier3, 
+                tier4, 
+                Stream.of(tier1, tier2, tier3, tier4).filter(tier -> tier != null && !tier.isEmpty()).collect(Collectors.joining("/")), 
+                extension
+            );
+            
             TreeNode parentNode = !parent.isEmpty() ? taxonomyFlat.get(parent) : null;
             if(parentNode==null){
                 parentNode = taxonomyTree; // Use root if no parent found
@@ -91,16 +101,16 @@ public final class SdanTaxonomy implements Serializable{
     }
 
 
-    public SdanTaxonomyTerm getByTerm(String term) {
+    public Term getByPath(String term) {
         for (TreeNode node : taxonomyFlat.values()) {
-            if (node.taxonomy.term().equalsIgnoreCase(term)) {
+            if (node.taxonomy.path().equalsIgnoreCase(term)) {
                 return node.taxonomy;
             }
         }
         return null; 
     }
 
-    public SdanTaxonomyTerm getById(String id){
+    public Term getById(String id){
         TreeNode node = taxonomyFlat.get(id);
         if (node != null) {
             return node.taxonomy;

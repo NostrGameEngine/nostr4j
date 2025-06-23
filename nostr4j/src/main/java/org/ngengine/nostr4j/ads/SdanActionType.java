@@ -1,4 +1,4 @@
-package org.ngengine.nostr4j.sdan;
+package org.ngengine.nostr4j.ads;
 
 /**
  * Enum for supported action types
