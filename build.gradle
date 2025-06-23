@@ -18,7 +18,7 @@ plugins {
 ext {
     repo="NostrGameEngine/nostr4j"
     website="https://github.com/NostrGameEngine/nostr4j"
-    baseVersion="0.0.0-SNAPSHOT"
+    baseVersion="0.1.0-SNAPSHOT"
     baseGroup="org.ngengine"
     description="High-performance Nostr client library with RTC support"
     author="Riccardo Balbo"
@@ -26,7 +26,7 @@ ext {
     authorEmail="os@rblb.it"
     license="BSD 3-Clause License"
     licenseUrl="https://opensource.org/licenses/BSD-3-Clause"
-    ngePlatformVersionSnapshot = "0.0.0-SNAPSHOT"
+    ngePlatformVersionSnapshot = "0.1.0-SNAPSHOT"
     ngePlatformVersion = "0.0.5"
 }
 

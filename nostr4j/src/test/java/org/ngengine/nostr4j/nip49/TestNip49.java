@@ -57,7 +57,7 @@ public class TestNip49 {
     }
 
     @Test
-    public void encryptDecrypt() throws Nip49FailedException, InterruptedException, ExecutionException {
+    public void encryptDecrypt() throws Nip49FailedException, Exception {
         for (int i = 0; i < testVectors.size(); i++) {
             JsonArray testVector = testVectors.get(i).getAsJsonArray();
             String password = testVector.get(0).getAsString();
@@ -83,7 +83,7 @@ public class TestNip49 {
     }
 
     @Test(expected = ExecutionException.class)
-    public void badDecrypt() throws Nip49FailedException, InterruptedException, ExecutionException {
+    public void badDecrypt() throws Nip49FailedException,  Exception {
         int i = 0;
         JsonArray testVector = testVectors.get(i).getAsJsonArray();
         String ncryptsec = testVector.get(4).getAsString();

@@ -236,7 +236,7 @@ public class NostrRTCRoom implements Closeable {
                         // remove expired pending connections
                         for (Map.Entry<NostrPublicKey, PendingConnection> entry : pendingInitiatedConnections.entrySet()) {
                             PendingConnection conn = entry.getValue();
-                            if (conn.createdAt.plusSeconds(settings.getPeerExpiration().toSeconds()).isBefore(now)) {
+                            if (conn.createdAt.plusSeconds(settings.getPeerExpiration().getSeconds()).isBefore(now)) {
                                 logger.warning("Pending connection timed out: " + entry.getKey());
                                 conn.socket.close();
                                 pendingInitiatedConnections.remove(entry.getKey());

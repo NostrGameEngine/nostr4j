@@ -51,7 +51,7 @@ public class NostrPoolQuorumAckPolicy implements NostrPoolAckPolicy {
         return INSTANCE;
     }
 
-    private final Logger logger = Logger.getLogger(NostrPoolQuorumAckPolicy.class.getName());
+    private final static Logger logger = Logger.getLogger(NostrPoolQuorumAckPolicy.class.getName());
 
     @Override
     public Status apply(List<AsyncTask<NostrMessageAck>> t) {

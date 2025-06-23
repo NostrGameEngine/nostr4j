@@ -97,8 +97,8 @@ public class TestNostrFilter {
             .limit(10)
             .until(Instant.ofEpochMilli(1000))
             .since(Instant.ofEpochMilli(2000))
-            .id("123")
-            .id("234");
+            .withId("123")
+            .withId("234");
 
         assertVerify(filter);
 

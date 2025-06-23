@@ -47,6 +47,7 @@ import org.ngengine.nostr4j.NostrSubscription;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.event.UnsignedNostrEvent;
 import org.ngengine.nostr4j.event.tracker.PassthroughEventTracker;
+import org.ngengine.nostr4j.listeners.sub.NostrSubEventListener;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCLocalPeer;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCPeer;
 import org.ngengine.platform.AsyncExecutor;
@@ -128,6 +129,20 @@ public class NostrTURN {
     private volatile Runnable lockNotify;
     private volatile boolean stopped = false;
 
+
+    private class SubscriptionListenerWrapper implements NostrSubEventListener {
+        private final boolean remote;
+        public SubscriptionListenerWrapper(boolean remote){
+            this.remote = remote;
+        }
+
+        @Override
+        public void onSubEvent(SignedNostrEvent event, boolean stored) {
+            onTurnEvent(event, remote);
+        }
+
+    }
+
     public NostrTURN(String connectionId, NostrRTCLocalPeer localPeer, NostrRTCPeer remotePeer, NostrTURNSettings config) {
         NGEPlatform platform = NGEUtils.getPlatform();
         this.connectionId = Objects.requireNonNull(connectionId, "connectionId cannot be null");
@@ -148,9 +163,7 @@ public class NostrTURN {
                         .withTag("d", "turn-" + this.connectionId) // tag to identify the connection
                 );
 
-        this.inSub.addEventListener((event, stored) -> {
-                onTurnEvent(event, false);
-            });
+        this.inSub.addEventListener(new SubscriptionListenerWrapper(false));
 
         // setup remote peer turn server
         logger.fine("Connecting to remote TURN server: " + remotePeer.getTurnServer());
@@ -163,9 +176,7 @@ public class NostrTURN {
                         .withKind(this.config.getKind())
                         .withTag("d", "turn-" + this.connectionId)
                 );
-        this.outSub.addEventListener((event, stored) -> {
-                onTurnEvent(event, true);
-            });
+        this.outSub.addEventListener(new SubscriptionListenerWrapper(false));
     }
 
     public void addListener(Listener listener) {

@@ -65,8 +65,8 @@ public class NostrSearchFilter extends NostrFilter {
         }
     }
 
-    public NostrSearchFilter id(String id) {
-        return (NostrSearchFilter) super.id(id);
+    public NostrSearchFilter withId(String id) {
+        return (NostrSearchFilter) super.withId(id);
     }
 
     public NostrSearchFilter withAuthor(String author) {

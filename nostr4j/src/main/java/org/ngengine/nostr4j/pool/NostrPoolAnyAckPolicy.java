@@ -50,7 +50,7 @@ public class NostrPoolAnyAckPolicy implements NostrPoolAckPolicy {
         return INSTANCE;
     }
 
-    private final Logger logger = Logger.getLogger(NostrPoolAnyAckPolicy.class.getName());
+    private final static Logger logger = Logger.getLogger(NostrPoolAnyAckPolicy.class.getName());
 
     @Override
     public Status apply(List<AsyncTask<NostrMessageAck>> t) {
