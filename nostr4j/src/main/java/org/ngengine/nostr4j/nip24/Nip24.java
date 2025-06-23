@@ -41,6 +41,11 @@ import org.ngengine.nostr4j.proto.NostrMessageAck;
 import org.ngengine.nostr4j.signer.NostrSigner;
 import org.ngengine.platform.AsyncTask;
 
+
+/**
+ * @deprecated Everything was moved to {@link Nip01}.
+ */
+@Deprecated
 public class Nip24 {
 
     public static Nip24ExtraMetadata from(NostrEvent event) {
