@@ -107,6 +107,21 @@ public class UnsignedNostrEvent implements NostrEvent {
         tagValues.add(value);
         return this;
     }
+    
+    public UnsignedNostrEvent replaceTag(String key, String... values) {
+        clearTags(key);
+        return withTag(key, values);
+    }
+
+    public UnsignedNostrEvent replaceTag(String key, List<String> values) {
+        clearTags(key);
+        return withTag(key, values);
+    }
+
+    public UnsignedNostrEvent replaceTag(String key, TagValue value) {
+        clearTags(key);
+        return withTag(key, value);
+    }
 
     public UnsignedNostrEvent clearTags(String key) {
         tagRows = null;
