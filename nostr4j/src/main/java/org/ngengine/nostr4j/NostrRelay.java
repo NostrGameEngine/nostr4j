@@ -417,7 +417,7 @@ public final class NostrRelay {
                         });
                         this.connector.connect(url)
                             .catchException(e -> {
-                                this.onConnectionClosedByServer("failed to connect");
+                                this.onConnectionClosedByServer("failed to connect: "+ e.getMessage());
                                 rej.accept(e);
                             });
                         this.loop();
