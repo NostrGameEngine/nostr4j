@@ -52,6 +52,7 @@ import org.ngengine.nostr4j.event.SignedNostrEvent.ReceivedSignedNostrEvent;
 import org.ngengine.nostr4j.event.tracker.EventTracker;
 import org.ngengine.nostr4j.event.tracker.ForwardSlidingWindowEventTracker;
 import org.ngengine.nostr4j.event.tracker.NaiveEventTracker;
+import org.ngengine.nostr4j.event.tracker.PassthroughEventTracker;
 import org.ngengine.nostr4j.listeners.NostrNoticeListener;
 import org.ngengine.nostr4j.listeners.NostrRelayComponent;
 import org.ngengine.nostr4j.pool.NostrPoolAckPolicy;
@@ -275,7 +276,8 @@ public class NostrPool {
             | NoSuchMethodException
             | SecurityException e
         ) {
-            throw new RuntimeException("Unable to create event tracker", e);
+            logger.log(Level.WARNING, "Error creating event tracker fallback to PassthroughEventTracker",e);
+            tracker = new PassthroughEventTracker();
         }
 
         assert dbg(() -> {
