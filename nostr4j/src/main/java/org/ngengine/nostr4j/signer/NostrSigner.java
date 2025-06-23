@@ -31,6 +31,7 @@
 package org.ngengine.nostr4j.signer;
 
 import java.io.Serializable;
+import org.ngengine.nostr4j.event.NostrEvent;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.event.UnsignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
@@ -70,4 +71,22 @@ public interface NostrSigner extends Cloneable, Serializable {
      * @return an async task that will be completed when the signer is closed
      */
     AsyncTask<NostrSigner> close();
+
+
+    /**
+     * Sign an event and attach a proof of computational work to it.
+     * Make sure to limit the maxium difficulty passed to this method, as it doesn't do any 
+     * validation on the difficulty parameter, it might run forever if the difficulty is too high.
+     * 
+     * @param event the event to sign
+     * @param difficulty the target difficulty for the proof of work 
+     * @return an async task that will be completed with the signed event containing the proof of work
+     */
+    default AsyncTask<SignedNostrEvent> powSign(UnsignedNostrEvent event, int difficulty){
+        return this.getPublicKey().compose(pubkey->{
+            return NostrEvent.minePow(pubkey, event, difficulty);
+        }).compose(mined->{
+            return this.sign(mined);
+        });
+    }
 }

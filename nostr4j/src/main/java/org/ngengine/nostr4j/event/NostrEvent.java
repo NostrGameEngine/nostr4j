@@ -40,6 +40,12 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.logging.Logger;
+
+import org.ngengine.nostr4j.keypair.NostrPublicKey;
+import org.ngengine.nostr4j.utils.ZeroCounter;
+import org.ngengine.platform.AsyncExecutor;
+import org.ngengine.platform.AsyncTask;
+import org.ngengine.platform.NGEPlatform;
 import org.ngengine.platform.NGEUtils;
 
 public interface NostrEvent extends Cloneable, Serializable {
@@ -99,6 +105,42 @@ public interface NostrEvent extends Cloneable, Serializable {
     List<List<String>> getTagRows();
 
     boolean hasTag(String tag);
+
+
+    static AsyncTask<UnsignedNostrEvent> minePow(
+        NostrPublicKey pubkey, 
+        UnsignedNostrEvent event,
+        int difficulty
+    ){
+        return NGEPlatform.get().wrapPromise((res,rej)->{
+            AsyncExecutor executor = NGEPlatform.get().newAsyncExecutor("long-blocking");
+            executor.run(()->{
+                try{
+                    int nonce = 0;
+                    
+                    do {
+                        event.createdAt(Instant.now());
+                        event.replaceTag("nonce", "" + nonce, ""+ difficulty);
+                        String id = NostrEvent.computeEventId(pubkey.asHex(), event);
+                        int leadingZeroes = ZeroCounter.countLeadingZeroes(id);
+                        if(leadingZeroes >= difficulty){
+                            res.accept(event);
+                            break;
+                        } else{
+                            nonce++;
+                        }                
+                    }while(true);
+                } catch (Exception e) {
+                    rej.accept(e);
+                } finally{
+                    executor.close();
+                } 
+                return null;
+            });
+        });
+
+    }
+
 
     static String computeEventId(String pubkey, NostrEvent event) {
         try {

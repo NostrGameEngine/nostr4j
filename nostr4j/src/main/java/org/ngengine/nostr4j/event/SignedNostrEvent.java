@@ -47,6 +47,7 @@ import java.util.Set;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.proto.NostrMessage;
 import org.ngengine.nostr4j.utils.Bech32;
+import org.ngengine.nostr4j.utils.ZeroCounter;
 import org.ngengine.nostr4j.utils.Bech32.Bech32Exception;
 import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEUtils;
@@ -317,9 +318,9 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
     @Override
     public Instant getExpiration() {
         if (expiresAt != null) return expiresAt;
-        String tag = getFirstTag("expiration").get(0);
+        TagValue tag = getFirstTag("expiration");
         if (tag != null) {
-            long expires = NGEUtils.safeLong(tag);
+            long expires = NGEUtils.safeLong(tag.get(0));
             expiresAt = Instant.ofEpochSecond(expires);
         } else {
             expiresAt = Instant.now().plusSeconds(60 * 60 * 24 * 365 * 2100);
@@ -334,7 +335,7 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
     }
 
     @Override
-    public Collection<TagValue> getTag(String key) {
+    public List<TagValue> getTag(String key) {
         List<TagValue> values = tags.get(key);
         if (values != null && values.isEmpty()) {
             return null;
@@ -393,5 +394,15 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
         }
     }
 
+
+    public int getPow() {
+        String id = getId();
+        return ZeroCounter.countLeadingZeroes(id);
+    }
+
+    public boolean checkPow(int difficulty) {
+        int getMinedDifficulty = getPow();
+        return getMinedDifficulty >= difficulty;
+    }
 
 }
