@@ -70,7 +70,7 @@ public class NostrRelayInfo implements Cloneable, Serializable {
     private transient String toStringCache;
     private transient Map<String, Object> limitation;
     private transient List<String> relayCountries;
-    private transient List<Locale> languageTags;
+    private transient List<String> languageTags;
     private transient List<String> tags;
     private transient String postingPolicy;
 
@@ -86,6 +86,7 @@ public class NostrRelayInfo implements Cloneable, Serializable {
         String httpUrl = relayUrl.startsWith("wss://")
             ? relayUrl.replace("wss://", "https://")
             : relayUrl.replace("ws://", "http://");
+        
         AsyncTask<String> task = platform.httpGet(httpUrl, Duration.ofSeconds(30), headers);
         return task.then(data -> {
             Map<String, Object> map = platform.fromJSON(data, Map.class);
@@ -248,18 +249,12 @@ public class NostrRelayInfo implements Cloneable, Serializable {
         return relayCountries;
     }
 
-    public List<Locale> getLanguageTags() {
+    public List<String> getLanguageTags() {
         if (languageTags == null) {
-            List<Locale> languageTags = new ArrayList<>();
             List<String> tags = NGEUtils.safeStringList(map.getOrDefault("language_tags", List.of()));
-            for (String tag : tags) {
-                try {
-                    languageTags.add(Locale.forLanguageTag(tag));
-                } catch (Exception e) {
-                    logger.log(Level.WARNING, "Invalid language tag: " + tag, e);
-                }
-            }
-            this.languageTags = Collections.unmodifiableList(languageTags);
+            this.languageTags = Collections.unmodifiableList(tags);
+        } else{
+            this.languageTags = new ArrayList<>();
         }
         return this.languageTags;
     }
