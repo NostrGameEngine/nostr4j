@@ -1,0 +1,71 @@
+<html>
+    <head>
+        <script src="./nostr-ads.js"></script>
+    </head>
+    <body>
+        <script>
+            async function main(){
+                const relays = [
+                    "wss://nostr.rblb.it",
+                ];
+                const adsKey = NostrAds.newAdsKey();
+                const appKey = "npub146wutmuxfmnlx9fcty0lkns2rpwhnl57kpes26mmt4hygalsakrsdllryz";
+                const client = await NostrAds.newAdvertiserClient(relays, appKey, adsKey);
+                console.log("Advertiser client created: ", client);
+                const bid = await client.publishNewBid({
+                    description: "Test js bid",
+                    categories: ["61"],
+                    languages: ["en"],
+                    offerersWhitelist: null,
+                    appsWhitelist: null,
+                    mimeType: "text/plain",
+                    payload: "This is a test ad",
+                    size: "468x60",
+                    link: "https://ngengine.org",
+                    callToAction: "Click here",
+                    bidMsats: 1000,
+                    holdTime: 60, // 1 minute
+                    delegate: null,
+                    actionType: "view"
+                });
+                console.log("Bid created: ", bid);
+
+                client.handleBid(bid,{
+                    offerFilter: (bid, offer, punish, accept)=>{
+                        accept();
+                    },
+                    pay: (bid, request, invoice, punish, confirm)=>{
+                        // NWC
+                        confirm("paid", "preimage");
+                    },
+                    bail: (bid, bailEvent, punish) => {
+                        console.log("Bailed");
+
+                    }
+                })
+
+                const client2 = await NostrAds.newOffererClient(relays, appKey, NostrAds.newAdsKey());
+                client2.handleOffers([],{
+                    show: (bid, confirm)=>{
+                        confirm();
+                    },
+                    bidFilter: (bid, confirm)=>{
+                        confirm();
+                    },
+                    beforePayment: (bid)=>{
+
+                    },
+                    verifyPayment: (bid, preimage, punish)=>{
+
+                    },
+                    bail: (bid, bailEvent, punish) => {
+                        console.log("Bailed");
+                    }
+
+                });
+            }
+            main();
+
+        </script>
+    </body>
+</html>

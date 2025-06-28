@@ -1,0 +1,113 @@
+
+plugins {
+    id 'java-library'
+    id "war"
+    id "org.teavm" version "0.12.1"
+}
+
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation "org.ngengine:nge-platform-common:${project.version.endsWith('-SNAPSHOT') ? rootProject.ext.ngePlatformVersionSnapshot : rootProject.ext.ngePlatformVersion}"
+    api "org.ngengine:nge-platform-teavm:${project.version.endsWith('-SNAPSHOT') ? rootProject.ext.ngePlatformVersionSnapshot : rootProject.ext.ngePlatformVersion}"
+    api project(":nostr4j")
+    implementation teavm.libs.jso
+    implementation teavm.libs.jsoApis
+
+    testImplementation "junit:junit:4.13.2"
+    testImplementation teavm.libs.jso
+    testImplementation teavm.libs.jsoApis
+    
+
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+sourceSets {
+    test {
+        resources {
+            srcDirs = ['src/test/resources', 'src/main/resources']            
+        }
+    }
+}
+
+teavm {
+    all {
+        mainClass = "org.ngengine.nostrads.NostrAdsModule"
+    }
+    js {
+        addedToWebApp = true
+        targetFileName = "nostr-ads.js"
+        sourceMap = true     
+        obfuscated = false
+        // fastGlobalAnalysis = false
+        moduleType = org.teavm.gradle.api.JSModuleType.ES2015
+
+        properties = [
+            "teavm.c.vmAssertions": "false"
+        ]
+        // optimization = org.teavm.gradle.api.OptimizationLevel.NONE
+   devServer {
+      port = 8083
+    
+    }
+    }
+   
+    // tests{
+    //     js {
+    //         runner =  org.teavm.gradle.api.TeaVMWebTestRunner.CHROME
+    //     }
+    // }
+}
+
+teavm.tests.js {
+    enabled.set(true)
+    runner.set(org.teavm.gradle.api.TeaVMWebTestRunner.CHROME)
+}
+ 
+
+
+// Add this new task to copy all resources from classpath
+// Add this new task to copy all resources from classpath
+task copyClasspathResources(type: Copy) {
+    description = 'Copies all resources from the classpath (including dependencies) to the TeaVM output directory'
+    
+    // Skip empty directories
+    includeEmptyDirs = false
+    
+    // Get all runtime classpath elements
+    from {
+        configurations.runtimeClasspath.collect { 
+            it.isDirectory() ? it : zipTree(it).matching { 
+                // Only include resource files, exclude class files and META-INF
+                exclude '**/*.class', 'META-INF/**'
+            }
+        }
+    }
+    
+    // Also include resources from the main source set
+    from sourceSets.main.resources
+    
+    // Destination directory
+    into 'build/generated/teavm/js'
+}
+// Make sure this task runs after TeaVM compilation
+tasks.named('generateJavaScript') {
+    finalizedBy(copyClasspathResources)
+}
+
+
+task buildJsLibrary(type: Exec) {
+    description = 'Runs webpack to bundle the generated JavaScript files'
+    group = 'build'
+    workingDir = project.projectDir
+    dependsOn 'generateJavaScript'
+    commandLine 'npx', 'webpack', '--config', 'webpack.config.js'
+}
