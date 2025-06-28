@@ -55,8 +55,10 @@ import org.ngengine.nostr4j.event.tracker.NaiveEventTracker;
 import org.ngengine.nostr4j.event.tracker.PassthroughEventTracker;
 import org.ngengine.nostr4j.listeners.NostrNoticeListener;
 import org.ngengine.nostr4j.listeners.NostrRelayComponent;
-import org.ngengine.nostr4j.pool.NostrPoolAckPolicy;
-import org.ngengine.nostr4j.pool.NostrPoolAnyAckPolicy;
+import org.ngengine.nostr4j.pool.ackpolicy.NostrPoolAckPolicy;
+import org.ngengine.nostr4j.pool.ackpolicy.NostrPoolAnyAckPolicy;
+import org.ngengine.nostr4j.pool.fetchpolicy.NostrAllEOSEPoolFetchPolicy;
+import org.ngengine.nostr4j.pool.fetchpolicy.NostrPoolFetchPolicy;
 import org.ngengine.nostr4j.proto.NostrMessage;
 import org.ngengine.nostr4j.proto.NostrMessageAck;
 import org.ngengine.nostr4j.proto.impl.NostrClosedMessage;
@@ -207,6 +209,16 @@ public class NostrPool {
         });
     }
 
+    public AsyncTask<NostrRelay> ensureRelay(String relay) {
+        for (NostrRelay r : relays) {
+            if (r.getUrl().equals(relay)) {
+                return r.connect();
+            }
+        }
+        NostrRelay newRelay = new NostrRelay(relay);
+        return connectRelay(newRelay);   
+    }
+
     public AsyncTask<NostrRelay> connectRelay(NostrRelay relay) {
         if (!relays.contains(relay)) {
             relays.addIfAbsent(relay);
@@ -308,30 +320,66 @@ public class NostrPool {
     }
 
     public AsyncTask<List<SignedNostrEvent>> fetch(NostrFilter filter) {
-        return fetch(Arrays.asList(filter));
+        return fetch(Arrays.asList(filter), NostrAllEOSEPoolFetchPolicy.get());
+    }
+
+    public AsyncTask<List<SignedNostrEvent>> fetch(NostrFilter filter,
+            NostrPoolFetchPolicy fetchPolicy) {
+        return fetch(Arrays.asList(filter), fetchPolicy);
     }
 
     public AsyncTask<List<SignedNostrEvent>> fetch(Collection<NostrFilter> filters) {
-        return fetch(filters, 1, TimeUnit.MINUTES);
+        return fetch(filters, 1, TimeUnit.MINUTES, NostrAllEOSEPoolFetchPolicy.get());
+    }
+
+
+    public AsyncTask<List<SignedNostrEvent>> fetch(Collection<NostrFilter> filters,
+            NostrPoolFetchPolicy fetchPolicy) {
+        return fetch(filters, 1, TimeUnit.MINUTES, fetchPolicy);
     }
 
     public AsyncTask<List<SignedNostrEvent>> fetch(NostrFilter filter, long timeout, TimeUnit unit) {
-        return fetch(Arrays.asList(filter), timeout, unit);
+        return fetch(Arrays.asList(filter), timeout, unit, NostrAllEOSEPoolFetchPolicy.get());
+    }
+
+
+    public AsyncTask<List<SignedNostrEvent>> fetch(NostrFilter filter, long timeout, TimeUnit unit,
+            NostrPoolFetchPolicy fetchPolicy) {
+        return fetch(Arrays.asList(filter), timeout, unit, fetchPolicy);
     }
 
     public AsyncTask<List<SignedNostrEvent>> fetch(Collection<NostrFilter> filters, long timeout, TimeUnit unit) {
-        return fetch(filters, timeout, unit, NaiveEventTracker.class);
+        return fetch(filters, timeout, unit, NaiveEventTracker.class, NostrAllEOSEPoolFetchPolicy.get());
+    }
+
+    public AsyncTask<List<SignedNostrEvent>> fetch(Collection<NostrFilter> filters, long timeout, TimeUnit unit,
+            NostrPoolFetchPolicy fetchPolicy) {
+        return fetch(filters, timeout, unit, NaiveEventTracker.class, fetchPolicy);
     }
 
     public AsyncTask<List<SignedNostrEvent>> fetch(NostrFilter filter, Class<? extends EventTracker> eventTracker) {
-        return fetch(Arrays.asList(filter), eventTracker);
+        return fetch(Arrays.asList(filter), eventTracker, NostrAllEOSEPoolFetchPolicy.get());
+    }
+
+
+    public AsyncTask<List<SignedNostrEvent>> fetch(NostrFilter filter, Class<? extends EventTracker> eventTracker,            NostrPoolFetchPolicy fetchPolicy  ) {
+        return fetch(Arrays.asList(filter), eventTracker, fetchPolicy);
     }
 
     public AsyncTask<List<SignedNostrEvent>> fetch(
         Collection<NostrFilter> filters,
         Class<? extends EventTracker> eventTracker
+
     ) {
-        return fetch(filters, 1, TimeUnit.MINUTES, eventTracker);
+        return fetch(filters, 1, TimeUnit.MINUTES, eventTracker, NostrAllEOSEPoolFetchPolicy.get());
+    }
+
+
+    public AsyncTask<List<SignedNostrEvent>> fetch(
+            Collection<NostrFilter> filters,
+            Class<? extends EventTracker> eventTracker,
+            NostrPoolFetchPolicy fetchPolicy            ) {
+        return fetch(filters, 1, TimeUnit.MINUTES, eventTracker, fetchPolicy);
     }
 
     public AsyncTask<List<SignedNostrEvent>> fetch(
@@ -340,7 +388,17 @@ public class NostrPool {
         TimeUnit unit,
         Class<? extends EventTracker> eventTracker
     ) {
-        return fetch(Arrays.asList(filters), timeout, unit, eventTracker);
+        return fetch(Arrays.asList(filters), timeout, unit, eventTracker, NostrAllEOSEPoolFetchPolicy.get());
+    }
+
+    public AsyncTask<List<SignedNostrEvent>> fetch(
+            NostrFilter filters,
+            long timeout,
+            TimeUnit unit,
+            Class<? extends EventTracker> eventTracker,
+            NostrPoolFetchPolicy fetchPolicy            
+    ) {
+        return fetch(Arrays.asList(filters), timeout, unit, eventTracker, fetchPolicy);
     }
 
     public AsyncTask<List<SignedNostrEvent>> fetch(
@@ -348,6 +406,16 @@ public class NostrPool {
         long timeout,
         TimeUnit unit,
         Class<? extends EventTracker> eventTracker
+    ) {
+        return fetch(filters, timeout, unit, eventTracker, NostrAllEOSEPoolFetchPolicy.get());
+    }
+
+    public AsyncTask<List<SignedNostrEvent>> fetch(
+        Collection<NostrFilter> filters,
+        long timeout,
+        TimeUnit unit,
+        Class<? extends EventTracker> eventTracker,
+        NostrPoolFetchPolicy fetchPolicy
     ) {
         NGEPlatform platform = NGEUtils.getPlatform();
         NostrSubscription sub = subscribe(filters, eventTracker);
@@ -379,37 +447,23 @@ public class NostrPool {
             );
 
             Consumer<List<SignedNostrEvent>> done = (evs)->{
-                res.accept(evs);
-                ended.set(true);
-                scheduledActions.remove(scheduled);
+                // res.accept(evs);
+                // ended.set(true);
+                // scheduledActions.remove(scheduled);
+                if(!ended.getAndSet(true)){
+                    res.accept(evs);
+                    scheduledActions.remove(scheduled);
+                    sub.close();
+                }
             };
 
             scheduledActions.add(scheduled);
-            sub
-                .addEoseListener(all -> {
-                    if (all) {
-                        assert dbg(() -> {
-                            logger.fine("fetch eose for fetch " + sub.getId() + " with received events: " + events);
-                        });
-                        done.accept(events);
-                        sub.close();
-                    }
-                })
-                .addEventListener((e, stored) -> {
-                    assert dbg(() -> {
-                        logger.finer("fetch event " + e + " for subscription " + sub.getId());
-                    });
 
-                    events.add(e);
-                })
-                .addCloseListener(reason -> {
-                    assert dbg(() -> {
-                        logger.fine("fetch close " + reason + " for subscription " + sub.getId());
-                    });
-                    if( ended.get()) return;
-                    done.accept(events);
-                })
-                .open();
+            sub.addListener(fetchPolicy.getListener(sub, events, ()->{
+                done.accept(events);
+            })).open();
+
+ 
         });
     }
 
@@ -480,7 +534,7 @@ public class NostrPool {
                         " isEOSEEverywhere: " +
                         isEOSEEverywhere
                     );
-                    sub.callEoseListeners(isEOSEEverywhere);
+                    sub.callEoseListeners(relay, isEOSEEverywhere);
                 } else {
                     logger.warning("received invalid eose for subscription " + subId + " from relay " + relay.getUrl());
                 }

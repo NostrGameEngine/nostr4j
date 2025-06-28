@@ -284,12 +284,12 @@ public class NostrSubscription extends NostrMessage {
         return this;
     }
 
-    protected void callEoseListeners(boolean everyWhere) {
+    protected void callEoseListeners(NostrRelay relay, boolean everyWhere) {
         if (onEoseListeners.isEmpty()) return;
         for (NostrSubEoseListener listener : onEoseListeners) {
             this.getExecutor()
                 .run(() -> {
-                    listener.onSubEose(everyWhere);
+                    listener.onSubEose(relay, everyWhere);
                     return null;
                 })
                 .catchException(ex -> {

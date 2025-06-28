@@ -28,7 +28,7 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package org.ngengine.nostr4j.pool;
+package org.ngengine.nostr4j.pool.ackpolicy;
 
 import java.util.List;
 import java.util.logging.Logger;
@@ -37,55 +37,62 @@ import org.ngengine.nostr4j.proto.NostrMessageAck.Status;
 import org.ngengine.platform.AsyncTask;
 
 /**
- * Consider a message acknowledged when all acks are received.
- * This is the strictest policy, ensuring that all relays have acknowledged the message.
- * If any ack is pending or fails, the overall status is pending or failure.
+ * Consider a message acknowledged if at least one relay acknowledges it.
+ * This is a more lenient policy, allowing for partial acknowledgments.
+ * If any ack is successful, the overall status is success.
+ * If all acks are pending or failed, the overall status is pending or failure.
  */
-public class NostrPoolAllAckPolicy implements NostrPoolAckPolicy {
+public class NostrPoolAnyAckPolicy implements NostrPoolAckPolicy {
 
-    private static final NostrPoolAllAckPolicy INSTANCE = new NostrPoolAllAckPolicy();
+    private static final NostrPoolAnyAckPolicy INSTANCE = new NostrPoolAnyAckPolicy();
 
     public static NostrPoolAckPolicy get() {
         return INSTANCE;
     }
 
-    private final static Logger logger = Logger.getLogger(NostrPoolAllAckPolicy.class.getName());
+    private final static Logger logger = Logger.getLogger(NostrPoolAnyAckPolicy.class.getName());
 
     @Override
     public Status apply(List<AsyncTask<NostrMessageAck>> t) {
+        boolean atLeastOneNonFailed = false;
+        boolean atLeastOneSuccess = false;
         for (AsyncTask<NostrMessageAck> ackTask : t) {
             try {
-                // if one is pending, we wait
+                // still waiting
                 if (!ackTask.isDone()) {
-                    logger.finer("Ack results - Still waiting for task: " + ackTask);
-                    return Status.PENDING;
+                    atLeastOneNonFailed = true;
+                    continue;
                 }
 
-                // if one failed, we fail
+                // failed
                 if (ackTask.isFailed()) {
-                    logger.finer("Ack results - Task failed: " + ackTask);
-                    return Status.FAILURE;
+                    continue;
                 }
 
                 NostrMessageAck ack = ackTask.await();
-
-                // if one is pending, we wait
-                if (ack.getStatus() == Status.PENDING) {
-                    logger.finer("Ack results - Still waiting for ack: " + ack);
-                    return Status.PENDING;
+                // waiting or success
+                if (ack.getStatus() != Status.FAILURE) {
+                    atLeastOneNonFailed = true;
                 }
 
-                // if one failed, we fail
-                if (ack.getStatus() == Status.FAILURE) {
-                    logger.finer("Ack results - Ack failed: " + ack);
-                    return Status.FAILURE;
+                // success
+                if (ack.getStatus() == Status.SUCCESS) {
+                    atLeastOneSuccess = true;
+                    break;
                 }
             } catch (Exception e) {
                 logger.warning("Error processing ack task: " + e.getMessage());
-                return Status.FAILURE; // if we catch an exception, we consider it a failure
             }
         }
-
-        return Status.SUCCESS; // if we reach here, all acks are successful
+        logger.finer(
+            "Ack results - At least one non-failed: " + atLeastOneNonFailed + ", At least one success: " + atLeastOneSuccess
+        );
+        if (atLeastOneSuccess) {
+            return Status.SUCCESS;
+        } else if (atLeastOneNonFailed) {
+            return Status.PENDING;
+        } else {
+            return Status.FAILURE;
+        }
     }
 }
