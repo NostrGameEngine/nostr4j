@@ -70,7 +70,7 @@ public class NostrCli {
             System.out.println("Event: " + event + " stored: " + stored);
         });
 
-        sub.addEoseListener(all -> {
+        sub.addEoseListener((relay,all) -> {
             System.out.println("Eose: " + all);
         });
 

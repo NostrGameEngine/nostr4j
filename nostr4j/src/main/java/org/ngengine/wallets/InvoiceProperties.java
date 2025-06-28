@@ -1,10 +1,10 @@
-package org.ngengine.nostr4j.wallet.invoice;
+package org.ngengine.wallets;
 
 import java.time.Duration;
 
 import jakarta.annotation.Nullable;
 
-public record NostrWalletMakeInvoiceRequest(
+public record InvoiceProperties(
     long amountMsats,
     @Nullable String description,
     @Nullable String descriptionHash,

@@ -1,8 +1,8 @@
-package org.ngengine.nostr4j.wallet.info;
+package org.ngengine.wallets;
 
 import java.util.List;
 
-public record NostrWalletInfo(
+public record WalletInfo(
     String alias,
     String color,
     String pubkey,

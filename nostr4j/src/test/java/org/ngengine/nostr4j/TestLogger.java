@@ -42,7 +42,7 @@ import java.util.logging.SimpleFormatter;
 
 public class TestLogger {
 
-    private static Logger rootLogger = Logger.getLogger("org.ngengine.nostr4j");
+    private static Logger rootLogger = Logger.getLogger("org.ngengine");
 
     public static Logger getRoot() {
         return getRoot(Level.WARNING);

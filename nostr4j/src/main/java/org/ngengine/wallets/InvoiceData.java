@@ -1,4 +1,4 @@
-package org.ngengine.nostr4j.wallet.invoice;
+package org.ngengine.wallets;
 
 import java.time.Instant;
 import java.util.Map;
@@ -8,8 +8,8 @@ import org.ngengine.platform.NGEUtils;
 import jakarta.annotation.Nonnull;
 import jakarta.annotation.Nullable;
 
-public record NostrWalletInvoice(
-    @Nonnull NostrWalletInvoiceType type,
+public record InvoiceData(
+    @Nonnull InvoiceType type,
     @Nullable String invoice,
     @Nullable String description,
     @Nullable String descriptionHash,

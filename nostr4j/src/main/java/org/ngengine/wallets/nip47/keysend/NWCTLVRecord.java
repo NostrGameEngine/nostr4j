@@ -1,8 +1,8 @@
-package org.ngengine.nostr4j.wallet.keysend;
+package org.ngengine.wallets.nip47.keysend;
 
 import jakarta.annotation.Nonnull;
 
-public record NostrWalletTLVRecord (
+public record NWCTLVRecord (
     long type,
     @Nonnull String value
 ){

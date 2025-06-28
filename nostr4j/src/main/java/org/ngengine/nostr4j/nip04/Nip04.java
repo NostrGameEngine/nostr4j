@@ -4,7 +4,6 @@ import java.nio.charset.StandardCharsets;
 
 import org.ngengine.nostr4j.keypair.NostrPrivateKey;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
-import org.ngengine.nostr4j.nip44.Nip44;
 import org.ngengine.platform.AsyncExecutor;
 import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEPlatform;
@@ -28,6 +27,7 @@ public class Nip04 {
         return b64ciphertext+"?iv="+b64iv;
        
     }
+    
     public static AsyncTask<String> encrypt(String plaintext, NostrPrivateKey ourPrivateKey, NostrPublicKey theirPublicKey) {
         return executor.run(() -> {
             return encryptSync(plaintext, ourPrivateKey, theirPublicKey);

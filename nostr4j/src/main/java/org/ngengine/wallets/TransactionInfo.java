@@ -1,15 +1,13 @@
-package org.ngengine.nostr4j.wallet.transactions;
+package org.ngengine.wallets;
 
 import java.time.Instant;
 import java.util.Map;
 
-import org.ngengine.nostr4j.wallet.invoice.NostrWalletInvoiceType;
-
 import jakarta.annotation.Nonnull;
 import jakarta.annotation.Nullable;
 
-public record NostrWalletTransaction(
-    @Nonnull NostrWalletTransactionType type,
+public record TransactionInfo(
+    @Nonnull TransactionType type,
     @Nullable String invoice,
     @Nullable String description,
     @Nullable String descriptionHash,

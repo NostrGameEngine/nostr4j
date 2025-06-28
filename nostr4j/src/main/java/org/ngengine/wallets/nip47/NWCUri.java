@@ -1,4 +1,4 @@
-package org.ngengine.nostr4j.nip47;
+package org.ngengine.wallets.nip47;
 
 import java.net.URI;
 import java.net.URISyntaxException;

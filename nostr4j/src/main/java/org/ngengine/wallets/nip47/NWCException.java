@@ -1,4 +1,4 @@
-package org.ngengine.nostr4j.nip47;
+package org.ngengine.wallets.nip47;
 
 public class NWCException extends RuntimeException {
 
@@ -8,10 +8,11 @@ public class NWCException extends RuntimeException {
 
     public NWCException(String code, String message) {
         super(code+": " + message);
+        this.code = code;
     }
 
-    @Override
-    public String toString() {
-        return code + ": " + message;
+    public String getCode() {
+        return code;
     }
+  
 }
