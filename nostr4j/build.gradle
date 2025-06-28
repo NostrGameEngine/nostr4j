@@ -1,3 +1,10 @@
+buildscript {
+    repositories { mavenCentral() }
+    dependencies {
+        classpath 'org.ow2.asm:asm:9.5'
+        classpath 'org.ow2.asm:asm-tree:9.5'
+    }
+}
 plugins {
     id 'java-library'
 }
@@ -7,6 +14,7 @@ dependencies {
     implementation "org.ngengine:nge-platform-common:${project.version.endsWith('-SNAPSHOT') ? rootProject.ext.ngePlatformVersionSnapshot : rootProject.ext.ngePlatformVersion}"
     testImplementation "org.ngengine:nge-platform-jvm:${project.version.endsWith('-SNAPSHOT') ? rootProject.ext.ngePlatformVersionSnapshot : rootProject.ext.ngePlatformVersion}"
     testImplementation 'com.google.code.gson:gson:2.12.1'
+    implementation 'jakarta.annotation:jakarta.annotation-api:2.1.1'
     implementation 'org.slf4j:slf4j-jdk14:2.0.12'
 }
 
@@ -28,3 +36,96 @@ tasks.withType(JavaCompile) {
     sourceCompatibility = '21'
     targetCompatibility = '21'
 }
+
+
+
+import java.nio.file.Files
+import org.objectweb.asm.tree.ClassNode
+import org.objectweb.asm.tree.MethodNode
+import org.objectweb.asm.ClassReader
+import org.objectweb.asm.ClassWriter
+import org.objectweb.asm.Opcodes
+
+
+// task injectJsExportAnnotations {
+//     description 'Injects @JSExport on every method (including constructors) of classes under org.ngengine.nostr4j'
+//     dependsOn compileJava
+//     doLast {
+//         def dest = compileJava.destinationDir.toPath()
+//         Files.walk(dest)
+//              .filter { it.toString().endsWith('.class') }
+//              .filter { path ->
+//                  def rel = dest.relativize(path).toString().replace(File.separator, '/')
+//                  rel.startsWith('org/ngengine/nostr4j/')
+//              }
+//              .forEach { path ->
+//                  byte[] bytes = Files.readAllBytes(path)
+//                  def cr = new org.objectweb.asm.ClassReader(bytes)
+//                  def cn = new org.objectweb.asm.tree.ClassNode()
+//                  cr.accept(cn, 0)
+
+//                  boolean modified = false
+//                  cn.methods.each { m ->
+//                      if (m.name == '<clinit>') return  // skip only the static initializer
+//                      if (!m.visibleAnnotations?.any { it.desc == 'Lorg/teavm/jso/JSExport;' }) {
+//                          m.visibleAnnotations = m.visibleAnnotations ?: []
+//                          m.visibleAnnotations.add(
+//                              new org.objectweb.asm.tree.AnnotationNode('Lorg/teavm/jso/JSExport;')
+//                          )
+//                          println "Injecting @JSExport into method: ${cn.name}.${m.name}(${m.desc})"
+//                          modified = true
+//                      }
+//                  }
+
+//                  if (modified) {
+//                      def cw = new org.objectweb.asm.ClassWriter(0)
+//                      cn.accept(cw)
+//                      Files.write(path, cw.toByteArray())
+//                  }
+//              }
+//         println "Injected @JSExport into all methods under org.ngengine.nostr4j"
+//     }
+// }
+// compileJava.finalizedBy injectJsExportAnnotations  
+
+// workaround for missing ObjectOutputStream, ObjectInputStream in TeaVM
+task removeSerializationMethods {
+    description 'Removes Java serialization methods from classes'
+    dependsOn compileJava
+    
+    doLast {
+        def dest = compileJava.destinationDir.toPath()
+        Files.walk(dest)
+             .filter { it.toString().endsWith('.class') }
+             .filter { path ->
+                 def rel = dest.relativize(path).toString().replace(File.separator, '/')
+                 rel.startsWith('org/ngengine/nostr4j/')
+             }
+             .forEach { path ->
+                 byte[] bytes = Files.readAllBytes(path)
+                 def cr = new ClassReader(bytes)
+                 def cn = new ClassNode()
+                 cr.accept(cn, 0)
+
+                 // Look for writeObject and readObject methods
+                 def methodsToRemove = cn.methods.findAll { method ->
+                     (method.name == 'writeObject' && method.desc == '(Ljava/io/ObjectOutputStream;)V') ||
+                     (method.name == 'readObject' && method.desc == '(Ljava/io/ObjectInputStream;)V')
+                 }
+                 
+                 if (methodsToRemove) {
+                     // Remove the methods
+                     cn.methods.removeAll(methodsToRemove)
+                     println "Removed serialization methods from: ${cn.name}"
+                     
+                     // Write back the modified class
+                     def cw = new ClassWriter(ClassWriter.COMPUTE_MAXS)
+                     cn.accept(cw)
+                     Files.write(path, cw.toByteArray())
+                 }
+             }
+        println "Completed removing serialization methods"
+    }
+}
+
+compileJava.finalizedBy removeSerializationMethods  

@@ -31,12 +31,20 @@ public class SdanPayoutEvent extends SdanNegotiationEvent {
         return preimage != null ? NGEUtils.safeString(preimage) : null;
     }
 
-    public static class Builder extends SdanNegotiationEvent.Builder<SdanPayoutEvent> {
-        public Builder() {
-            super((signer, event, of,c) -> new SdanPayoutEvent(signer, event,  of,c), "payout");
+    public static class PayoutBuilder extends SdanNegotiationEvent.Builder<SdanPayoutEvent> {
+        private final static Factory<SdanPayoutEvent> cstr = new Factory<SdanPayoutEvent>() {
+            @Override
+            public SdanPayoutEvent create(NostrSigner signer, SignedNostrEvent event, SdanOfferEvent offer,
+                    Map<String, Object> content) {
+                return new SdanPayoutEvent(signer, event, offer, content);
+            }
+        };
+
+        public PayoutBuilder() {
+            super(cstr, "payout");
         }
 
-        public Builder withPreimage(String preimage) {
+        public PayoutBuilder withPreimage(String preimage) {
             this.content.put("preimage", preimage);
             return this;
         }

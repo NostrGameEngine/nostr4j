@@ -7,9 +7,10 @@ import java.net.URISyntaxException;
 import java.time.Duration;
 
 import org.junit.Test;
-import org.ngengine.nostr4j.lnurl.services.LnUrlPayRequest;
-import org.ngengine.nostr4j.lnurl.services.LnUrlPayerData;
-import org.ngengine.nostr4j.lnurl.services.LnUrlPaymentResponse;
+import org.ngengine.lnurl.LnAddress;
+import org.ngengine.lnurl.services.LnUrlPayRequest;
+import org.ngengine.lnurl.services.LnUrlPayerData;
+import org.ngengine.lnurl.services.LnUrlPaymentResponse;
 import org.ngengine.nostr4j.utils.Bech32.Bech32DecodingException;
 import org.ngengine.nostr4j.utils.Bech32.Bech32EncodingException;
 import org.ngengine.nostr4j.utils.Bech32.Bech32InvalidChecksumException;

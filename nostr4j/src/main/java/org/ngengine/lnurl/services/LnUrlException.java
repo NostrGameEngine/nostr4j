@@ -1,8 +1,8 @@
-package org.ngengine.nostr4j.lnurl.services;
+package org.ngengine.lnurl.services;
 
 import java.util.Map;
 
-import org.ngengine.nostr4j.lnurl.LnUrlService;
+import org.ngengine.lnurl.LnUrlService;
 import org.ngengine.platform.NGEUtils;
 
 public class LnUrlException extends Exception implements LnUrlService {

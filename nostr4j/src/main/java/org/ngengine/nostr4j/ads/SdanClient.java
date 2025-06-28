@@ -1,17 +1,20 @@
 package org.ngengine.nostr4j.ads;
 
 import java.io.IOException;
+import java.net.URISyntaxException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import org.ngengine.lnurl.LnUrl;
 import org.ngengine.nostr4j.NostrFilter;
 import org.ngengine.nostr4j.NostrPool;
 import org.ngengine.nostr4j.NostrSubscription;
@@ -24,6 +27,7 @@ import org.ngengine.nostr4j.ads.negotiation.SdanPowNegotiationEvent;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.event.UnsignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
+import org.ngengine.nostr4j.nip01.Nip01;
 import org.ngengine.nostr4j.nip09.Nip09EventDeletion;
 import org.ngengine.nostr4j.proto.NostrMessageAck;
 import org.ngengine.nostr4j.signer.NostrSigner;
@@ -41,12 +45,24 @@ public class SdanClient {
     protected final NostrPool pool;
     protected final SdanTaxonomy taxonomy;
     protected final NostrPublicKey appKey;
-    private final  List<NostrSubscription> activeSubscriptions = new CopyOnWriteArrayList<>();
-    private final Map<SdanBidEvent, NostrSubscription> activeBids = new ConcurrentHashMap<>();
-
+    protected final  List<NostrSubscription> activeSubscriptions = new CopyOnWriteArrayList<>();
+    protected final Map<SdanBidEvent, NostrSubscription> activeBids = new ConcurrentHashMap<>();
+    protected BiFunction<NostrPool, NostrPublicKey,  AsyncTask<LnUrl>> lnUrlFetcher = (pool, appKey) -> {
+        return Nip01.fetch(pool, appKey).then(nip01->{
+           try {
+                return nip01.getPaymentAddress();
+           } catch (URISyntaxException e) {
+                throw new RuntimeException("Failed to fetch LNURL for app key: " + appKey.asHex(), e);
+           }
+        });
+    };
     protected Function<NostrPublicKey, Number> initialPenaltyProvider = (pubkey) -> {
         return 0;
     };
+
+    public void setLnUrlFetcher(BiFunction<NostrPool, NostrPublicKey, AsyncTask<LnUrl>> lnUrlFetcher) {
+        this.lnUrlFetcher = lnUrlFetcher;
+    }
 
     public void setInitialPenaltyProvider(Function<NostrPublicKey, Number> initialPenaltyprovider) {
         this.initialPenaltyProvider = initialPenaltyprovider;
@@ -54,8 +70,9 @@ public class SdanClient {
 
     public SdanClient(
             NostrPool pool,
-            NostrPublicKey appKey,
-            NostrSigner signer) throws IOException {
+            NostrSigner signer,
+            NostrPublicKey appKey
+            ) throws IOException {
         this(pool, signer, appKey, new SdanTaxonomy(), 32, 1);
     }
     public SdanClient(
@@ -221,7 +238,7 @@ public class SdanClient {
     ) {
         SdanAspectRatio aspectRatio = size.getAspectRatio();
         SdanPriceSlot priceSlot = SdanPriceSlot.fromValue(bidMsats);
-        SdanBidEvent.Builder builder = new SdanBidEvent.Builder(getTaxonomy(),id);
+        SdanBidEvent.BidBuilder builder = new SdanBidEvent.BidBuilder(getTaxonomy(),id);
         builder.withDescription(description);
         if(categories!=null){
             for(SdanTaxonomy.Term category : categories) {
@@ -296,17 +313,23 @@ public class SdanClient {
                     if (tgs != null && !tgs.contains(nev.getPubkey())) return null; 
                     tgs = ev.getTargetedApps();
                     if (tgs != null && !tgs.contains(((SdanOfferEvent) nev).getAppPubkey()))  return null;  
-                    SdanAdvSideNegotiation neg = new SdanAdvSideNegotiation(
-                        this.initialPenaltyProvider,
-                        this.appKey,
-                        this.pool,
-                        this.signer,
-                        ev,
-                        this.maxDiff,
-                        this.penaltyIncrease
-                    );     
-                    neg.addListener(listener);
-                    neg.init((SdanOfferEvent) nev);             
+                    lnUrlFetcher.apply(pool, appKey).then(lnurl->{
+                        SdanAdvSideNegotiation neg = new SdanAdvSideNegotiation(
+                            this.initialPenaltyProvider,
+                            this.appKey,
+                            lnurl,
+                            this.pool,
+                            this.signer,
+                            ev,
+                            this.maxDiff,
+                            this.penaltyIncrease
+                        );     
+                        neg.addListener(listener);
+                        neg.init((SdanOfferEvent) nev);       
+                        return null;      
+                    }).catchException(ex -> {
+                        logger.log(Level.WARNING, "Error initializing negotiation for event: " + event.getId(), ex);
+                    });
                  }
                 return null;
             })

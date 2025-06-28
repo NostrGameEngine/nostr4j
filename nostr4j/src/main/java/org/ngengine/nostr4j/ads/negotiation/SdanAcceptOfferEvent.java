@@ -12,9 +12,16 @@ public class SdanAcceptOfferEvent extends SdanPowNegotiationEvent {
         super( event, offer, content);
     }
 
-    public static class Builder extends SdanPowNegotiationEvent.PowBuilder<SdanAcceptOfferEvent> {
-        public Builder() {
-            super((signer, event, of, cc) -> new SdanAcceptOfferEvent(signer, event, of, cc), "accept_offer");
+    public static class SdanAcceptOfferBuilder extends SdanPowNegotiationEvent.PowBuilder<SdanAcceptOfferEvent> {
+        private final static Factory<SdanAcceptOfferEvent> cstr = new Factory<SdanAcceptOfferEvent>() {
+            @Override
+            public SdanAcceptOfferEvent create(NostrSigner signer, SignedNostrEvent event, SdanOfferEvent offer,
+                    Map<String, Object> content) {
+                return new SdanAcceptOfferEvent(signer, event, offer, content);
+            }
+        };
+        public SdanAcceptOfferBuilder() {
+            super(cstr, "accept_offer");
         }
     }
 

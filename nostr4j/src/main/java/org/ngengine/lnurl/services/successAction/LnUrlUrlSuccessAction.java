@@ -1,11 +1,11 @@
-package org.ngengine.nostr4j.lnurl.services.successAction;
+package org.ngengine.lnurl.services.successAction;
 
 import java.net.URI;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.ngengine.nostr4j.lnurl.services.LnUrlPayRequest;
+import org.ngengine.lnurl.services.LnUrlPayRequest;
 import org.ngengine.platform.NGEUtils;
 
 public class LnUrlUrlSuccessAction implements LnUrlSuccessAction {

@@ -2,6 +2,7 @@ package org.ngengine.nostr4j.ads;
 
 import java.util.List;
 
+import org.ngengine.lnurl.LnUrl;
 import org.ngengine.nostr4j.NostrFilter;
 import org.ngengine.nostr4j.NostrPool;
 import org.ngengine.nostr4j.NostrSubscription;
@@ -30,6 +31,7 @@ public abstract class SdanNegotiation {
     protected final SdanBidEvent bidding;
     
     protected final NostrPublicKey appKey;
+    protected final LnUrl appLnUrl;
     protected final Function<NostrPublicKey, Number> initialPenaltyProvider;
     protected final NostrSigner signer;
     protected final List<Listener> listeners = new CopyOnWriteArrayList<>();
@@ -49,9 +51,14 @@ public abstract class SdanNegotiation {
         listeners.remove(listener);
     }
 
+    public SdanBidEvent getBidding() {
+        return bidding;
+    }
+
     protected SdanNegotiation(
         Function<NostrPublicKey, Number> initialPenaltyProvider,
         NostrPublicKey appKey,
+        LnUrl appLnUrl,
         NostrPool pool,
         NostrSigner signer,
         SdanBidEvent bidding,
@@ -61,6 +68,7 @@ public abstract class SdanNegotiation {
         this.signer = signer;
         this.initialPenaltyProvider = initialPenaltyProvider;
         this.appKey = appKey;
+        this.appLnUrl = appLnUrl;
         this.pool = pool;
         this.bidding = bidding;
         this.maxDiff = maxDiff;
@@ -99,7 +107,7 @@ public abstract class SdanNegotiation {
     }
 
     public AsyncTask<SdanBailEvent> bail( SdanBailEvent.Reason reason) {
-        SdanBailEvent.Builder builder = new SdanBailEvent.Builder();
+        SdanBailEvent.SdanBailBuilder builder = new SdanBailEvent.SdanBailBuilder();
         builder.withReason(reason);
         return builder.build(signer, offer);
     }

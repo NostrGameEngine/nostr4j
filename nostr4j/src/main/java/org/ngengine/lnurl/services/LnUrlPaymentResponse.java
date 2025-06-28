@@ -1,4 +1,4 @@
-package org.ngengine.nostr4j.lnurl.services;
+package org.ngengine.lnurl.services;
 
 import java.io.IOException;
 import java.net.URI;
@@ -10,10 +10,10 @@ import java.util.Map;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
-import org.ngengine.nostr4j.lnurl.services.successAction.LnUrlAESSuccessAction;
-import org.ngengine.nostr4j.lnurl.services.successAction.LnUrlMessageSuccessAction;
-import org.ngengine.nostr4j.lnurl.services.successAction.LnUrlSuccessAction;
-import org.ngengine.nostr4j.lnurl.services.successAction.LnUrlUrlSuccessAction;
+import org.ngengine.lnurl.services.successAction.LnUrlAESSuccessAction;
+import org.ngengine.lnurl.services.successAction.LnUrlMessageSuccessAction;
+import org.ngengine.lnurl.services.successAction.LnUrlSuccessAction;
+import org.ngengine.lnurl.services.successAction.LnUrlUrlSuccessAction;
 import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEPlatform;
 import org.ngengine.platform.NGEUtils;

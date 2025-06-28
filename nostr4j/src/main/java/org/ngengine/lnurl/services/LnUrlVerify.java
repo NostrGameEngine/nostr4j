@@ -1,10 +1,10 @@
-package org.ngengine.nostr4j.lnurl.services;
+package org.ngengine.lnurl.services;
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.ngengine.nostr4j.lnurl.LnUrlService;
+import org.ngengine.lnurl.LnUrlService;
 import org.ngengine.platform.NGEUtils;
 
 import jakarta.annotation.Nullable;

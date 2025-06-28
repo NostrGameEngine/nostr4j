@@ -29,9 +29,16 @@ public class SdanOfferEvent extends SdanPowNegotiationEvent {
         getAppPubkey();
     }
 
-    public static class Builder extends SdanPowNegotiationEvent.PowBuilder<SdanOfferEvent> {
-        public Builder(NostrPublicKey appPubkey) {
-            super((signer,event, offer,c )->new SdanOfferEvent(signer,event,c), "offer");      
+    public static  class OfferBuilder extends SdanPowNegotiationEvent.PowBuilder<SdanOfferEvent> {
+        private final static Factory<SdanOfferEvent> cstr = new Factory<SdanOfferEvent>() {
+            @Override
+            public SdanOfferEvent create(NostrSigner signer, SignedNostrEvent event, SdanOfferEvent offer,
+                    Map<String, Object> content) {
+                return new SdanOfferEvent(signer, event, content);
+            }
+        };
+        public OfferBuilder(NostrPublicKey appPubkey) {
+            super(cstr, "offer");      
             event.replaceTag("y", appPubkey.asHex());
         }
 

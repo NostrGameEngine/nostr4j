@@ -1,12 +1,7 @@
-package org.ngengine.nostr4j.lnurl;
+package org.ngengine.lnurl;
 
 import java.net.URI;
 import java.net.URISyntaxException;
-
-import org.ngengine.nostr4j.utils.Bech32.Bech32DecodingException;
-import org.ngengine.nostr4j.utils.Bech32.Bech32EncodingException;
-import org.ngengine.nostr4j.utils.Bech32.Bech32InvalidChecksumException;
-import org.ngengine.nostr4j.utils.Bech32.Bech32InvalidRangeException;
 
 // lud16
 public class LnAddress extends LnUrl {

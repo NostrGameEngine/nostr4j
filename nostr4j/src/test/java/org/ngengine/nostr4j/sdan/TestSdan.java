@@ -10,8 +10,6 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -32,6 +30,7 @@ import org.ngengine.nostr4j.ads.negotiation.SdanOfferEvent;
 import org.ngengine.nostr4j.ads.negotiation.SdanPaymentRequestEvent;
 import org.ngengine.nostr4j.ads.negotiation.SdanPayoutEvent;
 import org.ngengine.nostr4j.ads.SdanAdvSideNegotiation;
+import org.ngengine.nostr4j.ads.SdanAdvSideNegotiation.NotifyPayout;
 import org.ngengine.nostr4j.ads.SdanBidEvent;
 import org.ngengine.nostr4j.ads.SdanBidFilter;
 import org.ngengine.nostr4j.ads.SdanClient;
@@ -41,7 +40,6 @@ import org.ngengine.nostr4j.keypair.NostrKeyPair;
 import org.ngengine.nostr4j.keypair.NostrPrivateKey;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
-import org.ngengine.nostr4j.unit.TestUtils;
 import org.ngengine.platform.NGEPlatform;
 
 public class TestSdan {
@@ -63,8 +61,8 @@ public class TestSdan {
 
         SdanClient client = new SdanClient(
             pool,
-            appKey,
-            advertiserSigner
+            advertiserSigner,
+            appKey
         );
 
         SdanTaxonomy taxonomy = client.getTaxonomy();
@@ -139,8 +137,8 @@ public class TestSdan {
 
             SdanClient advClient = new SdanClient(
                 pool,
-                appKey,
-                advertiserSigner
+                advertiserSigner,
+                appKey
             );
 
             SdanTaxonomy taxonomy = advClient.getTaxonomy();
@@ -171,7 +169,7 @@ public class TestSdan {
             NostrKeyPair offererKeyPair = new NostrKeyPair(NostrPrivateKey.generate());
             NostrKeyPairSigner offererSigner = new NostrKeyPairSigner(offererKeyPair);
 
-            SdanClient offererClient = new SdanClient(pool,appKey,offererSigner);
+            SdanClient offererClient = new SdanClient(pool, offererSigner,appKey);
 
 
             // no bid
@@ -219,8 +217,9 @@ public class TestSdan {
 
             SdanClient advClient = new SdanClient(
                     pool,
-                    appKey,
-                    advertiserSigner);
+                    advertiserSigner,
+                    appKey
+                    );
 
             SdanTaxonomy taxonomy = advClient.getTaxonomy();
 
@@ -249,7 +248,7 @@ public class TestSdan {
             NostrKeyPair offererKeyPair = new NostrKeyPair(NostrPrivateKey.generate());
             NostrKeyPairSigner offererSigner = new NostrKeyPairSigner(offererKeyPair);
 
-            SdanClient offererClient = new SdanClient(pool, appKey, offererSigner);
+            SdanClient offererClient = new SdanClient(pool,offererSigner, appKey);
       
 
             // find bid
@@ -285,8 +284,8 @@ public class TestSdan {
 
             SdanClient advClient = new SdanClient(
                     pool,
-                    appKey,
-                    advertiserSigner);
+                    advertiserSigner,
+                    appKey);
 
             SdanTaxonomy taxonomy = advClient.getTaxonomy();
 
@@ -315,7 +314,7 @@ public class TestSdan {
             NostrKeyPair offererKeyPair = new NostrKeyPair(NostrPrivateKey.generate());
             NostrKeyPairSigner offererSigner = new NostrKeyPairSigner(offererKeyPair);
 
-            SdanClient offererClient = new SdanClient(pool, appKey, offererSigner);
+            SdanClient offererClient = new SdanClient(pool, offererSigner,appKey);
             
             SdanTaxonomy taxonomy = offererClient.getTaxonomy();
 
@@ -354,8 +353,9 @@ public class TestSdan {
 
         SdanClient advClient = new SdanClient(
                 pool,
-                appKey,
-                advertiserSigner);
+                advertiserSigner,
+                appKey
+                );
 
         SdanTaxonomy taxonomy = advClient.getTaxonomy();
         SdanBidEvent bid = advClient.newBid(
@@ -384,7 +384,7 @@ public class TestSdan {
         NostrKeyPair offererKeyPair = new NostrKeyPair(NostrPrivateKey.generate());
         NostrKeyPairSigner offererSigner = new NostrKeyPairSigner(offererKeyPair);
 
-        SdanClient offererClient = new SdanClient(pool, appKey, offererSigner);
+        SdanClient offererClient = new SdanClient(pool, offererSigner, appKey);
 
           
         NostrFilter filter = new SdanBidFilter() .withId(bid.getId());
@@ -458,19 +458,18 @@ public class TestSdan {
             }
 
             @Override
-            public boolean onOffer(SdanNegotiation neg, SdanOfferEvent offer, Runnable acceptOffer) {
+            public void onOffer(SdanNegotiation neg, SdanOfferEvent offer, Runnable acceptOffer) {
                 System.out.println("[advertiser] Received offer: " + offer);
                 res.set("offer", neg, offer, acceptOffer);
                 acceptOffer.run(); // automatically accept the offer for testing
-                return true; // return true to indicate that the offer was handled
             }
 
             @Override
-            public boolean onPaymentRequest(SdanPaymentRequestEvent event, BiConsumer<String, String> notifyPayout) {
+            public void onPaymentRequest(SdanNegotiation neg,
+                    SdanPaymentRequestEvent event,String invoice, NotifyPayout notifyPayout) {
                 System.out.println("[advertiser] Payment request received: " + event);
                 res.set("payment_request", event, notifyPayout);
-                notifyPayout.accept("Payment request received", "preimage123");
-                return true; // return true to indicate that the payment request was handled
+                notifyPayout.call("Payment request received", "preimage123");
             }
             
         });

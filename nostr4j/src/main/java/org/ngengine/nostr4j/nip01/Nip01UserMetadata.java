@@ -38,10 +38,11 @@ import java.util.Collection;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
+
+import org.ngengine.lnurl.LnAddress;
+import org.ngengine.lnurl.LnUrl;
 import org.ngengine.nostr4j.event.NostrEvent;
 import org.ngengine.nostr4j.event.NostrEvent.TagValue;
-import org.ngengine.nostr4j.lnurl.LnAddress;
-import org.ngengine.nostr4j.lnurl.LnUrl;
 import org.ngengine.nostr4j.event.UnsignedNostrEvent;
 import org.ngengine.platform.NGEPlatform;
 import org.ngengine.platform.NGEUtils;

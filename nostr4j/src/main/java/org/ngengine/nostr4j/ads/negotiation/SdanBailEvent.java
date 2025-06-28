@@ -61,13 +61,21 @@ public class SdanBailEvent extends SdanNegotiationEvent {
         }
     }
 
-    public static class Builder extends SdanNegotiationEvent.Builder<SdanBailEvent> {
-        public Builder() {
-            super((signer, event,of,c) -> new SdanBailEvent(signer, event, of,c), "bail");
+    public static class SdanBailBuilder extends SdanNegotiationEvent.Builder<SdanBailEvent> {
+        private final static Factory<SdanBailEvent> cstr = new Factory<SdanBailEvent>() {
+            @Override
+            public SdanBailEvent create(NostrSigner signer, SignedNostrEvent event, SdanOfferEvent offer,
+                    Map<String, Object> content) {
+                return new SdanBailEvent(signer, event, offer, content);
+            }
+        };
+
+        public SdanBailBuilder() {
+            super(cstr, "bail");
         }
     
 
-        public Builder withReason(Reason reason) {
+        public SdanBailBuilder withReason(Reason reason) {
             withMessage(reason.getReason());
             return this;
         }

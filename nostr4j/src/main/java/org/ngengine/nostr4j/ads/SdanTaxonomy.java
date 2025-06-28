@@ -8,10 +8,37 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.StringTokenizer;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import org.ngengine.platform.NGEPlatform;
+
+/**
+ * This class wraps the taxonomy CSV into a tree structure.
+ * It provides methods for retrieving terms by their path or id.
+ * 
+ * The taxonomy data can be loaded from a CSV file, but sometimes bundling
+ * the complete taxonomy CSV is not desirable due to its size. To accommodate
+ * this requirement, the class can be initialized with a null InputStream.
+ * 
+ * When initialized without CSV data, the class will:
+ * 1. Not load any predefined taxonomy structure
+ * 2. Only allow retrieving terms by their id
+ * 3. Create terms dynamically as they are requested
+ * 
+ * Terms created without CSV data will have minimal metadata - only the id,
+ * which will also serve as the name and path. This approach is primarily
+ * useful for client applications where display metadata isn't critical,
+ * but filtering functionality is still required.
+ * 
+ * If for any reason the class is initialized with a valid input stream or with the default 
+ * constructor, but it fails to load the CSV data (eg. due to it not being bundled), it will 
+ * fall back to the same behavior as if it was initialized with a null InputStream.
+ */
 public final class SdanTaxonomy implements Serializable{
+    private final static Logger logger = Logger.getLogger(SdanTaxonomy.class.getName());
     public static record Term (
             String id,
             String parent,
@@ -37,15 +64,36 @@ public final class SdanTaxonomy implements Serializable{
     private final Map<String, TreeNode> taxonomyFlat = new HashMap<>();
     private final TreeNode taxonomyTree = new TreeNode(null,  new HashMap<>());
 
+    private boolean withCsv = false;
+
     public SdanTaxonomy(InputStream csvIn) throws IOException{
-        loadCSV(csvIn);
+        if(csvIn==null){
+            withCsv = false; 
+            logger.fine("Loaded without csv database");
+            return;
+        }
+
+        try{
+            loadCSV(csvIn);
+            withCsv = true;
+        } catch(IOException e){
+            logger.log(Level.WARNING, "Loaded without csv database", e);
+
+            withCsv = false;
+        }
     }
 
     public SdanTaxonomy() throws IOException{
-        InputStream is = this.getClass().getResourceAsStream("nostr-content-taxonomy.csv");
-        BufferedInputStream bis = new BufferedInputStream(is);
-        loadCSV(bis);
-        bis.close();       
+        try{
+            InputStream is = NGEPlatform.get().openResource("/org/ngengine/nostr4j/sdan/taxonomy/nostr-content-taxonomy.csv");
+            BufferedInputStream bis = new BufferedInputStream(is);
+            loadCSV(bis);
+            bis.close();       
+            withCsv = true;
+        } catch(IOException e){
+            withCsv = false;
+            logger.log(Level.WARNING, "Loaded without csv database", e);
+        }
     }
 
     private void loadCSV(InputStream csvIn) throws IOException {
@@ -102,15 +150,27 @@ public final class SdanTaxonomy implements Serializable{
 
 
     public Term getByPath(String term) {
-        for (TreeNode node : taxonomyFlat.values()) {
-            if (node.taxonomy.path().equalsIgnoreCase(term)) {
-                return node.taxonomy;
+        if(withCsv) {
+            for (TreeNode node : taxonomyFlat.values()) {
+                if (node.taxonomy.path().equalsIgnoreCase(term)) {
+                    return node.taxonomy;
+                }
             }
-        }
-        return null; 
+        }        
+        return getById(term); // Fallback to getById if not found by path
     }
 
     public Term getById(String id){
+        if(!withCsv) {
+            // if no CSV data is loaded, we can still return a Term with the id
+            // we'll assume it is always a valid id and create a Term on the fly
+            TreeNode node = taxonomyFlat.get(id);
+            if(node==null){
+                Term term = new Term(id, null, id, id, null, null, null, id, null);
+                node = new TreeNode(term, new HashMap<>());
+            }    
+            return node.taxonomy;
+        }
         TreeNode node = taxonomyFlat.get(id);
         if (node != null) {
             return node.taxonomy;

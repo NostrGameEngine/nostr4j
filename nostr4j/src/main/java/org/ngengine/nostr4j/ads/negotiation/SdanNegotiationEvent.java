@@ -69,7 +69,7 @@ public abstract class SdanNegotiationEvent extends SdanEvent{
         T create(NostrSigner signer, SignedNostrEvent event, SdanOfferEvent offer, Map<String, Object> unencryptedContent);
     }
     
-    public static class Builder<T extends SdanNegotiationEvent> {
+    public static abstract class Builder<T extends SdanNegotiationEvent> {
         protected final UnsignedNostrEvent event;
         protected final Map<String, Object> content = new HashMap<>();
         protected final Factory<T> factory;

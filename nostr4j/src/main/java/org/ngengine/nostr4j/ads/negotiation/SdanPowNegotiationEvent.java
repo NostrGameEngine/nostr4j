@@ -33,7 +33,7 @@ public class SdanPowNegotiationEvent extends SdanNegotiationEvent{
         getRequestedDifficultyToRespond();
     }
 
-    public static class PowBuilder<T extends SdanNegotiationEvent> extends SdanNegotiationEvent.Builder<T> {
+    public static abstract class PowBuilder<T extends SdanNegotiationEvent> extends SdanNegotiationEvent.Builder<T> {
 
         public PowBuilder(
                 Factory<T> factory,

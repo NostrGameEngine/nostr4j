@@ -1,6 +1,7 @@
 package org.ngengine.nostr4j.ads;
 
 import java.time.Instant;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.logging.Level;
@@ -40,15 +41,19 @@ public class SdanOffererSideNegotiation extends SdanNegotiation {
         int maxDiff,
         int penaltyIncrease
     ) {
-        super(initialPenaltyProvider, appKey, pool, signer, bidding, maxDiff, penaltyIncrease);
+        super(initialPenaltyProvider, appKey, null, pool, signer, bidding, maxDiff, penaltyIncrease);
     }
 
     protected void init(){
         logger.fine("Initializing offerer side negotiation for bidding: " + bidding.getId());
+        AtomicBoolean done = new AtomicBoolean(false);
+
         for (Listener listener : listeners) {
             if (listener instanceof OfferListener) {
                 ((OfferListener) listener).onBid(this,  () -> {
-                    makeOffer(null);
+                    if(!done.getAndSet(true)){
+                        makeOffer(null);
+                    }
                 });
             }
         }
@@ -61,16 +66,20 @@ public class SdanOffererSideNegotiation extends SdanNegotiation {
             if (event instanceof SdanAcceptOfferEvent) {
                 SdanAcceptOfferEvent acceptEvent = (SdanAcceptOfferEvent) event;
                 logger.fine("Received accept offer event: " + acceptEvent.getId() + " for bidding: " + bidding.getId());
+                AtomicBoolean done = new AtomicBoolean(false);
+
                 for (Listener listener : listeners) {
                     if (listener instanceof OfferListener) {
                         ((OfferListener) listener).showAd(this, acceptEvent, (msg)->{
-                            logger.fine("Ad was shown "+ msg + " for bidding: " + bidding.getId()+" ... requesting payment");
-                            for (Listener l : listeners) {
-                                if (l instanceof OfferListener) {
-                                    ((OfferListener) l).onRequestingPayment(this);
+                            if(!done.getAndSet(true)){
+                                logger.fine("Ad was shown "+ msg + " for bidding: " + bidding.getId()+" ... requesting payment");
+                                for (Listener l : listeners) {
+                                    if (l instanceof OfferListener) {
+                                        ((OfferListener) l).onRequestingPayment(this);
+                                    }
                                 }
+                                requestPayment(msg,null);
                             }
-                            requestPayment(msg,null);
                         });
                     }
                 }
@@ -97,7 +106,7 @@ public class SdanOffererSideNegotiation extends SdanNegotiation {
             this.penaltyAppliedToTheCounterparty = initDiff;
 
             // create the offer event
-            SdanOfferEvent.Builder builder = new SdanOfferEvent.Builder(appKey);
+            SdanOfferEvent.OfferBuilder builder = new SdanOfferEvent.OfferBuilder(appKey);
             builder.requestDifficulty(initDiff);
             builder.withExpiration(expiration);
 
@@ -118,7 +127,7 @@ public class SdanOffererSideNegotiation extends SdanNegotiation {
 
     protected AsyncTask<SdanPaymentRequestEvent> requestPayment(String message,  @Nullable Instant expiration) {
         logger.fine("Requesting payment for bidding: " + bidding.getId() + " with message: " + message + " and expiration: " + expiration);
-        SdanPaymentRequestEvent.Builder builder = new SdanPaymentRequestEvent.Builder();
+        SdanPaymentRequestEvent.PaymentRequestBuilder builder = new SdanPaymentRequestEvent.PaymentRequestBuilder();
 
         if (expiration != null) {
             builder.withExpiration(expiration);

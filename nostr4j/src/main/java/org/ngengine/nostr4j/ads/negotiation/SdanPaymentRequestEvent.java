@@ -20,9 +20,17 @@ public class SdanPaymentRequestEvent extends SdanNegotiationEvent {
         }
     }
 
-    public static class Builder extends SdanNegotiationEvent.Builder<SdanPaymentRequestEvent> {
-        public Builder( ) {
-            super((signer,event, of,c)->new SdanPaymentRequestEvent(signer,event, of,c), "payment_request");            
+    public static class PaymentRequestBuilder extends SdanNegotiationEvent.Builder<SdanPaymentRequestEvent> {
+        private final static Factory<SdanPaymentRequestEvent> cstr = new Factory<SdanPaymentRequestEvent>() {
+            @Override
+            public SdanPaymentRequestEvent create(NostrSigner signer, SignedNostrEvent event, SdanOfferEvent offer,
+                    Map<String, Object> content) {
+                return new SdanPaymentRequestEvent(signer, event, offer, content);
+            }
+        };
+
+        public PaymentRequestBuilder( ) {
+            super(cstr, "payment_request");            
         } 
 
     }

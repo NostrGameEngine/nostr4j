@@ -199,13 +199,13 @@ public class SdanBidEvent extends SdanEvent{
 
 
 
-    public static class Builder  {
+    public static class BidBuilder  {
         private final UnsignedNostrEvent event;
         private final Map<String, Object> content = new HashMap<>();
         private final SdanTaxonomy taxonomy;
  
         
-        public Builder(
+        public BidBuilder(
             SdanTaxonomy taxonomy,
             String adId
         ) {
@@ -216,84 +216,84 @@ public class SdanBidEvent extends SdanEvent{
                       
         }
 
-        public Builder withDescription(String description) {
+        public BidBuilder withDescription(String description) {
             this.content.put("description", description);
             return this;
         }
-        public Builder withContext(String context) {
+        public BidBuilder withContext(String context) {
             this.content.put("context", context);
             return this;
         }
-        public Builder withPayload(String payload) {
+        public BidBuilder withPayload(String payload) {
             this.content.put("payload", payload);
             return this;
         }
-        public Builder withLink(String link) {
+        public BidBuilder withLink(String link) {
             this.content.put("link", link);
             return this;
         }
-        public Builder withCallToAction(String callToAction) {
+        public BidBuilder withCallToAction(String callToAction) {
             this.content.put("call_to_action", callToAction);
             return this;
         }
-        public Builder withBidMsats(long bidMsats) {
+        public BidBuilder withBidMsats(long bidMsats) {
             this.content.put("bid", bidMsats);
             return this;
         }
-        public Builder withHoldTime(Duration holdTime) {
+        public BidBuilder withHoldTime(Duration holdTime) {
             if(holdTime.isNegative()) throw new IllegalArgumentException("Hold time cannot be negative");
             this.content.put("hold_time", holdTime.getSeconds());
             return this;
         }
-        public Builder withActionType(SdanActionType actionType) {
+        public BidBuilder withActionType(SdanActionType actionType) {
             this.event.withTag("k", actionType.getValue());
             return this;
         }
-        public Builder withMIMEType(SdanMimeType mimeType) {
+        public BidBuilder withMIMEType(SdanMimeType mimeType) {
             this.event.withTag("m", mimeType.toString());
             return this;
         }
      
-        public Builder withPriceSlot(SdanPriceSlot priceSlot) {
+        public BidBuilder withPriceSlot(SdanPriceSlot priceSlot) {
             this.event.withTag("f", priceSlot.toString());
             return this;
         }
 
-        public Builder withAspectRatio(SdanAspectRatio aspectRatio) {
+        public BidBuilder withAspectRatio(SdanAspectRatio aspectRatio) {
             this.event.withTag("S", aspectRatio.toString());
             return this;
         }
 
-        public Builder withDimensions(SdanSize dimensions) {
+        public BidBuilder withDimensions(SdanSize dimensions) {
             this.event.withTag("s", dimensions.toString());
             return this;
         }
 
-        public Builder withExpiration(Instant expireAt) {
+        public BidBuilder withExpiration(Instant expireAt) {
             this.event.withExpiration(expireAt);
             return this;
         }
 
-        public Builder withCategory(SdanTaxonomy.Term category) {
+        public BidBuilder withCategory(SdanTaxonomy.Term category) {
             this.event.withTag("t", category.id());
             return this;
         }
-        public Builder withLanguage(String language) {
+        public BidBuilder withLanguage(String language) {
             this.event.withTag("l", language);
             return this;
         }
 
-        public Builder whitelistOfferer(NostrPublicKey target) {
+        public BidBuilder whitelistOfferer(NostrPublicKey target) {
             this.event.withTag("p", target.asHex());
             return this;
         }
 
-        public Builder whitelistApp(NostrPublicKey target) {
+        public BidBuilder whitelistApp(NostrPublicKey target) {
             this.event.withTag("y", target.asHex());
             return this;
         }
 
-        public Builder withDelegate(NostrPublicKey delegate) {
+        public BidBuilder withDelegate(NostrPublicKey delegate) {
             this.event.withTag("delegation", delegate.asHex());
             return this;
         }

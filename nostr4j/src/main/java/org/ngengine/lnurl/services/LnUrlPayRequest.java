@@ -1,4 +1,4 @@
-package org.ngengine.nostr4j.lnurl.services;
+package org.ngengine.lnurl.services;
 
 import java.net.URI;
 import java.net.URLEncoder;
@@ -16,9 +16,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.BiFunction;
 
-import org.ngengine.nostr4j.lnurl.LnUrl;
-import org.ngengine.nostr4j.lnurl.LnUrlService;
-import org.ngengine.nostr4j.lnurl.services.successAction.LnUrlSuccessAction;
+import org.ngengine.lnurl.LnUrl;
+import org.ngengine.lnurl.LnUrlService;
+import org.ngengine.lnurl.services.successAction.LnUrlSuccessAction;
 import org.ngengine.nostr4j.utils.Bech32;
 import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEPlatform;

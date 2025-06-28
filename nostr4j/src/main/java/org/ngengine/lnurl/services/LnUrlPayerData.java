@@ -1,4 +1,4 @@
-package org.ngengine.nostr4j.lnurl.services;
+package org.ngengine.lnurl.services;
 
 import java.util.ArrayList;
 import java.util.HashMap;

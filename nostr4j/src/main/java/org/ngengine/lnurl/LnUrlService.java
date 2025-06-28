@@ -1,4 +1,4 @@
-package org.ngengine.nostr4j.lnurl;
+package org.ngengine.lnurl;
 
 import java.util.Map;
 

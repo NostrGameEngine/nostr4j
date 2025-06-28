@@ -1,4 +1,4 @@
-package org.ngengine.nostr4j.lnurl;
+package org.ngengine.lnurl;
 
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -11,8 +11,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.logging.Logger;
 
-import org.ngengine.nostr4j.lnurl.services.LnUrlPayRequest;
-import org.ngengine.nostr4j.lnurl.services.LnUrlException;
+import org.ngengine.lnurl.services.LnUrlException;
+import org.ngengine.lnurl.services.LnUrlPayRequest;
 import org.ngengine.nostr4j.utils.Bech32;
 import org.ngengine.nostr4j.utils.Bech32.Bech32DecodingException;
 import org.ngengine.nostr4j.utils.Bech32.Bech32EncodingException;

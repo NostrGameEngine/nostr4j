@@ -5,6 +5,7 @@ import static org.junit.Assert.assertEquals;
 import java.net.URISyntaxException;
 
 import org.junit.Test;
+import org.ngengine.lnurl.LnUrl;
 import org.ngengine.nostr4j.utils.Bech32.Bech32DecodingException;
 import org.ngengine.nostr4j.utils.Bech32.Bech32EncodingException;
 import org.ngengine.nostr4j.utils.Bech32.Bech32InvalidChecksumException;

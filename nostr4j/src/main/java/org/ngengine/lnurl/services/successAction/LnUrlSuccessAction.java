@@ -1,4 +1,4 @@
-package org.ngengine.nostr4j.lnurl.services.successAction;
+package org.ngengine.lnurl.services.successAction;
 
 
 import java.util.Map;
