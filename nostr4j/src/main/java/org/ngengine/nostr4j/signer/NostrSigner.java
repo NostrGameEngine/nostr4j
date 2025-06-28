@@ -38,26 +38,58 @@ import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.platform.AsyncTask;
 
 public interface NostrSigner extends Cloneable, Serializable {
+    public enum EncryptAlgo {
+        NIP44,
+        NIP04
+    }
+
+
     /**
      * Sign an event
      * @param event the event to sign
      * @return an async task that will be completed with the signed event
      */
     AsyncTask<SignedNostrEvent> sign(UnsignedNostrEvent event);
+
     /**
      * Encrypt a message
      * @param message  the message to encrypt
      * @param publicKey the public key of the recipient
+     * @param algo the encryption algorithm to use 
      * @return an async task that will be completed with the encrypted message
      */
-    AsyncTask<String> encrypt(String message, NostrPublicKey publicKey);
+    AsyncTask<String> encrypt(String message, NostrPublicKey publicKey, EncryptAlgo algo);
     /**
      * Decrypt a message
      * @param message the message to decrypt
      * @param publicKey the public key of the sender
+     * @param algo the encryption algorithm used to encrypt the message
      * @return an async task that will be completed with the decrypted message
      */
-    AsyncTask<String> decrypt(String message, NostrPublicKey publicKey);
+    AsyncTask<String> decrypt(String message, NostrPublicKey publicKey, EncryptAlgo algo);
+
+    /**
+     * Encrypt a message using the default NIP44 algorithm.
+     * 
+     * @param message   the message to encrypt
+     * @param publicKey the public key of the recipient
+     * @return an async task that will be completed with the encrypted message
+     */
+    default AsyncTask<String> encrypt(String message, NostrPublicKey publicKey){
+        return this.encrypt(message, publicKey, EncryptAlgo.NIP44);
+    }
+
+    /**
+     * Decrypt a message using the default NIP44 algorithm.
+     * 
+     * @param message   the message to decrypt
+     * @param publicKey the public key of the sender
+     * @return an async task that will be completed with the decrypted message
+     */
+    default AsyncTask<String> decrypt(String message, NostrPublicKey publicKey){
+        return this.decrypt(message, publicKey, EncryptAlgo.NIP44);
+    }
+    
 
     /**
      * Get the public key of the signer

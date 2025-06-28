@@ -41,7 +41,7 @@ import java.util.concurrent.ExecutionException;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.ngengine.nostr4j.keypair.NostrPrivateKey;
-import org.ngengine.nostr4j.unit.TestNip44;
+import org.ngengine.nostr4j.nip44.TestNip44;
 
 public class TestNip49 {
 

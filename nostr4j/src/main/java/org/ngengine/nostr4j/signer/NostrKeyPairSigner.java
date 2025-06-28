@@ -35,6 +35,7 @@ import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.event.UnsignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
+import org.ngengine.nostr4j.nip04.Nip04;
 import org.ngengine.nostr4j.nip44.Nip44;
 import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEPlatform;
@@ -72,26 +73,32 @@ public class NostrKeyPairSigner implements NostrSigner {
     }
 
     @Override
-    public AsyncTask<String> encrypt(String message, NostrPublicKey publicKey) {
-        return Nip44
-            .getConversationKey(keyPair.getPrivateKey(), publicKey)
-            .compose(sharedKey -> {
-                return Nip44.encrypt(message, sharedKey);
-            })
-            .then(encrypt -> {
-                return encrypt;
-            });
+    public AsyncTask<String> encrypt(String message, NostrPublicKey publicKey, NostrSigner.EncryptAlgo algo) {
+        if(algo==EncryptAlgo.NIP04) {
+            return Nip04.encrypt(message, keyPair.getPrivateKey(), publicKey);
+        } else {
+            return Nip44
+                .getConversationKey(keyPair.getPrivateKey(), publicKey)
+                .compose(sharedKey -> {
+                    return Nip44.encrypt(message, sharedKey);
+                })
+                .then(encrypt -> {
+                    return encrypt;
+                });
+        }
     }
 
     @Override
-    public AsyncTask<String> decrypt(String message, NostrPublicKey publicKey) {
-        NGEPlatform platform = NGEUtils.getPlatform();
-
-        return Nip44
-            .getConversationKey(keyPair.getPrivateKey(), publicKey)
-            .compose(sharedKey -> {
-                return Nip44.decrypt(message, sharedKey);
-            });
+    public AsyncTask<String> decrypt(String message, NostrPublicKey publicKey, NostrSigner.EncryptAlgo algo) {
+        if(algo==EncryptAlgo.NIP04) {
+            return Nip04.decrypt(message, keyPair.getPrivateKey(), publicKey);
+        }else{
+            return Nip44
+                .getConversationKey(keyPair.getPrivateKey(), publicKey)
+                .compose(sharedKey -> {
+                    return Nip44.decrypt(message, sharedKey);
+                });
+        }
     }
 
     @Override

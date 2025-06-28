@@ -721,8 +721,17 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
     }
 
     @Override
-    public AsyncTask<String> encrypt(String message, NostrPublicKey publicKey) {
-        String method = "nip44_encrypt";
+    public AsyncTask<String> encrypt(String message, NostrPublicKey publicKey, NostrSigner.EncryptAlgo algo) {
+        String method;
+        switch(algo){
+            case NIP04:
+                method = "nip04_encrypt";
+                break;
+            default:
+            case NIP44:
+                method = "nip44_encrypt";
+                break;            
+        }       
         Collection<Object> params = new ArrayList<>();
         params.add(publicKey.asHex());
         params.add(message);
@@ -730,8 +739,17 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
     }
 
     @Override
-    public AsyncTask<String> decrypt(String message, NostrPublicKey publicKey) {
-        String method = "nip44_decrypt";
+    public AsyncTask<String> decrypt(String message, NostrPublicKey publicKey, NostrSigner.EncryptAlgo algo) {
+        String method;
+        switch (algo) {
+            case NIP04:
+                method = "nip04_decrypt";
+                break;
+            default:
+            case NIP44:
+                method = "nip44_decrypt";
+                break;
+        }
         Collection<Object> params = new ArrayList<>();
         params.add(publicKey.asHex());
         params.add(message);
