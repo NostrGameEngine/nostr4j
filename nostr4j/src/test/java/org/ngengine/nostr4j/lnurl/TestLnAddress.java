@@ -21,8 +21,8 @@ public class TestLnAddress {
     
     @Test
     public void testLnAddress() throws Bech32EncodingException, URISyntaxException, Bech32DecodingException, Bech32InvalidChecksumException, Bech32InvalidRangeException {
-        String lnAddress = "zap@rblb.it";
-        String lnUrl = "https://rblb.it/.well-known/lnurlp/zap";
+        String lnAddress = "unit@lntest.rblb.it";
+        String lnUrl = "https://lntest.rblb.it/.well-known/lnurlp/unit";
         LnAddress lnAddressObj = new LnAddress(lnAddress);
         assertEquals(lnAddressObj.toURI().toString(), lnUrl);
     }
@@ -30,7 +30,7 @@ public class TestLnAddress {
 
     @Test
     public void getInvoice() throws Exception {
-        LnAddress lnAddressObj = new LnAddress("unit@ln.rblb.it");
+        LnAddress lnAddressObj = new LnAddress("unit@lntest.rblb.it");
         LnUrlPayRequest service = (LnUrlPayRequest) lnAddressObj.getService().await();
         assertEquals(service.canSend(1000),true);
         LnUrlPayerData payerData = new LnUrlPayerData();
