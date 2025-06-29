@@ -51,10 +51,19 @@ public class Nip01 {
         return fetch(pool, filter);
     }
 
+    /**
+     * Fetches the user metadata for a given filter.
+     * @param pool 
+     * @param filter
+     * @return an AsyncTask that resolves to the Nip01UserMetadata, or null if no metadata is found.
+     */
     public static AsyncTask<Nip01UserMetadata> fetch(NostrPool pool, Nip01UserMetadataFilter filter) {
         return pool
             .fetch(filter)
             .then(evs -> {
+                if(evs.size()==0) {
+                    return null; // No metadata found
+                }
                 SignedNostrEvent event = (SignedNostrEvent) evs.get(0);
                 try {
                     return new Nip01UserMetadata(event);
