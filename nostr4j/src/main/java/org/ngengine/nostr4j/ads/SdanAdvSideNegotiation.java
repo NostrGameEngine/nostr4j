@@ -2,13 +2,11 @@ package org.ngengine.nostr4j.ads;
 
 import java.time.Instant;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.logging.Logger;
 
 import org.ngengine.lnurl.LnUrl;
 import org.ngengine.lnurl.services.LnUrlPayRequest;
-import org.ngengine.lnurl.services.LnUrlPayerData;
 import org.ngengine.nostr4j.NostrPool;
 import org.ngengine.nostr4j.ads.negotiation.SdanAcceptOfferEvent;
 import org.ngengine.nostr4j.ads.negotiation.SdanNegotiationEvent;
@@ -18,20 +16,19 @@ import org.ngengine.nostr4j.ads.negotiation.SdanPayoutEvent;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.signer.NostrSigner;
 import org.ngengine.platform.AsyncTask;
-
 import jakarta.annotation.Nullable;
 
 public class SdanAdvSideNegotiation extends SdanNegotiation {
-    private final static Logger logger = Logger.getLogger(SdanAdvSideNegotiation.class.getName());
+    final static Logger logger = Logger.getLogger(SdanAdvSideNegotiation.class.getName());
     public static interface NotifyPayout {
         void call(String message, String preimage);
     }
+    
     public static interface AdvListener extends SdanNegotiation.Listener {
-        void onOffer(SdanNegotiation neg, SdanOfferEvent offer, Runnable acceptOffer);
-        
+        void onOffer(SdanNegotiation neg, SdanOfferEvent offer, Runnable acceptOffer);        
         void onPaymentRequest(SdanNegotiation neg, SdanPaymentRequestEvent event, String invoice, NotifyPayout notifyPayout);
     }
-    
+
     protected SdanAdvSideNegotiation(
         Function<NostrPublicKey, Number> initialPenaltyProvider,
         NostrPublicKey appKey,
@@ -64,22 +61,31 @@ public class SdanAdvSideNegotiation extends SdanNegotiation {
         try{
             if (event instanceof SdanPaymentRequestEvent) {
                 SdanPaymentRequestEvent paymentRequestEvent = (SdanPaymentRequestEvent) event;
-                LnUrlPayRequest payRequest = (LnUrlPayRequest) appLnUrl.getService(); 
-                payRequest.fetchInvoice(bidding.getBidMsats(), "Payment for " + this.offer.getId(), null).then(res->{
-                    String invoice = res.getPr();
-                    AtomicBoolean done = new AtomicBoolean(false);
-                    for (Listener listener : listeners) {
-                        if (listener instanceof AdvListener) {
-                            ((AdvListener) listener).onPaymentRequest(this, paymentRequestEvent, invoice, (message, preimage) -> {
-                                if (!done.getAndSet(true)) {
-                                    notifyPayout(message, preimage, null);
+                appLnUrl.getService().then(r->{
+                    try{
+                        LnUrlPayRequest payRequest = (LnUrlPayRequest) r;
+                        payRequest.fetchInvoice(bidding.getBidMsats(), "Payment for " + this.offer.getId(), null).then(res->{
+                            String invoice = res.getPr();
+                            AtomicBoolean done = new AtomicBoolean(false);
+                            for (Listener listener : listeners) {
+                                if (listener instanceof AdvListener) {
+                                    ((AdvListener) listener).onPaymentRequest(this, paymentRequestEvent, invoice, (message, preimage) -> {
+                                        if (!done.getAndSet(true)) {
+                                            notifyPayout(message, preimage, null);
+                                        }
+                                    });
                                 }
-                            });
-                        }
+                            }
+                            return null;
+                        }).catchException(e -> {
+                            logger.warning("Failed to fetch invoice for payment request: " + e.getMessage());
+                        });
+                    } catch (Exception e) {
+                      throw new RuntimeException("Failed to process LnUrl service: " + e.getMessage(), e);
                     }
                     return null;
                 }).catchException(e -> {
-                    logger.warning("Failed to fetch invoice for payment request: " + e.getMessage());
+                    logger.warning("Failed to get LnUrl service: " + e.getMessage());
                 });
             
             }

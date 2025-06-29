@@ -4,12 +4,14 @@ import java.io.IOException;
 import java.net.URISyntaxException;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
-import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -18,12 +20,8 @@ import org.ngengine.lnurl.LnUrl;
 import org.ngengine.nostr4j.NostrFilter;
 import org.ngengine.nostr4j.NostrPool;
 import org.ngengine.nostr4j.NostrSubscription;
-import org.ngengine.nostr4j.ads.negotiation.SdanAcceptOfferEvent;
-import org.ngengine.nostr4j.ads.negotiation.SdanBailEvent;
 import org.ngengine.nostr4j.ads.negotiation.SdanNegotiationEvent;
 import org.ngengine.nostr4j.ads.negotiation.SdanOfferEvent;
-import org.ngengine.nostr4j.ads.negotiation.SdanPayoutEvent;
-import org.ngengine.nostr4j.ads.negotiation.SdanPowNegotiationEvent;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.event.UnsignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
@@ -32,7 +30,9 @@ import org.ngengine.nostr4j.nip09.Nip09EventDeletion;
 import org.ngengine.nostr4j.proto.NostrMessageAck;
 import org.ngengine.nostr4j.signer.NostrSigner;
 import org.ngengine.nostr4j.utils.UniqueId;
+import org.ngengine.platform.AsyncExecutor;
 import org.ngengine.platform.AsyncTask;
+import org.ngengine.platform.NGEPlatform;
 
 import jakarta.annotation.Nonnull;
 import jakarta.annotation.Nullable;
@@ -46,10 +46,13 @@ public class SdanClient {
     protected final SdanTaxonomy taxonomy;
     protected final NostrPublicKey appKey;
     protected final  List<NostrSubscription> activeSubscriptions = new CopyOnWriteArrayList<>();
-    protected final Map<SdanBidEvent, NostrSubscription> activeBids = new ConcurrentHashMap<>();
+    protected final Map<SdanBidEvent, NostrSubscription> handlingBids = new ConcurrentHashMap<>();
+    protected final AsyncExecutor updater;
+    protected volatile boolean closed = false;
     protected BiFunction<NostrPool, NostrPublicKey,  AsyncTask<LnUrl>> lnUrlFetcher = (pool, appKey) -> {
         return Nip01.fetch(pool, appKey).then(nip01->{
            try {
+                if(nip01==null) throw new RuntimeException("No user metadata found for app key: " + appKey.asHex());
                 return nip01.getPaymentAddress();
            } catch (URISyntaxException e) {
                 throw new RuntimeException("Failed to fetch LNURL for app key: " + appKey.asHex(), e);
@@ -59,6 +62,36 @@ public class SdanClient {
     protected Function<NostrPublicKey, Number> initialPenaltyProvider = (pubkey) -> {
         return 0;
     };
+
+
+    private void update(){
+        updater.runLater(()->{
+            if(closed)return null;
+            try{
+                Iterator<Entry<SdanBidEvent, NostrSubscription>> it = handlingBids.entrySet().iterator();
+                Instant now = Instant.now();
+                while(it.hasNext()){
+                    Entry<SdanBidEvent, NostrSubscription> entry = it.next();
+                    SdanBidEvent ev = entry.getKey();
+                    if(ev.getExpiration().isBefore(now)) {
+                        // close expired bids
+                        logger.fine("Closing expired bid: " + ev.getId());
+                        close(ev, true);
+                
+                    }
+                    
+                    
+                }
+            } catch (Exception e) {
+                logger.log(Level.WARNING, "Error updating SdanClient", e);
+            }
+            if (closed)
+                return null;
+            update();
+            return null;
+        }, 1, TimeUnit.SECONDS);
+
+    }
 
     public void setLnUrlFetcher(BiFunction<NostrPool, NostrPublicKey, AsyncTask<LnUrl>> lnUrlFetcher) {
         this.lnUrlFetcher = lnUrlFetcher;
@@ -75,6 +108,7 @@ public class SdanClient {
             ) throws IOException {
         this(pool, signer, appKey, new SdanTaxonomy(), 32, 1);
     }
+
     public SdanClient(
         NostrPool pool, 
         NostrSigner signer,
@@ -98,6 +132,17 @@ public class SdanClient {
         this.pool = pool;
         this.taxonomy = taxonomy;
         this.appKey = appKey;
+        
+
+        AsyncExecutor updater = NGEPlatform.get().newAsyncExecutor(this.getClass());
+        NGEPlatform.get().registerFinalizer(this,()->{
+            updater.close();
+        });
+
+
+
+        this.updater = updater;
+        this.update();
     }
 
 
@@ -288,7 +333,7 @@ public class SdanClient {
         return pool.publish(ev);
     }
 
-    public AsyncTask<List<AsyncTask<NostrMessageAck>>> cancelBid(SdanBidEvent ev, String reason) {
+    protected AsyncTask<List<AsyncTask<NostrMessageAck>>> cancelBid(SdanBidEvent ev, String reason) {
         UnsignedNostrEvent cancel = Nip09EventDeletion.createDeletionEvent(reason,ev);
         return this.signer.sign(cancel).compose(signed -> {
             return pool.publish(signed);
@@ -296,7 +341,7 @@ public class SdanClient {
     }
 
     public NostrSubscription handleBid(SdanBidEvent ev,SdanAdvSideNegotiation.AdvListener listener){        
-        if(activeBids.containsKey(ev)){
+        if(handlingBids.containsKey(ev)){
             throw new IllegalStateException("Bid already being handled: " + ev.getId());
         }
         NostrSubscription sub = pool.subscribe(
@@ -341,8 +386,9 @@ public class SdanClient {
         activeSubscriptions.add(sub);
         sub.addCloseListener(reason -> {
             activeSubscriptions.remove(sub);
+            handlingBids.remove(ev);
         });
-        activeBids.put(ev, sub);
+        handlingBids.put(ev, sub);
         sub.open();
         return sub;
     }
@@ -353,7 +399,7 @@ public class SdanClient {
     }
 
     public void close(SdanBidEvent ev, boolean cancel) {
-        NostrSubscription sub = activeBids.remove(ev);
+        NostrSubscription sub = handlingBids.remove(ev);
         if (sub != null) {
             sub.close();
         } else {
@@ -365,10 +411,12 @@ public class SdanClient {
     }
 
     public void close(){
-        activeBids.forEach((ev, sub) -> {
+        closed = true;
+        handlingBids.forEach((ev, sub) -> {
             sub.close();
         });
-        activeBids.clear();
+        handlingBids.clear();
         activeSubscriptions.clear();
+        updater.close();
     }
 }

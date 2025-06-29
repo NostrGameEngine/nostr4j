@@ -20,6 +20,7 @@ import org.ngengine.nostr4j.NostrPool;
 import org.ngengine.nostr4j.NostrRelay;
 import org.ngengine.nostr4j.NostrSubscription;
 import org.ngengine.nostr4j.TestLogger;
+import org.ngengine.nostr4j.ads.AdvManager;
 import org.ngengine.nostr4j.ads.SdanActionType;
 import org.ngengine.nostr4j.ads.SdanMimeType;
 import org.ngengine.nostr4j.ads.SdanSize;
@@ -41,19 +42,33 @@ import org.ngengine.nostr4j.keypair.NostrPrivateKey;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
 import org.ngengine.platform.NGEPlatform;
+import org.ngengine.wallets.nip47.NWCUri;
+import org.ngengine.wallets.nip47.NWCWallet;
 
 public class TestSdan {
+    private String appkey ="npub13rugy09zg5pssxtjfvgkhjjzkx8swpvwr7e2gymnr2jp2ltveeqs88pjk4";
  
     private static final Logger logger = TestLogger.getRoot(Level.FINEST);
+    NostrPool pool;
+
+    // run before all tests
+    public TestSdan() {
+        pool = new NostrPool();
+        pool.connectRelay(new NostrRelay("wss://relay.ngengine.org"));
+    }
+
+    // run after all tests
+    public void tearDown() {
+        if (pool != null) {
+            pool.close();
+        }
+    }
 
     @Test
     public void testSdanBid() throws Exception{
-        NostrPool pool = new NostrPool();
-        pool.connectRelay(new NostrRelay("wss://nostr.rblb.it"));
+      
 
-        NostrPrivateKey appPrivKey = NostrPrivateKey.generate();
-        NostrPublicKey appKey = appPrivKey.getPublicKey();
-
+        NostrPublicKey appKey = NostrPublicKey.fromBech32(appkey);
         NostrKeyPair advertiserKeyPair = new NostrKeyPair(NostrPrivateKey.generate());
         NostrKeyPairSigner advertiserSigner = new NostrKeyPairSigner(advertiserKeyPair);
 
@@ -125,11 +140,8 @@ public class TestSdan {
     
     @Test
     public void testTargetedBids() throws Exception{
-        NostrPool pool = new NostrPool();
-        pool.connectRelay(new NostrRelay("wss://nostr.rblb.it"));
 
-        NostrPrivateKey appPrivKey = NostrPrivateKey.generate();
-        NostrPublicKey appKey = appPrivKey.getPublicKey();
+        NostrPublicKey appKey = NostrPublicKey.fromBech32(appkey);
 
         {
             NostrKeyPair advertiserKeyPair = new NostrKeyPair(NostrPrivateKey.generate());
@@ -205,11 +217,7 @@ public class TestSdan {
 
     @Test
     public void testUntargetedBids() throws Exception {
-        NostrPool pool = new NostrPool();
-        pool.connectRelay(new NostrRelay("wss://nostr.rblb.it"));
-
-        NostrPrivateKey appPrivKey = NostrPrivateKey.generate();
-        NostrPublicKey appKey = appPrivKey.getPublicKey();
+        NostrPublicKey appKey = NostrPublicKey.fromBech32(appkey);
 
         {
             NostrKeyPair advertiserKeyPair = new NostrKeyPair(NostrPrivateKey.generate());
@@ -272,11 +280,8 @@ public class TestSdan {
 
     @Test
     public void testCategoryBids() throws Exception {
-        NostrPool pool = new NostrPool();
-        pool.connectRelay(new NostrRelay("wss://nostr.rblb.it"));
 
-        NostrPrivateKey appPrivKey = NostrPrivateKey.generate();
-        NostrPublicKey appKey = appPrivKey.getPublicKey();
+        NostrPublicKey appKey = NostrPublicKey.fromBech32(appkey);
 
         {
             NostrKeyPair advertiserKeyPair = new NostrKeyPair(NostrPrivateKey.generate());
@@ -341,11 +346,11 @@ public class TestSdan {
     
     @Test
     public void testFlow() throws Exception {
-        NostrPool pool = new NostrPool();
-        pool.connectRelay(new NostrRelay("wss://nostr.rblb.it"));
 
-        NostrPrivateKey appPrivKey = NostrPrivateKey.generate();
-        NostrPublicKey appKey = appPrivKey.getPublicKey();
+        String nwc = "nostr+walletconnect://8e1e934ea0dd99cc2949805ed577abe76bb7d8c34d2d44a9e5f144a308b831f3?relay=wss://nostr.rblb.it&secret=520eaf4b4e7fcc0bb1498829955179e0693eeed59a2453807096e6bfd81cfb12";
+        NWCWallet wallet = new NWCWallet(new NWCUri(nwc));
+        
+        NostrPublicKey appKey = NostrPublicKey.fromBech32(appkey);
 
         
         NostrKeyPair advertiserKeyPair = new NostrKeyPair(NostrPrivateKey.generate());
@@ -377,9 +382,14 @@ public class TestSdan {
 
         System.out.println("Publishing bid: " + bid);
         advClient.publishBid(bid).await();
-        ResultWrapper advRes = handleBid(advClient, bid);
-    
+        
+        NostrSubscription sub = advClient.handleBid(bid, new AdvManager(
+            advClient,
+            wallet,
+            1010
+        ));
 
+    
         
         NostrKeyPair offererKeyPair = new NostrKeyPair(NostrPrivateKey.generate());
         NostrKeyPairSigner offererSigner = new NostrKeyPairSigner(offererKeyPair);
@@ -387,7 +397,7 @@ public class TestSdan {
         SdanClient offererClient = new SdanClient(pool, offererSigner, appKey);
 
           
-        NostrFilter filter = new SdanBidFilter() .withId(bid.getId());
+        NostrFilter filter = new SdanBidFilter().withId(bid.getId());
         ResultWrapper res = fetchBid(offererClient, filter);
         Object[] bidData = res.get("bid");
         System.out.println("Found bid: " + (bidData != null ? bidData[0] : "null"));
@@ -398,12 +408,10 @@ public class TestSdan {
 
         Object[] payout = res.get("payout");
         assertNotNull(payout); // no payout yet
-        System.out.println("Payout: " + payout);
+        System.out.println("Payout: " + payout[1]);
 
-    
 
-    
-
+        sub.close(); // close the subscription
     }
 
     public  static class ResultWrapper {

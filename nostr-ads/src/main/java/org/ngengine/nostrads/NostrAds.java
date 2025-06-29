@@ -1,6 +1,7 @@
 package org.ngengine.nostrads;
 
 import java.io.IOException;
+import java.net.URISyntaxException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -27,9 +28,9 @@ import org.ngengine.nostr4j.keypair.NostrPrivateKey;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
 import org.ngengine.nostr4j.signer.NostrSigner;
-import org.ngengine.nostrads.AdvListenerWrapper.NotifyCallbackWrapper;
-import org.ngengine.nostrads.AdvListenerWrapper.FunctionWrapper;
 import org.ngengine.platform.teavm.TeaVMJsConverter;
+import org.ngengine.wallets.nip47.NWCUri;
+import org.ngengine.wallets.nip47.NWCWallet;
 import org.teavm.jso.JSExport;
 import org.teavm.jso.JSObject;
 import org.teavm.jso.core.JSArray;
@@ -40,6 +41,7 @@ public class NostrAds {
     
     private SdanClient client;
     private NostrPool pool;
+    private NostrPool walletPool;
     private SdanTaxonomy taxonomy;
 
 
@@ -48,6 +50,7 @@ public class NostrAds {
         NostrAdsModule.initPlatform();
         client.close();
         pool.close();        
+        walletPool.close();
     }
 
     @JSExport
@@ -62,6 +65,8 @@ public class NostrAds {
             System.out.println("Connecting to relay: " + relays[i]);
             pool.connectRelay(new NostrRelay(relays[i]));
         }
+
+        walletPool = new NostrPool();
 
         System.out.println("Connected to relays: " + pool.getRelays().size());
 
@@ -90,6 +95,12 @@ public class NostrAds {
         System.out.println("Nostr Ads is ready!");
     }
 
+    private static NWCWallet getWallet(NostrPool walletPool, String nwcUrl)
+            throws URISyntaxException {
+        return new NWCWallet(
+                walletPool,
+                new NWCUri(nwcUrl));
+    }
  
     @JSExport
     public void publishNewBid(
@@ -181,13 +192,16 @@ public class NostrAds {
 
     
     }
+
+  
   
     @JSExport
     public Closer handleBid(
-       JSObject bidEvent,
-       JSObject listeners
-    ) {
+        JSObject bidEvent,
+        JSObject listeners
+    ) throws URISyntaxException {
         NostrAdsModule.initPlatform();
+           
         Map map = TeaVMJsConverter.toJavaMap(bidEvent);
         Map listenersMap = TeaVMJsConverter.toJavaMap(listeners);
         SignedNostrEvent event = new SignedNostrEvent(map);
@@ -195,19 +209,21 @@ public class NostrAds {
         if (bid.isValid()) {
             JSFunction bailCallback = (JSFunction) listenersMap.get("onBail");
             JSFunction offerCallback = (JSFunction) listenersMap.get("offerFilter");
-            JSFunction payCallback = (JSFunction) listenersMap.get("pay");
-            logger.log(Level.INFO, "Handling bid: " + bid.getId());
-            logger.log(Level.INFO, "onBail: " + bailCallback);
-            logger.log(Level.INFO, "offerFilter: " + offerCallback);
-            logger.log(Level.INFO, "pay: " + payCallback);
+            String nwcUrl =  (String) listenersMap.get("nwc");
+            Number budgetMsats =  (Number) listenersMap.get("budgetMsats");
 
-            if(payCallback == null){
-                throw new IllegalArgumentException("Pay callback is required");
+            logger.log(Level.INFO, "Handling bid: " + bid.getId());
+             
+            if(nwcUrl == null || nwcUrl.isEmpty()){
+                throw new IllegalArgumentException("NWC URL is required for handling bids");
             }
 
-            AdvListenerWrapper advListener = new AdvListenerWrapper((JSObject bidArg, JSObject eventArg, String invoice, FunctionWrapper punishFun, NotifyCallbackWrapper notifyPayoutFun)->{
-                payCallback.call(null,  bidArg, eventArg, invoice, punishFun, notifyPayoutFun);
-            });
+         
+            AdvListenerWrapper advListener = new AdvListenerWrapper(
+                client,
+                getWallet(walletPool, nwcUrl),
+                budgetMsats
+            );                   
 
             if(bailCallback != null){
                 advListener.setBailCallback((bidArg, eventArg, punishFun)->{
@@ -232,13 +248,15 @@ public class NostrAds {
     }
 
 
+
     @JSExport
-    public Closer handleOffers(
+    public Closer handleOffers(      
         JSArray filters,
         JSObject listeners
-
-    ){
+    ) throws URISyntaxException{
         NostrAdsModule.initPlatform();
+     
+
         ArrayList<NostrFilter> filtersList = new ArrayList<>();
         for (int i = 0; i < filters.getLength(); i++) {
             JSObject filterObj = (JSObject) filters.get(i);

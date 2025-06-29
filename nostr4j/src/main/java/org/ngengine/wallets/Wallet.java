@@ -198,4 +198,9 @@ public interface Wallet {
     public AsyncTask<Boolean> isMethodSupported(
         @Nonnull Methods method
     );
+
+    /**
+     * Close the wallet and release any resources.
+     */
+    public void close();
 }

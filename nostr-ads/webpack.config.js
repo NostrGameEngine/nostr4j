@@ -46,76 +46,13 @@ const teavmDir = path.resolve(__dirname, 'build/generated/teavm/js');
 const virtualFS = createVirtualFileSystem(teavmDir);
 
 // Create a wrapper entry point that re-exports everything
-const wrapperPath = path.resolve(__dirname, 'build/wrapper.js');
-fs.writeFileSync(wrapperPath, `
-// Re-export everything from the original module
-import * as _Binds from './generated/teavm/js/nostr-ads.js';
 
-console.log(_Binds);
-const {NostrAds, newAdsKey} = _Binds;
-
-
-const newAdvertiserClient = function(relays, appKey, adsKey){
-    const ads = new NostrAds(
-        relays,
-        appKey,
-        adsKey
-    );
-    return {
-        close: ()=> ads.close(),
-        publishNewBid: async (bid) => {
-            return new Promise((resolve, reject) => {
-                ads.publishNewBid(bid, (ev, error) => {
-                    if (!error) {
-                        resolve(ev);
-                    } else {
-                        reject(error);
-                    }
-                });
-            });
-        },
-        handleBid: async ({
-            bidEvent,
-            listeners
-        }) => {
-            return ads.handleBid(bid, listeners);
-        }
-       
-    };
-};
-
-const newOffererClient = function(relays, appKey, adsKey){
-    const ads = new NostrAds(
-        relays,
-        appKey,
-        adsKey
-    );
-
-    return {
-        close: ()=> ads.close(),
-        handleOffers: async ({
-            filters,
-            listeners
-        }) => {
-            return ads.handleOffers(filters, listeners);
-        }
-
-    };
-}
- 
- 
-export default {
-    newAdvertiserClient,
-    newOffererClient,
-    newAdsKey
-};
-`);
 
 const virtualFSJSON = JSON.stringify(virtualFS);
 
 module.exports = {
     mode: 'production',
-    entry: wrapperPath,
+    entry: path.resolve(__dirname, "build/generated/teavm/js/NostrAds.js")    ,
     devtool: 'source-map',
     output: {
         path: path.resolve(__dirname, 'build/generated/webpack'),

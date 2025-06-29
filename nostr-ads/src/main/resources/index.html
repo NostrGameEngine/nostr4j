@@ -34,10 +34,7 @@
                     offerFilter: (bid, offer, punish, accept)=>{
                         accept();
                     },
-                    pay: (bid, request, invoice, punish, confirm)=>{
-                        // NWC
-                        confirm("paid", "preimage");
-                    },
+                     
                     bail: (bid, bailEvent, punish) => {
                         console.log("Bailed");
 

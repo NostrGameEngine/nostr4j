@@ -47,17 +47,40 @@ public class NWCWallet implements Wallet {
     protected final NostrPool pool;
     protected final NWCUri uri;
     protected AsyncTask<List<String>> supportedMethods = null;
+    protected boolean tempPool = false;
+    protected Runnable closer;
 
     public NWCWallet(NWCUri uri) {
-        this(new NostrPool(), uri);
+        this(null, uri);
     }
 
-    public NWCWallet(NostrPool pool, NWCUri uri) {
-        this.pool = pool;
+ 
+    public NWCWallet(NostrPool pool, NWCUri uri ) {
+        if(pool==null){
+            // if pool is not provided we create a new one
+            // and we register it to be closed when this wallet is released  by the gc
+            NostrPool newPool = new NostrPool();
+            closer = NGEPlatform.get().registerFinalizer(this,()->{
+                newPool.close();
+            });
+            this.pool= newPool;
+        }else{
+            this.pool = pool;
+        }
+
         for (String relay : uri.getRelays()) {
             this.pool.ensureRelay(relay);
         }
         this.uri = uri;
+        
+    }
+
+    @Override
+    public void close(){
+        if(closer!=null){
+            closer.run();
+            closer = null;
+        }        
     }
 
     public AsyncTask<List<String>> getSupportedMethods() {
