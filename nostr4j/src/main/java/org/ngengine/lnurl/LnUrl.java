@@ -23,7 +23,7 @@ import org.ngengine.platform.NGEPlatform;
 
 // lud06
 public class LnUrl {
-    public static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(1);
+    public static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(60);
     private static final byte[] hrp = "lnurl".getBytes();
     private final static Logger logger = Logger.getLogger(LnUrl.class.getName());
     private final String bech32;
