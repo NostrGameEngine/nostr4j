@@ -230,6 +230,11 @@ public class NostrSubscription extends NostrMessage {
 
     /**
      * Adds a listener for subscription close events.
+     * 
+     * <p>
+     * The listener will be notified when the subscription is closed both remotely
+     * or locally using the {@link #close()} method.
+     * </p>
      *
      * @param listener The close listener to add
      * @return This subscription for method chaining
