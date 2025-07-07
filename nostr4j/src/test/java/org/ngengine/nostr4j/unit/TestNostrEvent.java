@@ -45,7 +45,7 @@ import org.ngengine.nostr4j.keypair.NostrPrivateKey;
 import org.ngengine.nostr4j.proto.NostrMessage;
 import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
 import org.ngengine.nostr4j.signer.NostrSigner;
-import org.ngengine.nostr4j.utils.Bech32;
+import org.ngengine.bech32.Bech32;
 import org.ngengine.platform.NGEUtils;
 import org.ngengine.platform.jvm.JVMAsyncPlatform;
 

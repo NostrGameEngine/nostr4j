@@ -26,8 +26,15 @@ ext {
     authorEmail="os@rblb.it"
     license="BSD 3-Clause License"
     licenseUrl="https://opensource.org/licenses/BSD-3-Clause"
+
     ngePlatformVersionSnapshot = "0.1.0-SNAPSHOT"
     ngePlatformVersion = "0.0.5"
+
+    lnurlVersionSnapshot = "0.0.0-SNAPSHOT"
+    lnurlVersion = "0.0.1"
+
+    bech32VersionSnapshot = "1.0.0-SNAPSHOT"
+    bech32Version = "1.0.2"
 }
 
 if(System.getenv("SONATYPE_USERNAME") || project.findProperty("sonatypeUsername")){

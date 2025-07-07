@@ -118,7 +118,7 @@ public class NWCWallet implements Wallet {
                             .withAuthor(uri.getPubkey().asHex())
                             .withTag("e", ev.getId())
                             .withTag("p", pubkey.asHex()),
-                    NostrWaitForEventFetchPolicy.get(e -> true)).then(r -> {
+                    NostrWaitForEventFetchPolicy.get(e -> true,1,false)).then(r -> {
                         return r.get(0);
                     });
         }).compose(response -> {

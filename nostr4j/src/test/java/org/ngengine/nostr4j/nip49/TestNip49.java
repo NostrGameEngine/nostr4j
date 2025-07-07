@@ -82,7 +82,7 @@ public class TestNip49 {
         }
     }
 
-    @Test(expected = ExecutionException.class)
+    @Test(expected = Nip49FailedException.class)
     public void badDecrypt() throws Nip49FailedException,  Exception {
         int i = 0;
         JsonArray testVector = testVectors.get(i).getAsJsonArray();

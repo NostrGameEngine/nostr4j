@@ -37,7 +37,7 @@ import java.util.Collection;
 import java.util.Collections;
 import org.ngengine.nostr4j.nip49.Nip49;
 import org.ngengine.nostr4j.nip49.Nip49FailedException;
-import org.ngengine.nostr4j.utils.Bech32;
+import org.ngengine.bech32.Bech32;
 import org.ngengine.nostr4j.utils.ByteBufferList;
 import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEUtils;

@@ -33,7 +33,7 @@ package org.ngengine.nostr4j.nip49;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import org.ngengine.nostr4j.keypair.NostrPrivateKey;
-import org.ngengine.nostr4j.utils.Bech32;
+import org.ngengine.bech32.Bech32;
 import org.ngengine.platform.AsyncExecutor;
 import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEPlatform;

@@ -16,6 +16,9 @@ dependencies {
     testImplementation 'com.google.code.gson:gson:2.12.1'
     implementation 'jakarta.annotation:jakarta.annotation-api:2.1.1'
     implementation 'org.slf4j:slf4j-jdk14:2.0.12'
+
+    implementation "org.ngengine:bech32:${project.version.endsWith('-SNAPSHOT') ? rootProject.ext.bech32VersionSnapshot : rootProject.ext.bech32Version}"
+    implementation "org.ngengine:lnurl4j:${project.version.endsWith('-SNAPSHOT') ? rootProject.ext.lnurlVersionSnapshot : rootProject.ext.lnurlVersion}"
 }
 
 java {

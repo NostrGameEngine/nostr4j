@@ -1,0 +1,33 @@
+
+plugins {
+    id 'java-library'
+}
+
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation "org.ngengine:nge-platform-common:${project.version.endsWith('-SNAPSHOT') ? rootProject.ext.ngePlatformVersionSnapshot : rootProject.ext.ngePlatformVersion}"
+    api project(":nostr4j")
+ 
+    testImplementation "org.ngengine:nge-platform-jvm:${project.version.endsWith('-SNAPSHOT') ? rootProject.ext.ngePlatformVersionSnapshot : rootProject.ext.ngePlatformVersion}"
+    testImplementation project(":nostr4j")
+
+    testImplementation "junit:junit:4.13.2"   
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+sourceSets {
+    test {
+        resources {
+            srcDirs = ['src/test/resources', 'src/main/resources']            
+        }
+    }
+}
