@@ -1,4 +1,3 @@
 rootProject.name = 'nostr4j'
 include("nostr4j")
 include("nostr4j-demo")
-include("nostrads")

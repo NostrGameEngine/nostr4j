@@ -249,23 +249,66 @@ subprojects { proj ->
         }
     }
 
+    
+    proj.tasks.register('addLicenseHeaders') {
+        description = 'Adds license headers to Java files if missing'
+        group = 'formatting'
+        
+        def srcFiles = proj.fileTree(dir: 'src', include: '**/java/**/*.java')
+        
+        def licenseText = file("${rootProject.rootDir}/LICENSE").text
+        licenseText = licenseText.readLines().collect { " * " + it }.join("\n")
+        licenseText = "/**\n" + licenseText + "\n */"
+
+        doLast {
+            def licenseHeader = licenseText
+            def headerPattern = ~/(?s)\/\*\*.*?Copyright.*?\*\//
+            
+            srcFiles.each { file ->
+                def content = file.text
+                
+                if (!(content =~ headerPattern)) {
+                    logger.info("Adding license header to: ${file.path}")
+                    
+                    def packageMatcher = content =~ /(?m)^package\s+[\w.]+;/
+                    
+                    if (packageMatcher.find()) {
+                        def position = packageMatcher.start()
+                        def newContent = content.substring(0, position) + 
+                                            licenseHeader + 
+                                            "\n\n" + 
+                                            content.substring(position)
+                        file.text = newContent
+                    } else {
+                        file.text = licenseHeader + "\n\n" + content
+                    }
+                } else {
+                    logger.debug("License header already exists in: ${file.path}")
+                }
+            }
+        }
+    }
   
     proj.plugins.withId("com.diffplug.spotless") {
         proj.spotless {
             java {
                 importOrder()
                 removeUnusedImports()
-                cleanthat()
-                prettier(["prettier": "2.8.8", "prettier-plugin-java": "2.2.0"])
-                    .config(["parser": "java", "tabWidth": 4, "printWidth": 128])
+             
                 formatAnnotations()
-
-                // Insert the LICENSE text (root/LICENSE) as a Javadoc‑style header
-                def licenseText = file("${proj.rootDir}/LICENSE").text
-                def wrapped     = licenseText.readLines().collect { " * " + it }.join("\n")
-                def header      = "/**\n" + wrapped + "\n */"
-                licenseHeader(header, /(?s)^(\/\*\*.*Copyright.*\*\/\s+)?package /)
+                prettier(["prettier": "2.8.8", "prettier-plugin-java": "2.2.0"])
+                        .config([
+                            "parser": "java", 
+                            "tabWidth": 4, 
+                            "printWidth": 128,
+                            "endOfLine": "lf",
+                            "useTabs": false
+                        ])
+                            
             }
+        }
+        proj.tasks.named('spotlessApply').configure {
+            dependsOn proj.tasks.named('addLicenseHeaders')
         }
     }
 } 
