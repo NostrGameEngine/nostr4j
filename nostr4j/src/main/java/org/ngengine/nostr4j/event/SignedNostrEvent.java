@@ -1,22 +1,22 @@
 /**
  * BSD 3-Clause License
- * 
+ *
  * Copyright (c) 2025, Riccardo Balbo
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -44,11 +44,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import org.ngengine.bech32.Bech32;
+import org.ngengine.bech32.Bech32Exception;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.proto.NostrMessage;
-import org.ngengine.bech32.Bech32;
 import org.ngengine.nostr4j.utils.ZeroCounter;
-import org.ngengine.bech32.Bech32Exception;
 import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEUtils;
 
@@ -362,16 +362,15 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
         return tagRows;
     }
 
-
     /**
      * Get coordinates to this event.
      * <p>
      * If the event is addressable or replaceable, it returns a coordinates object with type "a".
      * If the event is not addressable or replaceable, it returns a coordinates object with type "e".
-     * 
+     *
      * Type matches the tag key used to refer to this event as detailed in NIP-01
      * </p>
-     * 
+     *
      * @return
      */
     public NostrEvent.Coordinates getCoordinates() {
@@ -380,20 +379,12 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
             String pub = getPubkey().asHex();
             TagValue d = getFirstTag("d");
             String coords = kind + ":" + pub + ":" + (d != null ? d.get(0) : "");
-            return new NostrEvent.Coordinates(
-                    "a",
-                    String.valueOf(getKind()),
-                    coords);
+            return new NostrEvent.Coordinates("a", String.valueOf(getKind()), coords);
         } else {
             String id = getId();
-            return new NostrEvent.Coordinates(
-                    "e",
-                    kind,
-                    id
-            );
+            return new NostrEvent.Coordinates("e", kind, id);
         }
     }
-
 
     public int getPow() {
         String id = getId();
@@ -404,5 +395,4 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
         int getMinedDifficulty = getPow();
         return getMinedDifficulty >= difficulty;
     }
-
 }

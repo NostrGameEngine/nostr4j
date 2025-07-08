@@ -1,22 +1,22 @@
 /**
  * BSD 3-Clause License
- * 
+ *
  * Copyright (c) 2025, Riccardo Balbo
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -30,6 +30,7 @@
  */
 package org.ngengine.nostr4j.nip01;
 
+import jakarta.annotation.Nullable;
 import java.io.Serializable;
 import java.net.URISyntaxException;
 import java.time.Instant;
@@ -38,7 +39,6 @@ import java.util.Collection;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
-
 import org.ngengine.lnurl.LnAddress;
 import org.ngengine.lnurl.LnUrl;
 import org.ngengine.nostr4j.event.NostrEvent;
@@ -46,8 +46,6 @@ import org.ngengine.nostr4j.event.NostrEvent.TagValue;
 import org.ngengine.nostr4j.event.UnsignedNostrEvent;
 import org.ngengine.platform.NGEPlatform;
 import org.ngengine.platform.NGEUtils;
-
-import jakarta.annotation.Nullable;
 
 public class Nip01UserMetadata implements Serializable {
 
@@ -86,8 +84,6 @@ public class Nip01UserMetadata implements Serializable {
         return sourceEvent;
     }
 
-  
-
     public void setName(@Nullable String name) {
         metadata.put("name", name);
     }
@@ -109,7 +105,6 @@ public class Nip01UserMetadata implements Serializable {
         if (v == null) return null;
         return NGEUtils.safeString(v);
     }
-
 
     public void setPicture(@Nullable String picture) {
         metadata.put("picture", picture);
@@ -141,10 +136,8 @@ public class Nip01UserMetadata implements Serializable {
     @Nullable
     public String getName() {
         String v = NGEUtils.safeString(metadata.get("name"));
-        if (v == null || v.isEmpty())
-            v = NGEUtils.safeString(metadata.get("username"));
-        if (v == null || v.isEmpty())
-            return null;
+        if (v == null || v.isEmpty()) v = NGEUtils.safeString(metadata.get("username"));
+        if (v == null || v.isEmpty()) return null;
         return v;
     }
 
@@ -163,7 +156,6 @@ public class Nip01UserMetadata implements Serializable {
         metadata.put("display_name", name);
     }
 
- 
     @Nullable
     public String getWebsite() {
         Object v = metadata.get("website");
@@ -199,7 +191,7 @@ public class Nip01UserMetadata implements Serializable {
     /**
      * use getName() instead
      */
-    @Deprecated 
+    @Deprecated
     @Nullable
     public String getUsername() {
         Object v = metadata.get("username");
@@ -222,7 +214,6 @@ public class Nip01UserMetadata implements Serializable {
         return cal.getTime();
     }
 
-    
     public void setBirthday(@Nullable Date birthday) {
         if (birthday == null) {
             metadata.remove("birthday");
@@ -245,7 +236,6 @@ public class Nip01UserMetadata implements Serializable {
         metadata.put("birthday", b);
     }
 
-
     // nip 57
 
     /**
@@ -253,19 +243,18 @@ public class Nip01UserMetadata implements Serializable {
      * @return the LNURL or null if not present
      * @throws URISyntaxException
      */
-    @Nullable 
-    public LnUrl getLnUrl() throws URISyntaxException{
-        Object lud06 = metadata.get("lud06");   
+    @Nullable
+    public LnUrl getLnUrl() throws URISyntaxException {
+        Object lud06 = metadata.get("lud06");
         if (lud06 == null) return null;
         String lnurl = NGEUtils.safeString(lud06);
         if (lnurl.isEmpty()) return null;
-        return new LnUrl(lnurl);       
+        return new LnUrl(lnurl);
     }
-
 
     /**
      * Sets the LNURL in the user metadata.
-     * 
+     *
      * @param lnUrl the LNURL to set, or null to remove it.
      */
     public void setLnUrl(@Nullable LnUrl lnUrl) {
@@ -276,26 +265,23 @@ public class Nip01UserMetadata implements Serializable {
         }
     }
 
-
     /**
      * Gets the lud16 field from the user metadata.
      * @return the LN Address or null if not present
      * @throws URISyntaxException
      */
     @Nullable
-    public LnAddress getLnAddress() throws URISyntaxException{
+    public LnAddress getLnAddress() throws URISyntaxException {
         Object lud16 = metadata.get("lud16");
         if (lud16 == null) return null;
         String lnAddress = NGEUtils.safeString(lud16);
         if (lnAddress.isEmpty()) return null;
-        return new LnAddress(lnAddress);   
+        return new LnAddress(lnAddress);
     }
-
-
 
     /**
      * Sets the LN Address in the user metadata.
-     * 
+     *
      * @param lnAddress the LN Address to set, or null to remove it.
      */
     public void setLnAddress(@Nullable LnAddress lnAddress) {
@@ -309,7 +295,7 @@ public class Nip01UserMetadata implements Serializable {
     /**
      * Get either the LNURL or LN Address from the user metadata, whichever is available.
      * @return the LNURL or LN Address returned as a {@link LnUrl} object, so that they can be used interchangeably.
-     * 
+     *
      * @throws URISyntaxException
      */
     public LnUrl getPaymentAddress() throws URISyntaxException {
@@ -326,11 +312,11 @@ public class Nip01UserMetadata implements Serializable {
 
     /**
      * Sets the payment address in the user metadata.
-     * This can be either a {@link LnUrl} or a {@link LnAddress}, the method will handle both cases with the 
+     * This can be either a {@link LnUrl} or a {@link LnAddress}, the method will handle both cases with the
      * appropriate metadata fields.
-     * 
+     *
      * If the payment address is null, it will remove both "lud06" and "lud16" fields from the metadata.
-     * 
+     *
      * @param paymentAddress the payment address to set, can be either a {@link LnUrl} or a {@link LnAddress}, or null to remove it.
      */
     public void setPaymentAddress(@Nullable LnUrl paymentAddress) {

@@ -1,22 +1,22 @@
 /**
  * BSD 3-Clause License
- * 
+ *
  * Copyright (c) 2025, Riccardo Balbo
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -40,7 +40,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.logging.Logger;
-
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.utils.ZeroCounter;
 import org.ngengine.platform.AsyncExecutor;
@@ -49,10 +48,7 @@ import org.ngengine.platform.NGEPlatform;
 import org.ngengine.platform.NGEUtils;
 
 public interface NostrEvent extends Cloneable, Serializable {
-    public static record Coordinates(
-            String type,
-            String kind,
-            String coords) { }
+    public static record Coordinates(String type, String kind, String coords) {}
 
     class TagValue {
 
@@ -106,41 +102,36 @@ public interface NostrEvent extends Cloneable, Serializable {
 
     boolean hasTag(String tag);
 
+    static AsyncTask<UnsignedNostrEvent> minePow(NostrPublicKey pubkey, UnsignedNostrEvent event, int difficulty) {
+        return NGEPlatform
+            .get()
+            .wrapPromise((res, rej) -> {
+                AsyncExecutor executor = NGEPlatform.get().newAsyncExecutor("long-blocking");
+                executor.run(() -> {
+                    try {
+                        int nonce = 0;
 
-    static AsyncTask<UnsignedNostrEvent> minePow(
-        NostrPublicKey pubkey, 
-        UnsignedNostrEvent event,
-        int difficulty
-    ){
-        return NGEPlatform.get().wrapPromise((res,rej)->{
-            AsyncExecutor executor = NGEPlatform.get().newAsyncExecutor("long-blocking");
-            executor.run(()->{
-                try{
-                    int nonce = 0;
-                    
-                    do {
-                        event.createdAt(Instant.now());
-                        event.replaceTag("nonce", "" + nonce, ""+ difficulty);
-                        String id = NostrEvent.computeEventId(pubkey.asHex(), event);
-                        int leadingZeroes = ZeroCounter.countLeadingZeroes(id);
-                        if(leadingZeroes >= difficulty){
-                            res.accept(event);
-                            break;
-                        } else{
-                            nonce++;
-                        }                
-                    }while(true);
-                } catch (Exception e) {
-                    rej.accept(e);
-                } finally{
-                    executor.close();
-                } 
-                return null;
+                        do {
+                            event.createdAt(Instant.now());
+                            event.replaceTag("nonce", "" + nonce, "" + difficulty);
+                            String id = NostrEvent.computeEventId(pubkey.asHex(), event);
+                            int leadingZeroes = ZeroCounter.countLeadingZeroes(id);
+                            if (leadingZeroes >= difficulty) {
+                                res.accept(event);
+                                break;
+                            } else {
+                                nonce++;
+                            }
+                        } while (true);
+                    } catch (Exception e) {
+                        rej.accept(e);
+                    } finally {
+                        executor.close();
+                    }
+                    return null;
+                });
             });
-        });
-
     }
-
 
     static String computeEventId(String pubkey, NostrEvent event) {
         try {
@@ -181,12 +172,10 @@ public interface NostrEvent extends Cloneable, Serializable {
         return expiresAt;
     }
 
-
-
-    default  boolean isReplaceable() {
+    default boolean isReplaceable() {
         return isReplaceable(this);
     }
-    
+
     default boolean isAddressable() {
         return isAddressable(this);
     }
@@ -198,7 +187,6 @@ public interface NostrEvent extends Cloneable, Serializable {
     default boolean isRegular() {
         return isRegular(this);
     }
-    
 
     public static boolean isReplaceable(NostrEvent event) {
         if (event == null) {

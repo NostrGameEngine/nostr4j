@@ -1,22 +1,22 @@
 /**
  * BSD 3-Clause License
- * 
+ *
  * Copyright (c) 2025, Riccardo Balbo
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -36,7 +36,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -86,7 +85,7 @@ public class NostrRelayInfo implements Cloneable, Serializable {
         String httpUrl = relayUrl.startsWith("wss://")
             ? relayUrl.replace("wss://", "https://")
             : relayUrl.replace("ws://", "http://");
-        
+
         AsyncTask<String> task = platform.httpGet(httpUrl, Duration.ofSeconds(30), headers);
         return task.then(data -> {
             Map<String, Object> map = platform.fromJSON(data, Map.class);
@@ -253,7 +252,7 @@ public class NostrRelayInfo implements Cloneable, Serializable {
         if (languageTags == null) {
             List<String> tags = NGEUtils.safeStringList(map.getOrDefault("language_tags", List.of()));
             this.languageTags = Collections.unmodifiableList(tags);
-        } else{
+        } else {
             this.languageTags = new ArrayList<>();
         }
         return this.languageTags;

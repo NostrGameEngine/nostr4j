@@ -1,22 +1,22 @@
 /**
  * BSD 3-Clause License
- * 
+ *
  * Copyright (c) 2025, Riccardo Balbo
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -216,7 +216,7 @@ public class NostrPool {
             }
         }
         NostrRelay newRelay = new NostrRelay(relay);
-        return connectRelay(newRelay);   
+        return connectRelay(newRelay);
     }
 
     public AsyncTask<NostrRelay> connectRelay(NostrRelay relay) {
@@ -288,7 +288,7 @@ public class NostrPool {
             | NoSuchMethodException
             | SecurityException e
         ) {
-            logger.log(Level.WARNING, "Error creating event tracker fallback to PassthroughEventTracker",e);
+            logger.log(Level.WARNING, "Error creating event tracker fallback to PassthroughEventTracker", e);
             tracker = new PassthroughEventTracker();
         }
 
@@ -323,8 +323,7 @@ public class NostrPool {
         return fetch(Arrays.asList(filter), NostrAllEOSEPoolFetchPolicy.get());
     }
 
-    public AsyncTask<List<SignedNostrEvent>> fetch(NostrFilter filter,
-            NostrPoolFetchPolicy fetchPolicy) {
+    public AsyncTask<List<SignedNostrEvent>> fetch(NostrFilter filter, NostrPoolFetchPolicy fetchPolicy) {
         return fetch(Arrays.asList(filter), fetchPolicy);
     }
 
@@ -332,9 +331,7 @@ public class NostrPool {
         return fetch(filters, 1, TimeUnit.MINUTES, NostrAllEOSEPoolFetchPolicy.get());
     }
 
-
-    public AsyncTask<List<SignedNostrEvent>> fetch(Collection<NostrFilter> filters,
-            NostrPoolFetchPolicy fetchPolicy) {
+    public AsyncTask<List<SignedNostrEvent>> fetch(Collection<NostrFilter> filters, NostrPoolFetchPolicy fetchPolicy) {
         return fetch(filters, 1, TimeUnit.MINUTES, fetchPolicy);
     }
 
@@ -342,9 +339,12 @@ public class NostrPool {
         return fetch(Arrays.asList(filter), timeout, unit, NostrAllEOSEPoolFetchPolicy.get());
     }
 
-
-    public AsyncTask<List<SignedNostrEvent>> fetch(NostrFilter filter, long timeout, TimeUnit unit,
-            NostrPoolFetchPolicy fetchPolicy) {
+    public AsyncTask<List<SignedNostrEvent>> fetch(
+        NostrFilter filter,
+        long timeout,
+        TimeUnit unit,
+        NostrPoolFetchPolicy fetchPolicy
+    ) {
         return fetch(Arrays.asList(filter), timeout, unit, fetchPolicy);
     }
 
@@ -352,8 +352,12 @@ public class NostrPool {
         return fetch(filters, timeout, unit, NaiveEventTracker.class, NostrAllEOSEPoolFetchPolicy.get());
     }
 
-    public AsyncTask<List<SignedNostrEvent>> fetch(Collection<NostrFilter> filters, long timeout, TimeUnit unit,
-            NostrPoolFetchPolicy fetchPolicy) {
+    public AsyncTask<List<SignedNostrEvent>> fetch(
+        Collection<NostrFilter> filters,
+        long timeout,
+        TimeUnit unit,
+        NostrPoolFetchPolicy fetchPolicy
+    ) {
         return fetch(filters, timeout, unit, NaiveEventTracker.class, fetchPolicy);
     }
 
@@ -361,24 +365,26 @@ public class NostrPool {
         return fetch(Arrays.asList(filter), eventTracker, NostrAllEOSEPoolFetchPolicy.get());
     }
 
-
-    public AsyncTask<List<SignedNostrEvent>> fetch(NostrFilter filter, Class<? extends EventTracker> eventTracker,            NostrPoolFetchPolicy fetchPolicy  ) {
+    public AsyncTask<List<SignedNostrEvent>> fetch(
+        NostrFilter filter,
+        Class<? extends EventTracker> eventTracker,
+        NostrPoolFetchPolicy fetchPolicy
+    ) {
         return fetch(Arrays.asList(filter), eventTracker, fetchPolicy);
     }
 
     public AsyncTask<List<SignedNostrEvent>> fetch(
         Collection<NostrFilter> filters,
         Class<? extends EventTracker> eventTracker
-
     ) {
         return fetch(filters, 1, TimeUnit.MINUTES, eventTracker, NostrAllEOSEPoolFetchPolicy.get());
     }
 
-
     public AsyncTask<List<SignedNostrEvent>> fetch(
-            Collection<NostrFilter> filters,
-            Class<? extends EventTracker> eventTracker,
-            NostrPoolFetchPolicy fetchPolicy            ) {
+        Collection<NostrFilter> filters,
+        Class<? extends EventTracker> eventTracker,
+        NostrPoolFetchPolicy fetchPolicy
+    ) {
         return fetch(filters, 1, TimeUnit.MINUTES, eventTracker, fetchPolicy);
     }
 
@@ -392,11 +398,11 @@ public class NostrPool {
     }
 
     public AsyncTask<List<SignedNostrEvent>> fetch(
-            NostrFilter filters,
-            long timeout,
-            TimeUnit unit,
-            Class<? extends EventTracker> eventTracker,
-            NostrPoolFetchPolicy fetchPolicy            
+        NostrFilter filters,
+        long timeout,
+        TimeUnit unit,
+        Class<? extends EventTracker> eventTracker,
+        NostrPoolFetchPolicy fetchPolicy
     ) {
         return fetch(Arrays.asList(filters), timeout, unit, eventTracker, fetchPolicy);
     }
@@ -446,11 +452,11 @@ public class NostrPool {
                 }
             );
 
-            Consumer<List<SignedNostrEvent>> done = (evs)->{
+            Consumer<List<SignedNostrEvent>> done = evs -> {
                 // res.accept(evs);
                 // ended.set(true);
                 // scheduledActions.remove(scheduled);
-                if(!ended.getAndSet(true)){
+                if (!ended.getAndSet(true)) {
                     res.accept(evs);
                     scheduledActions.remove(scheduled);
                     sub.close();
@@ -459,11 +465,17 @@ public class NostrPool {
 
             scheduledActions.add(scheduled);
 
-            sub.addListener(fetchPolicy.getListener(sub, events, ()->{
-                done.accept(events);
-            })).open();
-
- 
+            sub
+                .addListener(
+                    fetchPolicy.getListener(
+                        sub,
+                        events,
+                        () -> {
+                            done.accept(events);
+                        }
+                    )
+                )
+                .open();
         });
     }
 

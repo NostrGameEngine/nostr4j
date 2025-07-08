@@ -1,22 +1,22 @@
 /**
  * BSD 3-Clause License
- * 
+ *
  * Copyright (c) 2025, Riccardo Balbo
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -40,9 +40,8 @@ import org.ngengine.platform.AsyncTask;
 public interface NostrSigner extends Cloneable, Serializable {
     public enum EncryptAlgo {
         NIP44,
-        NIP04
+        NIP04,
     }
-
 
     /**
      * Sign an event
@@ -55,7 +54,7 @@ public interface NostrSigner extends Cloneable, Serializable {
      * Encrypt a message
      * @param message  the message to encrypt
      * @param publicKey the public key of the recipient
-     * @param algo the encryption algorithm to use 
+     * @param algo the encryption algorithm to use
      * @return an async task that will be completed with the encrypted message
      */
     AsyncTask<String> encrypt(String message, NostrPublicKey publicKey, EncryptAlgo algo);
@@ -70,26 +69,25 @@ public interface NostrSigner extends Cloneable, Serializable {
 
     /**
      * Encrypt a message using the default NIP44 algorithm.
-     * 
+     *
      * @param message   the message to encrypt
      * @param publicKey the public key of the recipient
      * @return an async task that will be completed with the encrypted message
      */
-    default AsyncTask<String> encrypt(String message, NostrPublicKey publicKey){
+    default AsyncTask<String> encrypt(String message, NostrPublicKey publicKey) {
         return this.encrypt(message, publicKey, EncryptAlgo.NIP44);
     }
 
     /**
      * Decrypt a message using the default NIP44 algorithm.
-     * 
+     *
      * @param message   the message to decrypt
      * @param publicKey the public key of the sender
      * @return an async task that will be completed with the decrypted message
      */
-    default AsyncTask<String> decrypt(String message, NostrPublicKey publicKey){
+    default AsyncTask<String> decrypt(String message, NostrPublicKey publicKey) {
         return this.decrypt(message, publicKey, EncryptAlgo.NIP44);
     }
-    
 
     /**
      * Get the public key of the signer
@@ -104,21 +102,22 @@ public interface NostrSigner extends Cloneable, Serializable {
      */
     AsyncTask<NostrSigner> close();
 
-
     /**
      * Sign an event and attach a proof of computational work to it.
-     * Make sure to limit the maxium difficulty passed to this method, as it doesn't do any 
+     * Make sure to limit the maxium difficulty passed to this method, as it doesn't do any
      * validation on the difficulty parameter, it might run forever if the difficulty is too high.
-     * 
+     *
      * @param event the event to sign
-     * @param difficulty the target difficulty for the proof of work 
+     * @param difficulty the target difficulty for the proof of work
      * @return an async task that will be completed with the signed event containing the proof of work
      */
-    default AsyncTask<SignedNostrEvent> powSign(UnsignedNostrEvent event, int difficulty){
-        return this.getPublicKey().compose(pubkey->{
-            return NostrEvent.minePow(pubkey, event, difficulty);
-        }).compose(mined->{
-            return this.sign(mined);
-        });
+    default AsyncTask<SignedNostrEvent> powSign(UnsignedNostrEvent event, int difficulty) {
+        return this.getPublicKey()
+            .compose(pubkey -> {
+                return NostrEvent.minePow(pubkey, event, difficulty);
+            })
+            .compose(mined -> {
+                return this.sign(mined);
+            });
     }
 }

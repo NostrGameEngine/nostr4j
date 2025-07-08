@@ -1,12 +1,41 @@
+/**
+ * BSD 3-Clause License
+ *
+ * Copyright (c) 2025, Riccardo Balbo
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the documentation
+ *    and/or other materials provided with the distribution.
+ *
+ * 3. Neither the name of the copyright holder nor the names of its
+ *    contributors may be used to endorse or promote products derived from
+ *    this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
 package org.ngengine.wallets;
-
-import java.time.Instant;
-import java.util.List;
-
-import org.ngengine.platform.AsyncTask;
 
 import jakarta.annotation.Nonnull;
 import jakarta.annotation.Nullable;
+import java.time.Instant;
+import java.util.List;
+import org.ngengine.platform.AsyncTask;
 
 // TODO: support multi-target payments
 public interface Wallet {
@@ -16,9 +45,8 @@ public interface Wallet {
         lookupInvoice,
         listTransactions,
         getBalance,
-        getInfo
+        getInfo,
     }
-
 
     /**
      * Pay a lightning invoice
@@ -26,10 +54,7 @@ public interface Wallet {
      * @param amountMsats the amount in millisatoshis to pay, or null to use the invoice amount
      * @return an AsyncTask that resolves to a PayResponse containing the payment result
      */
-    public default AsyncTask<PayResponse> payInvoice(
-        @Nonnull String invoice,
-        @Nullable Long amountMsats
-    ) {
+    public default AsyncTask<PayResponse> payInvoice(@Nonnull String invoice, @Nullable Long amountMsats) {
         return payInvoice(invoice, amountMsats, null);
     }
 
@@ -42,11 +67,9 @@ public interface Wallet {
      */
     public AsyncTask<PayResponse> payInvoice(
         @Nonnull String invoice,
-        @Nullable Long amountMsats, 
+        @Nullable Long amountMsats,
         @Nullable Instant expireRequestAt
     );
- 
-
 
     /**
      * Create a lightning invoice
@@ -65,7 +88,6 @@ public interface Wallet {
      */
     public AsyncTask<InvoiceData> makeInvoice(InvoiceProperties req, @Nullable Instant expireRequestAt);
 
-
     /**
      * Lookup an invoice by payment hash or invoice string.
      * At least one of paymentHash or invoice must be provided.
@@ -73,11 +95,8 @@ public interface Wallet {
      * @param invoice the invoice string to lookup, or null if not available
      * @return an AsyncTask that resolves to an InvoiceData containing the invoice details
      */
-    public default AsyncTask<InvoiceData> lookupInvoice(
-        @Nullable String paymentHash,    
-        @Nullable String invoice
-    ) {
-        return lookupInvoice(paymentHash,invoice, null);
+    public default AsyncTask<InvoiceData> lookupInvoice(@Nullable String paymentHash, @Nullable String invoice) {
+        return lookupInvoice(paymentHash, invoice, null);
     }
 
     /**
@@ -87,13 +106,11 @@ public interface Wallet {
      * @param expireRequestAt an optional Instant to expire the request at, or null for no expiration
      * @return an AsyncTask that resolves to an InvoiceData containing the invoice details
      */
-    public AsyncTask<InvoiceData> lookupInvoice(  
-        @Nullable String paymentHash,    
-        @Nullable String invoice, 
+    public AsyncTask<InvoiceData> lookupInvoice(
+        @Nullable String paymentHash,
+        @Nullable String invoice,
         @Nullable Instant expireRequestAt
     );
-
-
 
     /**
      * List transactions in the wallet.
@@ -113,15 +130,7 @@ public interface Wallet {
         boolean includeUnpaid,
         @Nullable TransactionType type
     ) {
-        return listTransactions(
-            from,
-            until,
-            limit,
-            offset,
-            includeUnpaid,
-            type,
-            null
-        );
+        return listTransactions(from, until, limit, offset, includeUnpaid, type, null);
     }
 
     /**
@@ -144,7 +153,6 @@ public interface Wallet {
         @Nullable TransactionType type,
         @Nullable Instant expireRequestAt
     );
-
 
     /**
      *  Get the msats balance of the wallet.
@@ -176,8 +184,6 @@ public interface Wallet {
      */
     public AsyncTask<WalletInfo> getInfo(@Nullable Instant expireRequestAt);
 
-
-
     /**
      * Check if the wallet is ready to use.
      * @return true if the wallet is ready, false otherwise
@@ -195,9 +201,7 @@ public interface Wallet {
      * @param method the method to check support for
      * @return an AsyncTask that resolves to true if the method is supported, false otherwise
      */
-    public AsyncTask<Boolean> isMethodSupported(
-        @Nonnull Methods method
-    );
+    public AsyncTask<Boolean> isMethodSupported(@Nonnull Methods method);
 
     /**
      * Close the wallet and release any resources.
