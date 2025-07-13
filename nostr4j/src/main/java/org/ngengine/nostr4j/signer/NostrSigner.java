@@ -36,6 +36,7 @@ import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.event.UnsignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.platform.AsyncTask;
+import org.ngengine.platform.NGEPlatform;
 
 public interface NostrSigner extends Cloneable, Serializable {
     public enum EncryptAlgo {
@@ -119,5 +120,17 @@ public interface NostrSigner extends Cloneable, Serializable {
             .compose(mined -> {
                 return this.sign(mined);
             });
+    }
+
+
+    default AsyncTask<Boolean> isAvailable(){
+        return NGEPlatform.get().wrapPromise((res, rej) -> {
+            getPublicKey().then((pubkey) -> {
+                res.accept(pubkey != null);
+                return null;
+            }).catchException((err) -> {
+                res.accept(false);
+            });            
+        });
     }
 }
