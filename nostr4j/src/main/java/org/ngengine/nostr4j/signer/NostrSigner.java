@@ -122,15 +122,18 @@ public interface NostrSigner extends Cloneable, Serializable {
             });
     }
 
-
-    default AsyncTask<Boolean> isAvailable(){
-        return NGEPlatform.get().wrapPromise((res, rej) -> {
-            getPublicKey().then((pubkey) -> {
-                res.accept(pubkey != null);
-                return null;
-            }).catchException((err) -> {
-                res.accept(false);
-            });            
-        });
+    default AsyncTask<Boolean> isAvailable() {
+        return NGEPlatform
+            .get()
+            .wrapPromise((res, rej) -> {
+                getPublicKey()
+                    .then(pubkey -> {
+                        res.accept(pubkey != null);
+                        return null;
+                    })
+                    .catchException(err -> {
+                        res.accept(false);
+                    });
+            });
     }
 }
