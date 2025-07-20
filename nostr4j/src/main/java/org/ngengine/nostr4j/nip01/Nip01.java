@@ -36,6 +36,7 @@ import org.ngengine.nostr4j.event.NostrEvent;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.event.UnsignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
+import org.ngengine.nostr4j.pool.fetchpolicy.NostrWaitForEventFetchPolicy;
 import org.ngengine.nostr4j.proto.NostrMessageAck;
 import org.ngengine.nostr4j.signer.NostrSigner;
 import org.ngengine.platform.AsyncTask;
@@ -59,7 +60,7 @@ public class Nip01 {
      */
     public static AsyncTask<Nip01UserMetadata> fetch(NostrPool pool, Nip01UserMetadataFilter filter) {
         return pool
-            .fetch(filter)
+            .fetch(filter, NostrWaitForEventFetchPolicy.get(v -> true, 1, true))
             .then(evs -> {
                 if (evs.size() == 0) {
                     return null; // No metadata found
