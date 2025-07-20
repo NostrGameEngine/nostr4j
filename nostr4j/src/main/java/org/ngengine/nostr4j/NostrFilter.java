@@ -36,6 +36,8 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.ngengine.nostr4j.event.NostrEvent.TagValue;
+import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.proto.NostrMessageFragment;
 import org.ngengine.platform.NGEUtils;
@@ -191,5 +193,57 @@ public class NostrFilter extends NostrMessageFragment implements Cloneable {
             }
         }
         return serial;
+    }
+
+    public boolean matches(SignedNostrEvent event) {
+        return matches(event, 0);
+    }
+
+    public boolean matches(SignedNostrEvent event, int count) {
+        if (limit != null && count >= limit) {
+            return false;
+        }
+        if (ids != null && !ids.contains(event.getId())) {
+            return false;
+        }
+        if (authors != null && !authors.contains(event.getPubkey().asHex())) {
+            return false;
+        }
+        if (kinds != null && !kinds.contains(event.getKind())) {
+            return false;
+        }
+        if (since != null && event.getCreatedAt().isBefore(since)) {
+            return false;
+        }
+        if (until != null && event.getCreatedAt().isAfter(until)) {
+            return false;
+        }
+        if (tags != null) {
+            for (Map.Entry<String, List<String>> filterTagEntry : tags.entrySet()) {
+                String filterTagKey = filterTagEntry.getKey();
+                List<String> filterTagValues = filterTagEntry.getValue();
+                boolean found = false;
+                if (event.hasTag(filterTagKey)) {
+                    List<TagValue> tags = event.getTag(filterTagKey);
+                    for (String expectedValue : filterTagValues) {
+                        for (TagValue tagValue : tags) {
+                            for (String value : tagValue.getAll()) {
+                                if (value.equals(expectedValue)) {
+                                    found = true;
+                                    break;
+                                }
+                            }
+                            if (found) break;
+                        }
+                        if (found) break;
+                    }
+                }
+                if (!found) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
     }
 }
