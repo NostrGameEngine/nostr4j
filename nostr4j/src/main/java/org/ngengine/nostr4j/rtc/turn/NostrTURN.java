@@ -153,7 +153,7 @@ public class NostrTURN {
 
         // setup local peer turn server
         logger.fine("Connecting to local TURN server: " + localPeer.getTurnServer());
-        this.inPool = new NostrPool(PassthroughEventTracker.class);
+        this.inPool = new NostrPool(() -> new PassthroughEventTracker());
         this.inPool.connectRelay(new NostrRelay(Objects.requireNonNull(localPeer.getTurnServer()), executor));
         this.inSub = // receive packets from remote peer
             this.inPool.subscribe(
@@ -167,7 +167,7 @@ public class NostrTURN {
 
         // setup remote peer turn server
         logger.fine("Connecting to remote TURN server: " + remotePeer.getTurnServer());
-        this.outPool = new NostrPool(PassthroughEventTracker.class);
+        this.outPool = new NostrPool(() -> new PassthroughEventTracker());
         this.outPool.connectRelay(new NostrRelay(Objects.requireNonNull(remotePeer.getTurnServer()), executor));
         this.outSub =
             this.outPool.subscribe(

@@ -98,7 +98,7 @@ public class FullBenchmark {
         System.out.println("Send time: " + (System.currentTimeMillis() - sendStarted) + " ms");
 
         long receiveStarted = System.currentTimeMillis();
-        NostrSubscription sub = reader.subscribe(new NostrFilter().withKind(1).withTag("t", testId), NaiveEventTracker.class);
+        NostrSubscription sub = reader.subscribe(new NostrFilter().withKind(1).withTag("t", testId), ()->new NaiveEventTracker());
         sub.addEventListener((event, stored) -> {
             String i = event.getFirstTag("eventId").get(0);
             if (track.contains(i)) {

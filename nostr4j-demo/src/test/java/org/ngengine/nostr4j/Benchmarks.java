@@ -81,7 +81,7 @@ public class Benchmarks {
         relay.setVerifyEvents(!trusted);
         relay.setAsyncEventsVerification(false);
         pool.connectRelay(relay);
-        NostrSubscription sub = pool.subscribe(new NostrFilter(), PassthroughEventTracker.class);
+        NostrSubscription sub = pool.subscribe(new NostrFilter(), ()->new PassthroughEventTracker());
         messages = generateMessages(sub.getSubId());
     }
 

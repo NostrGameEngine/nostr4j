@@ -32,7 +32,6 @@ package org.ngengine.nostr4j;
 
 import static org.ngengine.platform.NGEUtils.dbg;
 
-import java.lang.reflect.InvocationTargetException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -45,6 +44,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
@@ -78,7 +78,7 @@ public class NostrPool {
     private final CopyOnWriteArrayList<NostrRelay> relays = new CopyOnWriteArrayList<>();
     private final List<NostrRelay> relaysRO = Collections.unmodifiableList(relays);
     private final List<ScheduledAction> scheduledActions = new CopyOnWriteArrayList<>();
-    private final Class<? extends EventTracker> defaultEventTracker;
+    private final Supplier<EventTracker> defaultEventTracker;
 
     private NostrRelayComponent listener = new NostrRelayComponent() {
         @Override
@@ -133,10 +133,10 @@ public class NostrPool {
     };
 
     public NostrPool() {
-        this(ForwardSlidingWindowEventTracker.class);
+        this(() -> new ForwardSlidingWindowEventTracker());
     }
 
-    public NostrPool(Class<? extends EventTracker> defaultEventTracker) {
+    public NostrPool(Supplier<EventTracker> defaultEventTracker) {
         this.defaultEventTracker = defaultEventTracker;
     }
 
@@ -271,23 +271,16 @@ public class NostrPool {
      * @param eventTracker The event tracker class to use for this subscription
      * @return A new subscription instance
      */
-    public NostrSubscription subscribe(NostrFilter filter, Class<? extends EventTracker> eventTracker) {
+    public NostrSubscription subscribe(NostrFilter filter, Supplier<EventTracker> eventTracker) {
         return subscribe(Arrays.asList(filter), eventTracker);
     }
 
-    public NostrSubscription subscribe(Collection<NostrFilter> filters, Class<? extends EventTracker> eventTracker) {
+    public NostrSubscription subscribe(Collection<NostrFilter> filters, Supplier<EventTracker> eventTracker) {
         String subId = UniqueId.getNext();
         EventTracker tracker;
         try {
-            tracker = eventTracker.getDeclaredConstructor().newInstance();
-        } catch (
-            InstantiationException
-            | IllegalAccessException
-            | IllegalArgumentException
-            | InvocationTargetException
-            | NoSuchMethodException
-            | SecurityException e
-        ) {
+            tracker = eventTracker.get();
+        } catch (Exception e) {
             logger.log(Level.WARNING, "Error creating event tracker fallback to PassthroughEventTracker", e);
             tracker = new PassthroughEventTracker();
         }
@@ -349,7 +342,7 @@ public class NostrPool {
     }
 
     public AsyncTask<List<SignedNostrEvent>> fetch(Collection<NostrFilter> filters, long timeout, TimeUnit unit) {
-        return fetch(filters, timeout, unit, NaiveEventTracker.class, NostrAllEOSEPoolFetchPolicy.get());
+        return fetch(filters, timeout, unit, () -> new NaiveEventTracker(), NostrAllEOSEPoolFetchPolicy.get());
     }
 
     public AsyncTask<List<SignedNostrEvent>> fetch(
@@ -358,31 +351,28 @@ public class NostrPool {
         TimeUnit unit,
         NostrPoolFetchPolicy fetchPolicy
     ) {
-        return fetch(filters, timeout, unit, NaiveEventTracker.class, fetchPolicy);
+        return fetch(filters, timeout, unit, () -> new NaiveEventTracker(), fetchPolicy);
     }
 
-    public AsyncTask<List<SignedNostrEvent>> fetch(NostrFilter filter, Class<? extends EventTracker> eventTracker) {
+    public AsyncTask<List<SignedNostrEvent>> fetch(NostrFilter filter, Supplier<EventTracker> eventTracker) {
         return fetch(Arrays.asList(filter), eventTracker, NostrAllEOSEPoolFetchPolicy.get());
     }
 
     public AsyncTask<List<SignedNostrEvent>> fetch(
         NostrFilter filter,
-        Class<? extends EventTracker> eventTracker,
+        Supplier<EventTracker> eventTracker,
         NostrPoolFetchPolicy fetchPolicy
     ) {
         return fetch(Arrays.asList(filter), eventTracker, fetchPolicy);
     }
 
-    public AsyncTask<List<SignedNostrEvent>> fetch(
-        Collection<NostrFilter> filters,
-        Class<? extends EventTracker> eventTracker
-    ) {
+    public AsyncTask<List<SignedNostrEvent>> fetch(Collection<NostrFilter> filters, Supplier<EventTracker> eventTracker) {
         return fetch(filters, 1, TimeUnit.MINUTES, eventTracker, NostrAllEOSEPoolFetchPolicy.get());
     }
 
     public AsyncTask<List<SignedNostrEvent>> fetch(
         Collection<NostrFilter> filters,
-        Class<? extends EventTracker> eventTracker,
+        Supplier<EventTracker> eventTracker,
         NostrPoolFetchPolicy fetchPolicy
     ) {
         return fetch(filters, 1, TimeUnit.MINUTES, eventTracker, fetchPolicy);
@@ -392,7 +382,7 @@ public class NostrPool {
         NostrFilter filters,
         long timeout,
         TimeUnit unit,
-        Class<? extends EventTracker> eventTracker
+        Supplier<EventTracker> eventTracker
     ) {
         return fetch(Arrays.asList(filters), timeout, unit, eventTracker, NostrAllEOSEPoolFetchPolicy.get());
     }
@@ -401,7 +391,7 @@ public class NostrPool {
         NostrFilter filters,
         long timeout,
         TimeUnit unit,
-        Class<? extends EventTracker> eventTracker,
+        Supplier<EventTracker> eventTracker,
         NostrPoolFetchPolicy fetchPolicy
     ) {
         return fetch(Arrays.asList(filters), timeout, unit, eventTracker, fetchPolicy);
@@ -411,7 +401,7 @@ public class NostrPool {
         Collection<NostrFilter> filters,
         long timeout,
         TimeUnit unit,
-        Class<? extends EventTracker> eventTracker
+        Supplier<EventTracker> eventTracker
     ) {
         return fetch(filters, timeout, unit, eventTracker, NostrAllEOSEPoolFetchPolicy.get());
     }
@@ -420,7 +410,7 @@ public class NostrPool {
         Collection<NostrFilter> filters,
         long timeout,
         TimeUnit unit,
-        Class<? extends EventTracker> eventTracker,
+        Supplier<EventTracker> eventTracker,
         NostrPoolFetchPolicy fetchPolicy
     ) {
         NGEPlatform platform = NGEUtils.getPlatform();

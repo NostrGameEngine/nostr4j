@@ -587,7 +587,7 @@ public class NostrClient extends JFrame {
 
         // Subscribe to events
         NostrSubscription sub =
-            this.pool.subscribe(Arrays.asList(new NostrFilter().withKind(1).limit(10)), FailOnDoubleTracker.class);
+            this.pool.subscribe(Arrays.asList(new NostrFilter().withKind(1).limit(10)), ()->new FailOnDoubleTracker());
 
         sub.addEventListener((event, stored) -> addEventToFeed(event, true));
         sub.open();
@@ -790,7 +790,7 @@ public class NostrClient extends JFrame {
                     .search(searchBar.getText().trim())
                     .until(Instant.ofEpochSecond(earliestEvent))
                     .limit(5),
-                FailOnDoubleTracker.class
+                ()->new FailOnDoubleTracker()
             )
             .catchException(e -> {
                 SwingUtilities.invokeLater(() -> {
