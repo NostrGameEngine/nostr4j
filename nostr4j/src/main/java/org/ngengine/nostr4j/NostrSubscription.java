@@ -34,6 +34,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -352,7 +353,7 @@ public class NostrSubscription extends NostrMessage {
         private final String id;
 
         public NostrSubCloseMessage(String id) {
-            this.id = id;
+            this.id = Objects.requireNonNull(id, "Subscription ID cannot be null");
         }
 
         public String getId() {
@@ -367,7 +368,7 @@ public class NostrSubscription extends NostrMessage {
         @Override
         public Collection<Object> getFragments() {
             if (fragments != null) return fragments;
-            fragments = new ArrayList<>(1);
+            fragments = new ArrayList<>();
             fragments.add(id);
             return fragments;
         }

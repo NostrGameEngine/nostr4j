@@ -54,6 +54,11 @@ public class Nip01UserMetadata implements Serializable {
     public final Map<String, Object> metadata;
     protected final NostrEvent sourceEvent;
 
+    public Nip01UserMetadata() {
+        this.sourceEvent = null;
+        this.metadata = new HashMap<>();
+    }
+
     public Nip01UserMetadata(NostrEvent source) {
         if (source.getKind() != 0) {
             throw new IllegalArgumentException("Invalid event kind");
@@ -71,10 +76,12 @@ public class Nip01UserMetadata implements Serializable {
         event.withKind(0);
         event.createdAt(Instant.now());
         event.withContent(NGEUtils.getPlatform().toJSON(metadata));
-        for (String key : sourceEvent.listTagKeys()) {
-            Collection<TagValue> tags = sourceEvent.getTag(key);
-            for (TagValue tag : tags) {
-                event.withTag(key, tag);
+        if (sourceEvent != null) {
+            for (String key : sourceEvent.listTagKeys()) {
+                Collection<TagValue> tags = sourceEvent.getTag(key);
+                for (TagValue tag : tags) {
+                    event.withTag(key, tag);
+                }
             }
         }
         return event;
@@ -119,17 +126,20 @@ public class Nip01UserMetadata implements Serializable {
             return true;
         }
         Nip01UserMetadata other = (Nip01UserMetadata) obj;
+        if (sourceEvent == null) return metadata.equals(other.metadata);
         return sourceEvent.equals(other.sourceEvent);
     }
 
     @Override
     public int hashCode() {
-        if (sourceEvent == null) return 0;
+        if (sourceEvent == null) return metadata.hashCode();
         return sourceEvent.hashCode();
     }
 
     @Override
     public String toString() {
+        if (sourceEvent == null) return metadata.toString();
+
         return sourceEvent.toString();
     }
 
