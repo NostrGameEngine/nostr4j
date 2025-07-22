@@ -135,7 +135,8 @@ public class ForwardSlidingWindowEventTracker implements EventTracker {
             assert checkOrder() : "Events are not in order";
             assert toRemove >= 0 &&
             toRemove <= seenEvents.size() &&
-            toRemove <= maxTrackedEvents : "Invalid number of events to remove";
+            (seenEvents.size() - toRemove) <= maxTrackedEvents &&
+            (seenEvents.size() - toRemove) >= 0 : "Invalid number of events to remove " + toRemove;
 
             ListIterator<SignedNostrEvent.Identifier> it = seenEvents.listIterator(seenEvents.size());
 
