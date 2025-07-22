@@ -61,7 +61,6 @@ public class BlossomEndpoint {
 
     /**
      * Get blob by SHA256
-     * (GET /<sha256>[.<ext>])
      *
      * @param sha256OrPath can be just sha256 or sha256.ext
      * @param byteRange optional, the range of bytes to fetch, can be null for full range
@@ -88,10 +87,9 @@ public class BlossomEndpoint {
 
     /**
      * Check if a blob exists
-     * (HEAD /<sha256>[.<ext>])
      *
      * @param sha256OrPath can be just sha256 or sha256.ext
-     * @param authorizationEventJson optional, can be null
+     * @param authEvent optional, can be null
      * @return an AsyncTask that returns true if the blob exists, false if it does not
      */
     public AsyncTask<Boolean> exists(String sha256OrPath, @Nullable SignedNostrEvent authEvent) {
@@ -104,7 +102,6 @@ public class BlossomEndpoint {
 
     /**
      * Upload a blob
-     * (PUT /upload)
      *
      * @param data the byte array to upload
      * @param mimeType (optional), the MIME type of the blob, can be null for application/octet-stream
@@ -127,7 +124,6 @@ public class BlossomEndpoint {
 
     /**
      * List blobs uploaded by a given public key
-     * (GET /list/<pubkey>?since=...
      *
      * @param pubkey the public key of the user whose blobs you want to list
      * @param since (optional) the start time for the listing, can be null
@@ -176,7 +172,13 @@ public class BlossomEndpoint {
             });
     }
 
-    // Delete blob (DELETE /<sha256>)
+    /**
+     * Delete a blob by its SHA256 hash
+     * 
+     * @param sha256
+     * @param authEvent
+     * @return
+     */
     public AsyncTask<BlossomResponse> delete(String sha256, @Nullable SignedNostrEvent authEvent) {
         String endpoint = sha256;
         return httpRequest(endpoint, "DELETE", null, null, authEvent)
