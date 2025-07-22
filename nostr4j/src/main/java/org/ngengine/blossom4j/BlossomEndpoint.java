@@ -174,7 +174,7 @@ public class BlossomEndpoint {
 
     /**
      * Delete a blob by its SHA256 hash
-     * 
+     *
      * @param sha256
      * @param authEvent
      * @return
