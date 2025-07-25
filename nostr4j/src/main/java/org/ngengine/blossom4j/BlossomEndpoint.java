@@ -68,7 +68,14 @@ public class BlossomEndpoint {
      * @return
      */
     public AsyncTask<BlossomBlobResponse> get(String sha256OrPath, int[] byteRange, @Nullable SignedNostrEvent authEvent) {
-        logger.finer("Fetching blob: " + sha256OrPath + ", byteRange: " + (byteRange != null ? "[" + byteRange[0] + ", " + byteRange[1] + "]" : "full range") + ", authEvent: " + authEvent);
+        logger.finer(
+            "Fetching blob: " +
+            sha256OrPath +
+            ", byteRange: " +
+            (byteRange != null ? "[" + byteRange[0] + ", " + byteRange[1] + "]" : "full range") +
+            ", authEvent: " +
+            authEvent
+        );
         String endpoint = sha256OrPath;
         Map<String, String> headers = new HashMap<>();
         if (byteRange != null) {
@@ -141,7 +148,16 @@ public class BlossomEndpoint {
         @Nullable Instant until,
         @Nullable SignedNostrEvent authEvent
     ) {
-        logger.finer("Listing blobs for pubkey: " + pubkey.asHex() + ", since: " + since + ", until: " + until + ", authEvent: " + authEvent);
+        logger.finer(
+            "Listing blobs for pubkey: " +
+            pubkey.asHex() +
+            ", since: " +
+            since +
+            ", until: " +
+            until +
+            ", authEvent: " +
+            authEvent
+        );
         String endpoint = "list/" + pubkey.asHex();
         StringBuilder query = new StringBuilder();
 
