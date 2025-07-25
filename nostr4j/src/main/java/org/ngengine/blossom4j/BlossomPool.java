@@ -172,7 +172,7 @@ public class BlossomPool implements Closeable {
     }
 
     public AsyncTask<BlobDescriptor> upload(ByteBuffer data, @Nullable String fileName) {
-        return upload(data, fileName);
+        return upload(data, fileName, null);
     }
 
     public AsyncTask<BlobDescriptor> upload(ByteBuffer data, @Nullable String fileName, @Nullable String mimeType) {
