@@ -28,7 +28,7 @@ ext {
     licenseUrl="https://opensource.org/licenses/BSD-3-Clause"
 
     ngePlatformVersionSnapshot = "0.1.0-SNAPSHOT"
-    ngePlatformVersion = "0.0.5"
+    ngePlatformVersion = "0.1.1"
 
     lnurlVersionSnapshot = "0.0.0-SNAPSHOT"
     lnurlVersion = "0.0.1"
