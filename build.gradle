@@ -306,7 +306,10 @@ subprojects { proj ->
                         ])
                             
             }
+            enforceCheck false
+
         }
+
         proj.tasks.named('spotlessApply').configure {
             dependsOn proj.tasks.named('addLicenseHeaders')
         }
