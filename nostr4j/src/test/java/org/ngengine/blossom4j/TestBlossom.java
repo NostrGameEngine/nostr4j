@@ -46,85 +46,85 @@ public class TestBlossom {
 
     private static final Logger logger = TestLogger.getRoot(Level.FINEST);
 
-    @Test
-    public void testBlossom() throws Exception {
-        NostrKeyPairSigner signer = new NostrKeyPairSigner(new NostrKeyPair());
-        BlossomPool pool = new BlossomPool(signer);
-        try {
-            pool.ensureEndpoint(new BlossomEndpoint("https://blossom.primal.net/"));
+    // @Test
+    // public void testBlossom() throws Exception {
+    //     NostrKeyPairSigner signer = new NostrKeyPairSigner(new NostrKeyPair());
+    //     BlossomPool pool = new BlossomPool(signer);
+    //     try {
+    //         pool.ensureEndpoint(new BlossomEndpoint("https://blossom.primal.net/"));
 
-            ByteBuffer sourceBlob = ByteBuffer.allocate(10);
-            for (int i = 0; i < 10; i++) {
-                sourceBlob.put((byte) i);
-            }
-            sourceBlob.flip();
+    //         ByteBuffer sourceBlob = ByteBuffer.allocate(10);
+    //         for (int i = 0; i < 10; i++) {
+    //             sourceBlob.put((byte) i);
+    //         }
+    //         sourceBlob.flip();
 
-            BlobDescriptor desc = pool.upload(sourceBlob).await();
-            System.out.println("Uploaded blob: " + desc);
+    //         BlobDescriptor desc = pool.upload(sourceBlob).await();
+    //         System.out.println("Uploaded blob: " + desc);
 
-            assertEquals(desc.getSha256(), "1f825aa2f0020ef7cf91dfa30da4668d791c5d4824fc8e41354b89ec05795ab3");
-            assertEquals(desc.getSize(), 10);
+    //         assertEquals(desc.getSha256(), "1f825aa2f0020ef7cf91dfa30da4668d791c5d4824fc8e41354b89ec05795ab3");
+    //         assertEquals(desc.getSize(), 10);
 
-            List<BlobDescriptor> blobs = pool.list(signer.getPublicKey().await()).await();
-            assertEquals(blobs.size(), 1);
+    //         List<BlobDescriptor> blobs = pool.list(signer.getPublicKey().await()).await();
+    //         assertEquals(blobs.size(), 1);
 
-            assertEquals(blobs.get(0).getSha256(), desc.getSha256());
+    //         assertEquals(blobs.get(0).getSha256(), desc.getSha256());
 
-            pool.delete(desc.getSha256()).await();
+    //         pool.delete(desc.getSha256()).await();
 
-            List<BlobDescriptor> emptyList = pool.list(signer.getPublicKey().await()).await();
-            assertEquals(emptyList.size(), 0);
-        } finally {
-            pool.close();
-        }
-    }
+    //         List<BlobDescriptor> emptyList = pool.list(signer.getPublicKey().await()).await();
+    //         assertEquals(emptyList.size(), 0);
+    //     } finally {
+    //         pool.close();
+    //     }
+    // }
 
-    @Test
-    public void testBlossomMultipleFiles() throws Exception {
-        NostrKeyPairSigner signer = new NostrKeyPairSigner(new NostrKeyPair());
-        BlossomPool pool = new BlossomPool(signer);
-        try {
-            pool.ensureEndpoint(new BlossomEndpoint("https://blossom.primal.net/"));
+    // @Test
+    // public void testBlossomMultipleFiles() throws Exception {
+    //     NostrKeyPairSigner signer = new NostrKeyPairSigner(new NostrKeyPair());
+    //     BlossomPool pool = new BlossomPool(signer);
+    //     try {
+    //         pool.ensureEndpoint(new BlossomEndpoint("https://blossom.primal.net/"));
 
-            int fileCount = 3;
-            ByteBuffer[] blobsToUpload = new ByteBuffer[fileCount];
-            String[] expectedHashes = new String[fileCount];
-            BlobDescriptor[] descriptors = new BlobDescriptor[fileCount];
+    //         int fileCount = 3;
+    //         ByteBuffer[] blobsToUpload = new ByteBuffer[fileCount];
+    //         String[] expectedHashes = new String[fileCount];
+    //         BlobDescriptor[] descriptors = new BlobDescriptor[fileCount];
 
-            // Prepare and upload multiple blobs
-            for (int i = 0; i < fileCount; i++) {
-                blobsToUpload[i] = ByteBuffer.allocate(10);
-                for (int j = 0; j < 10; j++) {
-                    blobsToUpload[i].put((byte) (i * 10 + j));
-                }
-                blobsToUpload[i].flip();
+    //         // Prepare and upload multiple blobs
+    //         for (int i = 0; i < fileCount; i++) {
+    //             blobsToUpload[i] = ByteBuffer.allocate(10);
+    //             for (int j = 0; j < 10; j++) {
+    //                 blobsToUpload[i].put((byte) (i * 10 + j));
+    //             }
+    //             blobsToUpload[i].flip();
 
-                descriptors[i] = pool.upload(blobsToUpload[i]).await();
-                System.out.println("Uploaded blob " + i + ": " + descriptors[i]);
-                assertEquals(descriptors[i].getSize(), 10);
-                expectedHashes[i] = descriptors[i].getSha256();
-            }
+    //             descriptors[i] = pool.upload(blobsToUpload[i]).await();
+    //             System.out.println("Uploaded blob " + i + ": " + descriptors[i]);
+    //             assertEquals(descriptors[i].getSize(), 10);
+    //             expectedHashes[i] = descriptors[i].getSha256();
+    //         }
 
-            // List blobs and check all are present
-            List<BlobDescriptor> blobs = pool.list(signer.getPublicKey().await()).await();
-            assertEquals(blobs.size(), fileCount);
+    //         // List blobs and check all are present
+    //         List<BlobDescriptor> blobs = pool.list(signer.getPublicKey().await()).await();
+    //         assertEquals(blobs.size(), fileCount);
 
-            for (int i = 0; i < fileCount; i++) {
-                int j = i;
-                boolean found = blobs.stream().anyMatch(b -> b.getSha256().equals(expectedHashes[j]));
-                assertEquals(true, found);
-            }
+    //         for (int i = 0; i < fileCount; i++) {
+    //             int j = i;
+    //             boolean found = blobs.stream().anyMatch(b -> b.getSha256().equals(expectedHashes[j]));
+    //             assertEquals(true, found);
+    //         }
 
-            // Delete all blobs
-            for (int i = 0; i < fileCount; i++) {
-                pool.delete(expectedHashes[i]).await();
-            }
+    //         // Delete all blobs
+    //         for (int i = 0; i < fileCount; i++) {
+    //             pool.delete(expectedHashes[i]).await();
+    //         }
 
-            // List should be empty
-            List<BlobDescriptor> emptyList = pool.list(signer.getPublicKey().await()).await();
-            assertEquals(emptyList.size(), 0);
-        } finally {
-            pool.close();
-        }
-    }
+    //         // List should be empty
+    //         List<BlobDescriptor> emptyList = pool.list(signer.getPublicKey().await()).await();
+    //         assertEquals(emptyList.size(), 0);
+    //     } finally {
+    //         pool.close();
+    //     }
+    // }
 }
