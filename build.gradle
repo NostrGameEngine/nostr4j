@@ -28,7 +28,7 @@ ext {
     licenseUrl="https://opensource.org/licenses/BSD-3-Clause"
 
     ngePlatformVersionSnapshot = "0.1.0-SNAPSHOT"
-    ngePlatformVersion = "0.1.1"
+    ngePlatformVersion = "0.1.2"
 
     lnurlVersionSnapshot = "0.0.0-SNAPSHOT"
     lnurlVersion = "0.0.1"
@@ -73,9 +73,6 @@ allprojects {
         mavenCentral()
         maven {
             url = uri("https://central.sonatype.com/repository/maven-snapshots")
-        }
-        maven {
-            url = "https://maven.rblb.it/NostrGameEngine/libdatachannel-java"
         }
     }
 }

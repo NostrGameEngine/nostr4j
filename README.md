@@ -27,9 +27,6 @@ repositories {
     //maven { 
     //    url = uri("https://central.sonatype.com/repository/maven-snapshots")
     //}
-    maven {
-        url = "https://maven.rblb.it/NostrGameEngine/libdatachannel-java"
-    }
 }
 
 dependencies {
