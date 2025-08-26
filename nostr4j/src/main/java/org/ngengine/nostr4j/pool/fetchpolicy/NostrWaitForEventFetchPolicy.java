@@ -56,17 +56,25 @@ public class NostrWaitForEventFetchPolicy implements NostrPoolFetchPolicy {
     private final boolean endOnEose;
     private final Duration timeout;
 
-    public static NostrWaitForEventFetchPolicy get(Predicate<SignedNostrEvent> filter, int numEventsToWait,
-            boolean endOnEose) {
+    public static NostrWaitForEventFetchPolicy get(Predicate<SignedNostrEvent> filter, int numEventsToWait, boolean endOnEose) {
         return new NostrWaitForEventFetchPolicy(filter, numEventsToWait, endOnEose, null);
     }
 
-    public static NostrWaitForEventFetchPolicy get(Predicate<SignedNostrEvent> filter, int numEventsToWait, boolean endOnEose, Duration timeout) {
+    public static NostrWaitForEventFetchPolicy get(
+        Predicate<SignedNostrEvent> filter,
+        int numEventsToWait,
+        boolean endOnEose,
+        Duration timeout
+    ) {
         return new NostrWaitForEventFetchPolicy(filter, numEventsToWait, endOnEose, timeout);
     }
 
-
-    public NostrWaitForEventFetchPolicy(Predicate<SignedNostrEvent> filter, int numEventsToWait, boolean endOnEose, Duration timeout) {
+    public NostrWaitForEventFetchPolicy(
+        Predicate<SignedNostrEvent> filter,
+        int numEventsToWait,
+        boolean endOnEose,
+        Duration timeout
+    ) {
         this.filter = filter;
         this.numEventsToWait = numEventsToWait;
         this.endOnEose = endOnEose;
@@ -75,19 +83,23 @@ public class NostrWaitForEventFetchPolicy implements NostrPoolFetchPolicy {
 
     @Override
     public NostrSubAllListener getListener(NostrSubscription sub, List<SignedNostrEvent> events, Runnable end) {
-        if(timeout!=null){
+        if (timeout != null) {
             AsyncExecutor exc = NGEUtils.getPlatform().newAsyncExecutor();
-            exc.runLater(()->{
-                try{
-                    assert dbg(() -> {
-                        logger.fine("fetch timeout for fetch " + sub.getId() + " with received events: " + events);
-                    });
-                    end.run();
-                } finally {
-                    exc.close();
-                }
-                return null;
-            }, timeout.toMillis(), TimeUnit.MILLISECONDS);
+            exc.runLater(
+                () -> {
+                    try {
+                        assert dbg(() -> {
+                            logger.fine("fetch timeout for fetch " + sub.getId() + " with received events: " + events);
+                        });
+                        end.run();
+                    } finally {
+                        exc.close();
+                    }
+                    return null;
+                },
+                timeout.toMillis(),
+                TimeUnit.MILLISECONDS
+            );
         }
         return new NostrSubAllListener() {
             @Override
