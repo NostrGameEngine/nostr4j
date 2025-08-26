@@ -33,7 +33,9 @@ package org.ngengine.nostr4j.pool.fetchpolicy;
 
 import static org.ngengine.platform.NGEUtils.dbg;
 
+import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Predicate;
 import java.util.logging.Logger;
@@ -42,6 +44,8 @@ import org.ngengine.nostr4j.NostrRelay;
 import org.ngengine.nostr4j.NostrSubscription;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.listeners.sub.NostrSubAllListener;
+import org.ngengine.platform.AsyncExecutor;
+import org.ngengine.platform.NGEUtils;
 
 public class NostrWaitForEventFetchPolicy implements NostrPoolFetchPolicy {
 
@@ -50,19 +54,41 @@ public class NostrWaitForEventFetchPolicy implements NostrPoolFetchPolicy {
     private AtomicInteger count = new AtomicInteger(0);
     private final int numEventsToWait;
     private final boolean endOnEose;
+    private final Duration timeout;
 
-    public static NostrWaitForEventFetchPolicy get(Predicate<SignedNostrEvent> filter, int numEventsToWait, boolean endOnEose) {
-        return new NostrWaitForEventFetchPolicy(filter, numEventsToWait, endOnEose);
+    public static NostrWaitForEventFetchPolicy get(Predicate<SignedNostrEvent> filter, int numEventsToWait,
+            boolean endOnEose) {
+        return new NostrWaitForEventFetchPolicy(filter, numEventsToWait, endOnEose, null);
     }
 
-    public NostrWaitForEventFetchPolicy(Predicate<SignedNostrEvent> filter, int numEventsToWait, boolean endOnEose) {
+    public static NostrWaitForEventFetchPolicy get(Predicate<SignedNostrEvent> filter, int numEventsToWait, boolean endOnEose, Duration timeout) {
+        return new NostrWaitForEventFetchPolicy(filter, numEventsToWait, endOnEose, timeout);
+    }
+
+
+    public NostrWaitForEventFetchPolicy(Predicate<SignedNostrEvent> filter, int numEventsToWait, boolean endOnEose, Duration timeout) {
         this.filter = filter;
         this.numEventsToWait = numEventsToWait;
         this.endOnEose = endOnEose;
+        this.timeout = timeout;
     }
 
     @Override
     public NostrSubAllListener getListener(NostrSubscription sub, List<SignedNostrEvent> events, Runnable end) {
+        if(timeout!=null){
+            AsyncExecutor exc = NGEUtils.getPlatform().newAsyncExecutor();
+            exc.runLater(()->{
+                try{
+                    assert dbg(() -> {
+                        logger.fine("fetch timeout for fetch " + sub.getId() + " with received events: " + events);
+                    });
+                    end.run();
+                } finally {
+                    exc.close();
+                }
+                return null;
+            }, timeout.toMillis(), TimeUnit.MILLISECONDS);
+        }
         return new NostrSubAllListener() {
             @Override
             public void onSubEvent(SignedNostrEvent e, boolean stored) {
