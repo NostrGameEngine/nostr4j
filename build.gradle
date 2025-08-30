@@ -13,6 +13,7 @@ plugins {
     id "com.github.spotbugs"                            version "5.1.3" apply false
     id "com.diffplug.spotless"                          version "7.0.2" apply false
     id "io.github.gradle-nexus.publish-plugin"          version "2.0.0" 
+    id "org.gradle.test-retry"                          version "1.5.2" apply false
 }
 
 ext {
@@ -216,6 +217,7 @@ def applyConf(proj){
 subprojects { proj ->
   
     proj.plugins.withId('java-library') {
+        proj.apply plugin: "org.gradle.test-retry"
         applyConf(proj);     
     }
 
@@ -309,6 +311,25 @@ subprojects { proj ->
 
         proj.tasks.named('spotlessApply').configure {
             dependsOn proj.tasks.named('addLicenseHeaders')
+        }
+
+        proj.tasks.withType(Test) {
+            retry {
+                maxRetries = 3
+                failOnPassedAfterRetry = false                
+                maxFailures = 10
+
+               
+
+            }
+            
+            testLogging {
+                events "passed", "skipped", "failed", "standardOut", "standardError"
+                showExceptions true
+                showCauses true
+                showStackTraces true
+                exceptionFormat "full"
+            }
         }
     }
 } 
