@@ -32,5 +32,48 @@
 package org.ngengine.blossom4j;
 
 import org.ngengine.platform.transport.NGEHttpResponse;
+import java.util.Arrays;
+import java.util.Objects;
 
-public record BlossomBlobResponse(byte[] data, NGEHttpResponse httpResponse) {}
+public class BlossomBlobResponse {
+    private final byte[] data;
+    private final NGEHttpResponse httpResponse;
+
+    public BlossomBlobResponse(byte[] data, NGEHttpResponse httpResponse) {
+        this.data = data;
+        this.httpResponse = httpResponse;
+    }
+
+    public byte[] data() {
+        return data;
+    }
+
+    public NGEHttpResponse httpResponse() {
+        return httpResponse;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o)
+            return true;
+        if (o == null || getClass() != o.getClass())
+            return false;
+        BlossomBlobResponse that = (BlossomBlobResponse) o;
+        return Arrays.equals(data, that.data) &&
+                Objects.equals(httpResponse, that.httpResponse);
+    }
+
+    @Override
+    public int hashCode() {
+        int result = Objects.hash(httpResponse);
+        result = 31 * result + Arrays.hashCode(data);
+        return result;
+    }
+
+    @Override
+    public String toString() {
+        return "BlossomBlobResponse[" +
+                "data=" + Arrays.toString(data) + ", " +
+                "httpResponse=" + httpResponse + ']';
+    }
+}

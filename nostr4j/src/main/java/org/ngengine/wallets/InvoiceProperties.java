@@ -33,10 +33,68 @@ package org.ngengine.wallets;
 
 import jakarta.annotation.Nullable;
 import java.time.Duration;
+import java.util.Objects;
 
-public record InvoiceProperties(
-    long amountMsats,
-    @Nullable String description,
-    @Nullable String descriptionHash,
-    @Nullable Duration expiry
-) {}
+public class InvoiceProperties {
+    private final long amountMsats;
+    private final @Nullable String description;
+    private final @Nullable String descriptionHash;
+    private final @Nullable Duration expiry;
+
+    public InvoiceProperties(
+            long amountMsats,
+            @Nullable String description,
+            @Nullable String descriptionHash,
+            @Nullable Duration expiry) {
+        this.amountMsats = amountMsats;
+        this.description = description;
+        this.descriptionHash = descriptionHash;
+        this.expiry = expiry;
+    }
+
+    public long amountMsats() {
+        return amountMsats;
+    }
+
+    @Nullable
+    public String description() {
+        return description;
+    }
+
+    @Nullable
+    public String descriptionHash() {
+        return descriptionHash;
+    }
+
+    @Nullable
+    public Duration expiry() {
+        return expiry;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o)
+            return true;
+        if (o == null || getClass() != o.getClass())
+            return false;
+        InvoiceProperties that = (InvoiceProperties) o;
+        return amountMsats == that.amountMsats &&
+                Objects.equals(description, that.description) &&
+                Objects.equals(descriptionHash, that.descriptionHash) &&
+                Objects.equals(expiry, that.expiry);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(amountMsats, description, descriptionHash, expiry);
+    }
+
+    @Override
+    public String toString() {
+        return "InvoiceProperties[" +
+                "amountMsats=" + amountMsats + ", " +
+                "description=" + description + ", " +
+                "descriptionHash=" + descriptionHash + ", " +
+                "expiry=" + expiry + ']';
+    }
+}

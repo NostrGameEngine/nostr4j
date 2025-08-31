@@ -32,6 +32,46 @@
 package org.ngengine.blossom4j;
 
 import java.util.List;
+import java.util.Objects;
 import org.ngengine.platform.transport.NGEHttpResponse;
 
-public record BlossomResponse(List<BlobDescriptor> blobs, NGEHttpResponse httpResponse) {}
+public class BlossomResponse {
+    private final List<BlobDescriptor> blobs;
+    private final NGEHttpResponse httpResponse;
+
+    public BlossomResponse(List<BlobDescriptor> blobs, NGEHttpResponse httpResponse) {
+        this.blobs = blobs;
+        this.httpResponse = httpResponse;
+    }
+
+    public List<BlobDescriptor> blobs() {
+        return blobs;
+    }
+
+    public NGEHttpResponse httpResponse() {
+        return httpResponse;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o)
+            return true;
+        if (o == null || getClass() != o.getClass())
+            return false;
+        BlossomResponse that = (BlossomResponse) o;
+        return Objects.equals(blobs, that.blobs) &&
+                Objects.equals(httpResponse, that.httpResponse);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(blobs, httpResponse);
+    }
+
+    @Override
+    public String toString() {
+        return "BlossomResponse[" +
+                "blobs=" + blobs + ", " +
+                "httpResponse=" + httpResponse + ']';
+    }
+}

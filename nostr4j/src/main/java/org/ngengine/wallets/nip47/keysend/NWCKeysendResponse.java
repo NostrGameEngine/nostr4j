@@ -33,5 +33,47 @@ package org.ngengine.wallets.nip47.keysend;
 
 import jakarta.annotation.Nonnull;
 import jakarta.annotation.Nullable;
+import java.util.Objects;
 
-public record NWCKeysendResponse(@Nonnull String preimage, @Nullable Long feesPaid) {}
+public class NWCKeysendResponse {
+    private final @Nonnull String preimage;
+    private final @Nullable Long feesPaid;
+
+    public NWCKeysendResponse(@Nonnull String preimage, @Nullable Long feesPaid) {
+        this.preimage = preimage;
+        this.feesPaid = feesPaid;
+    }
+
+    @Nonnull
+    public String preimage() {
+        return preimage;
+    }
+
+    @Nullable
+    public Long feesPaid() {
+        return feesPaid;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o)
+            return true;
+        if (o == null || getClass() != o.getClass())
+            return false;
+        NWCKeysendResponse that = (NWCKeysendResponse) o;
+        return Objects.equals(preimage, that.preimage) &&
+                Objects.equals(feesPaid, that.feesPaid);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(preimage, feesPaid);
+    }
+
+    @Override
+    public String toString() {
+        return "NWCKeysendResponse[" +
+                "preimage=" + preimage + ", " +
+                "feesPaid=" + feesPaid + ']';
+    }
+}

@@ -38,6 +38,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
@@ -48,8 +49,53 @@ import org.ngengine.platform.NGEPlatform;
 import org.ngengine.platform.NGEUtils;
 
 public interface NostrEvent extends Cloneable, Serializable {
-    public static record Coordinates(String type, String kind, String coords) {}
-
+    public static class Coordinates {
+        private final String type;
+        private final String kind;
+        private final String coords;
+        
+        public Coordinates(String type, String kind, String coords) {
+            this.type = type;
+            this.kind = kind;
+            this.coords = coords;
+        }
+        
+        public String type() {
+            return type;
+        }
+        
+        public String kind() {
+            return kind;
+        }
+        
+        public String coords() {
+            return coords;
+        }
+        
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            Coordinates that = (Coordinates) o;
+            return Objects.equals(type, that.type) && 
+                Objects.equals(kind, that.kind) && 
+                Objects.equals(coords, that.coords);
+        }
+        
+        @Override
+        public int hashCode() {
+            return Objects.hash(type, kind, coords);
+        }
+        
+        @Override
+        public String toString() {
+            return "Coordinates[" +
+                "type=" + type + ", " +
+                "kind=" + kind + ", " +
+                "coords=" + coords + ']';
+        }
+    }
+    
     class TagValue {
 
         private final List<String> values;

@@ -20,12 +20,7 @@ dependencies {
     api "org.ngengine:bech32:${project.version.endsWith('-SNAPSHOT') ? rootProject.ext.bech32VersionSnapshot : rootProject.ext.bech32Version}"
     api "org.ngengine:lnurl4j:${project.version.endsWith('-SNAPSHOT') ? rootProject.ext.lnurlVersionSnapshot : rootProject.ext.lnurlVersion}"
 }
-
-java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
-    }
-}
+ 
 
 tasks.named('test') {
     useJUnit()
@@ -35,8 +30,4 @@ tasks.named('test') {
     }
 }
 
-tasks.withType(JavaCompile) {
-    sourceCompatibility = '21'
-    targetCompatibility = '21'
-}
-
+ 

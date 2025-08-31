@@ -32,5 +32,46 @@
 package org.ngengine.wallets.nip47.keysend;
 
 import jakarta.annotation.Nonnull;
+import java.util.Objects;
 
-public record NWCTLVRecord(long type, @Nonnull String value) {}
+public class NWCTLVRecord {
+    private final long type;
+    private final @Nonnull String value;
+
+    public NWCTLVRecord(long type, @Nonnull String value) {
+        this.type = type;
+        this.value = value;
+    }
+
+    public long type() {
+        return type;
+    }
+
+    @Nonnull
+    public String value() {
+        return value;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o)
+            return true;
+        if (o == null || getClass() != o.getClass())
+            return false;
+        NWCTLVRecord that = (NWCTLVRecord) o;
+        return type == that.type &&
+                Objects.equals(value, that.value);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(type, value);
+    }
+
+    @Override
+    public String toString() {
+        return "NWCTLVRecord[" +
+                "type=" + type + ", " +
+                "value=" + value + ']';
+    }
+}

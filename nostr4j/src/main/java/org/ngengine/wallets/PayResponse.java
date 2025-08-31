@@ -33,5 +33,56 @@ package org.ngengine.wallets;
 
 import jakarta.annotation.Nonnull;
 import jakarta.annotation.Nullable;
+import java.util.Objects;
 
-public record PayResponse(@Nonnull String preimage, @Nullable Long feesPaid, @Nullable String id) {}
+public class PayResponse {
+    private final @Nonnull String preimage;
+    private final @Nullable Long feesPaid;
+    private final @Nullable String id;
+
+    public PayResponse(@Nonnull String preimage, @Nullable Long feesPaid, @Nullable String id) {
+        this.preimage = preimage;
+        this.feesPaid = feesPaid;
+        this.id = id;
+    }
+
+    @Nonnull
+    public String preimage() {
+        return preimage;
+    }
+
+    @Nullable
+    public Long feesPaid() {
+        return feesPaid;
+    }
+
+    @Nullable
+    public String id() {
+        return id;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o)
+            return true;
+        if (o == null || getClass() != o.getClass())
+            return false;
+        PayResponse that = (PayResponse) o;
+        return Objects.equals(preimage, that.preimage) &&
+                Objects.equals(feesPaid, that.feesPaid) &&
+                Objects.equals(id, that.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(preimage, feesPaid, id);
+    }
+
+    @Override
+    public String toString() {
+        return "PayResponse[" +
+                "preimage=" + preimage + ", " +
+                "feesPaid=" + feesPaid + ", " +
+                "id=" + id + ']';
+    }
+}

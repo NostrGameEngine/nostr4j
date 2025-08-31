@@ -16,11 +16,7 @@ dependencies {
 
 }
 
-java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
-    }
-}
+ 
 
 tasks.named('test') {
     useJUnit()
@@ -30,10 +26,7 @@ tasks.named('test') {
     }
 }
 
-tasks.withType(JavaCompile) {
-    sourceCompatibility = '21'
-    targetCompatibility = '21'
-}
+ 
 
 task runBenchmarks(type: JavaExec) {    
     group = 'application'
