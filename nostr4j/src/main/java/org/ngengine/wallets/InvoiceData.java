@@ -39,32 +39,54 @@ import java.util.Objects;
 import org.ngengine.platform.NGEUtils;
 
 public class InvoiceData {
-    private final @Nonnull InvoiceType type;
-    private final @Nullable String invoice;
-    private final @Nullable String description;
-    private final @Nullable String descriptionHash;
-    private final @Nullable String preimage;
-    private final @Nonnull String paymentHash;
+
+    @Nonnull
+    private final InvoiceType type;
+
+    @Nullable
+    private final String invoice;
+
+    @Nullable
+    private final String description;
+
+    @Nullable
+    private final String descriptionHash;
+
+    @Nullable
+    private final String preimage;
+
+    @Nonnull
+    private final String paymentHash;
+
     private final long amountMsats;
     private final long feesPaid;
-    private final @Nonnull Instant createdAt;
-    private final @Nullable Instant expiresAt;
-    private final @Nullable Instant settledAt;
-    private final @Nullable Map<String, Object> metadata;
+
+    @Nonnull
+    private final Instant createdAt;
+
+    @Nullable
+    private final Instant expiresAt;
+
+    @Nullable
+    private final Instant settledAt;
+
+    @Nullable
+    private final Map<String, Object> metadata;
 
     public InvoiceData(
-            @Nonnull InvoiceType type,
-            @Nullable String invoice,
-            @Nullable String description,
-            @Nullable String descriptionHash,
-            @Nullable String preimage,
-            @Nonnull String paymentHash,
-            long amountMsats,
-            long feesPaid,
-            @Nonnull Instant createdAt,
-            @Nullable Instant expiresAt,
-            @Nullable Instant settledAt,
-            @Nullable Map<String, Object> metadata) {
+        @Nonnull InvoiceType type,
+        @Nullable String invoice,
+        @Nullable String description,
+        @Nullable String descriptionHash,
+        @Nullable String preimage,
+        @Nonnull String paymentHash,
+        long amountMsats,
+        long feesPaid,
+        @Nonnull Instant createdAt,
+        @Nullable Instant expiresAt,
+        @Nullable Instant settledAt,
+        @Nullable Map<String, Object> metadata
+    ) {
         this.type = type;
         this.invoice = invoice;
         this.description = description;
@@ -150,45 +172,83 @@ public class InvoiceData {
 
     @Override
     public boolean equals(Object o) {
-        if (this == o)
-            return true;
-        if (o == null || getClass() != o.getClass())
-            return false;
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
         InvoiceData that = (InvoiceData) o;
-        return amountMsats == that.amountMsats &&
-                feesPaid == that.feesPaid &&
-                Objects.equals(type, that.type) &&
-                Objects.equals(invoice, that.invoice) &&
-                Objects.equals(description, that.description) &&
-                Objects.equals(descriptionHash, that.descriptionHash) &&
-                Objects.equals(preimage, that.preimage) &&
-                Objects.equals(paymentHash, that.paymentHash) &&
-                Objects.equals(createdAt, that.createdAt) &&
-                Objects.equals(expiresAt, that.expiresAt) &&
-                Objects.equals(settledAt, that.settledAt) &&
-                Objects.equals(metadata, that.metadata);
+        return (
+            amountMsats == that.amountMsats &&
+            feesPaid == that.feesPaid &&
+            Objects.equals(type, that.type) &&
+            Objects.equals(invoice, that.invoice) &&
+            Objects.equals(description, that.description) &&
+            Objects.equals(descriptionHash, that.descriptionHash) &&
+            Objects.equals(preimage, that.preimage) &&
+            Objects.equals(paymentHash, that.paymentHash) &&
+            Objects.equals(createdAt, that.createdAt) &&
+            Objects.equals(expiresAt, that.expiresAt) &&
+            Objects.equals(settledAt, that.settledAt) &&
+            Objects.equals(metadata, that.metadata)
+        );
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(type, invoice, description, descriptionHash, preimage, paymentHash,
-                amountMsats, feesPaid, createdAt, expiresAt, settledAt, metadata);
+        return Objects.hash(
+            type,
+            invoice,
+            description,
+            descriptionHash,
+            preimage,
+            paymentHash,
+            amountMsats,
+            feesPaid,
+            createdAt,
+            expiresAt,
+            settledAt,
+            metadata
+        );
     }
 
     @Override
     public String toString() {
-        return "InvoiceData[" +
-                "type=" + type + ", " +
-                "invoice=" + invoice + ", " +
-                "description=" + description + ", " +
-                "descriptionHash=" + descriptionHash + ", " +
-                "preimage=" + preimage + ", " +
-                "paymentHash=" + paymentHash + ", " +
-                "amountMsats=" + amountMsats + ", " +
-                "feesPaid=" + feesPaid + ", " +
-                "createdAt=" + createdAt + ", " +
-                "expiresAt=" + expiresAt + ", " +
-                "settledAt=" + settledAt + ", " +
-                "metadata=" + metadata + ']';
+        return (
+            "InvoiceData[" +
+            "type=" +
+            type +
+            ", " +
+            "invoice=" +
+            invoice +
+            ", " +
+            "description=" +
+            description +
+            ", " +
+            "descriptionHash=" +
+            descriptionHash +
+            ", " +
+            "preimage=" +
+            preimage +
+            ", " +
+            "paymentHash=" +
+            paymentHash +
+            ", " +
+            "amountMsats=" +
+            amountMsats +
+            ", " +
+            "feesPaid=" +
+            feesPaid +
+            ", " +
+            "createdAt=" +
+            createdAt +
+            ", " +
+            "expiresAt=" +
+            expiresAt +
+            ", " +
+            "settledAt=" +
+            settledAt +
+            ", " +
+            "metadata=" +
+            metadata +
+            ']'
+        );
     }
 }

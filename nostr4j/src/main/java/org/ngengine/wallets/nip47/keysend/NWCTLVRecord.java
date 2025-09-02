@@ -35,8 +35,11 @@ import jakarta.annotation.Nonnull;
 import java.util.Objects;
 
 public class NWCTLVRecord {
+
     private final long type;
-    private final @Nonnull String value;
+
+    @Nonnull
+    private final String value;
 
     public NWCTLVRecord(long type, @Nonnull String value) {
         this.type = type;
@@ -54,13 +57,10 @@ public class NWCTLVRecord {
 
     @Override
     public boolean equals(Object o) {
-        if (this == o)
-            return true;
-        if (o == null || getClass() != o.getClass())
-            return false;
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
         NWCTLVRecord that = (NWCTLVRecord) o;
-        return type == that.type &&
-                Objects.equals(value, that.value);
+        return type == that.type && Objects.equals(value, that.value);
     }
 
     @Override
@@ -70,8 +70,6 @@ public class NWCTLVRecord {
 
     @Override
     public String toString() {
-        return "NWCTLVRecord[" +
-                "type=" + type + ", " +
-                "value=" + value + ']';
+        return "NWCTLVRecord[" + "type=" + type + ", " + "value=" + value + ']';
     }
 }

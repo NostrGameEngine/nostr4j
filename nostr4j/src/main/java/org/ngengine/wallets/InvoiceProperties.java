@@ -36,16 +36,24 @@ import java.time.Duration;
 import java.util.Objects;
 
 public class InvoiceProperties {
+
     private final long amountMsats;
-    private final @Nullable String description;
-    private final @Nullable String descriptionHash;
-    private final @Nullable Duration expiry;
+
+    @Nullable
+    private final String description;
+
+    @Nullable
+    private final String descriptionHash;
+
+    @Nullable
+    private final Duration expiry;
 
     public InvoiceProperties(
-            long amountMsats,
-            @Nullable String description,
-            @Nullable String descriptionHash,
-            @Nullable Duration expiry) {
+        long amountMsats,
+        @Nullable String description,
+        @Nullable String descriptionHash,
+        @Nullable Duration expiry
+    ) {
         this.amountMsats = amountMsats;
         this.description = description;
         this.descriptionHash = descriptionHash;
@@ -73,15 +81,15 @@ public class InvoiceProperties {
 
     @Override
     public boolean equals(Object o) {
-        if (this == o)
-            return true;
-        if (o == null || getClass() != o.getClass())
-            return false;
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
         InvoiceProperties that = (InvoiceProperties) o;
-        return amountMsats == that.amountMsats &&
-                Objects.equals(description, that.description) &&
-                Objects.equals(descriptionHash, that.descriptionHash) &&
-                Objects.equals(expiry, that.expiry);
+        return (
+            amountMsats == that.amountMsats &&
+            Objects.equals(description, that.description) &&
+            Objects.equals(descriptionHash, that.descriptionHash) &&
+            Objects.equals(expiry, that.expiry)
+        );
     }
 
     @Override
@@ -91,10 +99,20 @@ public class InvoiceProperties {
 
     @Override
     public String toString() {
-        return "InvoiceProperties[" +
-                "amountMsats=" + amountMsats + ", " +
-                "description=" + description + ", " +
-                "descriptionHash=" + descriptionHash + ", " +
-                "expiry=" + expiry + ']';
+        return (
+            "InvoiceProperties[" +
+            "amountMsats=" +
+            amountMsats +
+            ", " +
+            "description=" +
+            description +
+            ", " +
+            "descriptionHash=" +
+            descriptionHash +
+            ", " +
+            "expiry=" +
+            expiry +
+            ']'
+        );
     }
 }

@@ -31,11 +31,12 @@
 
 package org.ngengine.blossom4j;
 
-import org.ngengine.platform.transport.NGEHttpResponse;
 import java.util.Arrays;
 import java.util.Objects;
+import org.ngengine.platform.transport.NGEHttpResponse;
 
 public class BlossomBlobResponse {
+
     private final byte[] data;
     private final NGEHttpResponse httpResponse;
 
@@ -54,13 +55,10 @@ public class BlossomBlobResponse {
 
     @Override
     public boolean equals(Object o) {
-        if (this == o)
-            return true;
-        if (o == null || getClass() != o.getClass())
-            return false;
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
         BlossomBlobResponse that = (BlossomBlobResponse) o;
-        return Arrays.equals(data, that.data) &&
-                Objects.equals(httpResponse, that.httpResponse);
+        return Arrays.equals(data, that.data) && Objects.equals(httpResponse, that.httpResponse);
     }
 
     @Override
@@ -72,8 +70,6 @@ public class BlossomBlobResponse {
 
     @Override
     public String toString() {
-        return "BlossomBlobResponse[" +
-                "data=" + Arrays.toString(data) + ", " +
-                "httpResponse=" + httpResponse + ']';
+        return "BlossomBlobResponse[" + "data=" + Arrays.toString(data) + ", " + "httpResponse=" + httpResponse + ']';
     }
 }

@@ -35,6 +35,7 @@ import java.util.List;
 import java.util.Objects;
 
 public class WalletInfo {
+
     private final String alias;
     private final String color;
     private final String pubkey;
@@ -45,14 +46,15 @@ public class WalletInfo {
     private final List<String> notifications;
 
     public WalletInfo(
-            String alias,
-            String color,
-            String pubkey,
-            String network,
-            int blockHeight,
-            String blockHash,
-            List<String> methods,
-            List<String> notifications) {
+        String alias,
+        String color,
+        String pubkey,
+        String network,
+        int blockHeight,
+        String blockHash,
+        List<String> methods,
+        List<String> notifications
+    ) {
         this.alias = alias;
         this.color = color;
         this.pubkey = pubkey;
@@ -97,19 +99,19 @@ public class WalletInfo {
 
     @Override
     public boolean equals(Object o) {
-        if (this == o)
-            return true;
-        if (o == null || getClass() != o.getClass())
-            return false;
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
         WalletInfo that = (WalletInfo) o;
-        return blockHeight == that.blockHeight &&
-                Objects.equals(alias, that.alias) &&
-                Objects.equals(color, that.color) &&
-                Objects.equals(pubkey, that.pubkey) &&
-                Objects.equals(network, that.network) &&
-                Objects.equals(blockHash, that.blockHash) &&
-                Objects.equals(methods, that.methods) &&
-                Objects.equals(notifications, that.notifications);
+        return (
+            blockHeight == that.blockHeight &&
+            Objects.equals(alias, that.alias) &&
+            Objects.equals(color, that.color) &&
+            Objects.equals(pubkey, that.pubkey) &&
+            Objects.equals(network, that.network) &&
+            Objects.equals(blockHash, that.blockHash) &&
+            Objects.equals(methods, that.methods) &&
+            Objects.equals(notifications, that.notifications)
+        );
     }
 
     @Override
@@ -119,14 +121,32 @@ public class WalletInfo {
 
     @Override
     public String toString() {
-        return "WalletInfo[" +
-                "alias=" + alias + ", " +
-                "color=" + color + ", " +
-                "pubkey=" + pubkey + ", " +
-                "network=" + network + ", " +
-                "blockHeight=" + blockHeight + ", " +
-                "blockHash=" + blockHash + ", " +
-                "methods=" + methods + ", " +
-                "notifications=" + notifications + ']';
+        return (
+            "WalletInfo[" +
+            "alias=" +
+            alias +
+            ", " +
+            "color=" +
+            color +
+            ", " +
+            "pubkey=" +
+            pubkey +
+            ", " +
+            "network=" +
+            network +
+            ", " +
+            "blockHeight=" +
+            blockHeight +
+            ", " +
+            "blockHash=" +
+            blockHash +
+            ", " +
+            "methods=" +
+            methods +
+            ", " +
+            "notifications=" +
+            notifications +
+            ']'
+        );
     }
 }

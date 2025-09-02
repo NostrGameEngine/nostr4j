@@ -36,9 +36,15 @@ import jakarta.annotation.Nullable;
 import java.util.Objects;
 
 public class PayResponse {
-    private final @Nonnull String preimage;
-    private final @Nullable Long feesPaid;
-    private final @Nullable String id;
+
+    @Nonnull
+    private final String preimage;
+
+    @Nullable
+    private final Long feesPaid;
+
+    @Nullable
+    private final String id;
 
     public PayResponse(@Nonnull String preimage, @Nullable Long feesPaid, @Nullable String id) {
         this.preimage = preimage;
@@ -63,14 +69,12 @@ public class PayResponse {
 
     @Override
     public boolean equals(Object o) {
-        if (this == o)
-            return true;
-        if (o == null || getClass() != o.getClass())
-            return false;
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
         PayResponse that = (PayResponse) o;
-        return Objects.equals(preimage, that.preimage) &&
-                Objects.equals(feesPaid, that.feesPaid) &&
-                Objects.equals(id, that.id);
+        return (
+            Objects.equals(preimage, that.preimage) && Objects.equals(feesPaid, that.feesPaid) && Objects.equals(id, that.id)
+        );
     }
 
     @Override
@@ -80,9 +84,6 @@ public class PayResponse {
 
     @Override
     public String toString() {
-        return "PayResponse[" +
-                "preimage=" + preimage + ", " +
-                "feesPaid=" + feesPaid + ", " +
-                "id=" + id + ']';
+        return "PayResponse[" + "preimage=" + preimage + ", " + "feesPaid=" + feesPaid + ", " + "id=" + id + ']';
     }
 }

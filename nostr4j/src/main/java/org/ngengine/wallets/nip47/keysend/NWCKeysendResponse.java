@@ -36,8 +36,12 @@ import jakarta.annotation.Nullable;
 import java.util.Objects;
 
 public class NWCKeysendResponse {
-    private final @Nonnull String preimage;
-    private final @Nullable Long feesPaid;
+
+    @Nonnull
+    private final String preimage;
+
+    @Nullable
+    private final Long feesPaid;
 
     public NWCKeysendResponse(@Nonnull String preimage, @Nullable Long feesPaid) {
         this.preimage = preimage;
@@ -56,13 +60,10 @@ public class NWCKeysendResponse {
 
     @Override
     public boolean equals(Object o) {
-        if (this == o)
-            return true;
-        if (o == null || getClass() != o.getClass())
-            return false;
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
         NWCKeysendResponse that = (NWCKeysendResponse) o;
-        return Objects.equals(preimage, that.preimage) &&
-                Objects.equals(feesPaid, that.feesPaid);
+        return Objects.equals(preimage, that.preimage) && Objects.equals(feesPaid, that.feesPaid);
     }
 
     @Override
@@ -72,8 +73,6 @@ public class NWCKeysendResponse {
 
     @Override
     public String toString() {
-        return "NWCKeysendResponse[" +
-                "preimage=" + preimage + ", " +
-                "feesPaid=" + feesPaid + ']';
+        return "NWCKeysendResponse[" + "preimage=" + preimage + ", " + "feesPaid=" + feesPaid + ']';
     }
 }

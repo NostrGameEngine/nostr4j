@@ -36,6 +36,7 @@ import java.util.Objects;
 import org.ngengine.platform.transport.NGEHttpResponse;
 
 public class BlossomResponse {
+
     private final List<BlobDescriptor> blobs;
     private final NGEHttpResponse httpResponse;
 
@@ -54,13 +55,10 @@ public class BlossomResponse {
 
     @Override
     public boolean equals(Object o) {
-        if (this == o)
-            return true;
-        if (o == null || getClass() != o.getClass())
-            return false;
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
         BlossomResponse that = (BlossomResponse) o;
-        return Objects.equals(blobs, that.blobs) &&
-                Objects.equals(httpResponse, that.httpResponse);
+        return Objects.equals(blobs, that.blobs) && Objects.equals(httpResponse, that.httpResponse);
     }
 
     @Override
@@ -70,8 +68,6 @@ public class BlossomResponse {
 
     @Override
     public String toString() {
-        return "BlossomResponse[" +
-                "blobs=" + blobs + ", " +
-                "httpResponse=" + httpResponse + ']';
+        return "BlossomResponse[" + "blobs=" + blobs + ", " + "httpResponse=" + httpResponse + ']';
     }
 }
