@@ -80,11 +80,28 @@ allprojects {
 
 def applyConf(proj){
     
+    def jts = proj.extensions.getByType(org.gradle.jvm.toolchain.JavaToolchainService)
+
     proj.java {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(11)
+        }
         withJavadocJar()
-        withSourcesJar()     
+        withSourcesJar()
+    }
+
+    // Use the service for test compilation
+    proj.tasks.named('compileTestJava') {
+        javaCompiler = jts.compilerFor {
+            languageVersion = JavaLanguageVersion.of(21)
+        }
+    }
+
+    // And for running tests
+    proj.tasks.named('test') {
+        javaLauncher = jts.launcherFor {
+            languageVersion = JavaLanguageVersion.of(21)
+        }
     }
     
     proj.apply plugin: "com.github.spotbugs"
