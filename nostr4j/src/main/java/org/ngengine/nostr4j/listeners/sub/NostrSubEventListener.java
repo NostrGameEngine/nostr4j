@@ -41,7 +41,8 @@ import org.ngengine.nostr4j.event.SignedNostrEvent;
  * <p>
  * Example usage:
  * </p>
- * <pre>
+ * 
+ * <pre>{@code
  * subscription.listenEvent((event, stored) -> {
  *     System.out.println("Received event: " + event.getContent());
  *     if (stored) {
@@ -49,7 +50,7 @@ import org.ngengine.nostr4j.event.SignedNostrEvent;
  *     } else {
  *         System.out.println("This is a new, real-time event");
  *     }
- * });
+ * });}
  * </pre>
  */
 public interface NostrSubEventListener extends NostrSubListener {

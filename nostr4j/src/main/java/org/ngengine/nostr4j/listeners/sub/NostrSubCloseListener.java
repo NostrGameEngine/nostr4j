@@ -36,19 +36,21 @@ import java.util.List;
  * A listener interface for subscription closure events.
  * <p>
  * This interface defines a callback method that is invoked when a subscription
- * is closed, either by the client or by the relay. The listener receives information
+ * is closed, either by the client or by the relay. The listener receives
+ * information
  * about why the subscription was closed.
  * </p>
  * <p>
  * Example usage:
  * </p>
- * <pre>
+ * 
+ * <pre>{@code
  * subscription.listenClose(reasons -> {
  *     System.out.println("Subscription closed for the following reasons:");
  *     for (String reason : reasons) {
  *         System.out.println(" - " + reason);
  *     }
- * });
+ * });}
  * </pre>
  */
 public interface NostrSubCloseListener extends NostrSubListener {

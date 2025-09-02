@@ -55,20 +55,23 @@ import org.ngengine.platform.NGEUtils;
 /**
  * Represents a subscription to a Nostr relay based on specific filter criteria.
  * <p>
- * A subscription allows clients to receive events matching specific filters from the relay.
- * It manages listeners for different types of subscription events (event received, end of stored events,
+ * A subscription allows clients to receive events matching specific filters
+ * from the relay.
+ * It manages listeners for different types of subscription events (event
+ * received, end of stored events,
  * subscription closed) and tracks event delivery.
  * </p>
  * <p>
  * Example usage:
  * </p>
- * <pre>
+ * 
+ * <pre>{@code
  * NostrFilter filter = new NostrFilter().kind(1).limit(10);
  * NostrSubscription subscription = relaySubManager.createSubscription(filter, new PassthroughEventTracker())
  *     .listenEvent((event, stored) -> System.out.println("Event: " + event.getContent()))
  *     .listenEose(everywhere -> System.out.println("End of stored events"));
  * subscription.open();
- * </pre>
+ * }</pre>
  */
 public class NostrSubscription extends NostrMessage {
 
