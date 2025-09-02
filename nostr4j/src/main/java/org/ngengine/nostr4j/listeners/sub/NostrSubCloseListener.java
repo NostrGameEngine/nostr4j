@@ -43,7 +43,7 @@ import java.util.List;
  * <p>
  * Example usage:
  * </p>
- * 
+ *
  * <pre>{@code
  * subscription.listenClose(reasons -> {
  *     System.out.println("Subscription closed for the following reasons:");

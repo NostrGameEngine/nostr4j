@@ -64,7 +64,7 @@ import org.ngengine.platform.NGEUtils;
  * <p>
  * Example usage:
  * </p>
- * 
+ *
  * <pre>{@code
  * NostrFilter filter = new NostrFilter().kind(1).limit(10);
  * NostrSubscription subscription = relaySubManager.createSubscription(filter, new PassthroughEventTracker())

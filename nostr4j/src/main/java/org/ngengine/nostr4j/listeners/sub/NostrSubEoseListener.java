@@ -46,7 +46,7 @@ import org.ngengine.nostr4j.NostrRelay;
  * <p>
  * Example usage:
  * </p>
- * 
+ *
  * <pre>{@code
  * subscription.listenEose(everywhere -> {
  *     if (everywhere) {

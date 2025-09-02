@@ -41,7 +41,7 @@ import org.ngengine.nostr4j.event.SignedNostrEvent;
  * <p>
  * Example usage:
  * </p>
- * 
+ *
  * <pre>{@code
  * subscription.listenEvent((event, stored) -> {
  *     System.out.println("Received event: " + event.getContent());
