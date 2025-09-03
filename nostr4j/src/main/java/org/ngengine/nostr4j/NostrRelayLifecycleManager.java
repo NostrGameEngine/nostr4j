@@ -72,6 +72,7 @@ public class NostrRelayLifecycleManager implements NostrRelayComponent {
         if (rcv instanceof NostrClosedMessage) {
             NostrClosedMessage msg = (NostrClosedMessage) rcv;
             String subId = msg.getSubId();
+            logger.fine("Removing closed subscription from lifecycle tracker: " + subId);
             this.subTracker.remove(subId);
         } else if (rcv instanceof NostrEvent) {
             this.keepAlive();
@@ -101,6 +102,7 @@ public class NostrRelayLifecycleManager implements NostrRelayComponent {
 
     @Override
     public boolean onRelayDisconnect(NostrRelay relay, String reason, boolean byClient) {
+        logger.fine("Clearing tracked subscription in lifecycle manager for relay: " + relay.getUrl() + " since it was closed for reason: " + reason + (byClient ? " (by client)" : ""));
         this.subTracker.clear();
         return true;
     }
@@ -120,9 +122,10 @@ public class NostrRelayLifecycleManager implements NostrRelayComponent {
             // you just subscribe to everything and the relay will automatically ignore
             // duplicates
             if (subTracker.addIfAbsent(sub.getSubId())) {
-                assert dbg(() -> {
-                    logger.finer("Tracking new subscription: " + sub.getSubId());
-                });
+                // assert dbg(() -> {
+                // logger.finer("Tracking new subscription: " + sub.getSubId());
+                logger.fine("Adding subscription to lifecycle tracker: " + sub.getSubId());
+                // });
             } else {
                 assert dbg(() -> {
                     logger.finer("Subscription already tracked: " + sub.getSubId());
@@ -131,9 +134,9 @@ public class NostrRelayLifecycleManager implements NostrRelayComponent {
             }
         } else if (message instanceof NostrSubscription.NostrSubCloseMessage) {
             subTracker.remove(((NostrSubscription.NostrSubCloseMessage) message).getId());
-            assert dbg(() -> {
-                logger.finer("Untracking subscription: " + ((NostrSubscription.NostrSubCloseMessage) message).getId());
-            });
+            // assert dbg(() -> {
+            logger.fine("Removing subscription from lifecycle tracker due to it being closed by the client: " + ((NostrSubscription.NostrSubCloseMessage) message).getId());
+            // });
         }
         return true;
     }
