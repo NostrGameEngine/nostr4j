@@ -32,6 +32,8 @@ package org.ngengine.nostr4j.unit;
 
 import static org.junit.Assert.*;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutorService;
@@ -43,137 +45,166 @@ import org.ngengine.nostr4j.utils.ExponentialBackoff;
 
 public class ExponentialBackoffTest {
 
+    private static void assertDurationEquals(Duration expected, Duration actual) {
+        assertEquals("Durations differ", expected, actual);
+    }
+
+    private static void assertDurationApprox(Duration expected, Duration actual, Duration tolerance) {
+        long diff = Math.abs(expected.toNanos() - actual.toNanos());
+        assertTrue("Duration " + actual + " not within ±" + tolerance + " of " + expected, diff <= tolerance.toNanos());
+    }
+
     @Test
     public void testConstructorValidation() {
-        // Test valid construction with cooldown
-        new ExponentialBackoff(1, 60, 30, TimeUnit.SECONDS, 2.0f);
+        // Valid construction
+        new ExponentialBackoff(Duration.ofSeconds(1), Duration.ofSeconds(60), Duration.ofSeconds(30), 2.0f);
 
-        // Test invalid parameters
+        // initialDelay <= 0
         try {
-            new ExponentialBackoff(0, 60, 30, TimeUnit.SECONDS, 2.0f);
+            new ExponentialBackoff(Duration.ZERO, Duration.ofSeconds(60), Duration.ofSeconds(30), 2.0f);
             fail("Should throw exception for initialDelay <= 0");
-        } catch (IllegalArgumentException e) {
-            // Expected
+        } catch (IllegalArgumentException expected) {
         }
 
+        // maxDelay < initialDelay
         try {
-            new ExponentialBackoff(60, 30, 30, TimeUnit.SECONDS, 2.0f);
+            new ExponentialBackoff(Duration.ofSeconds(60), Duration.ofSeconds(30), Duration.ofSeconds(30), 2.0f);
             fail("Should throw exception for maxDelay < initialDelay");
-        } catch (IllegalArgumentException e) {
-            // Expected
+        } catch (IllegalArgumentException expected) {
         }
 
+        // multiplier <= 1.0
         try {
-            new ExponentialBackoff(1, 60, 30, TimeUnit.SECONDS, 1.0f);
+            new ExponentialBackoff(Duration.ofSeconds(1), Duration.ofSeconds(60), Duration.ofSeconds(30), 1.0f);
             fail("Should throw exception for multiplier <= 1.0");
-        } catch (IllegalArgumentException e) {
-            // Expected
+        } catch (IllegalArgumentException expected) {
         }
 
+        // cooldown <= 0
         try {
-            new ExponentialBackoff(1, 60, 0, TimeUnit.SECONDS, 2.0f);
+            new ExponentialBackoff(Duration.ofSeconds(1), Duration.ofSeconds(60), Duration.ZERO, 2.0f);
             fail("Should throw exception for cooldown <= 0");
-        } catch (IllegalArgumentException e) {
-            // Expected
+        } catch (IllegalArgumentException expected) {
         }
     }
 
     @Test
     public void testExponentialIncrease() {
-        ExponentialBackoff backoff = new ExponentialBackoff(1, 1000, 30, TimeUnit.SECONDS, 2.0f);
+        ExponentialBackoff backoff = new ExponentialBackoff(Duration.ofSeconds(1), Duration.ofSeconds(1000),
+                Duration.ofSeconds(30), 2.0f);
 
-        // Initial state
-        long now = TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis());
-        assertEquals(0, backoff.getNextAttemptTime(now, TimeUnit.SECONDS));
+        Instant t0 = Instant.EPOCH;
 
-        // First failure - should be at current time + 1 second
-        backoff.registerFailure();
-        now = TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis());
-        long firstDelay = backoff.getNextAttemptTime(now, TimeUnit.SECONDS);
-        assertTrue("First delay should be approximately 1 second", Math.abs(firstDelay - 1) <= 1);
+        // Initial state: no wait
+        assertDurationEquals(Duration.ZERO, backoff.getDelay(t0));
 
-        // Second failure - should double to 2 seconds
-        backoff.registerFailure();
-        now = TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis());
-        long secondDelay = backoff.getNextAttemptTime(now, TimeUnit.SECONDS);
-        assertTrue("Second delay should be approximately 2 seconds", Math.abs(secondDelay - 2) <= 1);
+        // First failure -> delay 1s
+        backoff.registerFailure(t0);
+        assertDurationEquals(Duration.ofSeconds(1), backoff.getDelay(t0));
 
-        // Third failure - should double to 4 seconds
-        backoff.registerFailure();
-        now = TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis());
-        long thirdDelay = backoff.getNextAttemptTime(now, TimeUnit.SECONDS);
-        assertTrue("Third delay should be approximately 4 seconds", Math.abs(thirdDelay - 4) <= 1);
+        // Second failure -> delay 2s
+        backoff.registerFailure(t0);
+        assertDurationEquals(Duration.ofSeconds(2), backoff.getDelay(t0));
+
+        // Third failure -> delay 4s
+        backoff.registerFailure(t0);
+        assertDurationEquals(Duration.ofSeconds(4), backoff.getDelay(t0));
     }
 
     @Test
     public void testMaxDelayLimit() {
-        // Set max delay to 4 seconds
-        ExponentialBackoff backoff = new ExponentialBackoff(1, 4, 30, TimeUnit.SECONDS, 2.0f);
+        ExponentialBackoff backoff = new ExponentialBackoff(Duration.ofSeconds(1), Duration.ofSeconds(4),
+                Duration.ofSeconds(30), 2.0f);
 
-        // Cause multiple failures to exceed max delay
-        backoff.registerFailure(); // 1 second
-        backoff.registerFailure(); // 2 seconds
-        backoff.registerFailure(); // 4 seconds (at max)
-        backoff.registerFailure(); // Should still be 4 seconds
+        Instant t0 = Instant.EPOCH;
 
-        long now = TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis());
-        long delay = backoff.getNextAttemptTime(now, TimeUnit.SECONDS);
+        backoff.registerFailure(t0); // 1s
+        backoff.registerFailure(t0); // 2s
+        backoff.registerFailure(t0); // 4s (max)
+        backoff.registerFailure(t0); // still 4s
 
-        assertTrue("Delay should be capped at max (4 seconds)", delay <= 4);
+        assertDurationEquals(Duration.ofSeconds(4), backoff.getDelay(t0));
     }
 
     @Test
-    public void testCooldownDelay() {
-        // Use a very short cooldown period for testing (2 seconds)
-        ExponentialBackoff backoff = new ExponentialBackoff(1, 100, 2, TimeUnit.SECONDS, 2.0f);
+    public void testCooldownImmediateFailureKeepsCurrentDelay() {
+        // Immediate failure after success should keep the current delay (no reset yet)
+        ExponentialBackoff backoff = new ExponentialBackoff(Duration.ofSeconds(1), Duration.ofSeconds(100),
+                Duration.ofSeconds(2), 2.0f);
 
-        backoff.registerFailure(); //1
-        backoff.registerFailure(); // 2
-        backoff.registerSuccess();
-        backoff.registerFailure(); // 4
-        long now = TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis());
-        long delay = backoff.getNextAttemptTime(now, TimeUnit.SECONDS);
-        assertTrue("After success, delay should be 4 seconds", delay == 4);
+        Instant t0 = Instant.EPOCH;
 
-        backoff.registerFailure();
-        now = TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis() + 6000);
-        delay = backoff.getNextAttemptTime(now, TimeUnit.SECONDS);
-        assertTrue("After cooldown period, delay should reset to initial (1 second)", Math.abs(delay - 1) <= 1);
+        backoff.registerFailure(t0); // 1
+        backoff.registerFailure(t0); // 2 (currentDelay becomes 4 for next)
+        backoff.registerSuccess(t0); // start cooldown window
+        backoff.registerFailure(t0); // schedule using currentDelay=4
+
+        assertDurationEquals(Duration.ofSeconds(4), backoff.getDelay(t0));
     }
 
     @Test
-    public void testDifferentTimeUnits() {
-        ExponentialBackoff backoff = new ExponentialBackoff(1000, 10000, 30000, TimeUnit.MILLISECONDS, 2.0f);
+    public void testCooldownResetAfterQuietPeriod() {
+        // If cooldown elapses without failures, the delay resets to initial on the next
+        // scheduling
+        ExponentialBackoff backoff = new ExponentialBackoff(Duration.ofSeconds(1), Duration.ofSeconds(100),
+                Duration.ofSeconds(2), 2.0f);
 
-        backoff.registerFailure();
+        Instant t0 = Instant.EPOCH;
 
-        // Test different output units
-        long nowMs = System.currentTimeMillis();
-        assertEquals(1, backoff.getNextAttemptTime(TimeUnit.MILLISECONDS.toSeconds(nowMs), TimeUnit.SECONDS));
-        assertEquals(1000, backoff.getNextAttemptTime(nowMs, TimeUnit.MILLISECONDS));
-        assertEquals(1000000, backoff.getNextAttemptTime(TimeUnit.MILLISECONDS.toMicros(nowMs), TimeUnit.MICROSECONDS));
+        backoff.registerFailure(t0); // 1
+        backoff.registerFailure(t0); // 2 (currentDelay becomes 4 for next)
+        backoff.registerSuccess(t0); // start cooldown window
+
+        // Advance time beyond cooldown without failures to trigger reset logic
+        Instant t1 = t0.plusSeconds(6);
+
+        // Calling getDelay with t1 resets internal delay back to initial
+        assertDurationEquals(Duration.ZERO, backoff.getDelay(t1));
+
+        // Next failure at t1 should use the initial delay (1s)
+        backoff.registerFailure(t1);
+        assertDurationEquals(Duration.ofSeconds(1), backoff.getDelay(t1));
     }
 
     @Test
     public void testTimeCalculationEdgeCases() {
-        ExponentialBackoff backoff = new ExponentialBackoff(60, 3600, 300, TimeUnit.SECONDS, 2.0f);
+        ExponentialBackoff backoff = new ExponentialBackoff(Duration.ofSeconds(60), Duration.ofSeconds(3600),
+                Duration.ofSeconds(300), 2.0f);
 
-        // Test with past time (should return 0)
-        backoff.registerFailure();
-        long futureTime = TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis()) + 120;
-        assertEquals(0, backoff.getNextAttemptTime(futureTime, TimeUnit.SECONDS));
+        Instant base = Instant.EPOCH;
 
-        // Test with future time
-        backoff.registerFailure();
-        long pastTime = TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis()) - 3600;
-        assertTrue(backoff.getNextAttemptTime(pastTime, TimeUnit.SECONDS) > 0);
+        // After scheduling, asking far in the future returns zero
+        backoff.registerFailure(base);
+        Instant future = base.plusSeconds(120);
+        assertDurationEquals(Duration.ZERO, backoff.getDelay(future));
+
+        // Asking in the past returns positive delay (since nextAttemptAt > past)
+        backoff.registerFailure(base);
+        Instant past = base.minusSeconds(3600);
+        assertTrue(backoff.getDelay(past).compareTo(Duration.ZERO) > 0);
+    }
+
+    @Test
+    public void testDurationValues() {
+        ExponentialBackoff backoff = new ExponentialBackoff(Duration.ofMillis(500), Duration.ofSeconds(10),
+                Duration.ofSeconds(5), 2.0f);
+
+        Instant t0 = Instant.EPOCH;
+
+        backoff.registerFailure(t0);
+        Duration d = backoff.getDelay(t0);
+
+        assertDurationEquals(Duration.ofMillis(500), d);
+        assertEquals(500, d.toMillis());
+        assertDurationApprox(Duration.ofNanos(500_000_000L), d, Duration.ofNanos(0));
     }
 
     @Test
     public void testThreadSafety() throws InterruptedException {
         final int THREAD_COUNT = 20;
         final int ITERATIONS = 50;
-        final ExponentialBackoff backoff = new ExponentialBackoff(1, 60, 5, TimeUnit.SECONDS, 2.0f);
+        final ExponentialBackoff backoff = new ExponentialBackoff(Duration.ofSeconds(1), Duration.ofSeconds(60),
+                Duration.ofSeconds(5), 2.0f);
         final CyclicBarrier barrier = new CyclicBarrier(THREAD_COUNT);
         final CountDownLatch latch = new CountDownLatch(THREAD_COUNT);
         final AtomicBoolean failed = new AtomicBoolean(false);
@@ -184,23 +215,17 @@ public class ExponentialBackoffTest {
             final int threadId = i;
             executor.submit(() -> {
                 try {
-                    // Synchronize threads to start at the same time
                     barrier.await();
 
                     for (int j = 0; j < ITERATIONS; j++) {
+                        Instant now = Instant.now();
                         if (threadId % 3 == 0) {
-                            // One third of threads call registerFailure
-                            backoff.registerFailure();
+                            backoff.registerFailure(now);
                         } else if (threadId % 3 == 1) {
-                            // One third call registerSuccess
-                            backoff.registerSuccess();
+                            backoff.registerSuccess(now);
                         } else {
-                            // One third read values
-                            long now = TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis());
-                            backoff.getNextAttemptTime(now, TimeUnit.SECONDS);
+                            backoff.getDelay(now);
                         }
-
-                        // Small delay to increase chance of race conditions
                         Thread.sleep(5);
                     }
                 } catch (Exception e) {
@@ -212,7 +237,6 @@ public class ExponentialBackoffTest {
             });
         }
 
-        // Wait for all threads to finish
         assertTrue("Threads didn't complete in time", latch.await(30, TimeUnit.SECONDS));
         executor.shutdown();
 

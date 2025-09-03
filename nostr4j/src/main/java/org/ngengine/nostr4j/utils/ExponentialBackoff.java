@@ -30,77 +30,116 @@
  */
 package org.ngengine.nostr4j.utils;
 
-import java.util.concurrent.TimeUnit;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Objects;
 
-// non thread safe
+// thread safe
 public final class ExponentialBackoff {
 
-    private final long initialDelay;
-    private final long maxDelay;
+    private final Duration initialDelay;
+    private final Duration maxDelay;
+    private final Duration cooldown;
     private final float multiplier;
-    private final long cooldown;
-    private final TimeUnit timeUnit;
 
-    private long currentDelay;
-    private long nextAttemptTimestamp = 0;
-    private long cooldownStartTimestamp = 0;
+    private Duration currentDelay;
+    private Instant nextAttemptAt = null;
+    private Instant cooldownStartAt = null;
 
     public ExponentialBackoff() {
-        this(1, 2 * 60, 21, TimeUnit.SECONDS, 2.0f);
+        this(Duration.ofSeconds(1), Duration.ofSeconds(120), Duration.ofSeconds(21), 2.0f);
     }
 
-    public ExponentialBackoff(long initialDelay, long maxDelay, long cooldown, TimeUnit timeUnit, float multiplier) {
-        if (initialDelay <= 0) {
-            throw new IllegalArgumentException("Initial delay must be positive");
+    public ExponentialBackoff(Duration initialDelay, Duration maxDelay, Duration cooldown, float multiplier) {
+        this.initialDelay = Objects.requireNonNull(initialDelay, "initialDelay");
+        this.maxDelay = Objects.requireNonNull(maxDelay, "maxDelay");
+        this.cooldown = Objects.requireNonNull(cooldown, "cooldown");
+
+        if (initialDelay.isZero() || initialDelay.isNegative()) {
+            throw new IllegalArgumentException("Initial delay must be > 0");
         }
-        if (maxDelay < initialDelay) {
+        if (maxDelay.compareTo(initialDelay) < 0) {
             throw new IllegalArgumentException("Max delay must be >= initial delay");
         }
         if (multiplier <= 1.0f) {
             throw new IllegalArgumentException("Multiplier must be > 1.0");
         }
-        if (cooldown <= 0) {
-            throw new IllegalArgumentException("Cooldown period must be positive");
+        if (cooldown.isZero() || cooldown.isNegative()) {
+            throw new IllegalArgumentException("Cooldown must be > 0");
         }
-        this.timeUnit = timeUnit;
-        this.initialDelay = initialDelay;
-        this.maxDelay = maxDelay;
+
         this.multiplier = multiplier;
-        this.cooldown = cooldown;
         this.currentDelay = initialDelay;
     }
 
     /**
-     * Register a failure. This will increase the delay for the next attempt.
+     * Register a failure. Increases the delay for the next attempt and schedules
+     * nextAttemptAt.
      */
-    public void registerFailure() {
-        cooldownStartTimestamp = 0;
-        nextAttemptTimestamp = timeUnit.convert(System.currentTimeMillis(), TimeUnit.MILLISECONDS) + currentDelay;
-        currentDelay = Math.min((long) (currentDelay * multiplier), maxDelay);
+    public synchronized void registerFailure() {
+        registerFailure(Instant.now());
+    }
+
+    public synchronized void registerFailure(Instant now) {
+        cooldownStartAt = null;
+        nextAttemptAt = now.plus(currentDelay);
+        currentDelay = minDuration(multiply(currentDelay, multiplier), maxDelay);
     }
 
     /**
-     * Register a success. This will reset the delay to the initial value.
+     * Register a success. Starts the cooldown window; after cooldown elapses, delay
+     * resets.
      */
-    public void registerSuccess() {
-        cooldownStartTimestamp = timeUnit.convert(System.currentTimeMillis(), TimeUnit.MILLISECONDS);
+    public synchronized void registerSuccess() {
+        registerSuccess(Instant.now());
+    }
+
+    public synchronized void registerSuccess(Instant now) {
+        cooldownStartAt = now;
     }
 
     /**
-     * Get the delay for the next attempt.
-     * @param now current time
-     * @param unit the time unit for the now parameter and the return value
-     * @return the delay for the next attempt in the specified time unit
+     * Returns how long to wait before the next attempt (zero if you can try now).
      */
-    public long getNextAttemptTime(long now, TimeUnit unit) {
-        long nowInternal = timeUnit.convert(now, unit);
-        if (cooldownStartTimestamp != 0 && (nowInternal - cooldownStartTimestamp) > cooldown) {
-            currentDelay = initialDelay;
-            cooldownStartTimestamp = 0;
-            nextAttemptTimestamp = 0;
+    public Duration getDelay() {
+        return getDelay(Instant.now());
+    }
+
+    /**
+     * Returns how long to wait before the next attempt (zero if you can try now)
+     * using the provided time.
+     */
+    public synchronized Duration getDelay(Instant now) {
+        // Cooldown-based reset after a success
+        if (cooldownStartAt != null) {
+            Duration sinceSuccess = Duration.between(cooldownStartAt, now);
+            if (sinceSuccess.compareTo(cooldown) > 0) {
+                currentDelay = initialDelay;
+                cooldownStartAt = null;
+                nextAttemptAt = null;
+            }
         }
 
-        long remaining = Math.max(0, nextAttemptTimestamp - nowInternal);
-        return unit.convert(remaining, timeUnit);
+        if (nextAttemptAt == null) {
+            return Duration.ZERO;
+        }
+
+        return nextAttemptAt.isAfter(now) ? Duration.between(now, nextAttemptAt) : Duration.ZERO;
     }
+
+ 
+    private static Duration multiply(Duration d, float m) {
+        // Use nanos for precision; round to nearest nanosecond
+        long nanos = d.toNanos();
+        long scaled = Math.round(nanos * (double) m);
+        if (scaled < 0)
+            scaled = Long.MAX_VALUE; // guard overflow
+        return Duration.ofNanos(scaled);
+    }
+
+    private static Duration minDuration(Duration a, Duration b) {
+        return (a.compareTo(b) <= 0) ? a : b;
+    }
+
+    
 }
