@@ -127,19 +127,15 @@ public final class ExponentialBackoff {
         return nextAttemptAt.isAfter(now) ? Duration.between(now, nextAttemptAt) : Duration.ZERO;
     }
 
- 
     private static Duration multiply(Duration d, float m) {
         // Use nanos for precision; round to nearest nanosecond
         long nanos = d.toNanos();
         long scaled = Math.round(nanos * (double) m);
-        if (scaled < 0)
-            scaled = Long.MAX_VALUE; // guard overflow
+        if (scaled < 0) scaled = Long.MAX_VALUE; // guard overflow
         return Duration.ofNanos(scaled);
     }
 
     private static Duration minDuration(Duration a, Duration b) {
         return (a.compareTo(b) <= 0) ? a : b;
     }
-
-    
 }

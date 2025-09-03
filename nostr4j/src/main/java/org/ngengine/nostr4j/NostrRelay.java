@@ -140,8 +140,8 @@ public final class NostrRelay {
     protected final Queue<QueuedMessage> messageQueue;
     protected final Queue<Runnable> connectCallbacks;
 
- 
     protected transient NostrRelayInfo relayInfo = null;
+
     public NostrRelay(String url) {
         this(url, NGEUtils.getPlatform().newAsyncExecutor(NostrRelay.class));
     }
@@ -155,7 +155,7 @@ public final class NostrRelay {
             this.connectCallbacks = platform.newConcurrentQueue(Runnable.class);
             this.url = url;
             this.executor = executor;
-            this.excQueue=new ExecutionQueue(this.executor);
+            this.excQueue = new ExecutionQueue(this.executor);
         } catch (Exception e) {
             throw new RuntimeException("Error creating NostrRelay", e);
         }
@@ -166,14 +166,17 @@ public final class NostrRelay {
         if (!enqueue) {
             platform.promisify(runnable, executor);
         } else {
-            this.excQueue.enqueue((res,rej)->{
-                platform.wrapPromise(runnable).then(v->{
-                    res.accept(v);
-                    return null;
-                }).catchException(e->{
-                    rej.accept(e);
+            this.excQueue.enqueue((res, rej) -> {
+                    platform
+                        .wrapPromise(runnable)
+                        .then(v -> {
+                            res.accept(v);
+                            return null;
+                        })
+                        .catchException(e -> {
+                            rej.accept(e);
+                        });
                 });
-            });             
         }
     }
 
@@ -202,8 +205,6 @@ public final class NostrRelay {
     public boolean isAsyncEventsVerification() {
         return this.parallelEvents;
     }
-
- 
 
     public void setAutoReconnect(boolean reconnect) {
         this.reconnectOnDrop = reconnect;
@@ -394,7 +395,7 @@ public final class NostrRelay {
             return platform.wrapPromise((res, rej) -> {
                 runInRelayExecutor(
                     (r0, rj0) -> {
-                        try{
+                        try {
                             this.disconnectedByClient = false;
                             logger.fine("Connecting to relay: " + this.url);
                             for (NostrRelayComponent listener : this.listeners) {
@@ -417,7 +418,7 @@ public final class NostrRelay {
                             });
                             this.connector.connect(url)
                                 .catchException(e -> {
-                                    if(retry){
+                                    if (retry) {
                                         this.onConnectionClosedByServer("failed to connect: " + e.getMessage());
                                     } else {
                                         rej.accept(e);
@@ -425,9 +426,9 @@ public final class NostrRelay {
                                 });
                             this.loop();
                             r0.accept(this);
-                        } catch(Throwable e){
+                        } catch (Throwable e) {
                             rj0.accept(e);
-                            if(retry){
+                            if (retry) {
                                 onConnectionClosedByServer("failed to connect: " + e.getMessage());
                             } else {
                                 rej.accept(e);
@@ -684,17 +685,17 @@ public final class NostrRelay {
                     if (this.reconnectOnDrop && !this.disconnectedByClient) {
                         reconnectionBackoff.registerFailure();
                         Duration delay = reconnectionBackoff.getDelay(Instant.now());
-                        if(delay.toMillis()==0){
-                            this.connect(true);                             
+                        if (delay.toMillis() == 0) {
+                            this.connect(true);
                         } else {
                             this.executor.runLater(
-                                () -> {
-                                    this.connect(true);
-                                    return null;
-                                },
-                                delay.toMillis(),
-                                TimeUnit.MILLISECONDS
-                            );
+                                    () -> {
+                                        this.connect(true);
+                                        return null;
+                                    },
+                                    delay.toMillis(),
+                                    TimeUnit.MILLISECONDS
+                                );
                         }
                     }
 

@@ -459,7 +459,7 @@ public class NostrPool {
                                 logger.warning("events are not in order!");
                             }
                             last = e.getCreatedAt();
-                        }                        
+                        }
                     });
                     res.accept(Collections.unmodifiableList(safeEvs));
                     scheduledActions.remove(scheduled);

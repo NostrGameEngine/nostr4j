@@ -63,35 +63,35 @@ public class ExponentialBackoffTest {
         try {
             new ExponentialBackoff(Duration.ZERO, Duration.ofSeconds(60), Duration.ofSeconds(30), 2.0f);
             fail("Should throw exception for initialDelay <= 0");
-        } catch (IllegalArgumentException expected) {
-        }
+        } catch (IllegalArgumentException expected) {}
 
         // maxDelay < initialDelay
         try {
             new ExponentialBackoff(Duration.ofSeconds(60), Duration.ofSeconds(30), Duration.ofSeconds(30), 2.0f);
             fail("Should throw exception for maxDelay < initialDelay");
-        } catch (IllegalArgumentException expected) {
-        }
+        } catch (IllegalArgumentException expected) {}
 
         // multiplier <= 1.0
         try {
             new ExponentialBackoff(Duration.ofSeconds(1), Duration.ofSeconds(60), Duration.ofSeconds(30), 1.0f);
             fail("Should throw exception for multiplier <= 1.0");
-        } catch (IllegalArgumentException expected) {
-        }
+        } catch (IllegalArgumentException expected) {}
 
         // cooldown <= 0
         try {
             new ExponentialBackoff(Duration.ofSeconds(1), Duration.ofSeconds(60), Duration.ZERO, 2.0f);
             fail("Should throw exception for cooldown <= 0");
-        } catch (IllegalArgumentException expected) {
-        }
+        } catch (IllegalArgumentException expected) {}
     }
 
     @Test
     public void testExponentialIncrease() {
-        ExponentialBackoff backoff = new ExponentialBackoff(Duration.ofSeconds(1), Duration.ofSeconds(1000),
-                Duration.ofSeconds(30), 2.0f);
+        ExponentialBackoff backoff = new ExponentialBackoff(
+            Duration.ofSeconds(1),
+            Duration.ofSeconds(1000),
+            Duration.ofSeconds(30),
+            2.0f
+        );
 
         Instant t0 = Instant.EPOCH;
 
@@ -113,8 +113,12 @@ public class ExponentialBackoffTest {
 
     @Test
     public void testMaxDelayLimit() {
-        ExponentialBackoff backoff = new ExponentialBackoff(Duration.ofSeconds(1), Duration.ofSeconds(4),
-                Duration.ofSeconds(30), 2.0f);
+        ExponentialBackoff backoff = new ExponentialBackoff(
+            Duration.ofSeconds(1),
+            Duration.ofSeconds(4),
+            Duration.ofSeconds(30),
+            2.0f
+        );
 
         Instant t0 = Instant.EPOCH;
 
@@ -129,8 +133,12 @@ public class ExponentialBackoffTest {
     @Test
     public void testCooldownImmediateFailureKeepsCurrentDelay() {
         // Immediate failure after success should keep the current delay (no reset yet)
-        ExponentialBackoff backoff = new ExponentialBackoff(Duration.ofSeconds(1), Duration.ofSeconds(100),
-                Duration.ofSeconds(2), 2.0f);
+        ExponentialBackoff backoff = new ExponentialBackoff(
+            Duration.ofSeconds(1),
+            Duration.ofSeconds(100),
+            Duration.ofSeconds(2),
+            2.0f
+        );
 
         Instant t0 = Instant.EPOCH;
 
@@ -146,8 +154,12 @@ public class ExponentialBackoffTest {
     public void testCooldownResetAfterQuietPeriod() {
         // If cooldown elapses without failures, the delay resets to initial on the next
         // scheduling
-        ExponentialBackoff backoff = new ExponentialBackoff(Duration.ofSeconds(1), Duration.ofSeconds(100),
-                Duration.ofSeconds(2), 2.0f);
+        ExponentialBackoff backoff = new ExponentialBackoff(
+            Duration.ofSeconds(1),
+            Duration.ofSeconds(100),
+            Duration.ofSeconds(2),
+            2.0f
+        );
 
         Instant t0 = Instant.EPOCH;
 
@@ -168,8 +180,12 @@ public class ExponentialBackoffTest {
 
     @Test
     public void testTimeCalculationEdgeCases() {
-        ExponentialBackoff backoff = new ExponentialBackoff(Duration.ofSeconds(60), Duration.ofSeconds(3600),
-                Duration.ofSeconds(300), 2.0f);
+        ExponentialBackoff backoff = new ExponentialBackoff(
+            Duration.ofSeconds(60),
+            Duration.ofSeconds(3600),
+            Duration.ofSeconds(300),
+            2.0f
+        );
 
         Instant base = Instant.EPOCH;
 
@@ -186,8 +202,12 @@ public class ExponentialBackoffTest {
 
     @Test
     public void testDurationValues() {
-        ExponentialBackoff backoff = new ExponentialBackoff(Duration.ofMillis(500), Duration.ofSeconds(10),
-                Duration.ofSeconds(5), 2.0f);
+        ExponentialBackoff backoff = new ExponentialBackoff(
+            Duration.ofMillis(500),
+            Duration.ofSeconds(10),
+            Duration.ofSeconds(5),
+            2.0f
+        );
 
         Instant t0 = Instant.EPOCH;
 
@@ -203,8 +223,12 @@ public class ExponentialBackoffTest {
     public void testThreadSafety() throws InterruptedException {
         final int THREAD_COUNT = 20;
         final int ITERATIONS = 50;
-        final ExponentialBackoff backoff = new ExponentialBackoff(Duration.ofSeconds(1), Duration.ofSeconds(60),
-                Duration.ofSeconds(5), 2.0f);
+        final ExponentialBackoff backoff = new ExponentialBackoff(
+            Duration.ofSeconds(1),
+            Duration.ofSeconds(60),
+            Duration.ofSeconds(5),
+            2.0f
+        );
         final CyclicBarrier barrier = new CyclicBarrier(THREAD_COUNT);
         final CountDownLatch latch = new CountDownLatch(THREAD_COUNT);
         final AtomicBoolean failed = new AtomicBoolean(false);

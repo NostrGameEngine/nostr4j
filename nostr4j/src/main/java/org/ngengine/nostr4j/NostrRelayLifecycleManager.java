@@ -102,7 +102,13 @@ public class NostrRelayLifecycleManager implements NostrRelayComponent {
 
     @Override
     public boolean onRelayDisconnect(NostrRelay relay, String reason, boolean byClient) {
-        logger.fine("Clearing tracked subscription in lifecycle manager for relay: " + relay.getUrl() + " since it was closed for reason: " + reason + (byClient ? " (by client)" : ""));
+        logger.fine(
+            "Clearing tracked subscription in lifecycle manager for relay: " +
+            relay.getUrl() +
+            " since it was closed for reason: " +
+            reason +
+            (byClient ? " (by client)" : "")
+        );
         this.subTracker.clear();
         return true;
     }
@@ -135,7 +141,10 @@ public class NostrRelayLifecycleManager implements NostrRelayComponent {
         } else if (message instanceof NostrSubscription.NostrSubCloseMessage) {
             subTracker.remove(((NostrSubscription.NostrSubCloseMessage) message).getId());
             // assert dbg(() -> {
-            logger.fine("Removing subscription from lifecycle tracker due to it being closed by the client: " + ((NostrSubscription.NostrSubCloseMessage) message).getId());
+            logger.fine(
+                "Removing subscription from lifecycle tracker due to it being closed by the client: " +
+                ((NostrSubscription.NostrSubCloseMessage) message).getId()
+            );
             // });
         }
         return true;

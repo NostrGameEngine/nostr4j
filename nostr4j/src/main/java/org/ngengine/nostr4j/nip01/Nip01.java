@@ -76,8 +76,7 @@ public class Nip01 {
      */
     public static AsyncTask<Nip01UserMetadata> fetch(NostrPool pool, Nip01UserMetadataFilter filter, Duration timeout) {
         return pool
-            .fetch(filter, NostrWaitForEventFetchPolicy.get(v -> true, 1, false, 
-                        timeout))
+            .fetch(filter, NostrWaitForEventFetchPolicy.get(v -> true, 1, false, timeout))
             .then(evs -> {
                 if (evs.size() == 0) {
                     return new Nip01UserMetadata();
