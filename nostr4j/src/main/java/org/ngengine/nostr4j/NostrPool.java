@@ -447,7 +447,7 @@ public class NostrPool {
                 // ended.set(true);
                 // scheduledActions.remove(scheduled);
                 if (!ended.getAndSet(true)) {
-                    res.accept(evs);
+                    res.accept(Collections.unmodifiableList(new ArrayList<>(evs)));
                     scheduledActions.remove(scheduled);
                     sub.close();
                 }
