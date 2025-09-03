@@ -20,6 +20,8 @@ and more...
 
 ## Usage
 
+Include the library:
+
 ```gradle
 repositories {
     mavenCentral()
@@ -33,5 +35,22 @@ dependencies {
     implementation 'org.ngengine:nostr4j:<version>'
 }
 ```
+> [!TIP]
+> As `<version>` use one of the versions listed in the [releases page](/releases) or `0.0.0-SNAPSHOT` for the latest snapshot.
 
-as `<version>` use one of the versions listed in the [releases page](/releases) or `0.0.0-SNAPSHOT` for the latest snapshot.
+
+Add the right [nge-platform](https://github.com/NostrGameEngine/nge-platforms) for your target platform [from maven central](https://central.sonatype.com/search?q=nge-platform&namespace=org.ngengine).
+For example, for desktop:
+
+```gradle
+dependencies {
+    // ...
+    implementation 'org.ngengine:nge-platform-jvm:<version>' // note: this requires java 21+
+    // ...
+}
+```
+
+> [!NOTE]  
+> This library can be included in projects targeting java 11 or higher, but it requires java 21+ if you use `nge-platform-jvm` and to run tests (./gradlew test).
+> This is due to `nge-platform-jvm` using some java 21+ features, such as virtual threads, async http client, etc.. to improve performance.
+
