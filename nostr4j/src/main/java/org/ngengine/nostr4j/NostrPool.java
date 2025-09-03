@@ -416,7 +416,7 @@ public class NostrPool {
         NGEPlatform platform = NGEUtils.getPlatform();
         NostrSubscription sub = subscribe(filters, eventTracker);
         return platform.wrapPromise((res, rej) -> {
-            List<SignedNostrEvent> events = new ArrayList<>();
+            List<SignedNostrEvent> events = new CopyOnWriteArrayList<>();
 
             assert dbg(() -> {
                 logger.fine(
