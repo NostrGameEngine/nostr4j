@@ -63,7 +63,7 @@ public class Nip01 {
             .fetch(filter, NostrWaitForEventFetchPolicy.get(v -> true, 1, true))
             .then(evs -> {
                 if (evs.size() == 0) {
-                    return null; // No metadata found
+                    return new Nip01UserMetadata();
                 }
                 SignedNostrEvent event = (SignedNostrEvent) evs.get(0);
                 try {
