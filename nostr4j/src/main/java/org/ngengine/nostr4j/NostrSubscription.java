@@ -352,7 +352,6 @@ public class NostrSubscription extends NostrMessage {
 
     static final class NostrSubCloseMessage extends NostrMessage {
 
-        private transient List<Object> fragments;
         private final String id;
 
         public NostrSubCloseMessage(String id) {
@@ -369,9 +368,15 @@ public class NostrSubscription extends NostrMessage {
         }
 
         @Override
+        protected List<Object> toSerial() {
+            List<Object> serial = super.toSerial();
+            assert serial.size() == 2;
+            return serial;
+        }
+
+        @Override
         public Collection<Object> getFragments() {
-            if (fragments != null) return fragments;
-            fragments = new ArrayList<>();
+            ArrayList<Object> fragments = new ArrayList<>();
             fragments.add(id);
             return fragments;
         }
