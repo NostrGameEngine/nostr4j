@@ -30,6 +30,7 @@
  */
 package org.ngengine.nostr4j.nip01;
 
+import java.time.Duration;
 import java.util.List;
 import org.ngengine.nostr4j.NostrPool;
 import org.ngengine.nostr4j.event.NostrEvent;
@@ -48,19 +49,35 @@ public class Nip01 {
     }
 
     public static AsyncTask<Nip01UserMetadata> fetch(NostrPool pool, NostrPublicKey pubkey) {
+        return fetch(pool, pubkey, Duration.ofSeconds(21));
+    }
+
+    public static AsyncTask<Nip01UserMetadata> fetch(NostrPool pool, NostrPublicKey pubkey, Duration timeout) {
         Nip01UserMetadataFilter filter = new Nip01UserMetadataFilter(pubkey);
-        return fetch(pool, filter);
+        return fetch(pool, filter, timeout);
+    }
+
+    /**
+     * Fetches the user metadata for a given filter
+     * @param pool the NostrPool to use for fetching the metadata.
+     * @param filter the filter to use for fetching the metadata.
+     * @return an AsyncTask that resolves to the Nip01UserMetadata, or null if no metadata is found.
+     */
+    public static AsyncTask<Nip01UserMetadata> fetch(NostrPool pool, Nip01UserMetadataFilter filter) {
+        return fetch(pool, filter, Duration.ofSeconds(21));
     }
 
     /**
      * Fetches the user metadata for a given filter.
-     * @param pool
-     * @param filter
+     * @param pool the NostrPool to use for fetching the metadata.
+     * @param filter the filter to use for fetching the metadata.
+     * @param timeout the maximum time to wait for the metadata to be fetched.
      * @return an AsyncTask that resolves to the Nip01UserMetadata, or null if no metadata is found.
      */
-    public static AsyncTask<Nip01UserMetadata> fetch(NostrPool pool, Nip01UserMetadataFilter filter) {
+    public static AsyncTask<Nip01UserMetadata> fetch(NostrPool pool, Nip01UserMetadataFilter filter, Duration timeout) {
         return pool
-            .fetch(filter, NostrWaitForEventFetchPolicy.get(v -> true, 1, true))
+            .fetch(filter, NostrWaitForEventFetchPolicy.get(v -> true, 1, false, 
+                        timeout))
             .then(evs -> {
                 if (evs.size() == 0) {
                     return new Nip01UserMetadata();
