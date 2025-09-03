@@ -33,6 +33,7 @@ package org.ngengine.nostr4j;
 import static org.ngengine.platform.NGEUtils.dbg;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Iterator;
 import java.util.List;
@@ -41,7 +42,6 @@ import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.logging.Level;
@@ -57,6 +57,7 @@ import org.ngengine.nostr4j.proto.impl.NostrOKMessage;
 import org.ngengine.nostr4j.utils.ExponentialBackoff;
 import org.ngengine.platform.AsyncExecutor;
 import org.ngengine.platform.AsyncTask;
+import org.ngengine.platform.ExecutionQueue;
 import org.ngengine.platform.NGEPlatform;
 import org.ngengine.platform.NGEUtils;
 import org.ngengine.platform.transport.WebsocketTransport;
@@ -123,6 +124,7 @@ public final class NostrRelay {
     protected final List<NostrRelayComponent> listeners = new CopyOnWriteArrayList<>();
     protected final Map<String, NostrMessageAck> waitingEventsAck = new ConcurrentHashMap<>();
     protected final AsyncExecutor executor;
+    protected final ExecutionQueue excQueue;
 
     protected final ExponentialBackoff reconnectionBackoff = new ExponentialBackoff();
 
@@ -138,12 +140,10 @@ public final class NostrRelay {
     protected final Queue<QueuedMessage> messageQueue;
     protected final Queue<Runnable> connectCallbacks;
 
-    protected AtomicReference<AsyncTask> queue = new AtomicReference(null);
-
+ 
     protected transient NostrRelayInfo relayInfo = null;
-
     public NostrRelay(String url) {
-        this(url, NGEUtils.getPlatform().newRelayExecutor());
+        this(url, NGEUtils.getPlatform().newAsyncExecutor(NostrRelay.class));
     }
 
     public NostrRelay(String url, AsyncExecutor executor) {
@@ -155,8 +155,25 @@ public final class NostrRelay {
             this.connectCallbacks = platform.newConcurrentQueue(Runnable.class);
             this.url = url;
             this.executor = executor;
+            this.excQueue=new ExecutionQueue(this.executor);
         } catch (Exception e) {
             throw new RuntimeException("Error creating NostrRelay", e);
+        }
+    }
+
+    protected <T> void runInRelayExecutor(BiConsumer<Consumer<T>, Consumer<Throwable>> runnable, boolean enqueue) {
+        NGEPlatform platform = NGEUtils.getPlatform();
+        if (!enqueue) {
+            platform.promisify(runnable, executor);
+        } else {
+            this.excQueue.enqueue((res,rej)->{
+                platform.wrapPromise(runnable).then(v->{
+                    res.accept(v);
+                    return null;
+                }).catchException(e->{
+                    rej.accept(e);
+                });
+            });             
         }
     }
 
@@ -186,29 +203,7 @@ public final class NostrRelay {
         return this.parallelEvents;
     }
 
-    protected <T> void runInRelayExecutor(BiConsumer<Consumer<T>, Consumer<Throwable>> runnable, boolean enqueue) {
-        NGEPlatform platform = NGEUtils.getPlatform();
-        if (!enqueue) {
-            platform.promisify(runnable, executor);
-        } else {
-            synchronized (queue) {
-                if (queue.get() == null) {
-                    AsyncTask<T> nq = platform.promisify(runnable, executor);
-                    queue.set(nq);
-                } else {
-                    AsyncTask<T> q = queue.get();
-                    AsyncTask<T> nq = q.compose(
-                        (
-                            r -> {
-                                return platform.wrapPromise(runnable);
-                            }
-                        )
-                    );
-                    queue.set(nq);
-                }
-            }
-        }
-    }
+ 
 
     public void setAutoReconnect(boolean reconnect) {
         this.reconnectOnDrop = reconnect;
@@ -388,6 +383,10 @@ public final class NostrRelay {
     }
 
     public AsyncTask<NostrRelay> connect() {
+        return connect(false);
+    }
+
+    public AsyncTask<NostrRelay> connect(boolean retry) {
         NGEPlatform platform = NGEUtils.getPlatform();
 
         if (!this.connected && !this.connecting) {
@@ -395,33 +394,45 @@ public final class NostrRelay {
             return platform.wrapPromise((res, rej) -> {
                 runInRelayExecutor(
                     (r0, rj0) -> {
-                        this.disconnectedByClient = false;
-                        logger.fine("Connecting to relay: " + this.url);
-                        for (NostrRelayComponent listener : this.listeners) {
-                            try {
-                                if (!listener.onRelayConnectRequest(this)) {
-                                    logger.finer("Connection ignored by component: " + this.url);
-                                    res.accept(this);
-                                    r0.accept(this);
+                        try{
+                            this.disconnectedByClient = false;
+                            logger.fine("Connecting to relay: " + this.url);
+                            for (NostrRelayComponent listener : this.listeners) {
+                                try {
+                                    if (!listener.onRelayConnectRequest(this)) {
+                                        logger.finer("Connection ignored by component: " + this.url);
+                                        res.accept(this);
+                                        r0.accept(this);
+                                        return;
+                                    }
+                                } catch (Throwable e) {
+                                    rej.accept(new Exception("Connection cancelled by component: " + e.getMessage()));
+                                    rj0.accept(e);
                                     return;
                                 }
-                            } catch (Throwable e) {
-                                rej.accept(new Exception("Connection cancelled by component: " + e.getMessage()));
-                                rj0.accept(e);
-                                return;
+                            }
+
+                            connectCallbacks.add(() -> {
+                                res.accept(this);
+                            });
+                            this.connector.connect(url)
+                                .catchException(e -> {
+                                    if(retry){
+                                        this.onConnectionClosedByServer("failed to connect: " + e.getMessage());
+                                    } else {
+                                        rej.accept(e);
+                                    }
+                                });
+                            this.loop();
+                            r0.accept(this);
+                        } catch(Throwable e){
+                            rj0.accept(e);
+                            if(retry){
+                                onConnectionClosedByServer("failed to connect: " + e.getMessage());
+                            } else {
+                                rej.accept(e);
                             }
                         }
-
-                        connectCallbacks.add(() -> {
-                            res.accept(this);
-                        });
-                        this.connector.connect(url)
-                            .catchException(e -> {
-                                this.onConnectionClosedByServer("failed to connect: " + e.getMessage());
-                                rej.accept(e);
-                            });
-                        this.loop();
-                        r0.accept(this);
                     },
                     true
                 );
@@ -671,17 +682,20 @@ public final class NostrRelay {
                     }
 
                     if (this.reconnectOnDrop && !this.disconnectedByClient) {
-                        long now = Instant.now().getEpochSecond();
                         reconnectionBackoff.registerFailure();
-                        long delay = reconnectionBackoff.getNextAttemptTime(now, TimeUnit.SECONDS);
-                        this.executor.runLater(
+                        Duration delay = reconnectionBackoff.getDelay(Instant.now());
+                        if(delay.toMillis()==0){
+                            this.connect(true);                             
+                        } else {
+                            this.executor.runLater(
                                 () -> {
-                                    this.connect();
+                                    this.connect(true);
                                     return null;
                                 },
-                                delay,
-                                TimeUnit.SECONDS
+                                delay.toMillis(),
+                                TimeUnit.MILLISECONDS
                             );
+                        }
                     }
 
                     res.accept(this);
