@@ -447,7 +447,21 @@ public class NostrPool {
                 // ended.set(true);
                 // scheduledActions.remove(scheduled);
                 if (!ended.getAndSet(true)) {
-                    res.accept(Collections.unmodifiableList(new ArrayList<>(evs)));
+                    ArrayList<SignedNostrEvent> safeEvs = new ArrayList<>(evs);
+                    // sort newest to oldest
+                    safeEvs.sort((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()));
+                    assert dbg(() -> {
+                        logger.fine("fetch done for fetch " + sub.getId() + " got " + safeEvs.size() + " events");
+                        // check if events are in order newest to oldest
+                        Instant last = null;
+                        for (SignedNostrEvent e : safeEvs) {
+                            if (last != null && e.getCreatedAt().isAfter(last)) {
+                                logger.warning("events are not in order!");
+                            }
+                            last = e.getCreatedAt();
+                        }                        
+                    });
+                    res.accept(Collections.unmodifiableList(safeEvs));
                     scheduledActions.remove(scheduled);
                     sub.close();
                 }
