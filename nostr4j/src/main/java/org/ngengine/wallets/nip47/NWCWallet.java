@@ -118,6 +118,7 @@ public class NWCWallet implements Wallet {
     }
 
     public AsyncTask<List<String>> getSupportedMethods() {
+        logger.finest("Fetching supported methods for wallet: " + uri);
         if (supportedMethods == null) {
             supportedMethods =
                 pool
@@ -133,6 +134,7 @@ public class NWCWallet implements Wallet {
                         return Arrays.asList(ev.getContent().split(" "));
                     });
         }
+        logger.finest("Supported methods: " + supportedMethods);
         return supportedMethods;
     }
 
@@ -186,6 +188,7 @@ public class NWCWallet implements Wallet {
                 if (!supported.contains(method)) {
                     throw new IllegalArgumentException("Method " + method + " is not supported by this wallet");
                 }
+                logger.finest("Making request " + method + " with params: " + params + (expiresAt != null ? " expiring at " + expiresAt : ""));
                 Map<String, Object> content = new HashMap<>();
                 content.put("method", method);
                 content.put("params", params);
@@ -206,7 +209,9 @@ public class NWCWallet implements Wallet {
                         return signer.sign(req);
                     })
                     .compose(sev -> {
+                        logger.finest("Sending request event: " + sev);
                         pool.publish(sev);
+                        logger.finest("Request event sent, waiting for reply...");
                         AsyncTask<Map<String, Object>> res = waitForReply(method, sev);
                         return res;
                     });
@@ -260,6 +265,7 @@ public class NWCWallet implements Wallet {
             expireRequestAt
         )
             .then(res -> {
+                logger.finest("Pay request sent, got response: " + res);
                 return mapPayResponses(res, false);
             });
     }
