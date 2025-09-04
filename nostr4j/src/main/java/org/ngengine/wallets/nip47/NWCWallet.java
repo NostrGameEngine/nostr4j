@@ -188,7 +188,13 @@ public class NWCWallet implements Wallet {
                 if (!supported.contains(method)) {
                     throw new IllegalArgumentException("Method " + method + " is not supported by this wallet");
                 }
-                logger.finest("Making request " + method + " with params: " + params + (expiresAt != null ? " expiring at " + expiresAt : ""));
+                logger.finest(
+                    "Making request " +
+                    method +
+                    " with params: " +
+                    params +
+                    (expiresAt != null ? " expiring at " + expiresAt : "")
+                );
                 Map<String, Object> content = new HashMap<>();
                 content.put("method", method);
                 content.put("params", params);
