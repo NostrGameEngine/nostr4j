@@ -164,6 +164,8 @@ public class NostrRelayLifecycleManager implements NostrRelayComponent {
 
     @Override
     public boolean onRelayBeforeSend(NostrRelay relay, NostrMessage message) {
+        relay.connect();
+        this.keepAlive();
         return true;
     }
 
