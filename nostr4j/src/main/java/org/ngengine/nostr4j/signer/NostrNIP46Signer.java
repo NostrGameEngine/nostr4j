@@ -159,6 +159,14 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
         this.transportSigner = new NostrKeyPairSigner(clientKeyPair);
     }
 
+    public Nip46AppMetadata getMetadata() {
+        return metadata;
+    }
+
+    public NostrKeyPair getTransportKeyPair() {
+        return transportSigner.getKeyPair();
+    }
+
     @Override
     public String toString() {
         return "nip46-signer: " + this.transportPubkey.asHex();
