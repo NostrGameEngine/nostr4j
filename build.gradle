@@ -19,7 +19,7 @@ plugins {
 ext {
     repo="NostrGameEngine/nostr4j"
     website="https://github.com/NostrGameEngine/nostr4j"
-    baseVersion="0.1.0-SNAPSHOT"
+    baseVersion="0.2.0-SNAPSHOT"
     baseGroup="org.ngengine"
     description="High-performance Nostr client library with RTC support"
     author="Riccardo Balbo"
