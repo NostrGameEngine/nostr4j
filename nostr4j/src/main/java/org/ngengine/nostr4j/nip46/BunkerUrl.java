@@ -126,7 +126,7 @@ public class BunkerUrl implements Serializable, Cloneable {
 
     private static String urlEncode(String value) {
         try {
-            return URLEncoder.encode(value, StandardCharsets.UTF_8.toString());
+            return URLEncoder.encode(value, StandardCharsets.UTF_8.name());
         } catch (UnsupportedEncodingException e) {
             throw new RuntimeException(e);
         }
@@ -134,7 +134,7 @@ public class BunkerUrl implements Serializable, Cloneable {
 
     private static String urlDecode(String value) {
         try {
-            return URLDecoder.decode(value, StandardCharsets.UTF_8.toString());
+            return URLDecoder.decode(value, StandardCharsets.UTF_8.name());
         } catch (UnsupportedEncodingException e) {
             throw new RuntimeException(e);
         }
