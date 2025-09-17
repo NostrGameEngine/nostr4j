@@ -35,6 +35,8 @@ import static org.ngengine.platform.NGEUtils.safeMSats;
 
 import jakarta.annotation.Nonnull;
 import jakarta.annotation.Nullable;
+
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -49,7 +51,6 @@ import org.ngengine.nostr4j.NostrFilter;
 import org.ngengine.nostr4j.NostrPool;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.event.UnsignedNostrEvent;
-import org.ngengine.nostr4j.pool.fetchpolicy.NostrWaitForEventFetchPolicy;
 import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
 import org.ngengine.nostr4j.signer.NostrSigner;
 import org.ngengine.platform.AsyncTask;
@@ -122,7 +123,11 @@ public class NWCWallet implements Wallet {
         if (supportedMethods == null) {
             supportedMethods =
                 pool
-                    .fetch(new NostrFilter().withKind(INFO_KIND).withAuthor(uri.getPubkey()).limit(1))
+                    .fetch(
+                        new NostrFilter().withKind(INFO_KIND).withAuthor(uri.getPubkey()).limit(1),
+                        1,
+                        Duration.ofSeconds(30)
+                    )
                     .then(evs -> {
                         if (evs.isEmpty()) {
                             logger.warning(
@@ -151,7 +156,8 @@ public class NWCWallet implements Wallet {
                             .withAuthor(uri.getPubkey().asHex())
                             .withTag("e", ev.getId())
                             .withTag("p", pubkey.asHex()),
-                        NostrWaitForEventFetchPolicy.get(e -> true, 1, false)
+                        1,
+                        null
                     )
                     .then(r -> {
                         return r.get(0);

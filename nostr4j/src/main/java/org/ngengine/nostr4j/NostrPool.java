@@ -32,6 +32,7 @@ package org.ngengine.nostr4j;
 
 import static org.ngengine.platform.NGEUtils.dbg;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -41,7 +42,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -59,6 +59,7 @@ import org.ngengine.nostr4j.pool.ackpolicy.NostrPoolAckPolicy;
 import org.ngengine.nostr4j.pool.ackpolicy.NostrPoolAnyAckPolicy;
 import org.ngengine.nostr4j.pool.fetchpolicy.NostrAllEOSEPoolFetchPolicy;
 import org.ngengine.nostr4j.pool.fetchpolicy.NostrPoolFetchPolicy;
+import org.ngengine.nostr4j.pool.fetchpolicy.NostrWaitForEventFetchPolicy;
 import org.ngengine.nostr4j.proto.NostrMessage;
 import org.ngengine.nostr4j.proto.NostrMessageAck;
 import org.ngengine.nostr4j.proto.impl.NostrClosedMessage;
@@ -70,6 +71,8 @@ import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEPlatform;
 import org.ngengine.platform.NGEUtils;
 
+import jakarta.annotation.Nullable;
+
 public class NostrPool {
 
     private static final Logger logger = Logger.getLogger(NostrPool.class.getName());
@@ -77,7 +80,6 @@ public class NostrPool {
     private final List<NostrNoticeListener> noticeListener = new CopyOnWriteArrayList<>();
     private final CopyOnWriteArrayList<NostrRelay> relays = new CopyOnWriteArrayList<>();
     private final List<NostrRelay> relaysRO = Collections.unmodifiableList(relays);
-    private final List<ScheduledAction> scheduledActions = new CopyOnWriteArrayList<>();
     private final Supplier<EventTracker> defaultEventTracker;
 
     private NostrRelayComponent listener = new NostrRelayComponent() {
@@ -312,104 +314,82 @@ public class NostrPool {
         return sub;
     }
 
-    public AsyncTask<List<SignedNostrEvent>> fetch(NostrFilter filter) {
-        return fetch(Arrays.asList(filter), NostrAllEOSEPoolFetchPolicy.get());
+
+    /**
+     * Fetch up to numEvents events matching the given filter until timeout is
+     * reached or numEvents have been received.
+     * 
+     * <p>
+     * The method might return less events if the timeout is reached before numEvents
+     * </p>
+     * 
+     * @param filter    The filter to match events against
+     * @param numEvents The number of events to fetch
+     * @param timeout   The maximum duration to wait for events, null means no
+     *                  timeout
+     * @return A promise that resolves with up to numEvents matching events or when
+     *         the timeout is reached
+     */
+    public AsyncTask<List<SignedNostrEvent>> fetch(NostrFilter filter, int numEvents,  @Nullable Duration timeout) {
+        return fetch(
+            filter, 
+            numEvents,
+            false,
+            timeout
+        );
     }
 
-    public AsyncTask<List<SignedNostrEvent>> fetch(NostrFilter filter, NostrPoolFetchPolicy fetchPolicy) {
-        return fetch(Arrays.asList(filter), fetchPolicy);
+
+    /**
+     * Fetch up to maxEvents events matching the given filter until timeout is
+     * reached, numEvents have been received or all relays have sent EOSE if
+     * withEose is true.
+     * 
+     * <p>
+     * The method might return less events if the timeout is reached before numEvents
+     * or if all relays have sent EOSE and withEose is true
+     * </p>
+     * 
+     * @param filter    The filter to match events against
+     * @param numEvents The number of events to fetch
+     * @param withEose  If true the fetch will end when all relays have sent EOSE
+     *                  even if neither numEvents nor timeout are reached
+     * @param timeout   The maximum duration to wait for events, null means no
+     *                  timeout
+     * @return A promise that resolves with up to numEvents matching events or when
+     *         the timeout is reached
+     * 
+     */
+    public AsyncTask<List<SignedNostrEvent>> fetch(NostrFilter filter, int numEvents, boolean withEose, @Nullable Duration timeout) {
+        return fetch(
+            Arrays.asList(filter), 
+            NostrWaitForEventFetchPolicy.get((e) -> true, numEvents, false, timeout)
+        );
     }
 
-    public AsyncTask<List<SignedNostrEvent>> fetch(Collection<NostrFilter> filters) {
-        return fetch(filters, 1, TimeUnit.MINUTES, NostrAllEOSEPoolFetchPolicy.get());
-    }
 
-    public AsyncTask<List<SignedNostrEvent>> fetch(Collection<NostrFilter> filters, NostrPoolFetchPolicy fetchPolicy) {
-        return fetch(filters, 1, TimeUnit.MINUTES, fetchPolicy);
-    }
-
-    public AsyncTask<List<SignedNostrEvent>> fetch(NostrFilter filter, long timeout, TimeUnit unit) {
-        return fetch(Arrays.asList(filter), timeout, unit, NostrAllEOSEPoolFetchPolicy.get());
-    }
-
-    public AsyncTask<List<SignedNostrEvent>> fetch(
-        NostrFilter filter,
-        long timeout,
-        TimeUnit unit,
-        NostrPoolFetchPolicy fetchPolicy
-    ) {
-        return fetch(Arrays.asList(filter), timeout, unit, fetchPolicy);
-    }
-
-    public AsyncTask<List<SignedNostrEvent>> fetch(Collection<NostrFilter> filters, long timeout, TimeUnit unit) {
-        return fetch(filters, timeout, unit, () -> new NaiveEventTracker(), NostrAllEOSEPoolFetchPolicy.get());
-    }
-
-    public AsyncTask<List<SignedNostrEvent>> fetch(
-        Collection<NostrFilter> filters,
-        long timeout,
-        TimeUnit unit,
-        NostrPoolFetchPolicy fetchPolicy
-    ) {
-        return fetch(filters, timeout, unit, () -> new NaiveEventTracker(), fetchPolicy);
-    }
-
-    public AsyncTask<List<SignedNostrEvent>> fetch(NostrFilter filter, Supplier<EventTracker> eventTracker) {
-        return fetch(Arrays.asList(filter), eventTracker, NostrAllEOSEPoolFetchPolicy.get());
-    }
-
-    public AsyncTask<List<SignedNostrEvent>> fetch(
-        NostrFilter filter,
-        Supplier<EventTracker> eventTracker,
-        NostrPoolFetchPolicy fetchPolicy
-    ) {
-        return fetch(Arrays.asList(filter), eventTracker, fetchPolicy);
-    }
-
-    public AsyncTask<List<SignedNostrEvent>> fetch(Collection<NostrFilter> filters, Supplier<EventTracker> eventTracker) {
-        return fetch(filters, 1, TimeUnit.MINUTES, eventTracker, NostrAllEOSEPoolFetchPolicy.get());
-    }
-
-    public AsyncTask<List<SignedNostrEvent>> fetch(
-        Collection<NostrFilter> filters,
-        Supplier<EventTracker> eventTracker,
-        NostrPoolFetchPolicy fetchPolicy
-    ) {
-        return fetch(filters, 1, TimeUnit.MINUTES, eventTracker, fetchPolicy);
-    }
-
-    public AsyncTask<List<SignedNostrEvent>> fetch(
-        NostrFilter filters,
-        long timeout,
-        TimeUnit unit,
-        Supplier<EventTracker> eventTracker
-    ) {
-        return fetch(Arrays.asList(filters), timeout, unit, eventTracker, NostrAllEOSEPoolFetchPolicy.get());
-    }
-
-    public AsyncTask<List<SignedNostrEvent>> fetch(
-        NostrFilter filters,
-        long timeout,
-        TimeUnit unit,
-        Supplier<EventTracker> eventTracker,
-        NostrPoolFetchPolicy fetchPolicy
-    ) {
-        return fetch(Arrays.asList(filters), timeout, unit, eventTracker, fetchPolicy);
-    }
-
+    /**
+     * Fetch events matching the given filters using the specified fetch policy.
+     * @param filters The filters to match events against
+     * @param fetchPolicy The fetch policy to determine when to stop fetching events
+     * @return A promise that resolves with the list of matching events based on the fetch policy
+     */
     public AsyncTask<List<SignedNostrEvent>> fetch(
         Collection<NostrFilter> filters,
-        long timeout,
-        TimeUnit unit,
-        Supplier<EventTracker> eventTracker
+        NostrPoolFetchPolicy fetchPolicy
     ) {
-        return fetch(filters, timeout, unit, eventTracker, NostrAllEOSEPoolFetchPolicy.get());
+        return fetch(filters, () -> new NaiveEventTracker(), fetchPolicy);
     }
 
+    /**
+     * Fetch events matching the given filters using the specified event tracker and fetch policy.
+     * @param filters The filters to match events against
+     * @param eventTracker A supplier that provides an event tracker instance for handling duplicates
+     * @param fetchPolicy The fetch policy to determine when to stop fetching events
+     * @return A promise that resolves with the list of matching events based on the fetch policy
+     */
     public AsyncTask<List<SignedNostrEvent>> fetch(
         Collection<NostrFilter> filters,
-        long timeout,
-        TimeUnit unit,
         Supplier<EventTracker> eventTracker,
         NostrPoolFetchPolicy fetchPolicy
     ) {
@@ -422,30 +402,16 @@ public class NostrPool {
                 logger.fine(
                     "Initialize fetch of " +
                     filters +
-                    " with timeout " +
-                    timeout +
-                    " " +
-                    unit +
+
                     " for subscription " +
                     sub.getId()
                 );
             });
 
             AtomicBoolean ended = new AtomicBoolean(false);
-            ScheduledAction scheduled = new ScheduledAction(
-                platform.getTimestampSeconds() + unit.toSeconds(timeout),
-                () -> {
-                    if (ended.get()) return;
-                    logger.warning("fetch timeout for fetch " + sub.getId());
-                    sub.close();
-                    rej.accept(new Exception("timeout"));
-                }
-            );
+           
 
             Consumer<List<SignedNostrEvent>> done = evs -> {
-                // res.accept(evs);
-                // ended.set(true);
-                // scheduledActions.remove(scheduled);
                 if (!ended.getAndSet(true)) {
                     ArrayList<SignedNostrEvent> safeEvs = new ArrayList<>(evs);
                     // sort newest to oldest
@@ -462,12 +428,10 @@ public class NostrPool {
                         }
                     });
                     res.accept(Collections.unmodifiableList(safeEvs));
-                    scheduledActions.remove(scheduled);
                     sub.close();
                 }
             };
 
-            scheduledActions.add(scheduled);
 
             sub
                 .addListener(

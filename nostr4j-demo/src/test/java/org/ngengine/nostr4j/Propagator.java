@@ -23,7 +23,7 @@ public class Propagator {
 
         
         
-        List<SignedNostrEvent> events = pool.fetch(new NostrFilter().withId(sourceEvent)).await();
+        List<SignedNostrEvent> events = pool.fetch(new NostrFilter().withId(sourceEvent),1,null).await();
         SignedNostrEvent event = events.get(0);
         if(event == null) {
             System.out.println("Event not found");

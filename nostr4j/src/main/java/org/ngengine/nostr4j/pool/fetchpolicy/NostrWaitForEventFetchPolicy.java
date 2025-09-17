@@ -36,6 +36,7 @@ import static org.ngengine.platform.NGEUtils.dbg;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Predicate;
 import java.util.logging.Logger;
@@ -45,6 +46,7 @@ import org.ngengine.nostr4j.NostrSubscription;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.listeners.sub.NostrSubAllListener;
 import org.ngengine.platform.AsyncExecutor;
+import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEUtils;
 
 public class NostrWaitForEventFetchPolicy implements NostrPoolFetchPolicy {
@@ -56,7 +58,11 @@ public class NostrWaitForEventFetchPolicy implements NostrPoolFetchPolicy {
     private final boolean endOnEose;
     private final Duration timeout;
 
-    public static NostrWaitForEventFetchPolicy get(Predicate<SignedNostrEvent> filter, int numEventsToWait, boolean endOnEose) {
+    public static NostrWaitForEventFetchPolicy get(
+        Predicate<SignedNostrEvent> filter, 
+        int numEventsToWait, 
+        boolean endOnEose
+    ) {
         return new NostrWaitForEventFetchPolicy(filter, numEventsToWait, endOnEose, null);
     }
 
@@ -83,53 +89,73 @@ public class NostrWaitForEventFetchPolicy implements NostrPoolFetchPolicy {
 
     @Override
     public NostrSubAllListener getListener(NostrSubscription sub, List<SignedNostrEvent> events, Runnable end) {
-        if (timeout != null) {
-            AsyncExecutor exc = NGEUtils.getPlatform().newAsyncExecutor();
-            exc.runLater(
-                () -> {
-                    try {
-                        assert dbg(() -> {
-                            logger.fine("fetch timeout for fetch " + sub.getId() + " with received events: " + events);
-                        });
-                        end.run();
-                    } finally {
-                        exc.close();
-                    }
-                    return null;
-                },
-                timeout.toMillis(),
-                TimeUnit.MILLISECONDS
-            );
-        }
+      
         return new NostrSubAllListener() {
+            AtomicBoolean ended = new AtomicBoolean(false);
+            AsyncTask<Void> timeoutTask = null;
+            AsyncExecutor exc = NGEUtils.getPlatform().newAsyncExecutor(NostrWaitForEventFetchPolicy.class);
+
             @Override
-            public void onSubEvent(SignedNostrEvent e, boolean stored) {
+            public void onSubOpen(NostrSubscription sub){
+                if (timeout != null) {
+                    timeoutTask = exc.runLater(() -> {
+                        end("timeout");
+                        return null;
+                    },
+                    timeout.toMillis(),
+                    TimeUnit.MILLISECONDS);
+                }
+            }
+
+            private void end(String reason){
+                try {
+                    if (!ended.getAndSet(true)) {
+                        assert dbg(() -> {
+                            logger.fine("fetch ended due to " + reason + " with received events: "
+                                    + events);
+                        });
+                        end.run();                        
+                    }
+                } finally {
+                    try{
+                        if (timeoutTask != null) {
+                            timeoutTask.cancel();                                                            
+                        }
+                    } catch(Throwable e){
+                        logger.warning("Error cancelling timeout: " + e);
+                    }
+                    try{
+                        exc.close();
+                    } catch(Exception e){
+                        logger.warning("Error closing executor: " + e);
+                    }
+                }              
+            }
+
+            @Override
+            public void onSubEvent(NostrSubscription sub, SignedNostrEvent e, boolean stored) {
                 assert dbg(() -> {
                     logger.finer("fetch event " + e + " for subscription " + sub.getId());
                 });
                 if (filter.test(e)) {
-                    events.add(e);
-                    if (count.incrementAndGet() >= numEventsToWait) {
-                        end.run();
+                    if(!ended.get()){
+                        events.add(e);                        
+                        if (numEventsToWait != -1 && count.incrementAndGet() >= numEventsToWait) {
+                            end("received required events");
+                        }
                     }
                 }
             }
 
             @Override
-            public void onSubClose(List<String> reason) {
-                assert dbg(() -> {
-                    logger.fine("fetch close " + reason + " for subscription " + sub.getId());
-                });
-                end.run();
+            public void onSubClose(NostrSubscription sub, List<String> reason) {
+                end("sub closed for reasons: " + reason);
             }
 
             @Override
-            public void onSubEose(NostrRelay relay, boolean all) {
+            public void onSubEose(NostrSubscription sub, NostrRelay relay, boolean all) {
                 if (endOnEose && all) {
-                    end.run();
-                    assert dbg(() -> {
-                        logger.fine("fetch eose for fetch " + sub.getId() + " with received events: " + events);
-                    });
+                    end("eose");
                 }
             }
         };
