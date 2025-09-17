@@ -174,7 +174,7 @@ public class NostrSubscription extends NostrMessage {
         NGEPlatform platform = NGEUtils.getPlatform();
         this.exc = platform.newAsyncExecutor(NostrSubscription.class);
         opened = true;
-        AsyncTask<List<AsyncTask<NostrMessageAck>>>  out = this.onOpen.apply(this);
+        AsyncTask<List<AsyncTask<NostrMessageAck>>> out = this.onOpen.apply(this);
         callOpenListeners();
         return out;
     }
@@ -256,7 +256,7 @@ public class NostrSubscription extends NostrMessage {
 
     /**
      * Adds a listener for subscription open events.
-     * 
+     *
      * <p>
      * The listener will be notified when the subscription is successfully opened.
      * </p>

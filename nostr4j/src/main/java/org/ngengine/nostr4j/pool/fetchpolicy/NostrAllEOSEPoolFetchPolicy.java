@@ -63,7 +63,7 @@ public class NostrAllEOSEPoolFetchPolicy implements NostrPoolFetchPolicy {
             }
 
             @Override
-            public void onSubClose(NostrSubscription sub,List<String> reason) {
+            public void onSubClose(NostrSubscription sub, List<String> reason) {
                 assert dbg(() -> {
                     logger.fine("fetch close " + reason + " for subscription " + sub.getId());
                 });
@@ -71,7 +71,7 @@ public class NostrAllEOSEPoolFetchPolicy implements NostrPoolFetchPolicy {
             }
 
             @Override
-            public void onSubEose(NostrSubscription sub,NostrRelay relay, boolean all) {
+            public void onSubEose(NostrSubscription sub, NostrRelay relay, boolean all) {
                 if (all) {
                     assert dbg(() -> {
                         logger.fine("fetch eose for fetch " + sub.getId() + " with received events: " + events);
@@ -81,9 +81,7 @@ public class NostrAllEOSEPoolFetchPolicy implements NostrPoolFetchPolicy {
             }
 
             @Override
-            public void onSubOpen(NostrSubscription sub) {
-                
-            }
+            public void onSubOpen(NostrSubscription sub) {}
         };
     }
 }

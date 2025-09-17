@@ -32,6 +32,7 @@ package org.ngengine.nostr4j;
 
 import static org.ngengine.platform.NGEUtils.dbg;
 
+import jakarta.annotation.Nullable;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -57,7 +58,6 @@ import org.ngengine.nostr4j.listeners.NostrNoticeListener;
 import org.ngengine.nostr4j.listeners.NostrRelayComponent;
 import org.ngengine.nostr4j.pool.ackpolicy.NostrPoolAckPolicy;
 import org.ngengine.nostr4j.pool.ackpolicy.NostrPoolAnyAckPolicy;
-import org.ngengine.nostr4j.pool.fetchpolicy.NostrAllEOSEPoolFetchPolicy;
 import org.ngengine.nostr4j.pool.fetchpolicy.NostrPoolFetchPolicy;
 import org.ngengine.nostr4j.pool.fetchpolicy.NostrWaitForEventFetchPolicy;
 import org.ngengine.nostr4j.proto.NostrMessage;
@@ -65,13 +65,10 @@ import org.ngengine.nostr4j.proto.NostrMessageAck;
 import org.ngengine.nostr4j.proto.impl.NostrClosedMessage;
 import org.ngengine.nostr4j.proto.impl.NostrEOSEMessage;
 import org.ngengine.nostr4j.proto.impl.NostrNoticeMessage;
-import org.ngengine.nostr4j.utils.ScheduledAction;
 import org.ngengine.nostr4j.utils.UniqueId;
 import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEPlatform;
 import org.ngengine.platform.NGEUtils;
-
-import jakarta.annotation.Nullable;
 
 public class NostrPool {
 
@@ -314,15 +311,14 @@ public class NostrPool {
         return sub;
     }
 
-
     /**
      * Fetch up to numEvents events matching the given filter until timeout is
      * reached or numEvents have been received.
-     * 
+     *
      * <p>
      * The method might return less events if the timeout is reached before numEvents
      * </p>
-     * 
+     *
      * @param filter    The filter to match events against
      * @param numEvents The number of events to fetch
      * @param timeout   The maximum duration to wait for events, null means no
@@ -330,26 +326,20 @@ public class NostrPool {
      * @return A promise that resolves with up to numEvents matching events or when
      *         the timeout is reached
      */
-    public AsyncTask<List<SignedNostrEvent>> fetch(NostrFilter filter, int numEvents,  @Nullable Duration timeout) {
-        return fetch(
-            filter, 
-            numEvents,
-            false,
-            timeout
-        );
+    public AsyncTask<List<SignedNostrEvent>> fetch(NostrFilter filter, int numEvents, @Nullable Duration timeout) {
+        return fetch(filter, numEvents, false, timeout);
     }
-
 
     /**
      * Fetch up to maxEvents events matching the given filter until timeout is
      * reached, numEvents have been received or all relays have sent EOSE if
      * withEose is true.
-     * 
+     *
      * <p>
      * The method might return less events if the timeout is reached before numEvents
      * or if all relays have sent EOSE and withEose is true
      * </p>
-     * 
+     *
      * @param filter    The filter to match events against
      * @param numEvents The number of events to fetch
      * @param withEose  If true the fetch will end when all relays have sent EOSE
@@ -358,15 +348,16 @@ public class NostrPool {
      *                  timeout
      * @return A promise that resolves with up to numEvents matching events or when
      *         the timeout is reached
-     * 
+     *
      */
-    public AsyncTask<List<SignedNostrEvent>> fetch(NostrFilter filter, int numEvents, boolean withEose, @Nullable Duration timeout) {
-        return fetch(
-            Arrays.asList(filter), 
-            NostrWaitForEventFetchPolicy.get((e) -> true, numEvents, false, timeout)
-        );
+    public AsyncTask<List<SignedNostrEvent>> fetch(
+        NostrFilter filter,
+        int numEvents,
+        boolean withEose,
+        @Nullable Duration timeout
+    ) {
+        return fetch(Arrays.asList(filter), NostrWaitForEventFetchPolicy.get(e -> true, numEvents, false, timeout));
     }
-
 
     /**
      * Fetch events matching the given filters using the specified fetch policy.
@@ -374,10 +365,7 @@ public class NostrPool {
      * @param fetchPolicy The fetch policy to determine when to stop fetching events
      * @return A promise that resolves with the list of matching events based on the fetch policy
      */
-    public AsyncTask<List<SignedNostrEvent>> fetch(
-        Collection<NostrFilter> filters,
-        NostrPoolFetchPolicy fetchPolicy
-    ) {
+    public AsyncTask<List<SignedNostrEvent>> fetch(Collection<NostrFilter> filters, NostrPoolFetchPolicy fetchPolicy) {
         return fetch(filters, () -> new NaiveEventTracker(), fetchPolicy);
     }
 
@@ -399,17 +387,10 @@ public class NostrPool {
             List<SignedNostrEvent> events = new CopyOnWriteArrayList<>();
 
             assert dbg(() -> {
-                logger.fine(
-                    "Initialize fetch of " +
-                    filters +
-
-                    " for subscription " +
-                    sub.getId()
-                );
+                logger.fine("Initialize fetch of " + filters + " for subscription " + sub.getId());
             });
 
             AtomicBoolean ended = new AtomicBoolean(false);
-           
 
             Consumer<List<SignedNostrEvent>> done = evs -> {
                 if (!ended.getAndSet(true)) {
@@ -431,7 +412,6 @@ public class NostrPool {
                     sub.close();
                 }
             };
-
 
             sub
                 .addListener(

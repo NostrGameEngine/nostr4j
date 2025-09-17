@@ -58,11 +58,7 @@ public class NostrWaitForEventFetchPolicy implements NostrPoolFetchPolicy {
     private final boolean endOnEose;
     private final Duration timeout;
 
-    public static NostrWaitForEventFetchPolicy get(
-        Predicate<SignedNostrEvent> filter, 
-        int numEventsToWait, 
-        boolean endOnEose
-    ) {
+    public static NostrWaitForEventFetchPolicy get(Predicate<SignedNostrEvent> filter, int numEventsToWait, boolean endOnEose) {
         return new NostrWaitForEventFetchPolicy(filter, numEventsToWait, endOnEose, null);
     }
 
@@ -89,47 +85,48 @@ public class NostrWaitForEventFetchPolicy implements NostrPoolFetchPolicy {
 
     @Override
     public NostrSubAllListener getListener(NostrSubscription sub, List<SignedNostrEvent> events, Runnable end) {
-      
         return new NostrSubAllListener() {
             AtomicBoolean ended = new AtomicBoolean(false);
             AsyncTask<Void> timeoutTask = null;
             AsyncExecutor exc = NGEUtils.getPlatform().newAsyncExecutor(NostrWaitForEventFetchPolicy.class);
 
             @Override
-            public void onSubOpen(NostrSubscription sub){
+            public void onSubOpen(NostrSubscription sub) {
                 if (timeout != null) {
-                    timeoutTask = exc.runLater(() -> {
-                        end("timeout");
-                        return null;
-                    },
-                    timeout.toMillis(),
-                    TimeUnit.MILLISECONDS);
+                    timeoutTask =
+                        exc.runLater(
+                            () -> {
+                                end("timeout");
+                                return null;
+                            },
+                            timeout.toMillis(),
+                            TimeUnit.MILLISECONDS
+                        );
                 }
             }
 
-            private void end(String reason){
+            private void end(String reason) {
                 try {
                     if (!ended.getAndSet(true)) {
                         assert dbg(() -> {
-                            logger.fine("fetch ended due to " + reason + " with received events: "
-                                    + events);
+                            logger.fine("fetch ended due to " + reason + " with received events: " + events);
                         });
-                        end.run();                        
+                        end.run();
                     }
                 } finally {
-                    try{
+                    try {
                         if (timeoutTask != null) {
-                            timeoutTask.cancel();                                                            
+                            timeoutTask.cancel();
                         }
-                    } catch(Throwable e){
+                    } catch (Throwable e) {
                         logger.warning("Error cancelling timeout: " + e);
                     }
-                    try{
+                    try {
                         exc.close();
-                    } catch(Exception e){
+                    } catch (Exception e) {
                         logger.warning("Error closing executor: " + e);
                     }
-                }              
+                }
             }
 
             @Override
@@ -138,8 +135,8 @@ public class NostrWaitForEventFetchPolicy implements NostrPoolFetchPolicy {
                     logger.finer("fetch event " + e + " for subscription " + sub.getId());
                 });
                 if (filter.test(e)) {
-                    if(!ended.get()){
-                        events.add(e);                        
+                    if (!ended.get()) {
+                        events.add(e);
                         if (numEventsToWait != -1 && count.incrementAndGet() >= numEventsToWait) {
                             end("received required events");
                         }

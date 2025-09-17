@@ -33,7 +33,6 @@ package org.ngengine.nostr4j.nip01;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-
 import org.ngengine.nostr4j.NostrSubscription;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
@@ -59,7 +58,7 @@ public class Nip01UserMetadataListener implements NostrSubEventListener {
     }
 
     @Override
-    public void onSubEvent(NostrSubscription sub,SignedNostrEvent event, boolean stored) {
+    public void onSubEvent(NostrSubscription sub, SignedNostrEvent event, boolean stored) {
         try {
             if (event.getKind() != 0 || (pubkey != null && !pubkey.equals(event.getPubkey()))) return;
             Nip01UserMetadata profile = new Nip01UserMetadata(event);

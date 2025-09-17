@@ -31,9 +31,7 @@
 package org.ngengine.nostr4j.listeners.sub;
 
 import java.util.List;
-
 import org.ngengine.nostr4j.NostrSubscription;
-
 
 /**
  * A listener interface for subscription closure events.
