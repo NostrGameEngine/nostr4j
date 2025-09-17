@@ -155,7 +155,7 @@ public final class NostrRelay {
             this.connectCallbacks = platform.newConcurrentQueue(Runnable.class);
             this.url = url;
             this.executor = executor;
-            this.excQueue = new ExecutionQueue(this.executor);
+            this.excQueue = NGEPlatform.get().newExecutionQueue(executor);
         } catch (Exception e) {
             throw new RuntimeException("Error creating NostrRelay", e);
         }
