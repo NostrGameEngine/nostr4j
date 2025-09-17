@@ -138,7 +138,7 @@ public class NostrTURN {
         }
 
         @Override
-        public void onSubEvent(SignedNostrEvent event, boolean stored) {
+        public void onSubEvent(NostrSubscription sub, SignedNostrEvent event, boolean stored) {
             onTurnEvent(event, remote);
         }
     }

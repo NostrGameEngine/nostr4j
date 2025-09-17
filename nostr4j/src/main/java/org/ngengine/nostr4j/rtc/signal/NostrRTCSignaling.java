@@ -105,7 +105,7 @@ public class NostrRTCSignaling implements Closeable {
 
     private final NostrSubEventListener listener = new NostrSubEventListener() {
         @Override
-        public void onSubEvent(SignedNostrEvent event, boolean stored) {
+        public void onSubEvent(NostrSubscription sub, SignedNostrEvent event, boolean stored) {
             NostrRTCSignaling.this.onSubEvent(event, stored);
         }
     };

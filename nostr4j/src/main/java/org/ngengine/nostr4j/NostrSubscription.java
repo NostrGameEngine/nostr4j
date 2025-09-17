@@ -45,6 +45,7 @@ import org.ngengine.nostr4j.listeners.sub.NostrSubCloseListener;
 import org.ngengine.nostr4j.listeners.sub.NostrSubEoseListener;
 import org.ngengine.nostr4j.listeners.sub.NostrSubEventListener;
 import org.ngengine.nostr4j.listeners.sub.NostrSubListener;
+import org.ngengine.nostr4j.listeners.sub.NostrSubOpenListener;
 import org.ngengine.nostr4j.proto.NostrMessage;
 import org.ngengine.nostr4j.proto.NostrMessageAck;
 import org.ngengine.platform.AsyncExecutor;
@@ -82,6 +83,7 @@ public class NostrSubscription extends NostrMessage {
     private final Collection<NostrSubEoseListener> onEoseListeners = new CopyOnWriteArrayList<>();
     private final Collection<NostrSubEventListener> onEventListeners = new CopyOnWriteArrayList<>();
     private final Collection<NostrSubCloseListener> onCloseListeners = new CopyOnWriteArrayList<>();
+    private final Collection<NostrSubOpenListener> onOpenListeners = new CopyOnWriteArrayList<>();
 
     private AsyncExecutor exc;
     private final Collection<NostrFilter> filters;
@@ -170,9 +172,11 @@ public class NostrSubscription extends NostrMessage {
             throw new IllegalStateException("Subscription already opened");
         }
         NGEPlatform platform = NGEUtils.getPlatform();
-        this.exc = platform.newSubscriptionExecutor();
+        this.exc = platform.newAsyncExecutor(NostrSubscription.class);
         opened = true;
-        return this.onOpen.apply(this);
+        AsyncTask<List<AsyncTask<NostrMessageAck>>>  out = this.onOpen.apply(this);
+        callOpenListeners();
+        return out;
     }
 
     public boolean isOpened() {
@@ -251,6 +255,22 @@ public class NostrSubscription extends NostrMessage {
     }
 
     /**
+     * Adds a listener for subscription open events.
+     * 
+     * <p>
+     * The listener will be notified when the subscription is successfully opened.
+     * </p>
+     * @param listener
+     * @return
+     */
+    public NostrSubscription addOpenListener(NostrSubOpenListener listener) {
+        assert listener != null;
+        assert onOpenListeners.contains(listener) == false;
+        onOpenListeners.add(listener);
+        return this;
+    }
+
+    /**
      * Adds a general subscription listener that may implement one or more specific listener interfaces.
      *
      * @param listener The listener to add
@@ -269,6 +289,10 @@ public class NostrSubscription extends NostrMessage {
         if (listener instanceof NostrSubCloseListener) {
             assert onCloseListeners.contains(listener) == false;
             onCloseListeners.add((NostrSubCloseListener) listener);
+        }
+        if (listener instanceof NostrSubOpenListener) {
+            assert onOpenListeners.contains(listener) == false;
+            onOpenListeners.add((NostrSubOpenListener) listener);
         }
 
         return this;
@@ -298,7 +322,7 @@ public class NostrSubscription extends NostrMessage {
         for (NostrSubEoseListener listener : onEoseListeners) {
             this.getExecutor()
                 .run(() -> {
-                    listener.onSubEose(relay, everyWhere);
+                    listener.onSubEose(this, relay, everyWhere);
                     return null;
                 })
                 .catchException(ex -> {
@@ -312,7 +336,7 @@ public class NostrSubscription extends NostrMessage {
         for (NostrSubEventListener listener : onEventListeners) {
             this.getExecutor()
                 .run(() -> {
-                    listener.onSubEvent(event, stored);
+                    listener.onSubEvent(this, event, stored);
                     return null;
                 })
                 .catchException(ex -> {
@@ -326,11 +350,25 @@ public class NostrSubscription extends NostrMessage {
         for (NostrSubCloseListener listener : onCloseListeners) {
             this.getExecutor()
                 .run(() -> {
-                    listener.onSubClose(closeReasons);
+                    listener.onSubClose(this, closeReasons);
                     return null;
                 })
                 .catchException(ex -> {
                     logger.warning("Error calling Close listener: " + listener + " " + ex);
+                });
+        }
+    }
+
+    protected void callOpenListeners() {
+        if (onOpenListeners.isEmpty()) return;
+        for (NostrSubOpenListener listener : onOpenListeners) {
+            this.getExecutor()
+                .run(() -> {
+                    listener.onSubOpen(this);
+                    return null;
+                })
+                .catchException(ex -> {
+                    logger.warning("Error calling Open listener: " + listener + " " + ex);
                 });
         }
     }

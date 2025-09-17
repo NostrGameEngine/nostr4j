@@ -30,6 +30,7 @@
  */
 package org.ngengine.nostr4j.listeners.sub;
 
+import org.ngengine.nostr4j.NostrSubscription;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 
 /**
@@ -62,9 +63,10 @@ public interface NostrSubEventListener extends NostrSubListener {
      * subscription's event tracker.
      * </p>
      *
+     * @param sub   The subscription that received the event
      * @param event The signed Nostr event that was received
      * @param stored Whether this event came from the relay's stored history (true)
      *               or is a new event (false)
      */
-    void onSubEvent(SignedNostrEvent event, boolean stored);
+    void onSubEvent(NostrSubscription sub, SignedNostrEvent event, boolean stored);
 }

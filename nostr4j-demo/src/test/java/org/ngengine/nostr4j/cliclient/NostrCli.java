@@ -62,15 +62,15 @@ public class NostrCli {
         NostrSubscription sub = pool.subscribe(new NostrFilter().withKind(1).limit(3), ()->new FailOnDoubleTracker());
 
         // append listeners
-        sub.addCloseListener(reason -> {
+        sub.addCloseListener((s, reason )-> {
             System.out.println("Subscription closed: reason: " + reason);
         });
 
-        sub.addEventListener((event, stored) -> {
+        sub.addEventListener((s, event, stored) -> {
             System.out.println("Event: " + event + " stored: " + stored);
         });
 
-        sub.addEoseListener((relay,all) -> {
+        sub.addEoseListener((s, relay,all) -> {
             System.out.println("Eose: " + all);
         });
 

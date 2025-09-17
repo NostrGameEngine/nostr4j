@@ -31,6 +31,7 @@
 package org.ngengine.nostr4j.listeners.sub;
 
 import org.ngengine.nostr4j.NostrRelay;
+import org.ngengine.nostr4j.NostrSubscription;
 
 /**
  * A listener interface for receiving End-of-Stored-Events (EOSE) notifications
@@ -66,8 +67,9 @@ public interface NostrSubEoseListener extends NostrSubListener {
      * the subscription's filter. After this point, only new events will be received.
      * </p>
      *
+     * @param sub        The subscription for which the EOSE was received
      * @param everyWhere If true, all connected relays have sent EOSE for this subscription.
      *                   If false, at least one relay has sent EOSE, but not all.
      */
-    void onSubEose(NostrRelay relay, boolean everyWhere);
+    void onSubEose(NostrSubscription sub, NostrRelay relay, boolean everyWhere);
 }

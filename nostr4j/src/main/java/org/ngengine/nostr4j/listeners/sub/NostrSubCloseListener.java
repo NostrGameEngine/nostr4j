@@ -32,6 +32,9 @@ package org.ngengine.nostr4j.listeners.sub;
 
 import java.util.List;
 
+import org.ngengine.nostr4j.NostrSubscription;
+
+
 /**
  * A listener interface for subscription closure events.
  * <p>
@@ -62,7 +65,8 @@ public interface NostrSubCloseListener extends NostrSubListener {
      * the subscription was closed by multiple relays or had multiple closure events.
      * </p>
      *
+     * @param sub     The subscription that was closed
      * @param reasons A list of string reasons explaining why the subscription was closed
      */
-    void onSubClose(List<String> reasons);
+    void onSubClose(NostrSubscription sub, List<String> reasons);
 }

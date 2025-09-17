@@ -485,7 +485,7 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
     }
 
     @Override
-    public void onSubEvent(SignedNostrEvent event, boolean stored) {
+    public void onSubEvent(NostrSubscription sub, SignedNostrEvent event, boolean stored) {
         try {
             if (event.getKind() != 24133) {
                 logger.warning("Received unexpected event with kind: " + event.getKind());

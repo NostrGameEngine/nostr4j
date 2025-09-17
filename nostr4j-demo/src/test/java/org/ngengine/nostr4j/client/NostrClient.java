@@ -64,6 +64,7 @@ import org.ngengine.nostr4j.event.tracker.FailOnDoubleTracker;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.nip24.Nip24ExtraMetadata;
 import org.ngengine.nostr4j.nip50.NostrSearchFilter;
+import org.ngengine.nostr4j.pool.fetchpolicy.NostrAllEOSEPoolFetchPolicy;
 import org.ngengine.platform.AsyncTask;
 
 public class NostrClient extends JFrame {
@@ -589,7 +590,7 @@ public class NostrClient extends JFrame {
         NostrSubscription sub =
             this.pool.subscribe(Arrays.asList(new NostrFilter().withKind(1).limit(10)), ()->new FailOnDoubleTracker());
 
-        sub.addEventListener((event, stored) -> addEventToFeed(event, true));
+        sub.addEventListener((s, event, stored) -> addEventToFeed(event, true));
         sub.open();
     }
 
@@ -785,12 +786,13 @@ public class NostrClient extends JFrame {
         loadMoreButton.setText("LOADING...");
 
         this.pool.fetch(
-                new NostrSearchFilter()
+                Arrays.asList(new NostrSearchFilter()
                     .withKind(1)
                     .search(searchBar.getText().trim())
                     .until(Instant.ofEpochSecond(earliestEvent))
-                    .limit(5),
-                ()->new FailOnDoubleTracker()
+                    .limit(5)),
+                ()->new FailOnDoubleTracker(),
+                NostrAllEOSEPoolFetchPolicy.get()
             )
             .catchException(e -> {
                 SwingUtilities.invokeLater(() -> {
@@ -837,7 +839,7 @@ public class NostrClient extends JFrame {
         pool.unsubscribeAll();
         NostrSubscription sub = pool.subscribe(Arrays.asList(new NostrSearchFilter().withKind(1).limit(10).search(query)));
 
-        sub.addEventListener((event, stored) -> {
+        sub.addEventListener((s, event, stored) -> {
             SwingUtilities.invokeLater(() -> {
                 // Remove searching label on first result
                 if (contentPanel.getComponentCount() == 1 && contentPanel.getComponent(0) == loadingPanel) {

@@ -30,4 +30,6 @@
  */
 package org.ngengine.nostr4j.listeners.sub;
 
-public interface NostrSubAllListener extends NostrSubEventListener, NostrSubCloseListener, NostrSubEoseListener {}
+public interface NostrSubAllListener extends NostrSubEventListener, NostrSubCloseListener, NostrSubEoseListener , NostrSubOpenListener {
+    
+}

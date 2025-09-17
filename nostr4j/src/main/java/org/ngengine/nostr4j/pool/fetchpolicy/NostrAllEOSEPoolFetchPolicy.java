@@ -54,7 +54,7 @@ public class NostrAllEOSEPoolFetchPolicy implements NostrPoolFetchPolicy {
     public NostrSubAllListener getListener(NostrSubscription sub, List<SignedNostrEvent> events, Runnable end) {
         return new NostrSubAllListener() {
             @Override
-            public void onSubEvent(SignedNostrEvent e, boolean stored) {
+            public void onSubEvent(NostrSubscription sub, SignedNostrEvent e, boolean stored) {
                 assert dbg(() -> {
                     logger.finer("fetch event " + e + " for subscription " + sub.getId());
                 });
@@ -63,7 +63,7 @@ public class NostrAllEOSEPoolFetchPolicy implements NostrPoolFetchPolicy {
             }
 
             @Override
-            public void onSubClose(List<String> reason) {
+            public void onSubClose(NostrSubscription sub,List<String> reason) {
                 assert dbg(() -> {
                     logger.fine("fetch close " + reason + " for subscription " + sub.getId());
                 });
@@ -71,13 +71,18 @@ public class NostrAllEOSEPoolFetchPolicy implements NostrPoolFetchPolicy {
             }
 
             @Override
-            public void onSubEose(NostrRelay relay, boolean all) {
+            public void onSubEose(NostrSubscription sub,NostrRelay relay, boolean all) {
                 if (all) {
                     assert dbg(() -> {
                         logger.fine("fetch eose for fetch " + sub.getId() + " with received events: " + events);
                     });
                     end.run();
                 }
+            }
+
+            @Override
+            public void onSubOpen(NostrSubscription sub) {
+                
             }
         };
     }

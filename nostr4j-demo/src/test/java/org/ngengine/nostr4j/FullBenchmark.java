@@ -99,7 +99,7 @@ public class FullBenchmark {
 
         long receiveStarted = System.currentTimeMillis();
         NostrSubscription sub = reader.subscribe(new NostrFilter().withKind(1).withTag("t", testId), ()->new NaiveEventTracker());
-        sub.addEventListener((event, stored) -> {
+        sub.addEventListener((s, event, stored) -> {
             String i = event.getFirstTag("eventId").get(0);
             if (track.contains(i)) {
                 assert false : "Duplicate event: " + i;
