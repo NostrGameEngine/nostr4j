@@ -155,7 +155,7 @@ public final class NostrRelay {
             this.connectCallbacks = platform.newConcurrentQueue(Runnable.class);
             this.url = url;
             this.executor = executor;
-            this.excQueue = NGEPlatform.get().newExecutionQueue(executor);
+            this.excQueue = NGEPlatform.get().newExecutionQueue();
         } catch (Exception e) {
             throw new RuntimeException("Error creating NostrRelay", e);
         }
@@ -168,7 +168,7 @@ public final class NostrRelay {
         } else {
             this.excQueue.enqueue((res, rej) -> {
                     platform
-                        .wrapPromise(runnable)
+                        .promisify(runnable, executor)
                         .then(v -> {
                             res.accept(v);
                             return null;
