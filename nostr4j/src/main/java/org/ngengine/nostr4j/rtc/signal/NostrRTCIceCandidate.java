@@ -45,14 +45,18 @@ import org.ngengine.platform.transport.RTCTransportIceCandidate;
  * connection with a peer.
  */
 public class NostrRTCIceCandidate implements NostrRTCSignal {
-    
+
     private static final long serialVersionUID = 1L;
 
     private final NostrPublicKey pubkey;
     private final Map<String, Object> map;
     private final Collection<RTCTransportIceCandidate> candidates;
 
-    public NostrRTCIceCandidate(NostrPublicKey pubkey, Collection<RTCTransportIceCandidate> candidates, Map<String, Object> misc) {
+    public NostrRTCIceCandidate(
+        NostrPublicKey pubkey,
+        Collection<RTCTransportIceCandidate> candidates,
+        Map<String, Object> misc
+    ) {
         this.candidates = Collections.unmodifiableCollection(candidates);
         HashMap<String, Object> map = new HashMap<>();
         if (misc != null && !misc.isEmpty()) {
@@ -67,10 +71,10 @@ public class NostrRTCIceCandidate implements NostrRTCSignal {
         this(pubkey, candidatesFromMap(map), map);
     }
 
-    private static void candidatesToMap(Map<String,Object> map, Collection<RTCTransportIceCandidate> candidates){
-        ArrayList<Map<String,Object>> cs = new ArrayList<>();
-        for(RTCTransportIceCandidate c : candidates){
-            HashMap<String,Object> cm = new HashMap<>();
+    private static void candidatesToMap(Map<String, Object> map, Collection<RTCTransportIceCandidate> candidates) {
+        ArrayList<Map<String, Object>> cs = new ArrayList<>();
+        for (RTCTransportIceCandidate c : candidates) {
+            HashMap<String, Object> cm = new HashMap<>();
             cm.put("candidate", c.getCandidate());
             cm.put("sdpMid", c.getSdpMid());
             cs.add(cm);
@@ -78,10 +82,10 @@ public class NostrRTCIceCandidate implements NostrRTCSignal {
         map.put("candidates", cs);
     }
 
-    private static Collection<RTCTransportIceCandidate> candidatesFromMap(Map<String,Object> map){
+    private static Collection<RTCTransportIceCandidate> candidatesFromMap(Map<String, Object> map) {
         ArrayList<RTCTransportIceCandidate> candidates = new ArrayList<>();
-        Collection<Map<String,Object>> cs = (Collection<Map<String, Object>>) map.get("candidates");
-        for(Map<String,Object> c : cs){
+        Collection<Map<String, Object>> cs = (Collection<Map<String, Object>>) map.get("candidates");
+        for (Map<String, Object> c : cs) {
             String candidate = NGEUtils.safeString(c.get("candidate"));
             String sdpMid = NGEUtils.safeString(c.get("sdpMid"));
             candidates.add(new RTCTransportIceCandidate(candidate, sdpMid));

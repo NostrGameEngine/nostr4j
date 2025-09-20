@@ -233,7 +233,8 @@ public class NostrRTCSocket implements RTCTransportListener, NostrTURN.Listener,
                     logger.fine("Ready to send offer " + offer + " to connection ID: " + connectionId);
 
                     return offer;
-                }).catchException(ex->{
+                })
+                .catchException(ex -> {
                     logger.severe("Error while listening for RTC connections: " + ex.getMessage());
                     throw new IllegalStateException("Error while listening for RTC connections", ex);
                 });
