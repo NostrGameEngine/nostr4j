@@ -184,28 +184,7 @@ public class NostrPool {
             relay.afterSendMessage(message);
         }
 
-        NGEPlatform platform = NGEUtils.getPlatform();
-        return platform.wrapPromise((res, rej) -> {
-            for (AsyncTask<NostrMessageAck> ack : promises) {
-                ack.then(msg -> {
-                    NostrMessageAck.Status status = ackPolicy.apply(promises);
-                    if (status == NostrMessageAck.Status.SUCCESS) {
-                        res.accept(promises);
-                    } else if (status == NostrMessageAck.Status.FAILURE) {
-                        logger.warning(
-                            "Failed to send message " +
-                            message +
-                            " to relay " +
-                            msg.getRelay().getUrl() +
-                            ": " +
-                            msg.getMessage()
-                        );
-                        rej.accept(new Exception("Failed to send message to all relays. (" + msg.getMessage() + ")"));
-                    }
-                    return null;
-                });
-            }
-        });
+        return NGEPlatform.get().awaitAllSettled(promises);
     }
 
     public AsyncTask<NostrRelay> ensureRelay(String relay) {
