@@ -56,6 +56,7 @@ import org.ngengine.platform.NGEPlatform;
 import org.ngengine.platform.NGEUtils;
 import org.ngengine.platform.RTCSettings;
 import org.ngengine.platform.transport.RTCTransport;
+import org.ngengine.platform.transport.RTCTransportIceCandidate;
 import org.ngengine.platform.transport.RTCTransportListener;
 
 /**
@@ -77,7 +78,7 @@ public class NostrRTCSocket implements RTCTransportListener, NostrTURN.Listener,
     private static final Logger logger = Logger.getLogger(NostrRTCSocket.class.getName());
 
     private final List<NostrRTCSocketListener> listeners = new CopyOnWriteArrayList<>();
-    private final CopyOnWriteArrayList<String> localIceCandidates = new CopyOnWriteArrayList<>();
+    private final CopyOnWriteArrayList<RTCTransportIceCandidate> localIceCandidates = new CopyOnWriteArrayList<>();
 
     private final String connectionId;
     private final RTCSettings settings;
@@ -183,7 +184,7 @@ public class NostrRTCSocket implements RTCTransportListener, NostrTURN.Listener,
                         logger.fine("Emitting ICE candidates " + localIceCandidates);
                         NostrRTCIceCandidate iceCandidate = new NostrRTCIceCandidate(
                             localPeer.getPubkey(),
-                            new ArrayList<String>(localIceCandidates),
+                            new ArrayList<RTCTransportIceCandidate>(localIceCandidates),
                             new HashMap<String, Object>()
                         );
                         for (NostrRTCSocketListener listener : listeners) {
@@ -232,6 +233,9 @@ public class NostrRTCSocket implements RTCTransportListener, NostrTURN.Listener,
                     logger.fine("Ready to send offer " + offer + " to connection ID: " + connectionId);
 
                     return offer;
+                }).catchException(ex->{
+                    logger.severe("Error while listening for RTC connections: " + ex.getMessage());
+                    throw new IllegalStateException("Error while listening for RTC connections", ex);
                 });
         } catch (Exception e) {
             logger.severe("Error while listening for RTC connections: " + e.getMessage());
@@ -244,7 +248,7 @@ public class NostrRTCSocket implements RTCTransportListener, NostrTURN.Listener,
      * @param offerOrAnswer The offer or answer to connect to.
      * @return An async tasks that resolves after the connection is established with an
      * answer string if the argument is an offer or null if the argument is an answer.
-     * @throws IllegalStateException If the socket is already connected.
+     * @throws IllegalStateException If the socket is already connected or cannot be connected
      * @throws IllegalArgumentException If the argument is not an offer or answer.
      */
     AsyncTask<NostrRTCAnswer> connect(NostrRTCSignal offerOrAnswer) {
@@ -314,7 +318,7 @@ public class NostrRTCSocket implements RTCTransportListener, NostrTURN.Listener,
     }
 
     @Override
-    public void onLocalRTCIceCandidate(String candidateString) {
+    public void onLocalRTCIceCandidate(RTCTransportIceCandidate candidateString) {
         logger.fine("Received local ICE candidate: " + candidateString);
         localIceCandidates.addIfAbsent(candidateString);
         emitCandidates();
