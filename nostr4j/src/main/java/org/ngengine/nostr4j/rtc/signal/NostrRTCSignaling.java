@@ -114,7 +114,7 @@ public class NostrRTCSignaling implements Closeable {
         this.pool = pool;
         this.localPeer = localPeer;
         this.settings = settings;
-        this.executor = NGEUtils.getPlatform().newPoolExecutor();
+        this.executor = NGEUtils.getPlatform().newAsyncExecutor(NostrRTCSignaling.class);
         this.roomKeyPair = roomKeyPair;
         this.roomSigner = new NostrKeyPairSigner(roomKeyPair);
     }
