@@ -39,7 +39,6 @@ import org.ngengine.nostr4j.event.tracker.PassthroughEventTracker;
 import org.ngengine.nostr4j.proto.NostrMessage;
 import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
 import org.ngengine.platform.NGEUtils;
-import org.ngengine.platform.jvm.JVMThreadedPlatform;
 
 public class Benchmarks {
 
@@ -74,7 +73,7 @@ public class Benchmarks {
     NostrRelay relay;
 
     public Benchmarks(boolean trusted, boolean threaded) throws Exception {
-        if (threaded) NGEUtils.setPlatform(new JVMThreadedPlatform());
+        // if (threaded) NGEUtils.setPlatform(new JVMThreadedPlatform());
         pool = new NostrPool();
 
         relay = new NostrRelay("ws://127.0.0.1:8087");
@@ -119,9 +118,9 @@ public class Benchmarks {
         t = benchmark.run(6);
         System.out.println("Time: " + (t));
 
-        benchmark = new Benchmarks(false, true);
-        t = benchmark.run(6);
-        System.out.println("Time (threaded): " + (t));
+        // benchmark = new Benchmarks(false, true);
+        // t = benchmark.run(6);
+        // System.out.println("Time (threaded): " + (t));
 
         benchmark = new Benchmarks(true, false);
         t = benchmark.run(6);
