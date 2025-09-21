@@ -387,7 +387,7 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
      * connected. Called internally.
      * Everything enqueued to this will run in the signer executor.
      */
-    private AsyncTask<List<AsyncTask<NostrMessageAck>>> check() {
+    private AsyncTask<List<NostrMessageAck>> check() {
         if (closed) throw new RuntimeException("Closed");
         NGEPlatform p = NGEUtils.getPlatform();
 
@@ -456,7 +456,9 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
                         synchronized (this) {
                             if (!this.subscription.isOpened()) {
                                 logger.finest("Opening subscription: " + this.subscription);
-                                this.subscription.open()
+                                NGEPlatform
+                                    .get()
+                                    .awaitAll(this.subscription.open())
                                     .catchException(exc -> {
                                         rej.accept(exc);
                                     })

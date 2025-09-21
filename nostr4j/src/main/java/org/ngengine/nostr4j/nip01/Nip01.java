@@ -96,6 +96,6 @@ public class Nip01 {
     ) {
         UnsignedNostrEvent event = newMetadata.toUpdateEvent();
         AsyncTask<SignedNostrEvent> signedP = signer.sign(event);
-        return signedP.compose(signed -> pool.publish(signed));
+        return signedP.then(signed -> pool.publish(signed));
     }
 }

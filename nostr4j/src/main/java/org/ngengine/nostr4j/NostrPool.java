@@ -149,11 +149,11 @@ public class NostrPool {
         return this;
     }
 
-    public AsyncTask<List<AsyncTask<NostrMessageAck>>> publish(SignedNostrEvent ev) {
+    public List<AsyncTask<NostrMessageAck>> publish(SignedNostrEvent ev) {
         return sendMessage(ev, NostrPoolAnyAckPolicy.get());
     }
 
-    public AsyncTask<List<AsyncTask<NostrMessageAck>>> publish(SignedNostrEvent ev, NostrPoolAckPolicy ackPolicy) {
+    public List<AsyncTask<NostrMessageAck>> publish(SignedNostrEvent ev, NostrPoolAckPolicy ackPolicy) {
         return sendMessage(ev, ackPolicy);
     }
 
@@ -161,15 +161,15 @@ public class NostrPool {
      * @deprecated Use {@link #publish(SignedNostrEvent)} instead.
      */
     @Deprecated
-    public AsyncTask<List<AsyncTask<NostrMessageAck>>> send(SignedNostrEvent ev) {
+    public List<AsyncTask<NostrMessageAck>> send(SignedNostrEvent ev) {
         return publish(ev);
     }
 
-    protected AsyncTask<List<AsyncTask<NostrMessageAck>>> sendMessage(NostrMessage message) {
+    protected List<AsyncTask<NostrMessageAck>> sendMessage(NostrMessage message) {
         return sendMessage(message, NostrPoolAnyAckPolicy.get());
     }
 
-    protected AsyncTask<List<AsyncTask<NostrMessageAck>>> sendMessage(NostrMessage message, NostrPoolAckPolicy ackPolicy) {
+    protected List<AsyncTask<NostrMessageAck>> sendMessage(NostrMessage message, NostrPoolAckPolicy ackPolicy) {
         List<AsyncTask<NostrMessageAck>> promises = new ArrayList<>();
         for (NostrRelay relay : relays) {
             relay.beforeSendMessage(message);
@@ -184,7 +184,7 @@ public class NostrPool {
             relay.afterSendMessage(message);
         }
 
-        return NGEPlatform.get().awaitAllSettled(promises);
+        return promises;
     }
 
     public AsyncTask<NostrRelay> ensureRelay(String relay) {

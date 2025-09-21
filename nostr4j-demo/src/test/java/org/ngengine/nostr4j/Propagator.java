@@ -5,6 +5,7 @@ import java.util.Arrays;
 import java.util.List;
 
 import org.ngengine.nostr4j.event.SignedNostrEvent;
+import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEPlatform;
 
 public class Propagator {
@@ -43,7 +44,7 @@ public class Propagator {
                 }
                 pool = new NostrPool();
                 pool.ensureRelay(relay).await();
-                pool.publish(event).await();
+                AsyncTask.all(pool.publish(event)).await();
                 System.out.println("Published to " + relay);
                 pool.close();
             } catch (Exception e) {

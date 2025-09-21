@@ -287,7 +287,7 @@ public class NostrTURN {
 
                 return this.localPeer.getSigner()
                     .sign(event)
-                    .compose(signed -> {
+                    .then(signed -> {
                         return this.inPool.publish(signed);
                     });
             });
@@ -444,7 +444,7 @@ public class NostrTURN {
 
                                 SignedNostrEvent signed = this.localPeer.getSigner().sign(event).await();
 
-                                this.outPool.publish(signed).await();
+                                AsyncTask.awaitAny(this.outPool.publish(signed));
                             }
                         }
 

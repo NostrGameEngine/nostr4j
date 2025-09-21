@@ -75,7 +75,7 @@ public class FullBenchmark {
 
         long sendStarted = System.currentTimeMillis();
 
-        List<AsyncTask<List<AsyncTask<NostrMessageAck>>>> sent = new ArrayList<>();
+        List<List<AsyncTask<NostrMessageAck>>> sent = new ArrayList<>();
 
         for (int i = 0; i < EVENTS; i++) {
             UnsignedNostrEvent event = new UnsignedNostrEvent();

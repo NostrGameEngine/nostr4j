@@ -38,6 +38,7 @@ import org.ngengine.nostr4j.NostrRelay;
 import org.ngengine.nostr4j.NostrSubscription;
 import org.ngengine.nostr4j.TestLogger;
 import org.ngengine.nostr4j.event.tracker.FailOnDoubleTracker;
+import org.ngengine.platform.AsyncTask;
 
 public class NostrCli {
 
@@ -75,7 +76,7 @@ public class NostrCli {
         });
 
         // start sub
-        sub.open().await();
+        AsyncTask.all(sub.open()).await();
 
         // System.out.println("started: " + sub);
         rootLogger.info("started: " + sub);

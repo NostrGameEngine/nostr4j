@@ -263,7 +263,6 @@ public class NostrRTCSignaling implements Closeable {
     }
 
     public AsyncTask<Void> start(boolean signaling) {
-        List<AsyncTask<List<AsyncTask<NostrMessageAck>>>> waitQueue = new ArrayList<>();
         if (!this.isDiscoveryStarted()) {
             this.discoverySub = // listen for connect and disconnect events directed to the room
                 this.pool.subscribe(
@@ -274,7 +273,7 @@ public class NostrRTCSignaling implements Closeable {
                             .limit(0)
                     );
             this.discoverySub.addEventListener(listener);
-            waitQueue.add(this.discoverySub.open());
+            this.discoverySub.open();
         }
 
         if (!this.isSignalingStarted() && signaling) {
@@ -289,23 +288,20 @@ public class NostrRTCSignaling implements Closeable {
                             .limit(0)
                     );
             this.signalingSub.addEventListener(listener);
-            waitQueue.add(this.signalingSub.open());
+            this.signalingSub.open();
         }
 
         NGEPlatform platform = NGEUtils.getPlatform();
 
-        return platform
-            .awaitAll(waitQueue)
-            .compose(acks -> {
-                logger.finest("Opened subscriptions: " + acks);
-                if (!loopStarted) {
-                    loopStarted = true;
-                    this.loop();
-                }
-                return platform.wrapPromise((res, rej) -> {
-                    res.accept(null);
-                });
-            });
+
+        logger.finest("Opened subscriptions");
+        if (!loopStarted) {
+            loopStarted = true;
+            this.loop();
+        }
+        return platform.wrapPromise((res, rej) -> {
+            res.accept(null);
+        });
     }
 
     private void loop() {
@@ -357,7 +353,7 @@ public class NostrRTCSignaling implements Closeable {
         // logger.fine("Sending announce: " + connectEvent);
         return this.localPeer.getSigner()
             .sign(connectEvent)
-            .compose(ev -> {
+            .then(ev -> {
                 return pool.publish(ev);
             });
     }
@@ -392,7 +388,7 @@ public class NostrRTCSignaling implements Closeable {
 
                 return this.localPeer.getSigner()
                     .sign(event)
-                    .compose(ev -> {
+                    .then(ev -> {
                         return pool.publish(ev);
                     });
             });
@@ -426,7 +422,7 @@ public class NostrRTCSignaling implements Closeable {
 
                 return this.localPeer.getSigner()
                     .sign(event)
-                    .compose(ev -> {
+                    .then(ev -> {
                         return pool.publish(ev);
                     });
             });
@@ -462,7 +458,7 @@ public class NostrRTCSignaling implements Closeable {
 
                 return this.localPeer.getSigner()
                     .sign(event)
-                    .compose(ev -> {
+                    .then(ev -> {
                         return pool.publish(ev);
                     });
             });
@@ -483,7 +479,7 @@ public class NostrRTCSignaling implements Closeable {
         connectEvent.withTag("t", "disconnect");
         this.localPeer.getSigner()
             .sign(connectEvent)
-            .compose(ev -> {
+            .then(ev -> {
                 return pool.publish(ev);
             });
 
