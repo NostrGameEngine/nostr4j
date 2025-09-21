@@ -34,7 +34,6 @@ import static org.ngengine.platform.NGEUtils.dbg;
 
 import java.io.Closeable;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
@@ -292,7 +291,6 @@ public class NostrRTCSignaling implements Closeable {
         }
 
         NGEPlatform platform = NGEUtils.getPlatform();
-
 
         logger.finest("Opened subscriptions");
         if (!loopStarted) {
