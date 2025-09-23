@@ -50,12 +50,8 @@ public class NostrRTCPeer {
     private Map<String, Object> publicMisc;
 
     NostrRTCPeer(NostrPublicKey pubkey, String turnServer, Map<String, Object> misc) {
-        Objects.requireNonNull(turnServer);
         Objects.requireNonNull(pubkey);
         Objects.requireNonNull(misc);
-        if (turnServer.isEmpty()) {
-            throw new IllegalArgumentException("Turn server cannot be empty");
-        }
 
         this.pubkey = pubkey;
         this.turnServer = turnServer;
