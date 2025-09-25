@@ -282,7 +282,7 @@ public class NostrRTCSocket implements RTCTransportListener, NostrTURN.Listener,
         }
 
         logger.fine("Initializing TURN connection");
-        if (this.remotePeer.getTurnServer()!=null&&!this.remotePeer.getTurnServer().isEmpty()) {
+        if (this.remotePeer.getTurnServer() != null && !this.remotePeer.getTurnServer().isEmpty()) {
             this.turn = new NostrTURN(connectionId, localPeer, remotePeer, turnSettings);
             this.turn.addListener(this);
             this.turn.start();
