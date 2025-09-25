@@ -48,7 +48,7 @@ public class NostrCli {
         // initialize pool
         NostrPool pool = new NostrPool();
         // add relays
-        pool.connectRelay(new NostrRelay("ws://127.0.0.1:8087"));
+        pool.connectRelay(new NostrRelay("wss://relay.damus.io"));
 
         // listen for notices
         pool.addNoticeListener((relay, msg, error) -> {

@@ -579,7 +579,7 @@ public class NostrClient extends JFrame {
 
     private void initNostr() {
         this.pool = new NostrPool();
-        this.pool.connectRelay(new NostrRelay("wss://nostr.wine"));
+        this.pool.connectRelay(new NostrRelay("wss://relay.damus.io"));
 
         // Show notice in a cyber dialog
         this.pool.addNoticeListener((relay, notice, ex) ->
@@ -588,7 +588,7 @@ public class NostrClient extends JFrame {
 
         // Subscribe to events
         NostrSubscription sub =
-            this.pool.subscribe(Arrays.asList(new NostrFilter().withKind(1).limit(10)), ()->new FailOnDoubleTracker());
+            this.pool.subscribe(Arrays.asList(new NostrFilter().withKind(1).limit(21)), ()->new FailOnDoubleTracker());
 
         sub.addEventListener((s, event, stored) -> addEventToFeed(event, true));
         sub.open();
@@ -789,7 +789,7 @@ public class NostrClient extends JFrame {
                 Arrays.asList(new NostrSearchFilter()
                     .withKind(1)
                     .search(searchBar.getText().trim())
-                    .until(Instant.ofEpochSecond(earliestEvent))
+                    .until(Instant.ofEpochSecond(earliestEvent!=Long.MAX_VALUE?earliestEvent:Instant.now().getEpochSecond()))
                     .limit(5)),
                 ()->new FailOnDoubleTracker(),
                 NostrAllEOSEPoolFetchPolicy.get()
