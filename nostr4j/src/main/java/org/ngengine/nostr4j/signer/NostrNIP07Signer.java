@@ -42,14 +42,21 @@ import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEPlatform;
 
 public class NostrNIP07Signer implements NostrSigner {
+
     private final AsyncExecutor executor;
     private final Runnable closer;
 
     public NostrNIP07Signer() {
         this.executor = NGEPlatform.get().newAsyncExecutor(NostrNIP07Signer.class);
-        this.closer = NGEPlatform.get().registerFinalizer(this,()->{
-            this.executor.close();
-        });
+        this.closer =
+            NGEPlatform
+                .get()
+                .registerFinalizer(
+                    this,
+                    () -> {
+                        this.executor.close();
+                    }
+                );
     }
 
     @Override
@@ -62,19 +69,22 @@ public class NostrNIP07Signer implements NostrSigner {
         params.put("tags", event.getTagRows());
         params.put("created_at", event.getCreatedAt().getEpochSecond());
 
-        return p.promisify((res, rej) -> {
-            p.callFunction(
-                "window.nostr.signEvent",
-                List.of(params),
-                result -> {
-                    SignedNostrEvent signed = new SignedNostrEvent((Map<String, Object>) result);
-                    res.accept(signed);
-                },
-                err -> {
-                    rej.accept(err);
-                }
-            );
-        }, executor);
+        return p.promisify(
+            (res, rej) -> {
+                p.callFunction(
+                    "window.nostr.signEvent",
+                    List.of(params),
+                    result -> {
+                        SignedNostrEvent signed = new SignedNostrEvent((Map<String, Object>) result);
+                        res.accept(signed);
+                    },
+                    err -> {
+                        rej.accept(err);
+                    }
+                );
+            },
+            executor
+        );
     }
 
     private String getEncFun(EncryptAlgo algo, String type) {
@@ -92,52 +102,61 @@ public class NostrNIP07Signer implements NostrSigner {
     @Override
     public AsyncTask<String> encrypt(String message, NostrPublicKey publicKey, EncryptAlgo algo) {
         NGEPlatform p = NGEPlatform.get();
-        return p.promisify((res, rej) -> {
-            p.callFunction(
-                getEncFun(algo, "encrypt"),
-                List.of(publicKey.asHex(), message),
-                result -> {
-                    res.accept(result.toString());
-                },
-                err -> {
-                    rej.accept(err);
-                }
-            );
-        }, executor);
+        return p.promisify(
+            (res, rej) -> {
+                p.callFunction(
+                    getEncFun(algo, "encrypt"),
+                    List.of(publicKey.asHex(), message),
+                    result -> {
+                        res.accept(result.toString());
+                    },
+                    err -> {
+                        rej.accept(err);
+                    }
+                );
+            },
+            executor
+        );
     }
 
     @Override
     public AsyncTask<String> decrypt(String message, NostrPublicKey publicKey, EncryptAlgo algo) {
         NGEPlatform p = NGEPlatform.get();
-        return p.promisify((res, rej) -> {
-            p.callFunction(
-                getEncFun(algo, "decrypt"),
-                List.of(publicKey.asHex(), message),
-                result -> {
-                    res.accept(result.toString());
-                },
-                err -> {
-                    rej.accept(err);
-                }
-            );
-        }, executor);
+        return p.promisify(
+            (res, rej) -> {
+                p.callFunction(
+                    getEncFun(algo, "decrypt"),
+                    List.of(publicKey.asHex(), message),
+                    result -> {
+                        res.accept(result.toString());
+                    },
+                    err -> {
+                        rej.accept(err);
+                    }
+                );
+            },
+            executor
+        );
     }
 
     @Override
     public AsyncTask<NostrPublicKey> getPublicKey() {
         NGEPlatform p = NGEPlatform.get();
-        return p.promisify((res, rej) -> {
-            p.callFunction(
-                "window.nostr.getPublicKey",
-                List.of(),
-                result -> {
-                    res.accept(NostrPublicKey.fromHex(result.toString()));
-                },
-                err -> {
-                    rej.accept(err);
-                }
-            );
-        }, executor);
+        return p.promisify(
+            (res, rej) -> {
+                p.callFunction(
+                    "window.nostr.getPublicKey",
+                    List.of(),
+                    result -> {
+                        res.accept(NostrPublicKey.fromHex(result.toString()));
+                    },
+                    err -> {
+                        rej.accept(err);
+                    }
+                );
+            },
+            executor
+        );
     }
 
     @Override
@@ -153,17 +172,20 @@ public class NostrNIP07Signer implements NostrSigner {
     @Override
     public AsyncTask<Boolean> isAvailable() {
         NGEPlatform p = NGEPlatform.get();
-        return p.promisify((res, rej) -> {
-            if (!p.getPlatformName().contains("(browser)")) {
-                res.accept(false);
-                return;
-            }
-            p.canCallFunction(
-                "window.nostr.getPublicKey",
-                result -> {
-                    res.accept((boolean) result);
+        return p.promisify(
+            (res, rej) -> {
+                if (!p.getPlatformName().contains("(browser)")) {
+                    res.accept(false);
+                    return;
                 }
-            );
-        },executor);
+                p.canCallFunction(
+                    "window.nostr.getPublicKey",
+                    result -> {
+                        res.accept((boolean) result);
+                    }
+                );
+            },
+            executor
+        );
     }
 }
