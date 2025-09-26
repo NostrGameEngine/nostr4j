@@ -37,12 +37,20 @@ import java.util.Map;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.event.UnsignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
+import org.ngengine.platform.AsyncExecutor;
 import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEPlatform;
 
 public class NostrNIP07Signer implements NostrSigner {
+    private final AsyncExecutor executor;
+    private final Runnable closer;
 
-    public NostrNIP07Signer() {}
+    public NostrNIP07Signer() {
+        this.executor = NGEPlatform.get().newAsyncExecutor(NostrNIP07Signer.class);
+        this.closer = NGEPlatform.get().registerFinalizer(this,()->{
+            this.executor.close();
+        });
+    }
 
     @Override
     public AsyncTask<SignedNostrEvent> sign(UnsignedNostrEvent event) {
@@ -54,7 +62,7 @@ public class NostrNIP07Signer implements NostrSigner {
         params.put("tags", event.getTagRows());
         params.put("created_at", event.getCreatedAt().getEpochSecond());
 
-        return p.wrapPromise((res, rej) -> {
+        return p.promisify((res, rej) -> {
             p.callFunction(
                 "window.nostr.signEvent",
                 List.of(params),
@@ -66,7 +74,7 @@ public class NostrNIP07Signer implements NostrSigner {
                     rej.accept(err);
                 }
             );
-        });
+        }, executor);
     }
 
     private String getEncFun(EncryptAlgo algo, String type) {
@@ -84,7 +92,7 @@ public class NostrNIP07Signer implements NostrSigner {
     @Override
     public AsyncTask<String> encrypt(String message, NostrPublicKey publicKey, EncryptAlgo algo) {
         NGEPlatform p = NGEPlatform.get();
-        return p.wrapPromise((res, rej) -> {
+        return p.promisify((res, rej) -> {
             p.callFunction(
                 getEncFun(algo, "encrypt"),
                 List.of(publicKey.asHex(), message),
@@ -95,13 +103,13 @@ public class NostrNIP07Signer implements NostrSigner {
                     rej.accept(err);
                 }
             );
-        });
+        }, executor);
     }
 
     @Override
     public AsyncTask<String> decrypt(String message, NostrPublicKey publicKey, EncryptAlgo algo) {
         NGEPlatform p = NGEPlatform.get();
-        return p.wrapPromise((res, rej) -> {
+        return p.promisify((res, rej) -> {
             p.callFunction(
                 getEncFun(algo, "decrypt"),
                 List.of(publicKey.asHex(), message),
@@ -112,13 +120,13 @@ public class NostrNIP07Signer implements NostrSigner {
                     rej.accept(err);
                 }
             );
-        });
+        }, executor);
     }
 
     @Override
     public AsyncTask<NostrPublicKey> getPublicKey() {
         NGEPlatform p = NGEPlatform.get();
-        return p.wrapPromise((res, rej) -> {
+        return p.promisify((res, rej) -> {
             p.callFunction(
                 "window.nostr.getPublicKey",
                 List.of(),
@@ -129,11 +137,12 @@ public class NostrNIP07Signer implements NostrSigner {
                     rej.accept(err);
                 }
             );
-        });
+        }, executor);
     }
 
     @Override
     public AsyncTask<NostrSigner> close() {
+        closer.run();
         return NGEPlatform
             .get()
             .wrapPromise((res, rej) -> {
@@ -144,7 +153,7 @@ public class NostrNIP07Signer implements NostrSigner {
     @Override
     public AsyncTask<Boolean> isAvailable() {
         NGEPlatform p = NGEPlatform.get();
-        return p.wrapPromise((res, rej) -> {
+        return p.promisify((res, rej) -> {
             if (!p.getPlatformName().contains("(browser)")) {
                 res.accept(false);
                 return;
@@ -155,6 +164,6 @@ public class NostrNIP07Signer implements NostrSigner {
                     res.accept((boolean) result);
                 }
             );
-        });
+        },executor);
     }
 }
