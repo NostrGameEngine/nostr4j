@@ -335,7 +335,7 @@ public class NostrPool {
         boolean withEose,
         @Nullable Duration timeout
     ) {
-        return fetch(Arrays.asList(filter), NostrWaitForEventFetchPolicy.get(e -> true, numEvents, false, timeout));
+        return fetch(Arrays.asList(filter), NostrWaitForEventFetchPolicy.get(e -> true, numEvents, withEose, timeout));
     }
 
     /**
