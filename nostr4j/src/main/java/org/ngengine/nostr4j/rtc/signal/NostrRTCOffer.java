@@ -54,7 +54,7 @@ public class NostrRTCOffer implements NostrRTCSignal {
         this.pubkey = pubkey;
         this.offerString = offerString;
         this.turnServer = turnServer;
-         
+
         HashMap<String, Object> map = new HashMap<>();
         if (misc != null && !misc.isEmpty()) {
             map.putAll(misc);
