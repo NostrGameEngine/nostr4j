@@ -40,17 +40,18 @@ import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
 
 public class NostrconnectUrl implements Serializable, Cloneable {
 
-    public final List<String> relays;
+    public final Collection<String> relays;
     public final String secret;
     public final Nip46AppMetadata metadata;
     public final NostrPublicKey clientPubKey;
 
-    public NostrconnectUrl(NostrPublicKey clientPubKey, List<String> relays, String secret, Nip46AppMetadata appMetadata) {
+    public NostrconnectUrl(NostrPublicKey clientPubKey, Collection<String> relays, String secret, Nip46AppMetadata appMetadata) {
         this.relays = relays;
         this.secret = secret;
 

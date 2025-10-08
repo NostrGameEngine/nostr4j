@@ -314,7 +314,7 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
      * @param timeout the timeout for the connection
      * @return an async task that will complete with this signer after the connection is established
      */
-    public AsyncTask<NostrNIP46Signer> listen(List<String> relays, Consumer<NostrconnectUrl> onUrl, Duration timeout) {
+    public AsyncTask<NostrNIP46Signer> listen(Collection<String> relays, Consumer<NostrconnectUrl> onUrl, Duration timeout) {
         NGEPlatform platform = NGEUtils.getPlatform();
 
         if (connected) return platform.wrapPromise((res, rej) -> {
