@@ -51,7 +51,12 @@ public class NostrconnectUrl implements Serializable, Cloneable {
     public final Nip46AppMetadata metadata;
     public final NostrPublicKey clientPubKey;
 
-    public NostrconnectUrl(NostrPublicKey clientPubKey, Collection<String> relays, String secret, Nip46AppMetadata appMetadata) {
+    public NostrconnectUrl(
+        NostrPublicKey clientPubKey,
+        Collection<String> relays,
+        String secret,
+        Nip46AppMetadata appMetadata
+    ) {
         this.relays = relays;
         this.secret = secret;
 
