@@ -166,13 +166,29 @@ public class NostrRTCRoom implements Closeable {
     public void close() {
         // close everything
         for (NostrRTCSocket socket : connections.values()) {
-            socket.close();
+            try{
+                socket.close();
+            }catch(Exception e){
+                logger.log(Level.WARNING, "Error closing socket", e);
+            }
         }
         for (PendingConnection conn : pendingInitiatedConnections.values()) {
-            conn.socket.close();
+            try{
+                conn.socket.close();
+            }catch(Exception e){
+                logger.log(Level.WARNING, "Error closing pending socket", e);
+            }
         }
-        this.signaling.close();
-        this.executor.close();
+        try{
+            this.signaling.close();
+        }catch(Exception e){
+            logger.log(Level.WARNING, "Error closing signaling", e);
+        }
+        try{
+            this.executor.close();
+        }catch(Exception e){
+            logger.log(Level.WARNING, "Error closing executor", e);
+        }
     }
 
     public NostrRTCRoom addMessageListener(NostrRTCRoomPeerMessageListener listener) {
@@ -443,7 +459,11 @@ public class NostrRTCRoom implements Closeable {
      * @return the remote peer info
      */
     public NostrRTCPeer getRemotePeerInfo(NostrPublicKey pubkey) {
-        NostrRTCPeer peer = connections.get(pubkey).getRemotePeer();
+        NostrRTCSocket socket = connections.get(pubkey);
+        if (socket == null) {
+            return null;
+        }
+        NostrRTCPeer peer = socket.getRemotePeer();
         if (peer != null) {
             return peer;
         }
