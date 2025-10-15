@@ -39,6 +39,8 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.ngengine.nostr4j.NostrRelay;
@@ -51,13 +53,21 @@ public class TestRelay {
     private static final String TEST_RELAY_URL = "wss://nostr.rblb.it";
 
     private NostrRelay relay;
-
     @Before
     public void setUp() {
+        System.out.println("Setting up relay for tests...");
         relay = new NostrRelay(TEST_RELAY_URL);
         relay.addComponent(new NostrRelayLifecycleManager());
     }
 
+    @After
+    public void tearDown() throws Exception {
+        if (relay != null) {
+            System.out.println("Tearing down relay after tests...");
+            relay.disconnect("tearDown").await();
+        }
+    }
+    
     @Test
     public void testRelayConnection() throws Exception {
         final CountDownLatch connectionLatch = new CountDownLatch(1);

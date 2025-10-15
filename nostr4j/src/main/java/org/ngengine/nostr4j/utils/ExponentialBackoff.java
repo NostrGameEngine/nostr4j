@@ -75,12 +75,33 @@ public final class ExponentialBackoff {
     /**
      * Register a failure. Increases the delay for the next attempt and schedules
      * nextAttemptAt.
+     * @deprecated use registerAttempt()
      */
+    @Deprecated
     public synchronized void registerFailure() {
         registerFailure(Instant.now());
     }
 
+    /**
+     * Register an attempt. Increases the delay for the next attempt and schedules
+     * nextAttemptAt.
+     * 
+     */
+    public synchronized void registerAttempt() {
+        registerAttempt(Instant.now());
+    }
+
+    /**
+     * @deprecated use registerAttempt()
+     */
+    @Deprecated
     public synchronized void registerFailure(Instant now) {
+        cooldownStartAt = null;
+        nextAttemptAt = now.plus(currentDelay);
+        currentDelay = minDuration(multiply(currentDelay, multiplier), maxDelay);
+    }
+
+    public synchronized void registerAttempt(Instant now) {
         cooldownStartAt = null;
         nextAttemptAt = now.plus(currentDelay);
         currentDelay = minDuration(multiply(currentDelay, multiplier), maxDelay);
