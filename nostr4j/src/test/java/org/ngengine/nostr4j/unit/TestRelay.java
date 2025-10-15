@@ -39,7 +39,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -53,6 +52,7 @@ public class TestRelay {
     private static final String TEST_RELAY_URL = "wss://nostr.rblb.it";
 
     private NostrRelay relay;
+
     @Before
     public void setUp() {
         System.out.println("Setting up relay for tests...");
@@ -67,7 +67,7 @@ public class TestRelay {
             relay.disconnect("tearDown").await();
         }
     }
-    
+
     @Test
     public void testRelayConnection() throws Exception {
         final CountDownLatch connectionLatch = new CountDownLatch(1);

@@ -67,28 +67,28 @@ public final class NostrRelay {
 
     private static final Logger logger = Logger.getLogger(NostrRelay.class.getName());
 
-    private enum Status{
+    private enum Status {
         INITIALIZE_CONNECTION,
         WAITING_FOR_CONNECTION,
         TRYING_TO_CONNECT,
-        CONNECTED,        
+        CONNECTED,
         DISCONNECTED,
-        NEW
+        NEW,
     }
 
     private static final class QueuedMessage {
+
         final NostrMessage message;
         final Consumer<NostrMessageAck> res;
         final Consumer<Throwable> rej;
         final int failures;
+
         QueuedMessage(NostrMessage message, Consumer<NostrMessageAck> res, Consumer<Throwable> rej, int failures) {
             this.message = message;
             this.res = res;
             this.rej = rej;
             this.failures = failures;
         }
-
-   
     }
 
     private WebsocketTransportListener listener = new WebsocketTransportListener() {
@@ -118,7 +118,7 @@ public final class NostrRelay {
         }
     };
 
-    private interface ConnectionCallback{
+    private interface ConnectionCallback {
         void call(Throwable error);
     }
 
@@ -137,8 +137,6 @@ public final class NostrRelay {
     protected volatile boolean verifyEvents = true;
     protected volatile boolean parallelEvents = true;
 
-
- 
     protected Status currentStatus = Status.NEW;
     protected Instant statusSince = Instant.now();
     protected Duration statusTimeout = Duration.ofSeconds(120);
@@ -159,10 +157,9 @@ public final class NostrRelay {
 
     protected synchronized boolean isStatusTimeout() {
         Status status = getStatus();
-        if(status!=Status.TRYING_TO_CONNECT && status!=Status.WAITING_FOR_CONNECTION) return false;
+        if (status != Status.TRYING_TO_CONNECT && status != Status.WAITING_FOR_CONNECTION) return false;
         return Duration.between(this.statusSince, Instant.now()).compareTo(this.statusTimeout) > 0;
     }
- 
 
     protected final Queue<QueuedMessage> messageQueue;
     protected final Queue<ConnectionCallback> connectCallbacks;
@@ -192,12 +189,16 @@ public final class NostrRelay {
     }
 
     // make sure the loop is called periodically even if no event is triggered
-    protected void baseLoop(){
-        this.executor.runLater(()->{
-            loop();
-            baseLoop();
-            return null;
-        }, 100, TimeUnit.MILLISECONDS);
+    protected void baseLoop() {
+        this.executor.runLater(
+                () -> {
+                    loop();
+                    baseLoop();
+                    return null;
+                },
+                100,
+                TimeUnit.MILLISECONDS
+            );
     }
 
     protected <T> void runInRelayExecutor(BiConsumer<Consumer<T>, Consumer<Throwable>> runnable, boolean enqueue) {
@@ -206,21 +207,21 @@ public final class NostrRelay {
             platform.promisify(runnable, executor);
         } else {
             this.excQueue.enqueue((res, rej) -> {
-                platform
-                    .promisify(runnable, executor)
-                    .then(v -> {
-                        res.accept(v);
-                        return null;
-                    })
-                    .catchException(e -> {
-                        rej.accept(e);
-                    });
-            });
+                    platform
+                        .promisify(runnable, executor)
+                        .then(v -> {
+                            res.accept(v);
+                            return null;
+                        })
+                        .catchException(e -> {
+                            rej.accept(e);
+                        });
+                });
         }
     }
 
-    public void resetConnection(){
-        setStatus( reconnect ? Status.WAITING_FOR_CONNECTION : Status.DISCONNECTED);
+    public void resetConnection() {
+        setStatus(reconnect ? Status.WAITING_FOR_CONNECTION : Status.DISCONNECTED);
     }
 
     public NostrRelayInfo getInfo() throws IOException {
@@ -391,7 +392,7 @@ public final class NostrRelay {
                             String json = NostrMessage.toJSON(message);
                             this.connector.send(json)
                                 .catchException(e -> {
-                                    if(failures+1 >= maxSendFailures){
+                                    if (failures + 1 >= maxSendFailures) {
                                         logger.log(Level.WARNING, "Error sending message", e);
                                         result.callFailureCallback(e.getMessage());
                                     } else {
@@ -399,10 +400,10 @@ public final class NostrRelay {
                                             waitingEventsAck.remove(eventId);
                                         }
                                         logger.log(Level.WARNING, "Error sending message, will retry", e);
-                                        QueuedMessage q = new QueuedMessage(message, ores, orej, failures+1);
+                                        QueuedMessage q = new QueuedMessage(message, ores, orej, failures + 1);
                                         this.messageQueue.add(q);
                                         loop();
-                                    }                                   
+                                    }
                                 })
                                 .then(vo -> {
                                     assert dbg(() -> {
@@ -420,12 +421,12 @@ public final class NostrRelay {
                                 result.callFailureCallback(e.getMessage());
                             } else {
                                 this.messageQueue.add(new QueuedMessage(message, ores, orej, failures + 1));
-                                loop(); 
+                                loop();
                             }
                         }
                     } catch (Throwable e) {
                         logger.log(Level.WARNING, "Error sending message (1)", e);
-                    } finally{
+                    } finally {
                         rr0.accept(this);
                     }
                 },
@@ -440,27 +441,29 @@ public final class NostrRelay {
     }
 
     public AsyncTask<NostrRelay> connect() {
-        
         NGEPlatform platform = NGEUtils.getPlatform();
         return platform.wrapPromise((res, rej) -> {
-            runInRelayExecutor((r0, rj0) -> {
-                reconnect = enableAutoReconnect;
-                try{
-                    Status status = getStatus();
-                    if (status == Status.DISCONNECTED || status == Status.NEW) {
-                        setStatus(Status.INITIALIZE_CONNECTION);
-                    }
-                    connectCallbacks.add((err) -> {
-                        if (err != null) {
-                            rej.accept(err);
-                        } else {
-                            res.accept(this);
+            runInRelayExecutor(
+                (r0, rj0) -> {
+                    reconnect = enableAutoReconnect;
+                    try {
+                        Status status = getStatus();
+                        if (status == Status.DISCONNECTED || status == Status.NEW) {
+                            setStatus(Status.INITIALIZE_CONNECTION);
                         }
-                    });                
-                } finally {
-                    r0.accept(this);
-                }
-            }, true);
+                        connectCallbacks.add(err -> {
+                            if (err != null) {
+                                rej.accept(err);
+                            } else {
+                                res.accept(this);
+                            }
+                        });
+                    } finally {
+                        r0.accept(this);
+                    }
+                },
+                true
+            );
             loop();
         });
     }
@@ -473,20 +476,20 @@ public final class NostrRelay {
         NGEPlatform platform = NGEUtils.getPlatform();
         return platform.wrapPromise((ores, orej) -> {
             runInRelayExecutor(
-                (rs0, rj0) -> {    
-                    try{                    
+                (rs0, rj0) -> {
+                    try {
                         reconnect = false;
                         markForDisconnection = reason;
-                        disconnectCallbacks.add((err) -> {
+                        disconnectCallbacks.add(err -> {
                             if (err != null) {
                                 orej.accept(err);
                             } else {
                                 ores.accept(this);
                             }
                         });
-                    } catch(Throwable e){
+                    } catch (Throwable e) {
                         logger.log(Level.WARNING, "Error disconnecting", e);
-                    }finally{
+                    } finally {
                         rs0.accept(this);
                     }
                     // ores.accept(this);
@@ -497,8 +500,6 @@ public final class NostrRelay {
         });
     }
 
-
-   
     private void onConnectionOpen() {
         runInRelayExecutor(
             (res, rej) -> {
@@ -611,7 +612,6 @@ public final class NostrRelay {
                                 return;
                             }
                         }
-
                     } catch (Exception e) {
                         assert dbg(() -> {
                             logger.log(Level.WARNING, "Error processing message", e);
@@ -633,11 +633,11 @@ public final class NostrRelay {
         try {
             runInRelayExecutor(
                 (r0, rj0) -> {
-                    try{
+                    try {
                         Status oldStatus = getStatus();
-                        if(oldStatus == Status.DISCONNECTED){
+                        if (oldStatus == Status.DISCONNECTED) {
                             return;
-                        } 
+                        }
                         if (oldStatus == Status.CONNECTED) {
                             for (NostrRelayComponent listener : this.listeners) {
                                 try {
@@ -649,7 +649,7 @@ public final class NostrRelay {
                                     logger.log(Level.WARNING, "Disconnect cancelled by component: " + e.getMessage(), e);
                                 }
                             }
-                        }                    
+                        }
                         resetConnection();
                     } finally {
                         r0.accept(this);
@@ -663,13 +663,12 @@ public final class NostrRelay {
         }
     }
 
-
     private void onConnectionClosedByClient(String reason) {
         logger.finer("Connection closed by client: " + this.url + " reason: " + reason);
         try {
             runInRelayExecutor(
                 (r0, rj0) -> {
-                    try{
+                    try {
                         for (NostrRelayComponent listener : this.listeners) {
                             try {
                                 if (!listener.onRelayDisconnect(this, reason, true)) {
@@ -695,223 +694,224 @@ public final class NostrRelay {
     }
 
     protected void loop() {
-        runInRelayExecutor((r0,ej0)->{
-            try {
-                Instant nowInstant = Instant.now();
-                long now = nowInstant.getEpochSecond();
+        runInRelayExecutor(
+            (r0, ej0) -> {
+                try {
+                    Instant nowInstant = Instant.now();
+                    long now = nowInstant.getEpochSecond();
 
-                // remove timeouted acks
-                {
-                    Iterator<Map.Entry<String, NostrMessageAck>> it;
+                    // remove timeouted acks
+                    {
+                        Iterator<Map.Entry<String, NostrMessageAck>> it;
 
-                    it = waitingEventsAck.entrySet().iterator();
-                    while (it.hasNext()) {
-                        try {
-                            Map.Entry<String, NostrMessageAck> entry = it.next();
-                            NostrMessageAck ack = entry.getValue();
-                            if (ack.getSentAt().getEpochSecond() + ackTimeoutS < now) {
-                                assert dbg(() -> {
-                                    logger.finest("Event Ack timeout: " + ack.getId());
-                                });
-                                if (waitingEventsAck.remove(entry.getKey(), entry.getValue())) {
-                                    ack.callFailureCallback("Event status timeout");
+                        it = waitingEventsAck.entrySet().iterator();
+                        while (it.hasNext()) {
+                            try {
+                                Map.Entry<String, NostrMessageAck> entry = it.next();
+                                NostrMessageAck ack = entry.getValue();
+                                if (ack.getSentAt().getEpochSecond() + ackTimeoutS < now) {
+                                    assert dbg(() -> {
+                                        logger.finest("Event Ack timeout: " + ack.getId());
+                                    });
+                                    if (waitingEventsAck.remove(entry.getKey(), entry.getValue())) {
+                                        ack.callFailureCallback("Event status timeout");
+                                    }
                                 }
+                            } catch (Exception e) {
+                                logger.log(Level.WARNING, "Error in loop (1)", e);
                             }
-                        } catch (Exception e) {
-                            logger.log(Level.WARNING, "Error in loop (1)", e);
                         }
-                    }
 
-                    for (NostrRelayComponent listener : this.listeners) {
-                        try {
-                            if (!listener.onRelayLoop(this, nowInstant)) {
+                        for (NostrRelayComponent listener : this.listeners) {
+                            try {
+                                if (!listener.onRelayLoop(this, nowInstant)) {
+                                    assert dbg(() -> {
+                                        logger.finest("Loop ignored by component: " + this.url);
+                                    });
+                                    return;
+                                }
+                            } catch (Throwable e) {
                                 assert dbg(() -> {
-                                    logger.finest("Loop ignored by component: " + this.url);
+                                    logger.finest("Loop cancelled by component: " + e.getMessage());
                                 });
                                 return;
                             }
-                        } catch (Throwable e) {
-                            assert dbg(() -> {
-                                logger.finest("Loop cancelled by component: " + e.getMessage());
-                            });
-                            return;
                         }
                     }
-                }
 
+                    Status status = getStatus();
+                    if (status == Status.NEW && isMarkedForDisconnection()) {
+                        setStatus(Status.DISCONNECTED);
+                    }
 
-
-                Status status = getStatus();
-                if(status==Status.NEW&&isMarkedForDisconnection()){
-                    setStatus(Status.DISCONNECTED);
-                }
-
-                status = getStatus();
-                if(status == Status.INITIALIZE_CONNECTION){
-                    boolean canConnect = true;
-                    for (NostrRelayComponent listener : this.listeners) {
-                        try {
-                            if (!listener.onRelayConnectRequest(this)) {
-                                logger.finer("Connection ignored by component: " + this.url);
+                    status = getStatus();
+                    if (status == Status.INITIALIZE_CONNECTION) {
+                        boolean canConnect = true;
+                        for (NostrRelayComponent listener : this.listeners) {
+                            try {
+                                if (!listener.onRelayConnectRequest(this)) {
+                                    logger.finer("Connection ignored by component: " + this.url);
+                                    canConnect = false;
+                                }
+                            } catch (Throwable e) {
+                                logger.finer("Connection cancelled by component: " + e.getMessage());
                                 canConnect = false;
                             }
-                        } catch (Throwable e) {
-                            logger.finer("Connection cancelled by component: " + e.getMessage());
-                            canConnect = false;
+                        }
+                        if (canConnect) {
+                            setStatus(Status.WAITING_FOR_CONNECTION);
+                        } else {
+                            if (!reconnect) setStatus(Status.DISCONNECTED);
+                        }
+                    } else if (isStatusTimeout()) {
+                        try {
+                            this.connector.close("connection timeout");
+                        } catch (Throwable ignore) {}
+                        resetConnection();
+                    }
+
+                    status = getStatus();
+                    if (status == Status.WAITING_FOR_CONNECTION) {
+                        setStatus(Status.TRYING_TO_CONNECT);
+                        Duration delay = reconnectionBackoff.getDelay(Instant.now());
+                        reconnectionBackoff.registerAttempt();
+                        if (delay.toMillis() == 0) {
+                            this.connector.connect(this.url)
+                                .catchException(e -> {
+                                    logger.log(Level.WARNING, "Error connecting to relay: " + this.url, e);
+                                    runInRelayExecutor(
+                                        (a, b) -> {
+                                            try {
+                                                resetConnection();
+                                            } finally {
+                                                a.accept(this);
+                                            }
+                                        },
+                                        true
+                                    );
+                                    loop();
+                                });
+                        } else {
+                            this.executor.runLater(
+                                    () -> {
+                                        if (getStatus() != Status.TRYING_TO_CONNECT) {
+                                            return null;
+                                        }
+                                        this.connector.connect(this.url)
+                                            .catchException(e -> {
+                                                logger.log(Level.WARNING, "Error connecting to relay: " + this.url, e);
+                                                runInRelayExecutor(
+                                                    (a, b) -> {
+                                                        try {
+                                                            resetConnection();
+                                                        } finally {
+                                                            a.accept(this);
+                                                        }
+                                                    },
+                                                    true
+                                                );
+                                                loop();
+                                            });
+                                        return null;
+                                    },
+                                    delay.toMillis(),
+                                    TimeUnit.MILLISECONDS
+                                );
                         }
                     }
-                    if(canConnect){
-                        setStatus(Status.WAITING_FOR_CONNECTION);
-                    } else {
 
-                        if(!reconnect) setStatus(Status.DISCONNECTED);
-                    }
-                } else if (isStatusTimeout()) {
-                    try {
-                        this.connector.close("connection timeout");
-                    } catch (Throwable ignore) {
-                    }
-                    resetConnection();
-                }
-
-                status = getStatus();
-                if (status == Status.WAITING_FOR_CONNECTION) {
-                    setStatus(Status.TRYING_TO_CONNECT);
-                    Duration delay = reconnectionBackoff.getDelay(Instant.now());
-                    reconnectionBackoff.registerAttempt();
-                    if (delay.toMillis() == 0) {
-                        this.connector.connect(this.url).catchException(e -> {
-                            logger.log(Level.WARNING, "Error connecting to relay: " + this.url, e);
-                            runInRelayExecutor((a, b) -> {
-                                try {
-                                    resetConnection();
-                                } finally {
-                                    a.accept(this);
-                                }
-                            }, true);
-                            loop();
-                        });
-                    } else {
-                        this.executor.runLater( () -> {
-                            if (getStatus() != Status.TRYING_TO_CONNECT) {
-                                return null;
+                    status = getStatus();
+                    if (!this.connectCallbacks.isEmpty() && status == Status.CONNECTED) {
+                        ConnectionCallback cb;
+                        while ((cb = this.connectCallbacks.poll()) != null) {
+                            try {
+                                cb.call(null);
+                            } catch (Throwable e) {
+                                assert dbg(() -> {
+                                    logger.log(Level.WARNING, "Error in connect callback", e);
+                                });
                             }
-                            this.connector.connect(this.url).catchException(e -> {
-                                logger.log(Level.WARNING, "Error connecting to relay: " + this.url, e);
-                                runInRelayExecutor((a, b) -> {
-                                    try {
-                                        resetConnection();
-                                    } finally {
-                                        a.accept(this);
-                                    }
-                                }, true);
-                                loop();
-                            });
-                            return null;
-                        },
-                        delay.toMillis(),
-                        TimeUnit.MILLISECONDS);
-                    }
-                }
-
-                
-                status = getStatus();
-                if (!this.connectCallbacks.isEmpty() && status == Status.CONNECTED) {
-                    ConnectionCallback cb;
-                    while ((cb = this.connectCallbacks.poll()) != null) {
-                        try {
-                            
-                            cb.call(null);
-                        } catch (Throwable e) {
-                            assert dbg(() -> {
-                                logger.log(Level.WARNING, "Error in connect callback", e);
-                            });
                         }
                     }
-                }
 
-
-                status = getStatus();
-                if (status == Status.CONNECTED && markForDisconnection != null) {
-                    boolean canDisconnect = true;
-                    logger.fine("Disconnecting from relay: " + this + " reason: " + markForDisconnection);
-                    for (NostrRelayComponent listener : this.listeners) {
-                        try {
-                            if (!listener.onRelayDisconnectRequest(this, markForDisconnection)) {
-                                logger.finer("Disconnect ignored by component: " + this.url);
+                    status = getStatus();
+                    if (status == Status.CONNECTED && markForDisconnection != null) {
+                        boolean canDisconnect = true;
+                        logger.fine("Disconnecting from relay: " + this + " reason: " + markForDisconnection);
+                        for (NostrRelayComponent listener : this.listeners) {
+                            try {
+                                if (!listener.onRelayDisconnectRequest(this, markForDisconnection)) {
+                                    logger.finer("Disconnect ignored by component: " + this.url);
+                                    canDisconnect = false;
+                                }
+                            } catch (Throwable e) {
                                 canDisconnect = false;
                             }
-                        } catch (Throwable e) {
-                            canDisconnect = false;
+                        }
+                        if (canDisconnect) {
+                            try {
+                                this.connector.close("client disconnect");
+                            } catch (Throwable err) {
+                                logger.log(Level.WARNING, "Error disconnecting", err);
+                            }
+                            resetConnection();
+                            markForDisconnection = null;
                         }
                     }
-                    if (canDisconnect) {
-                        try {
-                            this.connector.close("client disconnect");
-                        } catch (Throwable err) {
-                            logger.log(Level.WARNING, "Error disconnecting", err);
+
+                    status = getStatus();
+                    if (!this.disconnectCallbacks.isEmpty() && status == Status.DISCONNECTED) {
+                        ConnectionCallback cb;
+                        while ((cb = this.disconnectCallbacks.poll()) != null) {
+                            try {
+                                cb.call(status != Status.DISCONNECTED ? new Exception("connected") : null);
+                            } catch (Throwable e) {
+                                assert dbg(() -> {
+                                    logger.log(Level.WARNING, "Error in connect callback", e);
+                                });
+                            }
                         }
-                        resetConnection();
-                        markForDisconnection = null;
                     }
-                }
 
-                status = getStatus();
-                if(!this.disconnectCallbacks.isEmpty() &&  status == Status.DISCONNECTED){
-                    ConnectionCallback cb;
-                    while ((cb = this.disconnectCallbacks.poll()) != null) {
-                        try {
-
-                            cb.call(status != Status.DISCONNECTED ? new Exception("connected") : null);
-                        } catch (Throwable e) {
+                    status = getStatus();
+                    if (status == Status.CONNECTED && !this.messageQueue.isEmpty()) {
+                        QueuedMessage q1;
+                        while ((q1 = this.messageQueue.poll()) != null) {
+                            QueuedMessage q = q1;
                             assert dbg(() -> {
-                                logger.log(Level.WARNING, "Error in connect callback", e);
+                                logger.finer("Sending queued message: " + q.message);
                             });
-                        }
-                    }
-                    
-                }
-
-                status = getStatus();
-                if (status == Status.CONNECTED && !this.messageQueue.isEmpty()) {
-                    QueuedMessage q1;
-                    while ((q1 = this.messageQueue.poll()) != null) {
-                        QueuedMessage q = q1;
-                        assert dbg(() -> {
-                            logger.finer("Sending queued message: " + q.message);
-                        });
-                        NostrMessage message = q.message;
-                        Consumer<NostrMessageAck> rs = q.res;
-                        Consumer<Throwable> rj = q.rej;
-                        int failures = q.failures;
-                        try {
-                            this.sendMessage(message, 
-                                    failures)
+                            NostrMessage message = q.message;
+                            Consumer<NostrMessageAck> rs = q.res;
+                            Consumer<Throwable> rj = q.rej;
+                            int failures = q.failures;
+                            try {
+                                this.sendMessage(message, failures)
                                     .catchException(rj::accept)
                                     .then(v -> {
                                         rs.accept(v);
                                         return null;
                                     });
-                        } catch (Throwable e) {
-                            logger.log(Level.WARNING, "Error sending queued message", e);
+                            } catch (Throwable e) {
+                                logger.log(Level.WARNING, "Error sending queued message", e);
+                            }
                         }
                     }
+                } catch (Throwable e) {
+                    logger.severe("Error in loop: " + e.getMessage());
+                } finally {
+                    r0.accept(this);
                 }
-
-                
-            } catch (Throwable e) {
-                logger.severe("Error in loop: " + e.getMessage());
-            } finally {
-                r0.accept(this);
-            }
-        }, true);
+            },
+            true
+        );
     }
 
     private void onConnectionError(Throwable e) {
         try {
             runInRelayExecutor(
                 (r0, rj0) -> {
-                    try{
+                    try {
                         for (NostrRelayComponent listener : this.listeners) {
                             try {
                                 if (!listener.onRelayError(this, e)) {
@@ -937,9 +937,8 @@ public final class NostrRelay {
         }
     }
 
-
     @Override
     public String toString() {
-        return "NostrRelay{" + "url='" + url + '\'' + ", status=" + getStatus() + "} @"+this.hashCode();
+        return "NostrRelay{" + "url='" + url + '\'' + ", status=" + getStatus() + "} @" + this.hashCode();
     }
 }

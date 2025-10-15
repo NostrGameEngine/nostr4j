@@ -85,7 +85,7 @@ public final class ExponentialBackoff {
     /**
      * Register an attempt. Increases the delay for the next attempt and schedules
      * nextAttemptAt.
-     * 
+     *
      */
     public synchronized void registerAttempt() {
         registerAttempt(Instant.now());
