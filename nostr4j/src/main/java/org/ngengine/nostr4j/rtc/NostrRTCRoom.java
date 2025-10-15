@@ -166,27 +166,27 @@ public class NostrRTCRoom implements Closeable {
     public void close() {
         // close everything
         for (NostrRTCSocket socket : connections.values()) {
-            try{
+            try {
                 socket.close();
-            }catch(Exception e){
+            } catch (Exception e) {
                 logger.log(Level.WARNING, "Error closing socket", e);
             }
         }
         for (PendingConnection conn : pendingInitiatedConnections.values()) {
-            try{
+            try {
                 conn.socket.close();
-            }catch(Exception e){
+            } catch (Exception e) {
                 logger.log(Level.WARNING, "Error closing pending socket", e);
             }
         }
-        try{
+        try {
             this.signaling.close();
-        }catch(Exception e){
+        } catch (Exception e) {
             logger.log(Level.WARNING, "Error closing signaling", e);
         }
-        try{
+        try {
             this.executor.close();
-        }catch(Exception e){
+        } catch (Exception e) {
             logger.log(Level.WARNING, "Error closing executor", e);
         }
     }
