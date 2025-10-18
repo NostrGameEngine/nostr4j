@@ -94,7 +94,7 @@ public class NostrRelayLifecycleManager implements NostrRelayComponent {
     @Override
     public boolean onRelayLoop(NostrRelay relay, Instant nowInstant) {
         // disconnect if no active subscriptions and last action is too old
-        if (relay.isMarkedForDisconnection()||!manageLifeCycle) return true;
+        if (relay.isMarkedForDisconnection() || !manageLifeCycle) return true;
         long now = nowInstant.getEpochSecond();
         if (this.subTracker.isEmpty() && now - this.lastAction > keepAliveTime) {
             logger.fine("Disconnecting from relay: " + relay + " for inactivity");

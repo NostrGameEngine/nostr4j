@@ -100,9 +100,9 @@ public class NostrSearchFilter extends NostrFilter {
 
     public boolean matches(SignedNostrEvent event, int count) {
         boolean match = super.matches(event, count);
-        if(!match && search != null && !search.isEmpty()){
+        if (!match && search != null && !search.isEmpty()) {
             String content = event.getContent();
-            if(content != null && !content.isEmpty()){
+            if (content != null && !content.isEmpty()) {
                 match = content.toLowerCase().contains(search.toLowerCase());
             }
         }
