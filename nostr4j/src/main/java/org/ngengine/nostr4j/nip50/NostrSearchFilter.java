@@ -33,6 +33,7 @@ package org.ngengine.nostr4j.nip50;
 import java.time.Instant;
 import java.util.Map;
 import org.ngengine.nostr4j.NostrFilter;
+import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.platform.NGEUtils;
 
@@ -95,5 +96,16 @@ public class NostrSearchFilter extends NostrFilter {
 
     public NostrSearchFilter withTag(String key, String... values) {
         return (NostrSearchFilter) super.withTag(key, values);
+    }
+
+    public boolean matches(SignedNostrEvent event, int count) {
+        boolean match = super.matches(event, count);
+        if(!match && search != null && !search.isEmpty()){
+            String content = event.getContent();
+            if(content != null && !content.isEmpty()){
+                match = content.toLowerCase().contains(search.toLowerCase());
+            }
+        }
+        return match;
     }
 }
