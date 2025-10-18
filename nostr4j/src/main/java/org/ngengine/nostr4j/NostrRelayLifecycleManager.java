@@ -48,6 +48,7 @@ public class NostrRelayLifecycleManager implements NostrRelayComponent {
     protected final CopyOnWriteArrayList<String> subTracker = new CopyOnWriteArrayList<>();
     protected volatile long keepAliveTime = TimeUnit.MINUTES.toSeconds(2);
     protected volatile long lastAction;
+    protected volatile boolean manageLifeCycle = false;
 
     public void setKeepAliveTime(long time, TimeUnit unit) {
         this.keepAliveTime = unit.toSeconds(time);
@@ -64,6 +65,7 @@ public class NostrRelayLifecycleManager implements NostrRelayComponent {
     @Override
     public boolean onRelayConnect(NostrRelay relay) {
         this.keepAlive();
+        manageLifeCycle = true;
         return true;
     }
 
@@ -92,7 +94,7 @@ public class NostrRelayLifecycleManager implements NostrRelayComponent {
     @Override
     public boolean onRelayLoop(NostrRelay relay, Instant nowInstant) {
         // disconnect if no active subscriptions and last action is too old
-        if (relay.isMarkedForDisconnection()) return true;
+        if (relay.isMarkedForDisconnection()||!manageLifeCycle) return true;
         long now = nowInstant.getEpochSecond();
         if (this.subTracker.isEmpty() && now - this.lastAction > keepAliveTime) {
             logger.fine("Disconnecting from relay: " + relay + " for inactivity");
@@ -103,6 +105,7 @@ public class NostrRelayLifecycleManager implements NostrRelayComponent {
 
     @Override
     public boolean onRelayDisconnect(NostrRelay relay, String reason, boolean byClient) {
+        manageLifeCycle = false;
         logger.fine(
             "Clearing tracked subscription in lifecycle manager for relay: " +
             relay.getUrl() +
