@@ -67,7 +67,7 @@ public final class NostrRelay {
 
     private static final Logger logger = Logger.getLogger(NostrRelay.class.getName());
 
-    private enum Status {
+    public enum Status {
         INITIALIZE_CONNECTION,
         WAITING_FOR_CONNECTION,
         TRYING_TO_CONNECT,
@@ -473,12 +473,16 @@ public final class NostrRelay {
     }
 
     public AsyncTask<NostrRelay> disconnect(String reason) {
+        return disconnect(reason,false);
+    }
+
+    public AsyncTask<NostrRelay> disconnect(String reason, boolean reconnect) {
         NGEPlatform platform = NGEUtils.getPlatform();
         return platform.wrapPromise((ores, orej) -> {
             runInRelayExecutor(
                 (rs0, rj0) -> {
                     try {
-                        reconnect = false;
+                        this.reconnect = reconnect;
                         markForDisconnection = reason;
                         disconnectCallbacks.add(err -> {
                             if (err != null) {
@@ -700,8 +704,16 @@ public final class NostrRelay {
                     Instant nowInstant = Instant.now();
                     long now = nowInstant.getEpochSecond();
 
+                    if (isStatusTimeout()) {
+                        try {
+                            this.connector.close("connection timeout");
+                        } catch (Throwable ignore) {
+                        }
+                        resetConnection();
+                    }
+
                     // remove timeouted acks
-                    {
+                    try{
                         Iterator<Map.Entry<String, NostrMessageAck>> it;
 
                         it = waitingEventsAck.entrySet().iterator();
@@ -718,7 +730,7 @@ public final class NostrRelay {
                                     }
                                 }
                             } catch (Exception e) {
-                                logger.log(Level.WARNING, "Error in loop (1)", e);
+                                logger.log(Level.WARNING, "Error when cleaning ack", e);
                             }
                         }
 
@@ -737,6 +749,8 @@ public final class NostrRelay {
                                 return;
                             }
                         }
+                    } catch (Throwable e) {
+                        logger.log(Level.SEVERE, "Error when cleaning acks", e);
                     }
 
                     Status status = getStatus();
@@ -744,7 +758,7 @@ public final class NostrRelay {
                         setStatus(Status.DISCONNECTED);
                     }
 
-                    status = getStatus();
+                    status = getStatus();                    
                     if (status == Status.INITIALIZE_CONNECTION) {
                         boolean canConnect = true;
                         for (NostrRelayComponent listener : this.listeners) {
@@ -763,13 +777,8 @@ public final class NostrRelay {
                         } else {
                             if (!reconnect) setStatus(Status.DISCONNECTED);
                         }
-                    } else if (isStatusTimeout()) {
-                        try {
-                            this.connector.close("connection timeout");
-                        } catch (Throwable ignore) {}
-                        resetConnection();
                     }
-
+                    
                     status = getStatus();
                     if (status == Status.WAITING_FOR_CONNECTION) {
                         setStatus(Status.TRYING_TO_CONNECT);

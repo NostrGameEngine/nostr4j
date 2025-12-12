@@ -206,6 +206,9 @@ public class NostrPool {
             if (relay.getComponent(NostrRelayLifecycleManager.class) == null) {
                 relay.addComponent(new NostrRelayLifecycleManager());
             }
+            if(relay.getComponent(NostrRelayWatchdog.class) == null){
+                relay.addComponent(new NostrRelayWatchdog());
+            }
             relay.addComponent(listener);
         }
         return relay.connect();
