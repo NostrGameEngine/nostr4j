@@ -31,10 +31,10 @@ ext {
     ngePlatformVersionSnapshot = "0.2.0-SNAPSHOT"
     ngePlatformVersion = "0.2.2"
 
-    lnurlVersionSnapshot = "0.0.0-SNAPSHOT"
+    lnurlVersionSnapshot = "0.0.3"
     lnurlVersion = "0.0.3"
 
-    bech32VersionSnapshot = "1.0.0-SNAPSHOT"
+    bech32VersionSnapshot = "1.0.3"
     bech32Version = "1.0.3"
 }
 
