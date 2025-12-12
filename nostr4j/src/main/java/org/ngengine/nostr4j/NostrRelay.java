@@ -473,7 +473,7 @@ public final class NostrRelay {
     }
 
     public AsyncTask<NostrRelay> disconnect(String reason) {
-        return disconnect(reason,false);
+        return disconnect(reason, false);
     }
 
     public AsyncTask<NostrRelay> disconnect(String reason, boolean reconnect) {
@@ -707,13 +707,12 @@ public final class NostrRelay {
                     if (isStatusTimeout()) {
                         try {
                             this.connector.close("connection timeout");
-                        } catch (Throwable ignore) {
-                        }
+                        } catch (Throwable ignore) {}
                         resetConnection();
                     }
 
                     // remove timeouted acks
-                    try{
+                    try {
                         Iterator<Map.Entry<String, NostrMessageAck>> it;
 
                         it = waitingEventsAck.entrySet().iterator();
@@ -758,7 +757,7 @@ public final class NostrRelay {
                         setStatus(Status.DISCONNECTED);
                     }
 
-                    status = getStatus();                    
+                    status = getStatus();
                     if (status == Status.INITIALIZE_CONNECTION) {
                         boolean canConnect = true;
                         for (NostrRelayComponent listener : this.listeners) {
@@ -778,7 +777,7 @@ public final class NostrRelay {
                             if (!reconnect) setStatus(Status.DISCONNECTED);
                         }
                     }
-                    
+
                     status = getStatus();
                     if (status == Status.WAITING_FOR_CONNECTION) {
                         setStatus(Status.TRYING_TO_CONNECT);
