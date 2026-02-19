@@ -94,14 +94,13 @@ public class Nip44 {
         return chunk * ((length - 1) / chunk + 1);
     }
 
-    private static byte[] pad(String plaintext) {
-        byte[] unpadded = plaintext.getBytes(StandardCharsets.UTF_8);
+    private static byte[] pad(byte[] unpadded) {
         int unpaddedLen = unpadded.length;
         int paddedLen = calcPaddedLength(unpaddedLen);
         return concatBytes((unpaddedLen >> 8) & 0xFF, unpaddedLen & 0xFF, unpadded, null, null, paddedLen + 2);
     }
 
-    public static String encryptSync(String plaintext, byte[] conversationKey, byte[] nonce) {
+    public static byte[] encryptSyncBinary(byte[] data, byte[] conversationKey, byte[] nonce) {
         if (conversationKey == null || conversationKey.length != CONVERSATION_KEY_SIZE) throw new IllegalArgumentException(
             "Conversation key must be 32 bytes"
         );
@@ -112,24 +111,29 @@ public class Nip44 {
         byte[] chachaNonce = keys[1];
         byte[] hmacKey = keys[2];
 
-        byte[] padded = pad(plaintext);
+        byte[] padded = pad(data);
         byte[] ciphertext = NGEUtils.getPlatform().chacha20(chachaKey, chachaNonce, padded, true);
         byte[] mac = NGEUtils.getPlatform().hmac(hmacKey, nonce, ciphertext);
         byte[] out = concatBytes(VERSION_V2, Integer.MIN_VALUE, nonce, ciphertext, mac, -1);
 
-        return NGEUtils.getPlatform().base64encode(out);
+        return out;
+    }
+
+    public static byte[] encryptSyncBinary(byte[] data, byte[] conversationKey) {
+        return encryptSyncBinary(data, conversationKey, null);
+    }
+
+    public static String encryptSync(String plaintext, byte[] conversationKey, byte[] nonce) {
+        return NGEUtils.getPlatform().base64encode(encryptSyncBinary(plaintext.getBytes(StandardCharsets.UTF_8), conversationKey, nonce));
     }
 
     public static String encryptSync(String plaintext, byte[] conversationKey) {
         return encryptSync(plaintext, conversationKey, null);
     }
 
-    private static byte[][] decodePayload(String payload) {
-        int plen = payload.length();
-        if (plen < 132 || plen > 87472) throw new IllegalArgumentException("invalid payload length: " + plen);
-        if (payload.charAt(0) == '#') throw new IllegalArgumentException("unknown encryption version");
 
-        byte[] data = NGEUtils.getPlatform().base64decode(payload);
+    private static byte[][] decodePayload(byte[] data) {
+
         int dataLen = data.length;
         if (dataLen < (VERSION_SIZE + NONCE_SIZE + 1 + MAC_SIZE) || dataLen > 65603) {
             throw new IllegalArgumentException("invalid data length: " + dataLen);
@@ -145,12 +149,14 @@ public class Nip44 {
         return new byte[][] { nonce, ciphertext, mac };
     }
 
-    public static String decryptSync(String payload, byte[] conversationKey) {
+    public static byte[] decryptSyncBinary(byte[] payloadData, byte[] conversationKey) {
         if (conversationKey == null || conversationKey.length != CONVERSATION_KEY_SIZE) throw new IllegalArgumentException(
             "Conversation key must be 32 bytes"
         );
+        if (payloadData.length < 132 || payloadData.length > 87472) throw new IllegalArgumentException("invalid payload length: " + payloadData.length);
 
-        byte[][] decodedPayload = decodePayload(payload);
+
+        byte[][] decodedPayload = decodePayload(payloadData);
         byte[] nonce = decodedPayload[0];
         byte[] ciphertext = decodedPayload[1];
         byte[] mac = decodedPayload[2];
@@ -182,7 +188,20 @@ public class Nip44 {
             throw new IllegalArgumentException("invalid padding");
         }
 
-        return new String(unpadded, StandardCharsets.UTF_8);
+        return  unpadded;
+    }
+
+    public static String decryptSync(String payload, byte[] conversationKey) {
+        if (conversationKey == null || conversationKey.length != CONVERSATION_KEY_SIZE) throw new IllegalArgumentException(
+            "Conversation key must be 32 bytes"
+        );
+
+        int plen = payload.length();
+        if (plen < 132 || plen > 87472) throw new IllegalArgumentException("invalid payload length: " + plen);
+        if (payload.charAt(0) == '#') throw new IllegalArgumentException("unknown encryption version");
+
+        byte[] payloadData = NGEUtils.getPlatform().base64decode(payload);
+        return new String(decryptSyncBinary(payloadData, conversationKey), StandardCharsets.UTF_8);
     }
 
     private static boolean constantTimeEquals(byte[] a, byte[] b) {
@@ -262,4 +281,24 @@ public class Nip44 {
             return getConversationKeySync(privateKey, publicKey);
         });
     }
+
+    public static AsyncTask<byte[]> encryptBinary(byte[] data, byte[] conversationKey, byte[] nonce) {
+        return executor.run(() -> {
+            return encryptSyncBinary(data, conversationKey, nonce);
+        });
+    }
+
+    public static AsyncTask<byte[]> encryptBinary(byte[] data, byte[] conversationKey) {
+        return executor.run(() -> {
+            return encryptSyncBinary(data, conversationKey);
+        });
+    }
+
+    public static AsyncTask<byte[]> decryptBinary(byte[] payloadData, byte[] conversationKey) {
+        return executor.run(() -> {
+            return decryptSyncBinary(payloadData, conversationKey);
+        });
+    }
+
+    
 }
