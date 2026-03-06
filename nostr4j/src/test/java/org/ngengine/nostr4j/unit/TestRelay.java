@@ -69,6 +69,12 @@ public class TestRelay {
     }
 
     @Test
+    public void testNewRelayIsNotConnectedButActive() {
+        assertFalse("New relay should not be connected", relay.isConnected());
+        assertTrue("New relay should be active before explicit disconnect", relay.isActive());
+    }
+
+    @Test
     public void testRelayConnection() throws Exception {
         final CountDownLatch connectionLatch = new CountDownLatch(1);
         final AtomicBoolean connected = new AtomicBoolean(false);

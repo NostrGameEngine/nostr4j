@@ -51,15 +51,16 @@ public class NostrRelayWatchdog implements NostrRelayComponent {
             return;
         }
         NostrPool pool = new NostrPool();
-        pool.connectRelay(relay);
+        pool.addRelay(relay);
         pool
             .fetch(new NostrFilter().limit(1).withKind(0), 1, Duration.ofMinutes(5))
             .then(evs -> {
-                pool.close();
+                pool.clean();
+                relay.disconnect("watchdog", false);
                 return null;
             })
             .catchException(ex -> {
-                pool.close();
+                pool.clean();
                 relay.disconnect("killed by watchdog due to unresponsiveness", true);
             });
     }

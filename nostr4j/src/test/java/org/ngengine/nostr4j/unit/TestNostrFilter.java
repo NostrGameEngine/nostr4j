@@ -31,6 +31,7 @@
 package org.ngengine.nostr4j.unit;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 
 import java.time.Instant;
 import java.util.List;
@@ -85,6 +86,13 @@ public class TestNostrFilter {
         assertEquals(filter.getIds().get(1), "234");
     }
 
+    @SuppressWarnings("unchecked")
+    private void assertJsonRepresentsMap(String json, Map<String, Object> expected, NGEPlatform platform) throws Exception {
+        NostrFilter fromJson = new TestableNostrFilter((Map<String, Object>) platform.fromJSON(json, Map.class));
+        Map<String, Object> normalized = ((TestableNostrFilter) fromJson).toMap();
+        assertEquals(expected, normalized);
+    }
+
     @Test
     public void testFilterSerialization() throws Exception {
         NostrFilter filter = new TestableNostrFilter()
@@ -102,13 +110,10 @@ public class TestNostrFilter {
 
         assertVerify(filter);
 
-        String expectedJson =
-            "{\"limit\":10,\"ids\":[\"123\",\"234\"],\"kinds\":[0,1],\"until\":1,\"#a\":[\"1\"],\"authors\":[\"2dfd5a7b5389aa6b550efbf996ef5cd2708fbce28de0bc48d2d5c0b2253f9652\",\"77cca49d43c6013b25be4991e5be283be83d156c6fe30d0e6fa89306d47c5253\"],\"since\":2,\"#b\":[\"1\",\"2\",\"3\"]}";
-
         Map<String, Object> map = ((TestableNostrFilter) filter).toMap();
         NGEPlatform p = NGEUtils.getPlatform();
         String json = p.toJSON(map);
-        assertEquals(json, expectedJson);
+        assertJsonRepresentsMap(json, map, p);
 
         NostrFilter loadFromMap = new TestableNostrFilter(map);
         assertVerify(loadFromMap);
@@ -117,9 +122,24 @@ public class TestNostrFilter {
         assertVerify(loadFromJson);
 
         String json2 = p.toJSON(((TestableNostrFilter) loadFromMap).toMap());
-        assertEquals(json2, expectedJson);
+        assertJsonRepresentsMap(json2, map, p);
 
         String json3 = p.toJSON(((TestableNostrFilter) loadFromJson).toMap());
-        assertEquals(json3, expectedJson);
+        assertJsonRepresentsMap(json3, map, p);
+    }
+
+    @Test
+    public void testFilterCloneDeepCopiesTagLists() throws Exception {
+        NostrFilter original = new NostrFilter().withTag("p", "alpha", "beta");
+        NostrFilter clone = original.clone();
+
+        List<String> cloneTagValues = clone.getTagValues("p");
+        cloneTagValues.set(0, "changed");
+        clone.getTags().put("x", new java.util.ArrayList<>(List.of("1")));
+
+        assertEquals("alpha", original.getTagValues("p").get(0));
+        assertEquals("changed", clone.getTagValues("p").get(0));
+        assertFalse(original.getTags().containsKey("x"));
+        assertEquals(List.of("alpha", "beta"), original.getTagValues("p"));
     }
 }

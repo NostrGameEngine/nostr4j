@@ -433,7 +433,7 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
 
                     for (String relay : relays) {
                         if (!this.pool.getRelays().stream().anyMatch(s -> s.getUrl().equals(relay))) {
-                            this.pool.connectRelay(new NostrRelay(relay));
+                            this.pool.addRelay(new NostrRelay(relay));
                         }
                     }
 

@@ -974,7 +974,8 @@ public class NostrRTCIntegrationTest {
     private static void attachRelay(NostrPool pool, String relayUrl) {
         NostrRelay relay = new NostrRelay(relayUrl);
         relay.setAutoReconnect(false);
-        pool.connectRelay(relay);
+        pool.addRelay(relay);
+        relay.connect();
     }
 
     private static String waitForSharedConnectedRelay(NostrPool poolA, NostrPool poolB, long timeoutMs)

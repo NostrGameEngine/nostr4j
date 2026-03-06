@@ -194,10 +194,17 @@ public class NostrPool {
             }
         }
         NostrRelay newRelay = new NostrRelay(relay);
-        return connectRelay(newRelay);
+        addRelay(newRelay);
+        return newRelay.connect();
     }
 
-    public AsyncTask<NostrRelay> connectRelay(NostrRelay relay) {
+    /**
+     * Adds a relay to this pool and connects to it if not already connected.
+     *
+     * @param relay The relay to attach to this pool
+     * @return  A promise that resolves when the relay is connected and ready to use
+     */
+    public AsyncTask<NostrRelay> addRelay(NostrRelay relay) {
         if (!relays.contains(relay)) {
             relays.addIfAbsent(relay);
             if (relay.getComponent(NostrRelaySubManager.class) == null) {
@@ -212,6 +219,14 @@ public class NostrPool {
             relay.addComponent(listener);
         }
         return relay.connect();
+    }
+
+    /**
+     * @deprecated Use {@link #addRelay(NostrRelay)} 
+     */
+    @Deprecated
+    public AsyncTask<NostrRelay> connectRelay(NostrRelay relay) {
+        return addRelay(relay);
     }
 
     public NostrRelay removeRelay(NostrRelay relay) {
@@ -535,19 +550,40 @@ public class NostrPool {
         return true;
     }
 
+    /**
+     * @deprecated This method does not disconnect relay transports by design to
+     *             support shared relays. This is deprecated because the name was misleading
+     *             use {@link #clean()} to both unsubscribe and remove relays 
+     *              or {@link #removeAllRelays()} to just remove relays without unsubscribing or {@link #unsubscribeAll()} to just unsubscribe without removing relays.
+     *
+     */
+    @Deprecated
     public List<NostrRelay> close() {
-        // close all subs
+        // close all subscriptions owned by this pool
         for (NostrSubscription sub : subscriptions.values()) {
             sub.close();
         }
 
-        // close all relays
-        List<NostrRelay> closedRelays = new ArrayList<>();
-        closedRelays.addAll(relays);
-        relays.clear();
-        return closedRelays;
+        // detach all relays from this pool without disconnecting them
+        List<NostrRelay> detachedRelays = new ArrayList<>(relays);
+        for (NostrRelay relay : detachedRelays) {
+            removeRelay(relay);
+        }
+        return detachedRelays;
     }
 
+    public  List<NostrRelay> removeAllRelays() {
+        List<NostrRelay> detachedRelays = new ArrayList<>(relays);
+        for (NostrRelay relay : relays) {
+            removeRelay(relay);
+        }
+        return detachedRelays;
+    }
+
+    public List<NostrRelay>  clean(){
+        unsubscribeAll();
+        return removeAllRelays();
+    }
     public void unsubscribeAll() {
         for (NostrSubscription sub : subscriptions.values()) {
             sub.close();

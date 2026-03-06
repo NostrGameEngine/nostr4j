@@ -91,7 +91,14 @@ public class NostrFilter extends NostrMessageFragment implements Cloneable {
             cl.ids = ids != null ? new ArrayList<>(ids) : null;
             cl.authors = authors != null ? new ArrayList<>(authors) : null;
             cl.kinds = kinds != null ? new ArrayList<>(kinds) : null;
-            cl.tags = tags != null ? new HashMap<>(tags) : null;
+            if (tags != null) {
+                cl.tags = new HashMap<>();
+                for (Map.Entry<String, List<String>> entry : tags.entrySet()) {
+                    cl.tags.put(entry.getKey(), entry.getValue() != null ? new ArrayList<>(entry.getValue()) : null);
+                }
+            } else {
+                cl.tags = null;
+            }
             return cl;
         } catch (CloneNotSupportedException e) {
             throw new RuntimeException("Clone not supported for NostrFilter", e);

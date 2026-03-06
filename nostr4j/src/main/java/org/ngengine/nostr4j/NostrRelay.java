@@ -286,7 +286,18 @@ public final class NostrRelay {
         return null;
     }
 
+    /**
+     * Returns true only when the websocket transport is ready for immediate sends.
+     */
     public boolean isConnected() {
+        return getStatus() == Status.CONNECTED;
+    }
+
+    /**
+     * Returns true while the relay is active in its lifecycle, including
+     * connection setup/retry states.
+     */
+    public boolean isActive() {
         return getStatus() != Status.DISCONNECTED;
     }
 
