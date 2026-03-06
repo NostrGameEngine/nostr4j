@@ -1,0 +1,7 @@
+{
+  "reflection": [
+    {
+      "type": "org.eclipse.jetty.ee10.servlet.ServletHandler$Default404Servlet"
+    }
+  ]
+}
