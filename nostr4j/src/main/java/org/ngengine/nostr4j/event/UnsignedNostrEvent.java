@@ -65,8 +65,7 @@ public class UnsignedNostrEvent implements NostrEvent {
     }
 
     public UnsignedNostrEvent withContent(String content) {
-        this.content = content;
-
+        this.content = NGEUtils.safeString(content);
         return this;
     }
 

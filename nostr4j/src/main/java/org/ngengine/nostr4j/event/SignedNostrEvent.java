@@ -318,13 +318,17 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
     @Override
     public Instant getExpiration() {
         if (expiresAt != null) return expiresAt;
-        TagValue tag = getFirstTag("expiration");
-        if (tag != null) {
-            long expires = NGEUtils.safeLong(tag.get(0));
-            expiresAt = Instant.ofEpochSecond(expires);
-        } else {
-            expiresAt = Instant.now().plusSeconds(60 * 60 * 24 * 365 * 2100);
+        String expirationTag = getFirstTagFirstValue("expiration");
+        if (expirationTag == null || expirationTag.isEmpty()) {
+            expiresAt = Instant.now().plusSeconds(60L * 60L * 24L * 365L * 2100L);
+            return expiresAt;
         }
+        long expires = NGEUtils.safeLong(expirationTag);
+        if (expires <= 0L) {
+            expiresAt = Instant.now().plusSeconds(60L * 60L * 24L * 365L * 2100L);
+            return expiresAt;
+        }
+        expiresAt = Instant.ofEpochSecond(expires);
         return expiresAt;
     }
 
