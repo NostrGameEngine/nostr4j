@@ -153,8 +153,7 @@ public class Nip44 {
         if (conversationKey == null || conversationKey.length != CONVERSATION_KEY_SIZE) throw new IllegalArgumentException(
             "Conversation key must be 32 bytes"
         );
-        if (payloadData.length < 132 || payloadData.length > 87472) throw new IllegalArgumentException("invalid payload length: " + payloadData.length);
-
+ 
 
         byte[][] decodedPayload = decodePayload(payloadData);
         byte[] nonce = decodedPayload[0];
