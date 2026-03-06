@@ -94,7 +94,7 @@ def applyConf(proj){
             languageVersion = JavaLanguageVersion.of(25)
             vendor = JvmVendorSpec.ADOPTIUM
         }
-        options.release = 21
+        options.release = 25
     }
 
     proj.tasks.named('test') {
@@ -104,17 +104,17 @@ def applyConf(proj){
         }
     }
 
-    // Resolve test-only dependencies against Java 21 variants.
+    // Resolve test-only dependencies against Java 25 variants.
     proj.configurations.named("testCompileClasspath").configure {
         attributes.attribute(
             org.gradle.api.attributes.java.TargetJvmVersion.TARGET_JVM_VERSION_ATTRIBUTE,
-            21
+            25
         )
     }
     proj.configurations.named("testRuntimeClasspath").configure {
         attributes.attribute(
             org.gradle.api.attributes.java.TargetJvmVersion.TARGET_JVM_VERSION_ATTRIBUTE,
-            21
+            25
         )
     }
     
