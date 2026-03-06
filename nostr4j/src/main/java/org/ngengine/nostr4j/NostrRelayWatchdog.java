@@ -33,6 +33,10 @@ package org.ngengine.nostr4j;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import org.ngengine.nostr4j.listeners.NostrRelayComponent;
 import org.ngengine.nostr4j.proto.NostrMessage;
 
@@ -45,8 +49,9 @@ public class NostrRelayWatchdog implements NostrRelayComponent {
 
     private Instant lastCheck = Instant.EPOCH;
     private Duration checkInterval = Duration.ofMinutes(10);
+    private final Map<NostrRelay, AtomicLong> scheduleGenerations = new ConcurrentHashMap<>();
 
-    private void watchdog(NostrRelay relay) {
+    protected void runWatchdog(NostrRelay relay) {
         if (relay.getStatus() != NostrRelay.Status.CONNECTED) {
             return;
         }
@@ -65,6 +70,32 @@ public class NostrRelayWatchdog implements NostrRelayComponent {
             });
     }
 
+    protected void invalidateSchedule(NostrRelay relay) {
+        scheduleGenerations.computeIfAbsent(relay, r -> new AtomicLong()).incrementAndGet();
+    }
+
+    protected void scheduleWatchdog(NostrRelay relay) {
+        long generation = scheduleGenerations.computeIfAbsent(relay, r -> new AtomicLong()).incrementAndGet();
+        long delayMs = Math.max(1L, this.checkInterval.toMillis());
+        relay.executor.runLater(
+                () -> {
+                    AtomicLong current = scheduleGenerations.get(relay);
+                    if (current == null || current.get() != generation) {
+                        return null;
+                    }
+                    if (relay.getStatus() != NostrRelay.Status.CONNECTED) {
+                        return null;
+                    }
+                    this.lastCheck = Instant.now();
+                    runWatchdog(relay);
+                    scheduleWatchdog(relay);
+                    return null;
+                },
+                delayMs,
+                TimeUnit.MILLISECONDS
+            );
+    }
+
     @Override
     public boolean onRelayConnectRequest(NostrRelay relay) {
         return true;
@@ -72,6 +103,7 @@ public class NostrRelayWatchdog implements NostrRelayComponent {
 
     @Override
     public boolean onRelayConnect(NostrRelay relay) {
+        scheduleWatchdog(relay);
         return true;
     }
 
@@ -86,16 +118,8 @@ public class NostrRelayWatchdog implements NostrRelayComponent {
     }
 
     @Override
-    public boolean onRelayLoop(NostrRelay relay, Instant nowInstant) {
-        if (Duration.between(this.lastCheck, nowInstant).compareTo(this.checkInterval) >= 0) {
-            this.lastCheck = nowInstant;
-            this.watchdog(relay);
-        }
-        return true;
-    }
-
-    @Override
     public boolean onRelayDisconnect(NostrRelay relay, String reason, boolean byClient) {
+        invalidateSchedule(relay);
         return true;
     }
 

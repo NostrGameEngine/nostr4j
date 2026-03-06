@@ -34,7 +34,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-import java.time.Instant;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -104,11 +103,6 @@ public class TestRelay {
                 }
 
                 @Override
-                public boolean onRelayLoop(NostrRelay relay, Instant nowInstant) {
-                    return true;
-                }
-
-                @Override
                 public boolean onRelayDisconnect(NostrRelay relay, String reason, boolean byClient) {
                     return true;
                 }
@@ -171,11 +165,6 @@ public class TestRelay {
 
                 @Override
                 public boolean onRelayError(NostrRelay relay, Throwable error) {
-                    return true;
-                }
-
-                @Override
-                public boolean onRelayLoop(NostrRelay relay, Instant nowInstant) {
                     return true;
                 }
 
@@ -283,11 +272,6 @@ public class TestRelay {
                         }
 
                         @Override
-                        public boolean onRelayLoop(NostrRelay relay, Instant nowInstant) {
-                            return true;
-                        }
-
-                        @Override
                         public boolean onRelayDisconnect(NostrRelay relay, String reason, boolean byClient) {
                             return true;
                         }
@@ -369,11 +353,6 @@ public class TestRelay {
 
             @Override
             public boolean onRelayError(NostrRelay relay, Throwable error) {
-                return true;
-            }
-
-            @Override
-            public boolean onRelayLoop(NostrRelay relay, Instant nowInstant) {
                 return true;
             }
 

@@ -101,11 +101,6 @@ public class NostrPool {
         }
 
         @Override
-        public boolean onRelayLoop(NostrRelay relay, Instant nowInstant) {
-            return NostrPool.this.onRelayLoop(relay, nowInstant);
-        }
-
-        @Override
         public boolean onRelayDisconnect(NostrRelay relay, String reason, boolean byClient) {
             return NostrPool.this.onRelayDisconnect(relay, reason, byClient);
         }
@@ -615,10 +610,6 @@ public class NostrPool {
     }
 
     protected boolean onRelayConnectRequest(NostrRelay relay) {
-        return true;
-    }
-
-    protected boolean onRelayLoop(NostrRelay relay, Instant nowInstant) {
         return true;
     }
 

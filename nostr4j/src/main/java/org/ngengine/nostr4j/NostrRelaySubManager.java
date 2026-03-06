@@ -108,11 +108,6 @@ public class NostrRelaySubManager implements NostrRelayComponent {
     }
 
     @Override
-    public boolean onRelayLoop(NostrRelay relay, Instant nowInstant) {
-        return true;
-    }
-
-    @Override
     public boolean onRelayDisconnect(NostrRelay relay, String reason, boolean byClient) {
         return true;
     }

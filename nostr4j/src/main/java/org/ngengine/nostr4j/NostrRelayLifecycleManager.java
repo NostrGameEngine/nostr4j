@@ -33,8 +33,11 @@ package org.ngengine.nostr4j;
 import static org.ngengine.platform.NGEUtils.dbg;
 
 import java.time.Instant;
+import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.event.NostrEvent;
 import org.ngengine.nostr4j.listeners.NostrRelayComponent;
@@ -46,8 +49,39 @@ public class NostrRelayLifecycleManager implements NostrRelayComponent {
     private static final Logger logger = Logger.getLogger(NostrRelayLifecycleManager.class.getName());
 
     protected final CopyOnWriteArrayList<String> subTracker = new CopyOnWriteArrayList<>();
+    protected final Map<NostrRelay, AtomicLong> scheduleGenerations = new ConcurrentHashMap<>();
     protected volatile long keepAliveTime = TimeUnit.MINUTES.toSeconds(2);
     protected volatile long lastAction;
+
+    protected void invalidateSchedule(NostrRelay relay) {
+        scheduleGenerations.computeIfAbsent(relay, r -> new AtomicLong()).incrementAndGet();
+    }
+
+    protected void scheduleInactivityCheck(NostrRelay relay) {
+        long generation = scheduleGenerations.computeIfAbsent(relay, r -> new AtomicLong()).incrementAndGet();
+        long delayMs = Math.max(1L, TimeUnit.SECONDS.toMillis(Math.max(0L, this.keepAliveTime)));
+        relay.executor.runLater(
+                () -> {
+                    AtomicLong current = scheduleGenerations.get(relay);
+                    if (current == null || current.get() != generation) {
+                        return null;
+                    }
+                    if (relay.isMarkedForDisconnection() || !relay.isConnected()) {
+                        return null;
+                    }
+                    long now = Instant.now().getEpochSecond();
+                    if (this.subTracker.isEmpty() && now - this.lastAction > keepAliveTime) {
+                        logger.fine("Disconnecting from relay: " + relay + " for inactivity");
+                        relay.disconnect("timeout");
+                        return null;
+                    }
+                    scheduleInactivityCheck(relay);
+                    return null;
+                },
+                delayMs,
+                TimeUnit.MILLISECONDS
+            );
+    }
 
     public void setKeepAliveTime(long time, TimeUnit unit) {
         this.keepAliveTime = unit.toSeconds(time);
@@ -64,6 +98,7 @@ public class NostrRelayLifecycleManager implements NostrRelayComponent {
     @Override
     public boolean onRelayConnect(NostrRelay relay) {
         this.keepAlive();
+        scheduleInactivityCheck(relay);
         return true;
     }
 
@@ -90,18 +125,6 @@ public class NostrRelayLifecycleManager implements NostrRelayComponent {
     }
 
     @Override
-    public boolean onRelayLoop(NostrRelay relay, Instant nowInstant) {
-        // disconnect if no active subscriptions and last action is too old
-        if (relay.isMarkedForDisconnection() || !relay.isConnected()) return true;
-        long now = nowInstant.getEpochSecond();
-        if (this.subTracker.isEmpty() && now - this.lastAction > keepAliveTime) {
-            logger.fine("Disconnecting from relay: " + relay + " for inactivity");
-            relay.disconnect("timeout");
-        }
-        return true;
-    }
-
-    @Override
     public boolean onRelayDisconnect(NostrRelay relay, String reason, boolean byClient) {
         logger.fine(
             "Clearing tracked subscription in lifecycle manager for relay: " +
@@ -111,6 +134,7 @@ public class NostrRelayLifecycleManager implements NostrRelayComponent {
             (byClient ? " (by client)" : "")
         );
         this.subTracker.clear();
+        invalidateSchedule(relay);
         return true;
     }
 
@@ -148,18 +172,21 @@ public class NostrRelayLifecycleManager implements NostrRelayComponent {
             );
             // });
         }
+        scheduleInactivityCheck(relay);
         return true;
     }
 
     @Override
     public boolean onRelayConnectRequest(NostrRelay relay) {
         this.keepAlive();
+        scheduleInactivityCheck(relay);
         return true;
     }
 
     @Override
     public boolean onRelayDisconnectRequest(NostrRelay relay, String reason) {
         this.keepAlive();
+        scheduleInactivityCheck(relay);
         return true;
     }
 
@@ -167,6 +194,7 @@ public class NostrRelayLifecycleManager implements NostrRelayComponent {
     public boolean onRelayBeforeSend(NostrRelay relay, NostrMessage message) {
         relay.connect();
         this.keepAlive();
+        scheduleInactivityCheck(relay);
         return true;
     }
 
