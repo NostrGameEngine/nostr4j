@@ -28,6 +28,7 @@ dependencies {
 
 tasks.named('test') {
     useJUnit()
+    failOnNoDiscoveredTests = false
     testLogging {
         events "passed", "skipped", "failed"
         exceptionFormat "full"

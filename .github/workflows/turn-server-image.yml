@@ -17,18 +17,21 @@ jobs:
       contents: read
       packages: write
 
-    env:
-      IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}-turn-server
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up JDK for Gradle
+      - name: Compute lowercase image name
+        run: |
+          OWNER_LC="$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
+          REPO_LC="$(echo "${GITHUB_REPOSITORY#*/}" | tr '[:upper:]' '[:lower:]')"
+          echo "IMAGE_NAME=ghcr.io/${OWNER_LC}/${REPO_LC}-turn-server" >> "$GITHUB_ENV"
+
+      - name: Set up JDK 25 for Gradle
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: '25'
           cache: gradle
 
       - name: Set up Docker Buildx

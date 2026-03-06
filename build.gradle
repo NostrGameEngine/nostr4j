@@ -48,6 +48,15 @@ if(System.getenv("SONATYPE_USERNAME") || project.findProperty("sonatypeUsername"
 
 allprojects {
 
+    configurations.configureEach {
+        resolutionStrategy.eachDependency { details ->
+            if (details.requested.group == "org.ow2.asm") {
+                details.useVersion(libs.versions.asm.get())
+                details.because("ASM 9.7 fails on Java 25 class files in CI test runtime")
+            }
+        }
+    }
+
     def projectVersion = System.getenv("VERSION")
     if (projectVersion == null || projectVersion.trim().isEmpty()) {
         projectVersion = rootProject.ext.baseVersion
