@@ -82,7 +82,11 @@ public class TestRelayLoopScheduling {
         relay.addComponent(lifecycle);
 
         relay.connect().await();
-        awaitCondition(() -> relay.getStatus() == NostrRelay.Status.DISCONNECTED, 1_000, "lifecycle timeout did not disconnect");
+        awaitCondition(
+            () -> relay.getStatus() == NostrRelay.Status.DISCONNECTED,
+            1_000,
+            "lifecycle timeout did not disconnect"
+        );
     }
 
     @Test

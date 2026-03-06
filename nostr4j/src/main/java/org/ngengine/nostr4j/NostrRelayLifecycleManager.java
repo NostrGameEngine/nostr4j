@@ -34,8 +34,8 @@ import static org.ngengine.platform.NGEUtils.dbg;
 
 import java.time.Instant;
 import java.util.Map;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Logger;
@@ -61,26 +61,26 @@ public class NostrRelayLifecycleManager implements NostrRelayComponent {
         long generation = scheduleGenerations.computeIfAbsent(relay, r -> new AtomicLong()).incrementAndGet();
         long delayMs = Math.max(1L, TimeUnit.SECONDS.toMillis(Math.max(0L, this.keepAliveTime)));
         relay.executor.runLater(
-                () -> {
-                    AtomicLong current = scheduleGenerations.get(relay);
-                    if (current == null || current.get() != generation) {
-                        return null;
-                    }
-                    if (relay.isMarkedForDisconnection() || !relay.isConnected()) {
-                        return null;
-                    }
-                    long now = Instant.now().getEpochSecond();
-                    if (this.subTracker.isEmpty() && now - this.lastAction > keepAliveTime) {
-                        logger.fine("Disconnecting from relay: " + relay + " for inactivity");
-                        relay.disconnect("timeout");
-                        return null;
-                    }
-                    scheduleInactivityCheck(relay);
+            () -> {
+                AtomicLong current = scheduleGenerations.get(relay);
+                if (current == null || current.get() != generation) {
                     return null;
-                },
-                delayMs,
-                TimeUnit.MILLISECONDS
-            );
+                }
+                if (relay.isMarkedForDisconnection() || !relay.isConnected()) {
+                    return null;
+                }
+                long now = Instant.now().getEpochSecond();
+                if (this.subTracker.isEmpty() && now - this.lastAction > keepAliveTime) {
+                    logger.fine("Disconnecting from relay: " + relay + " for inactivity");
+                    relay.disconnect("timeout");
+                    return null;
+                }
+                scheduleInactivityCheck(relay);
+                return null;
+            },
+            delayMs,
+            TimeUnit.MILLISECONDS
+        );
     }
 
     public void setKeepAliveTime(long time, TimeUnit unit) {

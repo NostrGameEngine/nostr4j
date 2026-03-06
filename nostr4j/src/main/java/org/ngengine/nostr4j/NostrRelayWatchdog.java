@@ -78,22 +78,22 @@ public class NostrRelayWatchdog implements NostrRelayComponent {
         long generation = scheduleGenerations.computeIfAbsent(relay, r -> new AtomicLong()).incrementAndGet();
         long delayMs = Math.max(1L, this.checkInterval.toMillis());
         relay.executor.runLater(
-                () -> {
-                    AtomicLong current = scheduleGenerations.get(relay);
-                    if (current == null || current.get() != generation) {
-                        return null;
-                    }
-                    if (relay.getStatus() != NostrRelay.Status.CONNECTED) {
-                        return null;
-                    }
-                    this.lastCheck = Instant.now();
-                    runWatchdog(relay);
-                    scheduleWatchdog(relay);
+            () -> {
+                AtomicLong current = scheduleGenerations.get(relay);
+                if (current == null || current.get() != generation) {
                     return null;
-                },
-                delayMs,
-                TimeUnit.MILLISECONDS
-            );
+                }
+                if (relay.getStatus() != NostrRelay.Status.CONNECTED) {
+                    return null;
+                }
+                this.lastCheck = Instant.now();
+                runWatchdog(relay);
+                scheduleWatchdog(relay);
+                return null;
+            },
+            delayMs,
+            TimeUnit.MILLISECONDS
+        );
     }
 
     @Override
