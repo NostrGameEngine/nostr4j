@@ -222,7 +222,7 @@ public class NostrPool {
     }
 
     /**
-     * @deprecated Use {@link #addRelay(NostrRelay)} 
+     * @deprecated Use {@link #addRelay(NostrRelay)}
      */
     @Deprecated
     public AsyncTask<NostrRelay> connectRelay(NostrRelay relay) {
@@ -553,7 +553,7 @@ public class NostrPool {
     /**
      * @deprecated This method does not disconnect relay transports by design to
      *             support shared relays. This is deprecated because the name was misleading
-     *             use {@link #clean()} to both unsubscribe and remove relays 
+     *             use {@link #clean()} to both unsubscribe and remove relays
      *              or {@link #removeAllRelays()} to just remove relays without unsubscribing or {@link #unsubscribeAll()} to just unsubscribe without removing relays.
      *
      */
@@ -572,7 +572,7 @@ public class NostrPool {
         return detachedRelays;
     }
 
-    public  List<NostrRelay> removeAllRelays() {
+    public List<NostrRelay> removeAllRelays() {
         List<NostrRelay> detachedRelays = new ArrayList<>(relays);
         for (NostrRelay relay : relays) {
             removeRelay(relay);
@@ -580,10 +580,11 @@ public class NostrPool {
         return detachedRelays;
     }
 
-    public List<NostrRelay>  clean(){
+    public List<NostrRelay> clean() {
         unsubscribeAll();
         return removeAllRelays();
     }
+
     public void unsubscribeAll() {
         for (NostrSubscription sub : subscriptions.values()) {
             sub.close();
