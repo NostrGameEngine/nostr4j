@@ -36,53 +36,83 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
+import org.ngengine.platform.NGEUtils;
+
+import jakarta.annotation.Nullable;
 
 /**
- * All the info about a peer in the swarm.
+ * Creates a new peer with the given information.
+ * <p>
+ * A peer is uniquely identified by the tuple (pubkey, applicationId, protocolId, sessionId, roomPubkey). This combination
+ * is used to route messages to the correct peer and to distinguish between multiple sessions from the same pubkey.
+ * <p>
+ * Note: All fields except {@code pubkey} and {@code roomPubkey} can be freely chosen by applications. 
+ * If two different applications donnect to a public room sharing the same user signer, they may impersonate one another. 
+ * If this is a concern, generate a random keypair and use that instead of the user-provided one (authentication can be handled off-protocol).
  */
 public class NostrRTCPeer {
 
     private final NostrPublicKey pubkey;
-    private final Map<String, Object> misc;
-
-    private final String turnServer;
     private Instant lastSeen;
-    private Map<String, Object> publicMisc;
+    private final String applicationId;
+    private final String protocolId;
+    private final String sessionId;
+    private final NostrPublicKey roomPubkey;
+    private String turnServer;
 
-    NostrRTCPeer(NostrPublicKey pubkey, String turnServer, Map<String, Object> misc) {
-        Objects.requireNonNull(pubkey);
-        Objects.requireNonNull(misc);
-
-        this.pubkey = pubkey;
+    /**
+     * Creates a new peer with the given information.
+     *
+     * @param pubkey      Peer's public key (must not be null)
+     * @param applicationId Application ID (e.g., "com.myapp.rtc") (must not be null)
+     * @param protocolId  Protocol ID used by the application (e.g., "mygame-01") (must not be null)
+     * @param sessionId   Session ID (unique per peer session, e.g., random UUID created on application startup) (must not be null)
+     * @param roomPubkey  Room public key (identifies the room the peer is in) (must not be null)
+     * @param turnServer  TURN server URL, or {@code null} if unknown
+     */
+    public NostrRTCPeer(
+        NostrPublicKey pubkey, 
+        String applicationId,
+        String protocolId,
+        String sessionId,
+        NostrPublicKey roomPubkey,
+        @Nullable String turnServer
+    ) {
+        this.pubkey = Objects.requireNonNull(pubkey, "Pubkey cannot be null");
+        this.applicationId = Objects.requireNonNull(applicationId, "Application ID cannot be null");
+        this.protocolId = Objects.requireNonNull(protocolId, "Protocol ID cannot be null");
+        this.sessionId = Objects.requireNonNull(sessionId, "Session ID cannot be null");
+        this.roomPubkey = Objects.requireNonNull(roomPubkey, "Room pubkey cannot be null");
         this.turnServer = turnServer;
-
-        this.misc = new HashMap<>(misc);
     }
 
-    public NostrPublicKey getPubkey() {
-        return pubkey;
+    void setTurnServer(String turnServer) {
+        this.turnServer = turnServer;
     }
 
-    public Map<String, Object> getMisc() {
-        return misc;
+    public String getApplicationId() {
+        return applicationId;
     }
 
-    public Map<String, Object> getPublicMisc() {
-        if (publicMisc == null) {
-            publicMisc = new HashMap<>();
-            for (Entry<String, Object> entry : misc.entrySet()) {
-                if (entry.getKey().startsWith("public:")) {
-                    publicMisc.put(entry.getKey(), entry.getValue());
-                }
-            }
-        }
-        return publicMisc;
+    public String getProtocolId() {
+        return protocolId;
     }
 
+    public String getSessionId() {
+        return sessionId;
+    }
+
+    @Nullable
     public String getTurnServer() {
         return turnServer;
     }
 
+ 
+    public NostrPublicKey getPubkey() {
+        return pubkey;
+    }
+
+  
     public Instant getLastSeen() {
         if (lastSeen == null) return Instant.now();
         return lastSeen;
@@ -97,12 +127,17 @@ public class NostrRTCPeer {
         if (this == obj) return true;
         if (obj == null || getClass() != obj.getClass()) return false;
         NostrRTCPeer that = (NostrRTCPeer) obj;
-        return pubkey.equals(that.pubkey);
+        if(!pubkey.equals(that.pubkey)) return false;
+        if(!applicationId.equals(that.applicationId)) return false;
+        if(!protocolId.equals(that.protocolId)) return false;
+        if(!sessionId.equals(that.sessionId)) return false;    
+        if(!roomPubkey.equals(that.roomPubkey)) return false;  
+        return true;
     }
 
     @Override
     public int hashCode() {
-        return pubkey.hashCode();
+        return Objects.hash(pubkey, applicationId, protocolId, sessionId, roomPubkey);
     }
 
     @Override
@@ -111,13 +146,21 @@ public class NostrRTCPeer {
             "NostrRTCPeer{" +
             "pubkey=" +
             pubkey +
-            ", misc=" +
-            misc +
+            ", applicationId='" +
+            applicationId +
+            '\'' +
+            ", protocolId='" +
+            protocolId +
+            '\'' +
+            ", sessionId='" +
+            sessionId +
+            '\'' +
             ", turnServer='" +
             turnServer +
             '\'' +
             ", lastSeen=" +
-            lastSeen +
+            lastSeen +      
+            
             '}'
         );
     }

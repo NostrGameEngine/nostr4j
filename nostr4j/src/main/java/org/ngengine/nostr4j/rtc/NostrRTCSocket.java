@@ -30,26 +30,29 @@
  */
 package org.ngengine.nostr4j.rtc;
 
-import static org.ngengine.platform.NGEUtils.dbg;
-
 import java.io.Closeable;
 import java.nio.ByteBuffer;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Logger;
+
+import org.ngengine.nostr4j.keypair.NostrKeyPair;
 import org.ngengine.nostr4j.rtc.listeners.NostrRTCSocketListener;
-import org.ngengine.nostr4j.rtc.signal.NostrRTCAnswer;
-import org.ngengine.nostr4j.rtc.signal.NostrRTCIceCandidate;
-import org.ngengine.nostr4j.rtc.signal.NostrRTCLocalPeer;
-import org.ngengine.nostr4j.rtc.signal.NostrRTCOffer;
-import org.ngengine.nostr4j.rtc.signal.NostrRTCPeer;
+import org.ngengine.nostr4j.rtc.signal.NostrRTCAnswerSignal;
+import org.ngengine.nostr4j.rtc.signal.NostrRTCRouteSignal;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCSignal;
-import org.ngengine.nostr4j.rtc.turn.NostrTURN;
-import org.ngengine.nostr4j.rtc.turn.NostrTURNSettings;
+import org.ngengine.nostr4j.rtc.signal.NostrRTCLocalPeer;
+import org.ngengine.nostr4j.rtc.signal.NostrRTCOfferSignal;
+import org.ngengine.nostr4j.rtc.signal.NostrRTCPeer;
+import org.ngengine.nostr4j.rtc.turn.NostrTURNPool;
 import org.ngengine.platform.AsyncExecutor;
 import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEPlatform;
@@ -59,55 +62,368 @@ import org.ngengine.platform.transport.RTCTransport;
 import org.ngengine.platform.transport.RTCTransportIceCandidate;
 import org.ngengine.platform.transport.RTCTransportListener;
 
+import jakarta.annotation.Nullable;
+
+import org.ngengine.platform.transport.RTCDataChannel;
+
 /**
  * An RTC socket between two peers.
  * This class will try to establish a direct connection between the two peers, when
  * not possible it will fallback to a TURN server.
  *
  * Note:
- *      isConnected() will return true as long as any kind of connection is possible, this includes turn
- *      if the turn servers are provided. This also means that due to the nature of the TURN connection, the socket
- *       will always result connected as long as the TURN relay is reachable, even if the peer is long gone.
+ *      isConnected() reports RTC transport connectivity only.
+ *      TURN failover is internal and surfaced through listeners transport switch events.
  *
  *      This is because, to avoid inefficiencies, the keep-alive mechanism is implemented only in the
  *      signaling protocol: when the signaling announce is stale, the socket should be closed using close().
  *      So keep in mind that you need to handle keep-alive youself, if you want to use this class by itself (without the signaling protocol).
  */
-public class NostrRTCSocket implements RTCTransportListener, NostrTURN.Listener, Closeable {
-
+public class NostrRTCSocket implements Closeable {
+    public static final String DEFAULT_CHANNEL_NAME = "default";
     private static final Logger logger = Logger.getLogger(NostrRTCSocket.class.getName());
+    private static final long RTC_CONNECT_TIMEOUT_MS = 7_000;
+
+    public static enum TransportPath {
+        NONE,
+        RTC,
+        TURN
+    }
 
     private final List<NostrRTCSocketListener> listeners = new CopyOnWriteArrayList<>();
     private final CopyOnWriteArrayList<RTCTransportIceCandidate> localIceCandidates = new CopyOnWriteArrayList<>();
 
-    private final String connectionId;
     private final RTCSettings settings;
-    private final NostrTURNSettings turnSettings;
     private final AsyncExecutor executor;
-
     private final NostrRTCLocalPeer localPeer;
-
-    private RTCTransport transport;
-    private NostrTURN turn;
-    private NostrRTCPeer remotePeer;
-
-    private volatile boolean useTURN = false;
-    private volatile boolean forceTURN = false;
-    private volatile boolean connected = false;
+    private final NostrKeyPair roomKeyPair;
+    private final NostrTURNPool turnPool;
+    private final Map<String, NostrRTCChannel> channels = new ConcurrentHashMap<>();
+    @Nullable
+    private final String turnServerUrl;
+    
+    private volatile RTCTransport transport;
+    private volatile NostrRTCPeer remotePeer;
+    private volatile boolean connected = false, stopped  = false;
     private volatile AsyncTask<Void> delayedCandidateEmission;
+    private volatile Instant pendingConnectionSince;
+    private volatile AsyncTask<Void> rtcConnectDeadlineTask;
+    private volatile TransportPath activeTransportPath = TransportPath.NONE;
+    private volatile boolean turnFallbackAllowed = false;
 
+    private class NostrRTCListener implements RTCTransportListener{
+        private final NostrRTCSocket socket;
+        NostrRTCListener(NostrRTCSocket socket) {
+            this.socket = socket;
+        }
+
+        @Override
+        public void onLocalRTCIceCandidate(RTCTransportIceCandidate candidateString) {
+            logger.fine("Received local ICE candidate: " + candidateString);
+            localIceCandidates.addIfAbsent(candidateString);
+            emitCandidates();
+        }
+
+        @Override
+        public void onRTCConnected() {
+            logger.fine("Link established");
+            connected = true;
+            turnFallbackAllowed = false;
+            pendingConnectionSince = null;
+            cancelRtcConnectTimeout();
+            switchActiveTransport(TransportPath.RTC, "rtc-connected");
+            socket.resurrectChannels();
+        }
+
+        @Override
+        public void onRTCDisconnected(String reason) {
+            connected = false;
+            pendingConnectionSince = null;
+            logger.fine("RTC disconnected: " + reason);
+            cancelRtcConnectTimeout();
+            if (activeTransportPath == TransportPath.RTC) {
+                switchActiveTransport(TransportPath.NONE, "rtc-disconnected");
+            }
+            for (NostrRTCSocketListener listener : listeners) {
+                try {
+                    listener.onRTCSocketTransportDegraded(socket, activeTransportPath, reason);
+                } catch (Exception e) {
+                    logger.severe("Error emitting transport degraded: " + e.getMessage());
+                }
+            }
+            ensureTurnForDownChannels("rtc-disconnected:" + reason);
+        }
+
+        @Override
+        public void onRTCBinaryMessage(RTCDataChannel chan, ByteBuffer bbf) {
+            // for (NostrRTCSocketListener listener : listeners) {
+            //     try {
+            //         listener.onRTCSocketMessage(socket, chan,  bbf, false);
+            //     } catch (Exception e) {
+            //         logger.severe("Error emitting message: " + e.getMessage());
+            //     }
+            // }
+            NostrRTCChannel logicalChannel = channels.get(chan.getName());
+            if (logicalChannel != null) {
+                logicalChannel.onRTCSocketMessage(bbf);
+            }
+        }
+
+        // @Override
+        // public void onTurnPacket(SNostrRTCPeer peer, ByteBuffer data) {
+        //     for (NostrRTCSocketListener listener : listeners) {
+        //         try {
+        //             listener.onRTCSocketMessage(socket, data, true);
+        //         } catch (Exception e) {
+        //             logger.severe("Error emitting message: " + e.getMessage());
+        //         }
+        //     }
+        // }
+
+
+        @Override
+        public void onRTCChannelError(RTCDataChannel chan, Throwable e) {
+            logger.severe("RTC Channel Error " + e);
+            NostrRTCChannel logicalChannel = channels.get(chan.getName());
+            if (logicalChannel != null) {
+                logicalChannel.onRTCChannelError(e);
+            }
+            // for (NostrRTCSocketListener listener : listeners) {
+            //     try {
+            //         listener.onRTCChannelError(socket, chan, e);
+            //     } catch (Exception ex) {
+            //         logger.severe("Error emitting channel error: " + ex.getMessage());
+            //     }
+            // }
+        }
+
+        @Override
+        public void onRTCChannelReady(RTCDataChannel channel) {
+            NostrRTCChannel logicalChannel = getOrCreateLogicalChannel(
+                channel.getName(),
+                channel.isOrdered(),
+                channel.isReliable(),
+                channel.getMaxRetransmits(),
+                channel.getMaxPacketLifeTime()
+            );
+            logicalChannel.setChannel(channel);
+            emitChannelReady(logicalChannel);
+            logger.fine("RTC Channel ready: " + channel.getName());
+        }
+
+        @Override
+        public void onRTCChannelClosed(RTCDataChannel channel) {
+            NostrRTCChannel logicalChannel = channels.get(channel.getName());
+            if (logicalChannel != null) {
+                logicalChannel.setChannel(null);
+                // if(!logicalChannel.isClosed() && connected){
+                //     logger.fine("RTC Channel closed: " + channel.getName() + ", but socket is still connected, resurrecting channel");
+                //     socket.resurrectChannel(logicalChannel);
+                //     return;
+                // } else {
+                //     logger.fine("RTC Channel closed: " + channel.getName());
+                // }
+            } else {
+                logger.warning("RTC Channel closed: " + channel.getName() + ", but no logical channel found");
+            }
+            // channels.remove(channel.getName());
+            // for (NostrRTCSocketListener listener : listeners) {
+            //     try {
+            //         listener.onRTCChannelClosed(channel);
+            //     } catch (Exception e) {
+            //         logger.severe("Error emitting channel closed: " + e.getMessage());
+            //     }
+            // }
+        }
+
+        @Override
+        public void onRTCBufferedAmountLow(RTCDataChannel channel) {
+            NostrRTCChannel logicalChannel = channels.get(channel.getName());
+            if (logicalChannel != null) {
+                logicalChannel.onRTCBufferedAmountLow();
+            }
+            logger.fine("RTC Channel buffered amount low: " + channel.getName());
+            // for (NostrRTCSocketListener listener : listeners) {
+            //     try {
+            //         listener.onRTCBufferedAmountLow(channel);
+            //     } catch (Exception e) {
+            //         logger.severe("Error emitting buffered amount low: " + e.getMessage());
+            //     }
+            // }
+        }
+
+    };
+   
+    private final NostrRTCListener rtcListener = new NostrRTCListener(this);
+
+   
     public NostrRTCSocket(
         AsyncExecutor executor,
+        NostrKeyPair roomKeyPair,
         NostrRTCLocalPeer localPeer,
-        String connectionId,
         RTCSettings settings,
-        NostrTURNSettings turnSettings
+        @Nullable String turnServerUrl,
+        NostrTURNPool turnPool
     ) {
         this.executor = Objects.requireNonNull(executor, "Executor cannot be null");
-        this.connectionId = Objects.requireNonNull(connectionId, "Connection ID cannot be null");
         this.settings = Objects.requireNonNull(settings, "Settings cannot be null");
         this.localPeer = Objects.requireNonNull(localPeer, "Local Peer cannot be null");
-        this.turnSettings = Objects.requireNonNull(turnSettings, "TURN Settings cannot be null");
+        this.roomKeyPair = Objects.requireNonNull(roomKeyPair, "Room Key Pair cannot be null");
+        this.turnPool = turnPool;
+        this.turnServerUrl = turnServerUrl;
+    }
+ 
+
+    private NostrRTCChannel getOrCreateLogicalChannel(
+        String name,
+        boolean ordered,
+        boolean reliable,
+        @Nullable Integer maxRetransmits,
+        @Nullable Duration maxPacketLifeTime
+    ) {
+        return channels.computeIfAbsent(name, n -> new NostrRTCChannel(
+            name,
+            this,
+            ordered,
+            reliable,
+            maxRetransmits != null ? maxRetransmits : Integer.valueOf(0),
+            maxPacketLifeTime
+        ));
+    }
+
+    private void switchActiveTransport(TransportPath next, String reason) {
+        TransportPath previous = this.activeTransportPath;
+        if (previous == next) return;
+        this.activeTransportPath = next;
+        for (NostrRTCSocketListener listener : listeners) {
+            try {
+                listener.onRTCSocketTransportSwitch(this, previous, next, reason);
+            } catch (Exception e) {
+                logger.severe("Error emitting transport switch: " + e.getMessage());
+            }
+        }
+    }
+
+    private void cancelRtcConnectTimeout() {
+        AsyncTask<Void> task = rtcConnectDeadlineTask;
+        if (task != null) {
+            task.cancel();
+            rtcConnectDeadlineTask = null;
+        }
+    }
+
+    private void scheduleRtcConnectTimeout(String reason) {
+        cancelRtcConnectTimeout();
+        if (stopped) return;
+        rtcConnectDeadlineTask = executor.runLater(() -> {
+            rtcConnectDeadlineTask = null;
+            if (stopped || connected || transport == null) return null;
+            for (NostrRTCSocketListener listener : listeners) {
+                try {
+                    listener.onRTCSocketTransportDegraded(this, activeTransportPath, "rtc-timeout");
+                } catch (Exception e) {
+                    logger.severe("Error emitting transport degraded: " + e.getMessage());
+                }
+            }
+            ensureTurnForDownChannels("rtc-timeout:" + reason);
+            return null;
+        }, RTC_CONNECT_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+    }
+
+    private void ensureTurnForDownChannels(String reason) {
+        turnFallbackAllowed = true;
+        for (NostrRTCChannel channel : channels.values()) {
+            if (!channel.isClosed() && !channel.isConnected()) {
+                channel.setChannel(null);
+            }
+        }
+    }
+
+    @Nullable
+    String resolveReceiveTurnUrl() {
+        String localTurnServer = localPeer.getTurnServer();
+        if (localTurnServer != null && !localTurnServer.isEmpty()) {
+            return localTurnServer;
+        }
+        if (turnServerUrl != null && !turnServerUrl.isEmpty()) {
+            return turnServerUrl;
+        }
+        return null;
+    }
+
+    @Nullable
+    String resolveSendTurnUrl() {
+        NostrRTCPeer currentRemotePeer = remotePeer;
+        if (currentRemotePeer != null) {
+            String remoteTurnServer = currentRemotePeer.getTurnServer();
+            if (remoteTurnServer != null && !remoteTurnServer.isEmpty()) {
+                return remoteTurnServer;
+            }
+        }
+        if (turnServerUrl != null && !turnServerUrl.isEmpty()) {
+            return turnServerUrl;
+        }
+        return null;
+    }
+
+    private void resurrectChannel(NostrRTCChannel channel){
+        if(transport==null||!transport.isConnected()) return;
+        if (!channel.isConnected() && !channel.isClosed() && !channel.isResurrecting()) {
+            if (!shouldCreateDataChannelLocally()) {
+                return;
+            }
+            channel.setResurrecting(true);
+            // logger.fine("Resurrecting channel " + channel.getName());
+            transport.createDataChannel(
+                channel.getName(),
+                localPeer.getProtocolId(),
+                channel.isOrdered(),
+                channel.isReliable(),
+                channel.getMaxRetransmits(),
+                channel.getMaxPacketLifeTime()
+            ).then(newChannel -> {
+                channel.setResurrecting(false);
+                channel.setChannel(newChannel);
+                emitChannelReady(channel);
+                logger.fine("Channel " + channel.getName() + " resurrected");
+                return null;
+            }).catchException(e -> {
+                channel.setResurrecting(false);
+                logger.severe("Error resurrecting channel " + channel.getName() + ": " + e.getMessage());
+            });
+        }
+    }
+
+
+    private void resurrectChannels() {
+        executor.runLater(() -> {
+            if(stopped) return null;
+            if(connected){
+                for (NostrRTCChannel channel : channels.values()) {
+                    resurrectChannel(channel);
+                }
+            }
+            this.resurrectChannels();
+            return null;
+        }, 100, TimeUnit.MILLISECONDS);
+    }
+
+    private boolean shouldCreateDataChannelLocally() {
+        NostrRTCPeer remote = remotePeer;
+        if (remote == null || remote.getPubkey() == null || localPeer.getPubkey() == null) {
+            return true;
+        }
+        return localPeer.getPubkey().asHex().compareTo(remote.getPubkey().asHex()) < 0;
+    }
+
+    private void emitChannelReady(NostrRTCChannel channel) {
+        for (NostrRTCSocketListener listener : listeners) {
+            try {
+                listener.onRTCChannelReady(channel);
+            } catch (Exception e) {
+                logger.severe("Error emitting channel ready: " + e.getMessage());
+            }
+        }
     }
 
     /**
@@ -126,35 +442,64 @@ public class NostrRTCSocket implements RTCTransportListener, NostrTURN.Listener,
         return remotePeer;
     }
 
+    NostrKeyPair getRoomKeyPair() {
+        return roomKeyPair;
+    }
+
+    NostrTURNPool getTurnPool() {
+        return turnPool;
+    }
+
+    boolean isTurnFallbackAllowed() {
+        return turnFallbackAllowed;
+    }
+
     /**
      * Return true if the connection is established.
      * @return True if the connection is established.
      */
-    public boolean isConnected() {
+    boolean isConnected() {
         return connected;
+    }
+
+    public boolean isClosed(){
+        return stopped;
     }
 
     /**
      * Close the socket.
      */
     public void close() {
+        stopped = true;
         logger.fine("Closing RTC Socket");
-        if (this.transport != null) try {
-            this.transport.close();
-        } catch (Exception e) {
-            logger.severe("Error closing transport: " + e.getMessage());
+
+
+
+        for (NostrRTCChannel channel : channels.values()) {
+            channel.close();
         }
-        if (this.turn != null) try {
-            this.turn.close();
-        } catch (Exception e) {
-            logger.severe("Error closing TURN: " + e.getMessage());
-        }
-        if (delayedCandidateEmission != null) {
-            delayedCandidateEmission.cancel();
-        }
-        delayedCandidateEmission = null;
-        localIceCandidates.clear();
-        listeners.clear();
+        
+        reset();
+        
+        channels.clear();
+
+        // if (this.transport != null) try {
+        //     this.transport.close();
+        // } catch (Exception e) {
+        //     logger.severe("Error closing transport: " + e.getMessage());
+        // }
+        // TODO implement turn
+        // if (this.turn != null) try {
+        //     this.turn.close();
+        // } catch (Exception e) {
+        //     logger.severe("Error closing TURN: " + e.getMessage());
+        // }
+        // if (delayedCandidateEmission != null) {
+        //     delayedCandidateEmission.cancel();
+        // }
+        // delayedCandidateEmission = null;
+        // pendingConnectionSince = null;
+        // localIceCandidates.clear();
         for (NostrRTCSocketListener listener : listeners) {
             try {
                 listener.onRTCSocketClose(this);
@@ -162,6 +507,36 @@ public class NostrRTCSocket implements RTCTransportListener, NostrTURN.Listener,
                 logger.severe("Error closing socket: " + e.getMessage());
             }
         }
+        listeners.clear();
+        connected = false;
+        switchActiveTransport(TransportPath.NONE, "socket-closed");
+    }
+
+    public void reset() {
+        logger.fine("Resetting RTC Socket");
+        connected = false;
+        turnFallbackAllowed = false;
+        remotePeer = null;
+        cancelRtcConnectTimeout();
+        for (NostrRTCChannel channel : channels.values()) {
+            channel.setChannel(null);
+        }
+        if(this.transport != null) try {
+            this.transport.close();
+        } catch (Exception e) {
+            logger.severe("Error closing transport: " + e.getMessage());
+        }
+        this.transport = null;
+        if (delayedCandidateEmission != null) {
+            delayedCandidateEmission.cancel();
+        }
+        delayedCandidateEmission = null;
+        pendingConnectionSince = null;
+        localIceCandidates.clear();
+        if (activeTransportPath == TransportPath.RTC) {
+            switchActiveTransport(TransportPath.NONE, "rtc-reset");
+        }
+
     }
 
     public void addListener(NostrRTCSocketListener listener) {
@@ -182,14 +557,14 @@ public class NostrRTCSocket implements RTCTransportListener, NostrTURN.Listener,
             this.executor.runLater(
                     () -> {
                         logger.fine("Emitting ICE candidates " + localIceCandidates);
-                        NostrRTCIceCandidate iceCandidate = new NostrRTCIceCandidate(
-                            localPeer.getPubkey(),
-                            new ArrayList<RTCTransportIceCandidate>(localIceCandidates),
-                            new HashMap<String, Object>()
-                        );
+                    
                         for (NostrRTCSocketListener listener : listeners) {
                             try {
-                                listener.onRTCSocketLocalIceCandidate(this, iceCandidate);
+                                listener.onRTCSocketRouteUpdate(
+                                    this,  
+                                    new ArrayList<RTCTransportIceCandidate>(localIceCandidates),
+                                    localPeer.getTurnServer()
+                                );
                             } catch (Exception e) {
                                 logger.severe("Error emitting ICE candidates: " + e.getMessage());
                             }
@@ -206,31 +581,33 @@ public class NostrRTCSocket implements RTCTransportListener, NostrTURN.Listener,
      * @return An async task that resolves with the offer string.
      * @throws IllegalStateException If the socket is already connected.
      */
-    AsyncTask<NostrRTCOffer> listen() {
+    AsyncTask<NostrRTCOfferSignal> listen() {
         try {
             if (this.transport != null) throw new IllegalStateException("Already connected");
 
-            logger.fine("Listening for RTC connections on connection ID: " + connectionId);
-            useTURN(false);
+            logger.fine("Listening for RTC connections on connection ID: " + localPeer.getSessionId());
+            this.pendingConnectionSince = Instant.now();
+            scheduleRtcConnectTimeout("listen");
+            // useTURN(false);
 
             NGEPlatform platform = NGEUtils.getPlatform();
-            logger.fine("Creating RTC transport for connection ID: " + connectionId);
+            logger.fine("Creating RTC transport for connection ID: " +  localPeer.getSessionId());
 
-            this.transport = platform.newRTCTransport(settings, connectionId, localPeer.getStunServers());
-            this.transport.addListener(this);
+            this.transport = platform.newRTCTransport(settings, localPeer.getSessionId(), localPeer.getStunServers());
+            this.transport.addListener(rtcListener);
 
-            logger.fine("Initiating RTC channel for connection ID: " + connectionId);
+            logger.fine("Initiating RTC channel for connection ID: " + localPeer.getSessionId());
 
-            return this.transport.initiateChannel()
+            return this.transport.listen()
                 .then(offerString -> {
-                    logger.fine("Use offer string: " + offerString + " to connect with connection ID: " + connectionId);
-                    NostrRTCOffer offer = new NostrRTCOffer(
-                        localPeer.getPubkey(),
-                        offerString,
-                        this.localPeer.getTurnServer(),
-                        this.localPeer.getMisc()
+                    logger.fine("Use offer string: " + offerString + " to connect with connection ID: " + localPeer.getSessionId());
+                    NostrRTCOfferSignal offer = new NostrRTCOfferSignal(
+                        localPeer.getSigner(),
+                        roomKeyPair,
+                        localPeer,
+                        offerString                       
                     );
-                    logger.fine("Ready to send offer " + offer + " to connection ID: " + connectionId);
+                    logger.fine("Ready to send offer " + offer + " to connection ID: " + localPeer.getSessionId());
 
                     return offer;
                 })
@@ -252,57 +629,49 @@ public class NostrRTCSocket implements RTCTransportListener, NostrTURN.Listener,
      * @throws IllegalStateException If the socket is already connected or cannot be connected
      * @throws IllegalArgumentException If the argument is not an offer or answer.
      */
-    AsyncTask<NostrRTCAnswer> connect(NostrRTCSignal offerOrAnswer) {
+    AsyncTask<NostrRTCAnswerSignal> connect(NostrRTCSignal offerOrAnswer) {
         Objects.requireNonNull(offerOrAnswer);
         logger.fine("Connecting to RTC socket " + offerOrAnswer);
-        useTURN(false);
+        this.pendingConnectionSince = Instant.now();
+        scheduleRtcConnectTimeout("connect");
+        // useTURN(false);
 
         NGEPlatform platform = NGEUtils.getPlatform();
 
         String connectString;
-        if (offerOrAnswer instanceof NostrRTCOffer) {
+        if (offerOrAnswer instanceof NostrRTCOfferSignal) {
             if (this.transport != null) throw new IllegalStateException("Already connected");
-            this.transport = platform.newRTCTransport(settings, connectionId, localPeer.getStunServers());
-            this.transport.addListener(this);
+            this.transport = platform.newRTCTransport(settings, localPeer.getSessionId(), localPeer.getStunServers());
+            this.transport.addListener(rtcListener);
             logger.fine("Use offer to connect");
             this.remotePeer =
-                Objects.requireNonNull(((NostrRTCOffer) offerOrAnswer).getPeerInfo(), "Remote Peer cannot be null");
+                Objects.requireNonNull(((NostrRTCOfferSignal) offerOrAnswer).getPeer(), "Remote Peer cannot be null");
             emitCandidates();
-            connectString = ((NostrRTCOffer) offerOrAnswer).getOfferString();
-        } else if (offerOrAnswer instanceof NostrRTCAnswer) {
+            connectString = ((NostrRTCOfferSignal) offerOrAnswer).getOfferString();
+        } else if (offerOrAnswer instanceof NostrRTCAnswerSignal) {
             // logger.fine("Use answer to connect");
             if (this.transport == null) throw new IllegalStateException("Not connected");
 
             this.remotePeer =
-                Objects.requireNonNull(((NostrRTCAnswer) offerOrAnswer).getPeerInfo(), "Remote Peer cannot be null");
+                Objects.requireNonNull(((NostrRTCAnswerSignal) offerOrAnswer).getPeer(), "Remote Peer cannot be null");
             emitCandidates();
-            connectString = ((NostrRTCAnswer) offerOrAnswer).getSdp();
+            connectString = ((NostrRTCAnswerSignal) offerOrAnswer).getSdp();
         } else {
             throw new IllegalArgumentException("Invalid RTC signal type");
         }
 
-        logger.fine("Initializing TURN connection");
-        String turnServer = this.remotePeer.getTurnServer();
-        if (turnServer != null && !turnServer.isEmpty()) {
-            this.turn = new NostrTURN(connectionId, localPeer, remotePeer, turnSettings);
-            this.turn.addListener(this);
-            this.turn.start();
-        } else {
-            this.turn = null;
-        }
-
-        return this.transport.connectToChannel(connectString)
+        return this.transport.connect(connectString)
             .then(answerString -> {
                 if (answerString == null) {
                     logger.fine("Connected to RTC socket");
                     return null;
                 }
                 logger.fine("Connected to RTC socket, received answer " + answerString);
-                NostrRTCAnswer answer = new NostrRTCAnswer(
-                    localPeer.getPubkey(),
-                    answerString,
-                    this.localPeer.getTurnServer(),
-                    this.localPeer.getMisc()
+                NostrRTCAnswerSignal answer = new NostrRTCAnswerSignal(
+                    localPeer.getSigner(),
+                    roomKeyPair,
+                    localPeer,
+                    answerString
                 );
                 return answer;
             });
@@ -313,75 +682,96 @@ public class NostrRTCSocket implements RTCTransportListener, NostrTURN.Listener,
      * tracked candidates.
      * @param candidate The remote ICE candidates.
      */
-    public void mergeRemoteRTCIceCandidate(NostrRTCIceCandidate candidate) {
+    void mergeRemoteRTCIceCandidate(NostrRTCRouteSignal candidate) {
         Objects.requireNonNull(candidate);
-        Objects.requireNonNull(this.transport);
+        NostrRTCPeer currentRemotePeer = this.remotePeer;
+        if (currentRemotePeer != null) {
+            candidate.updatePeer(currentRemotePeer);
+        }
+        if (this.transport == null) return;
         this.transport.addRemoteIceCandidates(candidate.getCandidates());
     }
 
-    @Override
-    public void onLocalRTCIceCandidate(RTCTransportIceCandidate candidateString) {
-        logger.fine("Received local ICE candidate: " + candidateString);
-        localIceCandidates.addIfAbsent(candidateString);
-        emitCandidates();
-    }
-
-    @Override
-    public void onRTCConnected() {
-        logger.fine("Link established");
-        connected = true;
-        useTURN(false);
-    }
-
-    @Override
-    public void onRTCDisconnected(String reason) {
-        if (this.turn != null) {
-            connected = true; // still connected via turn
-            logger.info("RTC disconnected: " + reason);
-            useTURN(true);
-        } else {
-            connected = false;
-            logger.info("RTC disconnected: " + reason);
-            this.close();
-        }
-    }
-
+    // TODO implement turn support
     /**
      * Set the socket to use the turn server.
      * @param use
      */
-    public void useTURN(boolean use) {
-        if (forceTURN) use = true;
-        if (use == useTURN) return;
-        logger.fine("Using TURN: " + use);
-        this.useTURN = use;
-    }
+    // public void useTURN(boolean use) {
+    //     if (forceTURN) use = true;
+    //     if (use == useTURN) return;
+    //     logger.fine("Using TURN: " + use);
+    //     this.useTURN = use;
+    // }
 
-    public boolean isUsingTURN() {
-        return useTURN;
-    }
+    // public boolean isUsingTURN() {
+    //     return useTURN;
+    // }
 
-    @Override
-    public void onRTCBinaryMessage(ByteBuffer bbf) {
-        for (NostrRTCSocketListener listener : listeners) {
-            try {
-                listener.onRTCSocketMessage(this, bbf, false);
-            } catch (Exception e) {
-                logger.severe("Error emitting message: " + e.getMessage());
-            }
+ 
+    public NostrRTCChannel getChannel(String name) {
+        String nativeName = name;
+        if(DEFAULT_CHANNEL_NAME.equals(name)){
+            nativeName = RTCTransport.DEFAULT_CHANNEL;
         }
+        if (nativeName == null || nativeName.isEmpty()) {
+            nativeName = DEFAULT_CHANNEL_NAME;
+        }
+        NostrRTCChannel channel = channels.get(nativeName);
+        if (channel == null) {
+            return null;
+        }
+        channel.activateFallbackIfNeeded();
+        resurrectChannel(channel);
+        return channel;
     }
 
-    @Override
-    public void onTurnPacket(NostrRTCPeer peer, ByteBuffer data) {
-        for (NostrRTCSocketListener listener : listeners) {
-            try {
-                listener.onRTCSocketMessage(this, data, true);
-            } catch (Exception e) {
-                logger.severe("Error emitting message: " + e.getMessage());
-            }
-        }
+    public final NostrRTCChannel createChannel(
+        String name
+    ){
+        return createChannel(name, true, true, null, null);
     }
+         
+
+    public NostrRTCChannel createChannel(
+        String name,  
+        boolean ordered,
+        boolean reliable,
+        @Nullable Integer maxRetransmits,
+        @Nullable Duration maxPacketLifeTime
+    ){
+        String nativeName = DEFAULT_CHANNEL_NAME.equals(name) ? RTCTransport.DEFAULT_CHANNEL : name;
+        if (nativeName == null || nativeName.isEmpty()) {
+            nativeName = DEFAULT_CHANNEL_NAME;
+        }
+        final String channelName = nativeName;
+        Integer normalizedMaxRetransmits = maxRetransmits != null ? maxRetransmits : Integer.valueOf(0);
+        AtomicBoolean created = new AtomicBoolean(false);
+        NostrRTCChannel chan = this.channels.computeIfAbsent(channelName, n -> {
+            created.set(true);
+            return new NostrRTCChannel(
+                channelName, this, ordered, reliable, normalizedMaxRetransmits, maxPacketLifeTime
+            );
+        });
+        if (created.get()) {
+            emitChannelReady(chan);
+        }
+        chan.activateFallbackIfNeeded();
+        return chan;
+          
+        // NostrRTCChannel channel = channels.computeIfAbsent(nativeName, n -> new NostrRTCChannel(
+        //     nativeName, this, ordered, reliable, maxRetransmits, maxPacketLifeTime
+        // ));
+        // this.transport.createDataChannel(nativeName, localPeer.getProtocolId(), ordered, reliable, 
+        //     maxRetransmits != null ? maxRetransmits.intValue() : 0, maxPacketLifeTime).then(e->{
+               
+        //         channel.setChannel(e);
+        //         return channel;
+        // });
+        // return channel;
+    }
+
+    
 
     /**
      * Send some data to the remote peer.
@@ -389,35 +779,43 @@ public class NostrRTCSocket implements RTCTransportListener, NostrTURN.Listener,
      * @throws IllegalStateException If the socket is not connected.
      * @throws IllegalArgumentException If the data is null.
      * @return An async task that resolves when the data is sent.
+     * @deprecated use getChannel(DEFAULT_CHANNEL_NAME).write(ByteBuffer)
      */
+    @Deprecated
     public AsyncTask<Void> write(ByteBuffer bbf) {
-        if (this.useTURN) {
-            assert dbg(() -> {
-                logger.finest("Send message with turn");
-            });
-            return this.turn.write(bbf);
-        } else {
-            assert dbg(() -> {
-                logger.finest("Send message p2p");
-            });
-            return this.transport.write(bbf);
-        }
+        // if (this.useTURN) {
+        //     assert dbg(() -> {
+        //         logger.finest("Send message with turn");
+        //     });
+        //     return this.turn.write(bbf);
+        // } else {
+            // assert dbg(() -> {
+            //     logger.finest("Send message p2p");
+            // });
+            // return this.transport.write(bbf);
+        // }
+        return getChannel(DEFAULT_CHANNEL_NAME).write(bbf);
     }
 
-    @Override
-    public void onRTCChannelError(Throwable e) {
-        logger.severe("RTC Channel Error " + e);
+
+    // TODO reimplement turn
+    // /**
+    //  * Force the usage of TURN server.
+    //  * @param forceTURN
+    //  */
+    // public void setForceTURN(boolean forceTURN) {
+    //     this.forceTURN = forceTURN;
+    //     if (!useTURN && forceTURN) {
+    //         logger.fine("Forcing TURN usage");
+    //         useTURN(true);
+    //     }
+    // }
+
+    boolean isPendingConnection(){
+        if(pendingConnectionSince == null) return false;
+        if (connected || stopped) return false;
+        return pendingConnectionSince.plus(settings.getPeerExpiration()).isAfter(Instant.now());
     }
 
-    /**
-     * Force the usage of TURN server.
-     * @param forceTURN
-     */
-    public void setForceTURN(boolean forceTURN) {
-        this.forceTURN = forceTURN;
-        if (!useTURN && forceTURN) {
-            logger.fine("Forcing TURN usage");
-            useTURN(true);
-        }
-    }
+  
 }

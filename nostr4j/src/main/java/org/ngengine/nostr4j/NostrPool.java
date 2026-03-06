@@ -526,7 +526,7 @@ public class NostrPool {
                         });
                     }
                 } else {
-                    logger.warning("Received event for unknown subscription " + subId + " " + rcv);
+                    logger.finer("Received event for closed subscription " + subId + " " + rcv);
                 }
             }
         } catch (Throwable t) {

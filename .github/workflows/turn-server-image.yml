@@ -1,0 +1,65 @@
+name: TURN Server Image
+
+on:
+  push:
+    branches:
+      - '**'
+    tags-ignore:
+      - '*'
+  release:
+    types:
+      - published
+
+jobs:
+  publish-image:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    env:
+      IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}-turn-server
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK for Gradle
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build TURN server native executable
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon :nostr4j-turn-server:buildNativeExecutable
+
+      - name: Build and push snapshot image
+        if: github.event_name == 'push'
+        uses: docker/build-push-action@v6
+        with:
+          context: ./nostr4j-turn-server
+          file: ./nostr4j-turn-server/Dockerfile
+          push: true
+          tags: ${{ env.IMAGE_NAME }}:snapshot
+
+      - name: Build and push release image
+        if: github.event_name == 'release'
+        uses: docker/build-push-action@v6
+        with:
+          context: ./nostr4j-turn-server
+          file: ./nostr4j-turn-server/Dockerfile
+          push: true
+          tags: ${{ env.IMAGE_NAME }}:${{ github.event.release.tag_name }}

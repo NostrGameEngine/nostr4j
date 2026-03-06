@@ -30,9 +30,10 @@
  */
 package org.ngengine.nostr4j.rtc.listeners;
 
-import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.rtc.NostrRTCSocket;
+import org.ngengine.nostr4j.rtc.signal.NostrRTCPeer;
 
+@FunctionalInterface
 public interface NostrRTCRoomPeerConnectedListener extends NostrRTCRoomListener {
-    void onRoomPeerConnected(NostrPublicKey peerKey, NostrRTCSocket conn);
+    void onRoomPeerConnected(NostrRTCPeer peer, NostrRTCSocket conn);
 }

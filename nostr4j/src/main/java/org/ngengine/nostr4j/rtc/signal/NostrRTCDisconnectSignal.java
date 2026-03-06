@@ -28,13 +28,58 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package org.ngengine.nostr4j.rtc.listeners;
+package org.ngengine.nostr4j.rtc.signal;
 
+import java.time.Instant;
+import java.util.Objects;
+
+import org.ngengine.nostr4j.event.SignedNostrEvent;
+import org.ngengine.nostr4j.event.UnsignedNostrEvent;
+import org.ngengine.nostr4j.keypair.NostrKeyPair;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
-import org.ngengine.nostr4j.rtc.NostrRTCSocket;
-import org.ngengine.nostr4j.rtc.signal.NostrRTCPeer;
+import org.ngengine.nostr4j.signer.NostrSigner;
+import org.ngengine.platform.AsyncTask;
 
-@FunctionalInterface
-public interface NostrRTCRoomPeerDisconnectListener extends NostrRTCRoomListener {
-    void onRoomPeerDisconnected(NostrRTCPeer peer, NostrRTCSocket socket);
+import jakarta.annotation.Nullable;
+
+/**
+ * Announce the peer can accept connections.
+ * (unencrypted)
+ */
+public class NostrRTCDisconnectSignal extends NostrRTCSignal {
+    private static final long serialVersionUID = 2L;
+    private final String message;
+
+    public NostrRTCDisconnectSignal(
+        NostrSigner localSigner,
+        NostrKeyPair roomKeyPair,    
+        NostrRTCPeer peer,
+        @Nullable String message
+    ) {
+        super(localSigner, "disconnect", roomKeyPair, peer);
+        this.message = message;
+    }
+ 
+    public NostrRTCDisconnectSignal(
+        NostrSigner localSigner,
+        NostrKeyPair roomKeyPair, 
+        SignedNostrEvent event
+    ) {
+        super(localSigner, "disconnect", roomKeyPair, event);
+        this.message = event.getContent();  
+    }
+
+    @Override
+    protected AsyncTask<UnsignedNostrEvent> computeEvent(UnsignedNostrEvent event) {      
+        if (message != null) {
+            event.withContent(message);
+        }
+        return AsyncTask.completed(event);
+    }
+
+    @Override
+    protected final  boolean requireRoomSignature(){
+        return false;
+    }
+
 }

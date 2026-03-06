@@ -31,33 +31,50 @@
 package org.ngengine.nostr4j.rtc.signal;
 
 import java.time.Instant;
-import java.util.HashMap;
-import java.util.Map;
-import org.ngengine.nostr4j.keypair.NostrPublicKey;
+import java.util.Objects;
+
+import org.ngengine.nostr4j.event.SignedNostrEvent;
+import org.ngengine.nostr4j.event.UnsignedNostrEvent;
+import org.ngengine.nostr4j.keypair.NostrKeyPair;
+import org.ngengine.nostr4j.signer.NostrSigner;
+import org.ngengine.platform.AsyncTask;
+
+import jakarta.annotation.Nullable;
 
 /**
  * Announce the peer can accept connections.
+ * (unencrypted)
  */
-public class NostrRTCAnnounce implements NostrRTCSignal {
-
-    private static final long serialVersionUID = 1L;
-
-    private final NostrPublicKey publicKey;
-    private final Map<String, Object> misc;
+public final class NostrRTCConnectSignal extends NostrRTCSignal {
+    private static final long serialVersionUID = 2L;
     private volatile Instant expireAt;
+    private final String message;
 
-    public NostrRTCAnnounce(NostrPublicKey publicKey, Instant expireAt, Map<String, Object> misc) {
-        this.publicKey = publicKey;
-        this.expireAt = expireAt;
-        HashMap<String, Object> map = new HashMap<>();
-        if (misc != null && !misc.isEmpty()) {
-            map.putAll(misc);
-        }
-        this.misc = map;
+    public NostrRTCConnectSignal(
+        NostrSigner localSigner,
+        NostrKeyPair roomKeyPair,
+        NostrRTCPeer peer,
+        Instant expireAt,
+        @Nullable String message
+    ) {
+        super(localSigner, "connect", roomKeyPair, peer);
+        this.expireAt = Objects.requireNonNull(expireAt, "Expire at cannot be null");
+        this.message = message;
     }
 
+    public NostrRTCConnectSignal(
+        NostrSigner localSigner,
+        NostrKeyPair roomKeyPair, 
+        SignedNostrEvent event
+    ) {
+        super(localSigner, "connect", roomKeyPair, event);
+        this.expireAt = event.getExpiration();
+        this.message = event.getContent();
+    }
+    
+
     public void updateExpireAt(Instant expireAt) {
-        this.expireAt = expireAt;
+        this.expireAt =  Objects.requireNonNull(expireAt, "Expire at cannot be null");
     }
 
     public Instant getExpireAt() {
@@ -69,31 +86,18 @@ public class NostrRTCAnnounce implements NostrRTCSignal {
     }
 
     @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (!(o instanceof NostrRTCAnnounce)) return false;
-
-        NostrRTCAnnounce that = (NostrRTCAnnounce) o;
-
-        if (!publicKey.equals(that.publicKey)) return false;
-        return true;
+    protected final AsyncTask<UnsignedNostrEvent> computeEvent(UnsignedNostrEvent event) {
+        event.withTag("expiration", String.valueOf(expireAt.getEpochSecond()));
+        if (message != null) {
+            event.withContent(message);
+        }
+        return AsyncTask.completed(event);      
     }
-
+    
     @Override
-    public int hashCode() {
-        return publicKey.hashCode();
+    protected final  boolean requireRoomSignature(){
+        return false;
     }
-
-    public Map<String, Object> get() {
-        return misc;
-    }
-
-    public NostrPublicKey getPubkey() {
-        return publicKey;
-    }
-
-    @Override
-    public String toString() {
-        return "NostrRTCAnnounce{" + "publicKey=" + publicKey + ", expireAt=" + expireAt + '}';
-    }
+    
+ 
 }

@@ -31,9 +31,13 @@
 package org.ngengine.nostr4j.rtc.listeners;
 
 import java.nio.ByteBuffer;
-import org.ngengine.nostr4j.keypair.NostrPublicKey;
+import org.ngengine.nostr4j.rtc.NostrRTCChannel;
 import org.ngengine.nostr4j.rtc.NostrRTCSocket;
+import org.ngengine.nostr4j.rtc.signal.NostrRTCPeer;
 
+@FunctionalInterface
 public interface NostrRTCRoomPeerMessageListener extends NostrRTCRoomListener {
-    void onRoomPeerMessage(NostrPublicKey peerKey, NostrRTCSocket socket, ByteBuffer bbf, boolean turn);
+    void onRoomPeerMessage(NostrRTCPeer peer, NostrRTCSocket socket, NostrRTCChannel channel, ByteBuffer bbf, boolean turn);
+
+    default void onRoomPeerBufferedAmountLow(NostrRTCPeer peer, NostrRTCSocket socket, NostrRTCChannel channel){}
 }

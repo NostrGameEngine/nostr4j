@@ -31,21 +31,71 @@
 package org.ngengine.nostr4j.rtc.signal;
 
 import java.util.Collection;
-import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicLong;
+
+import org.ngengine.nostr4j.keypair.NostrKeyPair;
 import org.ngengine.nostr4j.signer.NostrSigner;
+import org.ngengine.platform.NGEPlatform;
 import org.ngengine.platform.NGEUtils;
 
+import jakarta.annotation.Nullable;
+
 /**
- * All the info about the current local peer.
+ * The local peer (ourselves). This is used to store our own information and configuration, such as the signer and TURN/STUN servers.
+ * {@inheritDoc}
  */
 public class NostrRTCLocalPeer extends NostrRTCPeer {
 
-    private NostrSigner signer;
-    private Collection<String> stunServers;
+    private final NostrSigner signer;
+    private final Collection<String> stunServers;
+    private static final AtomicLong sessionIdCounter = new AtomicLong(0);
 
-    public NostrRTCLocalPeer(NostrSigner signer, Collection<String> stunServers, String turnServer, Map<String, Object> misc) {
-        super(NGEUtils.awaitNoThrow(signer.getPublicKey()), turnServer, misc);
+
+    private static String newSessionId() {
+        String sessionId = "nostr4j";
+        sessionId += System.currentTimeMillis();
+        sessionId += "-" + sessionIdCounter.incrementAndGet();
+        sessionId += "-" + NGEUtils.bytesToHex(NGEPlatform.get().randomBytes(16));
+        return sessionId;
+    }
+
+    public NostrRTCLocalPeer(
+        NostrSigner signer, 
+        Collection<String> stunServers,
+        String applicationId,
+        String protocolId,
+        NostrKeyPair roomKeyPair,
+        @Nullable String turnServer
+    ) {
+        this(
+            signer, 
+            stunServers,
+            applicationId,
+            protocolId,
+            newSessionId(),
+            roomKeyPair,
+            turnServer    
+        );
+    }
+
+    public NostrRTCLocalPeer(
+        NostrSigner signer, 
+        Collection<String> stunServers,
+        String applicationId,
+        String protocolId,
+        String sessionId,
+        NostrKeyPair roomKeyPair,
+        @Nullable String turnServer
+    ) {
+        super(
+            NGEUtils.awaitNoThrow(signer.getPublicKey()),
+            applicationId,
+            protocolId,
+            sessionId,
+            roomKeyPair.getPublicKey(),
+            turnServer            
+        );
         Objects.requireNonNull(signer);
         Objects.requireNonNull(stunServers);
         this.signer = signer;
@@ -64,17 +114,12 @@ public class NostrRTCLocalPeer extends NostrRTCPeer {
     public String toString() {
         return (
             "NostrRTCLocalPeer{" +
-            "pubkey=" +
-            getPubkey() +
-            ", misc=" +
-            getMisc() +
-            ", turnServer='" +
-            getTurnServer() +
-            '\'' +
-            ", lastSeen=" +
-            getLastSeen() +
-            ", stunServers=" +
-            stunServers +
+            "pubkey=" + getPubkey() +
+            ", applicationId='" + getApplicationId() + '\'' +
+            ", protocolId='" + getProtocolId() + '\'' +
+            ", sessionId='" + getSessionId() + '\'' +
+            ", turnServer='" + getTurnServer() + '\'' +
+            ", stunServers=" + stunServers +
             '}'
         );
     }

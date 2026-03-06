@@ -1,3 +1,7 @@
+plugins {
+    id "org.gradle.toolchains.foojay-resolver-convention" version "0.9.0"
+}
 rootProject.name = 'nostr4j'
 include("nostr4j")
+include("nostr4j-turn-server")
 include("nostr4j-demo")

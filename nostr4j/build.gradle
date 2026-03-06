@@ -11,6 +11,7 @@ plugins {
 
 dependencies {
     testImplementation "junit:junit:4.13.2"
+    testImplementation project(':nostr4j-turn-server')
     implementation "org.ngengine:nge-platform-common:${project.version.endsWith('-SNAPSHOT') ? rootProject.ext.ngePlatformVersionSnapshot : rootProject.ext.ngePlatformVersion}"
     testImplementation "org.ngengine:nge-platform-jvm:${project.version.endsWith('-SNAPSHOT') ? rootProject.ext.ngePlatformVersionSnapshot : rootProject.ext.ngePlatformVersion}"
     testImplementation 'com.google.code.gson:gson:2.12.1'
@@ -29,5 +30,4 @@ tasks.named('test') {
         exceptionFormat "full"
     }
 }
-
  

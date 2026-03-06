@@ -1,0 +1,56 @@
+plugins {
+    id 'application'
+    id 'org.graalvm.buildtools.native' version '0.10.3'
+}
+
+ 
+application {
+    mainClass = 'org.ngengine.nostr4j.turn.ref.Main'
+}
+
+def jts = extensions.getByType(org.gradle.jvm.toolchain.JavaToolchainService)
+def graalLauncher = javaToolchains.launcherFor {
+    languageVersion = JavaLanguageVersion.of(25)
+    vendor = JvmVendorSpec.ORACLE
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+        vendor = JvmVendorSpec.ORACLE
+    }
+}
+
+graalvmNative {
+    toolchainDetection = true
+    binaries {
+        main {
+            imageName = 'nostr4j-turn-server'
+            mainClass = application.mainClass.get()
+            javaLauncher = graalLauncher
+            fallback = false
+            buildArgs.add('--no-fallback')
+        }
+    }
+}
+ 
+dependencies {
+    implementation project(':nostr4j')
+    implementation "org.ngengine:nge-platform-common:${project.version.endsWith('-SNAPSHOT') ? rootProject.ext.ngePlatformVersionSnapshot : rootProject.ext.ngePlatformVersion}"
+    implementation 'com.google.code.gson:gson:2.12.1'
+    implementation 'org.eclipse.jetty:jetty-server:12.0.14'
+    implementation 'org.eclipse.jetty.ee10:jetty-ee10-servlet:12.0.14'
+    implementation 'org.eclipse.jetty.ee10.websocket:jetty-ee10-websocket-jetty-server:12.0.14'
+    testImplementation "junit:junit:4.13.2"
+    testImplementation "org.ngengine:nge-platform-jvm:${project.version.endsWith('-SNAPSHOT') ? rootProject.ext.ngePlatformVersionSnapshot : rootProject.ext.ngePlatformVersion}"
+}
+
+tasks.named('test') {
+    useJUnit()
+}
+
+tasks.register('buildNativeExecutable') {
+    group = 'build'
+    description = 'Builds GraalVM native executable for the TURN server module.'
+    dependsOn tasks.named('nativeCompile')
+}

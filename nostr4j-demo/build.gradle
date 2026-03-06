@@ -8,6 +8,17 @@
     id 'java'
 }
 
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+        vendor = JvmVendorSpec.ORACLE
+    }
+}
+
+tasks.named('compileJava') {
+    options.release = 21
+}
+
 dependencies {
     testImplementation "junit:junit:4.13.2"
     implementation project(":nostr4j")

@@ -31,13 +31,15 @@
 package org.ngengine.nostr4j.rtc.listeners;
 
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
-import org.ngengine.nostr4j.rtc.signal.NostrRTCAnnounce;
+import org.ngengine.nostr4j.rtc.signal.NostrRTCConnectSignal;
+import org.ngengine.nostr4j.rtc.signal.NostrRTCPeer;
 
+@FunctionalInterface
 public interface NostrRTCRoomPeerDiscoveredListener extends NostrRTCRoomListener {
     enum NostrRTCRoomPeerDiscoveredState {
         ONLINE,
         OFFLINE,
     }
 
-    void onRoomPeerDiscovered(NostrPublicKey peerKey, NostrRTCAnnounce announce, NostrRTCRoomPeerDiscoveredState state);
+    void onRoomPeerDiscovered(NostrRTCPeer peer, NostrRTCConnectSignal announce, NostrRTCRoomPeerDiscoveredState state);
 }
