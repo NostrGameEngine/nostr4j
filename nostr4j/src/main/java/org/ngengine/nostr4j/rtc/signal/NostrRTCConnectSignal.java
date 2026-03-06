@@ -30,22 +30,21 @@
  */
 package org.ngengine.nostr4j.rtc.signal;
 
+import jakarta.annotation.Nullable;
 import java.time.Instant;
 import java.util.Objects;
-
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.event.UnsignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
 import org.ngengine.nostr4j.signer.NostrSigner;
 import org.ngengine.platform.AsyncTask;
 
-import jakarta.annotation.Nullable;
-
 /**
  * Announce the peer can accept connections.
  * (unencrypted)
  */
 public final class NostrRTCConnectSignal extends NostrRTCSignal {
+
     private static final long serialVersionUID = 2L;
     private volatile Instant expireAt;
     private final String message;
@@ -62,19 +61,14 @@ public final class NostrRTCConnectSignal extends NostrRTCSignal {
         this.message = message;
     }
 
-    public NostrRTCConnectSignal(
-        NostrSigner localSigner,
-        NostrKeyPair roomKeyPair, 
-        SignedNostrEvent event
-    ) {
+    public NostrRTCConnectSignal(NostrSigner localSigner, NostrKeyPair roomKeyPair, SignedNostrEvent event) {
         super(localSigner, "connect", roomKeyPair, event);
         this.expireAt = event.getExpiration();
         this.message = event.getContent();
     }
-    
 
     public void updateExpireAt(Instant expireAt) {
-        this.expireAt =  Objects.requireNonNull(expireAt, "Expire at cannot be null");
+        this.expireAt = Objects.requireNonNull(expireAt, "Expire at cannot be null");
     }
 
     public Instant getExpireAt() {
@@ -91,13 +85,11 @@ public final class NostrRTCConnectSignal extends NostrRTCSignal {
         if (message != null) {
             event.withContent(message);
         }
-        return AsyncTask.completed(event);      
+        return AsyncTask.completed(event);
     }
-    
+
     @Override
-    protected final  boolean requireRoomSignature(){
+    protected final boolean requireRoomSignature() {
         return false;
     }
-    
- 
 }

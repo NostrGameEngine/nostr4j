@@ -30,7 +30,6 @@
  */
 package org.ngengine.nostr4j.rtc.listeners;
 
-import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.rtc.NostrRTCSocket;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCPeer;
 

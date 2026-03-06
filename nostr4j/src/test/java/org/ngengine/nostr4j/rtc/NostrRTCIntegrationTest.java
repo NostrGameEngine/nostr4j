@@ -1,3 +1,34 @@
+/**
+ * BSD 3-Clause License
+ *
+ * Copyright (c) 2025, Riccardo Balbo
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the documentation
+ *    and/or other materials provided with the distribution.
+ *
+ * 3. Neither the name of the copyright holder nor the names of its
+ *    contributors may be used to endorse or promote products derived from
+ *    this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
 package org.ngengine.nostr4j.rtc;
 
 import static org.junit.Assert.assertArrayEquals;
@@ -14,7 +45,6 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -30,18 +60,15 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
 import java.util.logging.Handler;
 import java.util.logging.Level;
-import java.util.logging.LogManager;
 import java.util.logging.Logger;
-
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import org.ngengine.nostr4j.event.SignedNostrEvent;
-import org.ngengine.nostr4j.event.UnsignedNostrEvent;
-import org.ngengine.nostr4j.keypair.NostrKeyPair;
 import org.ngengine.nostr4j.NostrPool;
 import org.ngengine.nostr4j.NostrRelay;
 import org.ngengine.nostr4j.TestLogger;
+import org.ngengine.nostr4j.event.SignedNostrEvent;
+import org.ngengine.nostr4j.keypair.NostrKeyPair;
 import org.ngengine.nostr4j.rtc.listeners.NostrRTCChannelListener;
 import org.ngengine.nostr4j.rtc.listeners.NostrRTCSocketListener;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCAnswerSignal;
@@ -69,6 +96,7 @@ import org.ngengine.platform.transport.WebsocketTransport;
 import org.ngengine.platform.transport.WebsocketTransportListener;
 
 public class NostrRTCIntegrationTest {
+
     private static final Logger logger = TestLogger.getRoot(Level.INFO);
     private static final String APP_ID = "integration-app";
     private static final String PROTOCOL_ID = "integration-proto";
@@ -85,7 +113,7 @@ public class NostrRTCIntegrationTest {
     private static Logger rootLogger;
     private static Level previousRootLevel;
     private static final Map<Handler, Level> previousHandlerLevels = new IdentityHashMap<Handler, Level>();
- 
+
     private static NostrRTCLocalPeer localPeer(NostrKeyPairSigner signer, NostrKeyPair roomKeyPair, String sessionId) {
         return new NostrRTCLocalPeer(
             signer,
@@ -122,13 +150,7 @@ public class NostrRTCIntegrationTest {
         long vsocketId = 123L;
 
         ByteBuffer ackFrame = NGEUtils.awaitNoThrow(
-            NostrTURNAckEvent.createAck(
-                bobLocal,
-                aliceRemote,
-                roomKeyPair,
-                "default",
-                vsocketId
-            ).encodeToFrame(null)
+            NostrTURNAckEvent.createAck(bobLocal, aliceRemote, roomKeyPair, "default", vsocketId).encodeToFrame(null)
         );
         SignedNostrEvent signed = org.ngengine.nostr4j.rtc.turn.event.NostrTURNCodec.decodeHeader(ackFrame);
 
@@ -185,7 +207,7 @@ public class NostrRTCIntegrationTest {
         only.get(bytes);
         assertArrayEquals("hello over turn".getBytes(), bytes);
     }
-    
+
     @BeforeClass
     public static void beforeClass() throws Exception {
         // rootLogger = LogManager.getLogManager().getLogger("");
@@ -209,8 +231,7 @@ public class NostrRTCIntegrationTest {
         //         logger.setLevel(Level.INFO);
         //     }
         // }
-        
-        
+
         previousPlatform = getInstalledPlatform();
         testPlatform = new TestPlatform();
         installPlatform(testPlatform);
@@ -281,10 +302,7 @@ public class NostrRTCIntegrationTest {
 
         String offerSdp = "v=0\\r\\no=- 1 1 IN IP4 127.0.0.1\\r\\n";
         String answerSdp = "v=0\\r\\no=- 2 1 IN IP4 127.0.0.1\\r\\n";
-        RTCTransportIceCandidate candidate = new RTCTransportIceCandidate(
-            "candidate:1 1 UDP 1 127.0.0.1 9999 typ host",
-            "0"
-        );
+        RTCTransportIceCandidate candidate = new RTCTransportIceCandidate("candidate:1 1 UDP 1 127.0.0.1 9999 typ host", "0");
 
         NostrRTCOfferSignal offerOut = new NostrRTCOfferSignal(aliceSigner, roomKeyPair, aliceLocal, offerSdp);
         SignedNostrEvent offerEvent = NGEUtils.awaitNoThrow(offerOut.toEvent(bobLocal.getPubkey()));
@@ -309,7 +327,10 @@ public class NostrRTCIntegrationTest {
         );
         SignedNostrEvent routeEvent = NGEUtils.awaitNoThrow(routeOut.toEvent(bobLocal.getPubkey()));
         assertNotNull(routeEvent);
-        assertFalse("Route leaked plaintext candidate in event content", routeEvent.getContent().contains(candidate.getCandidate()));
+        assertFalse(
+            "Route leaked plaintext candidate in event content",
+            routeEvent.getContent().contains(candidate.getCandidate())
+        );
         NostrRTCRouteSignal routeIn = new NostrRTCRouteSignal(bobSigner, roomKeyPair, routeEvent);
         assertEquals(turnUrlA, routeIn.getTurnServer());
         assertEquals(1, routeIn.getCandidates().size());
@@ -335,7 +356,11 @@ public class NostrRTCIntegrationTest {
             NostrRTCChannel aliceAlt = alice.socket.createChannel("sync", true, true, 0, null);
             NostrRTCChannel bobAlt = bob.socket.createChannel("sync", true, true, 0, null);
 
-            awaitCondition(() -> aliceDefault.isConnected() && bobDefault.isConnected() && aliceAlt.isConnected() && bobAlt.isConnected(), 5000, "RTC channels did not become ready");
+            awaitCondition(
+                () -> aliceDefault.isConnected() && bobDefault.isConnected() && aliceAlt.isConnected() && bobAlt.isConnected(),
+                5000,
+                "RTC channels did not become ready"
+            );
 
             MessageCapture defaultCapture = new MessageCapture(1);
             MessageCapture altCapture = new MessageCapture(1);
@@ -373,53 +398,57 @@ public class NostrRTCIntegrationTest {
 
             CountDownLatch aliceReady = new CountDownLatch(1);
             CountDownLatch bobReady = new CountDownLatch(1);
-            alice.socket.addListener(new NostrRTCSocketListener() {
-                @Override
-                public void onRTCSocketRouteUpdate(
-                    NostrRTCSocket socket,
-                    Collection<RTCTransportIceCandidate> candidates,
-                    String turnServer
-                ) {
-                }
+            alice.socket.addListener(
+                new NostrRTCSocketListener() {
+                    @Override
+                    public void onRTCSocketRouteUpdate(
+                        NostrRTCSocket socket,
+                        Collection<RTCTransportIceCandidate> candidates,
+                        String turnServer
+                    ) {}
 
-                @Override
-                public void onRTCSocketClose(NostrRTCSocket socket) {
-                }
+                    @Override
+                    public void onRTCSocketClose(NostrRTCSocket socket) {}
 
-                @Override
-                public void onRTCChannelReady(NostrRTCChannel channel) {
-                    if ("defaults".equals(channel.getName())) {
-                        aliceReady.countDown();
+                    @Override
+                    public void onRTCChannelReady(NostrRTCChannel channel) {
+                        if ("defaults".equals(channel.getName())) {
+                            aliceReady.countDown();
+                        }
                     }
                 }
-            });
-            bob.socket.addListener(new NostrRTCSocketListener() {
-                @Override
-                public void onRTCSocketRouteUpdate(
-                    NostrRTCSocket socket,
-                    Collection<RTCTransportIceCandidate> candidates,
-                    String turnServer
-                ) {
-                }
+            );
+            bob.socket.addListener(
+                new NostrRTCSocketListener() {
+                    @Override
+                    public void onRTCSocketRouteUpdate(
+                        NostrRTCSocket socket,
+                        Collection<RTCTransportIceCandidate> candidates,
+                        String turnServer
+                    ) {}
 
-                @Override
-                public void onRTCSocketClose(NostrRTCSocket socket) {
-                }
+                    @Override
+                    public void onRTCSocketClose(NostrRTCSocket socket) {}
 
-                @Override
-                public void onRTCChannelReady(NostrRTCChannel channel) {
-                    if ("defaults".equals(channel.getName())) {
-                        bobReady.countDown();
+                    @Override
+                    public void onRTCChannelReady(NostrRTCChannel channel) {
+                        if ("defaults".equals(channel.getName())) {
+                            bobReady.countDown();
+                        }
                     }
                 }
-            });
+            );
 
             NostrRTCChannel aliceChannel = alice.socket.createChannel("defaults");
             NostrRTCChannel bobChannel = bob.socket.createChannel("defaults");
 
             assertTrue("Alice custom channel readiness callback not fired", aliceReady.await(5, TimeUnit.SECONDS));
             assertTrue("Bob custom channel readiness callback not fired", bobReady.await(5, TimeUnit.SECONDS));
-            awaitCondition(() -> aliceChannel.isConnected() && bobChannel.isConnected(), 5000, "Default-options channel not connected");
+            awaitCondition(
+                () -> aliceChannel.isConnected() && bobChannel.isConnected(),
+                5000,
+                "Default-options channel not connected"
+            );
 
             MessageCapture capture = new MessageCapture(1);
             bobChannel.addListener(capture);
@@ -464,7 +493,10 @@ public class NostrRTCIntegrationTest {
             assertFalse(capture.turnFlags.get(0).booleanValue());
 
             Thread.sleep(300);
-            assertTrue("TURN should not be pre-warmed while RTC is healthy", testPlatform.getCapturedBinaryFrames(strictTurnUrl).isEmpty());
+            assertTrue(
+                "TURN should not be pre-warmed while RTC is healthy",
+                testPlatform.getCapturedBinaryFrames(strictTurnUrl).isEmpty()
+            );
         } finally {
             alice.close();
             bob.close();
@@ -529,24 +561,32 @@ public class NostrRTCIntegrationTest {
             MessageCapture capture = new MessageCapture(3);
             bobDefault.addListener(capture);
 
-            awaitCondition(new BooleanSupplier() {
-                @Override
-                public boolean getAsBoolean() {
-                    return aliceDefault.isConnected() && bobDefault.isConnected();
-                }
-            }, 5000, "RTC channel not ready");
+            awaitCondition(
+                new BooleanSupplier() {
+                    @Override
+                    public boolean getAsBoolean() {
+                        return aliceDefault.isConnected() && bobDefault.isConnected();
+                    }
+                },
+                5000,
+                "RTC channel not ready"
+            );
 
             sendUntilMessageReceived(aliceDefault, capture, "first-rtc", 4000);
 
             Thread.sleep(700);
             sendUntilMessageReceived(aliceDefault, capture, "second-turn", 10000);
 
-            awaitCondition(new BooleanSupplier() {
-                @Override
-                public boolean getAsBoolean() {
-                    return aliceDefault.isConnected() && bobDefault.isConnected();
-                }
-            }, 10000, "RTC channel not restored");
+            awaitCondition(
+                new BooleanSupplier() {
+                    @Override
+                    public boolean getAsBoolean() {
+                        return aliceDefault.isConnected() && bobDefault.isConnected();
+                    }
+                },
+                10000,
+                "RTC channel not restored"
+            );
             sendUntilMessageReceived(aliceDefault, capture, "third-rtc", 10000, Boolean.FALSE);
 
             int firstRtcIdx = capture.firstIndexOf("first-rtc");
@@ -600,17 +640,23 @@ public class NostrRTCIntegrationTest {
             bAux.addListener(bAuxCapture);
             cMesh.addListener(cMeshCapture);
 
-            awaitCondition(new BooleanSupplier() {
-                @Override
-                public boolean getAsBoolean() {
-                    return isTurnPathReady(ab)
-                        && isTurnPathReady(abAux)
-                        && isTurnPathReady(bMesh)
-                        && isTurnPathReady(bAux)
-                        && isTurnPathReady(ac)
-                        && isTurnPathReady(cMesh);
-                }
-            }, 20000, "TURN paths did not become ready for multi-peer send phase");
+            awaitCondition(
+                new BooleanSupplier() {
+                    @Override
+                    public boolean getAsBoolean() {
+                        return (
+                            isTurnPathReady(ab) &&
+                            isTurnPathReady(abAux) &&
+                            isTurnPathReady(bMesh) &&
+                            isTurnPathReady(bAux) &&
+                            isTurnPathReady(ac) &&
+                            isTurnPathReady(cMesh)
+                        );
+                    }
+                },
+                20000,
+                "TURN paths did not become ready for multi-peer send phase"
+            );
 
             sendUntilMessageReceived(ab, bMeshCapture, "to-bob-mesh", 20000);
             sendUntilMessageReceived(abAux, bAuxCapture, "to-bob-aux", 20000);
@@ -739,13 +785,13 @@ public class NostrRTCIntegrationTest {
     private static void connect(SocketContext a, SocketContext b) throws Exception {
         NostrPool poolA = new NostrPool();
         NostrPool poolB = new NostrPool();
-            NostrRTCSignaling signalingA = null;
-            NostrRTCSignaling signalingB = null;
-            CountDownLatch connected = new CountDownLatch(1);
-            AtomicBoolean answerApplied = new AtomicBoolean(false);
-            AtomicReference<String> cachedAnswerSdp = new AtomicReference<String>();
-            AtomicBoolean routeAReceivedFromB = new AtomicBoolean(false);
-            AtomicBoolean routeBReceivedFromA = new AtomicBoolean(false);
+        NostrRTCSignaling signalingA = null;
+        NostrRTCSignaling signalingB = null;
+        CountDownLatch connected = new CountDownLatch(1);
+        AtomicBoolean answerApplied = new AtomicBoolean(false);
+        AtomicReference<String> cachedAnswerSdp = new AtomicReference<String>();
+        AtomicBoolean routeAReceivedFromB = new AtomicBoolean(false);
+        AtomicBoolean routeBReceivedFromA = new AtomicBoolean(false);
         try {
             attachRelay(poolA, REAL_RELAY_A);
             attachRelay(poolA, REAL_RELAY_B);
@@ -755,157 +801,137 @@ public class NostrRTCIntegrationTest {
             String sharedRelay = waitForSharedConnectedRelay(poolA, poolB, 20_000);
             assertNotNull("No shared connected relay for peer A/B", sharedRelay);
 
-            signalingA = new NostrRTCSignaling(
-                RTCSettings.DEFAULT,
-                APP_ID,
-                PROTOCOL_ID,
-                a.localPeer,
-                a.roomKeyPair,
-                poolA
-            );
-            signalingB = new NostrRTCSignaling(
-                RTCSettings.DEFAULT,
-                APP_ID,
-                PROTOCOL_ID,
-                b.localPeer,
-                b.roomKeyPair,
-                poolB
-            );
+            signalingA = new NostrRTCSignaling(RTCSettings.DEFAULT, APP_ID, PROTOCOL_ID, a.localPeer, a.roomKeyPair, poolA);
+            signalingB = new NostrRTCSignaling(RTCSettings.DEFAULT, APP_ID, PROTOCOL_ID, b.localPeer, b.roomKeyPair, poolB);
 
             final NostrRTCSignaling signalingAFinal = signalingA;
             final NostrRTCSignaling signalingBFinal = signalingB;
-            signalingB.addListener(new NostrRTCSignaling.Listener() {
-                @Override
-                public void onAddAnnounce(org.ngengine.nostr4j.rtc.signal.NostrRTCConnectSignal announce) {
-                }
+            signalingB.addListener(
+                new NostrRTCSignaling.Listener() {
+                    @Override
+                    public void onAddAnnounce(org.ngengine.nostr4j.rtc.signal.NostrRTCConnectSignal announce) {}
 
-                @Override
-                public void onUpdateAnnounce(org.ngengine.nostr4j.rtc.signal.NostrRTCConnectSignal announce) {
-                }
+                    @Override
+                    public void onUpdateAnnounce(org.ngengine.nostr4j.rtc.signal.NostrRTCConnectSignal announce) {}
 
-                @Override
-                public void onRemoveAnnounce(
-                    org.ngengine.nostr4j.rtc.signal.NostrRTCConnectSignal announce,
-                    NostrRTCSignaling.Listener.RemoveReason reason
-                ) {
-                }
+                    @Override
+                    public void onRemoveAnnounce(
+                        org.ngengine.nostr4j.rtc.signal.NostrRTCConnectSignal announce,
+                        NostrRTCSignaling.Listener.RemoveReason reason
+                    ) {}
 
-                @Override
-                public void onReceiveOffer(NostrRTCOfferSignal offer) {
-                    if (!a.localPeer.getPubkey().equals(offer.getPeer().getPubkey())) {
-                        return;
+                    @Override
+                    public void onReceiveOffer(NostrRTCOfferSignal offer) {
+                        if (!a.localPeer.getPubkey().equals(offer.getPeer().getPubkey())) {
+                            return;
+                        }
+                        String existing = cachedAnswerSdp.get();
+                        if (existing != null) {
+                            NGEUtils.awaitNoThrow(signalingBFinal.sendAnswer(existing, a.localPeer.getPubkey()));
+                            return;
+                        }
+                        NostrRTCAnswerSignal answer = NGEUtils.awaitNoThrow(b.socket.connect(offer));
+                        if (answer != null) {
+                            cachedAnswerSdp.compareAndSet(null, answer.getSdp());
+                            NGEUtils.awaitNoThrow(signalingBFinal.sendAnswer(answer.getSdp(), a.localPeer.getPubkey()));
+                        }
                     }
-                    String existing = cachedAnswerSdp.get();
-                    if (existing != null) {
-                        NGEUtils.awaitNoThrow(signalingBFinal.sendAnswer(existing, a.localPeer.getPubkey()));
-                        return;
-                    }
-                    NostrRTCAnswerSignal answer = NGEUtils.awaitNoThrow(b.socket.connect(offer));
-                    if (answer != null) {
-                        cachedAnswerSdp.compareAndSet(null, answer.getSdp());
-                        NGEUtils.awaitNoThrow(signalingBFinal.sendAnswer(answer.getSdp(), a.localPeer.getPubkey()));
-                    }
-                }
 
-                @Override
-                public void onReceiveAnswer(NostrRTCAnswerSignal answer) {
-                }
+                    @Override
+                    public void onReceiveAnswer(NostrRTCAnswerSignal answer) {}
 
-                @Override
-                public void onReceiveCandidates(NostrRTCRouteSignal candidate) {
-                    if (a.localPeer.getPubkey().equals(candidate.getPeer().getPubkey())) {
-                        routeBReceivedFromA.set(true);
-                        b.socket.mergeRemoteRTCIceCandidate(candidate);
+                    @Override
+                    public void onReceiveCandidates(NostrRTCRouteSignal candidate) {
+                        if (a.localPeer.getPubkey().equals(candidate.getPeer().getPubkey())) {
+                            routeBReceivedFromA.set(true);
+                            b.socket.mergeRemoteRTCIceCandidate(candidate);
+                        }
                     }
                 }
-            });
+            );
 
-            signalingA.addListener(new NostrRTCSignaling.Listener() {
-                @Override
-                public void onAddAnnounce(org.ngengine.nostr4j.rtc.signal.NostrRTCConnectSignal announce) {
-                }
+            signalingA.addListener(
+                new NostrRTCSignaling.Listener() {
+                    @Override
+                    public void onAddAnnounce(org.ngengine.nostr4j.rtc.signal.NostrRTCConnectSignal announce) {}
 
-                @Override
-                public void onUpdateAnnounce(org.ngengine.nostr4j.rtc.signal.NostrRTCConnectSignal announce) {
-                }
+                    @Override
+                    public void onUpdateAnnounce(org.ngengine.nostr4j.rtc.signal.NostrRTCConnectSignal announce) {}
 
-                @Override
-                public void onRemoveAnnounce(
-                    org.ngengine.nostr4j.rtc.signal.NostrRTCConnectSignal announce,
-                    NostrRTCSignaling.Listener.RemoveReason reason
-                ) {
-                }
+                    @Override
+                    public void onRemoveAnnounce(
+                        org.ngengine.nostr4j.rtc.signal.NostrRTCConnectSignal announce,
+                        NostrRTCSignaling.Listener.RemoveReason reason
+                    ) {}
 
-                @Override
-                public void onReceiveOffer(NostrRTCOfferSignal offer) {
-                }
+                    @Override
+                    public void onReceiveOffer(NostrRTCOfferSignal offer) {}
 
-                @Override
-                public void onReceiveAnswer(NostrRTCAnswerSignal answer) {
-                    if (!b.localPeer.getPubkey().equals(answer.getPeer().getPubkey())) {
-                        return;
+                    @Override
+                    public void onReceiveAnswer(NostrRTCAnswerSignal answer) {
+                        if (!b.localPeer.getPubkey().equals(answer.getPeer().getPubkey())) {
+                            return;
+                        }
+                        if (answerApplied.compareAndSet(false, true)) {
+                            NGEUtils.awaitNoThrow(a.socket.connect(answer));
+                            connected.countDown();
+                        }
                     }
-                    if (answerApplied.compareAndSet(false, true)) {
-                        NGEUtils.awaitNoThrow(a.socket.connect(answer));
-                        connected.countDown();
-                    }
-                }
 
-                @Override
-                public void onReceiveCandidates(NostrRTCRouteSignal candidate) {
-                    if (b.localPeer.getPubkey().equals(candidate.getPeer().getPubkey())) {
-                        routeAReceivedFromB.set(true);
-                        a.socket.mergeRemoteRTCIceCandidate(candidate);
+                    @Override
+                    public void onReceiveCandidates(NostrRTCRouteSignal candidate) {
+                        if (b.localPeer.getPubkey().equals(candidate.getPeer().getPubkey())) {
+                            routeAReceivedFromB.set(true);
+                            a.socket.mergeRemoteRTCIceCandidate(candidate);
+                        }
                     }
                 }
-            });
+            );
 
             NGEUtils.awaitNoThrow(signalingA.start(true));
             NGEUtils.awaitNoThrow(signalingB.start(true));
 
-            a.socket.addListener(new NostrRTCSocketListener() {
-                @Override
-                public void onRTCSocketRouteUpdate(
-                    NostrRTCSocket socket,
-                    Collection<RTCTransportIceCandidate> candidates,
-                    String turnServer
-                ) {
-                    try {
-                        NGEUtils.awaitNoThrow(signalingAFinal.sendRoutes(candidates, turnServer, b.localPeer.getPubkey()));
-                    } catch (Exception ignored) {
+            a.socket.addListener(
+                new NostrRTCSocketListener() {
+                    @Override
+                    public void onRTCSocketRouteUpdate(
+                        NostrRTCSocket socket,
+                        Collection<RTCTransportIceCandidate> candidates,
+                        String turnServer
+                    ) {
+                        try {
+                            NGEUtils.awaitNoThrow(signalingAFinal.sendRoutes(candidates, turnServer, b.localPeer.getPubkey()));
+                        } catch (Exception ignored) {}
                     }
-                }
 
-                @Override
-                public void onRTCSocketClose(NostrRTCSocket socket) {
-                }
+                    @Override
+                    public void onRTCSocketClose(NostrRTCSocket socket) {}
 
-                @Override
-                public void onRTCChannelReady(NostrRTCChannel channel) {
+                    @Override
+                    public void onRTCChannelReady(NostrRTCChannel channel) {}
                 }
-            });
+            );
 
-            b.socket.addListener(new NostrRTCSocketListener() {
-                @Override
-                public void onRTCSocketRouteUpdate(
-                    NostrRTCSocket socket,
-                    Collection<RTCTransportIceCandidate> candidates,
-                    String turnServer
-                ) {
-                    try {
-                        NGEUtils.awaitNoThrow(signalingBFinal.sendRoutes(candidates, turnServer, a.localPeer.getPubkey()));
-                    } catch (Exception ignored) {
+            b.socket.addListener(
+                new NostrRTCSocketListener() {
+                    @Override
+                    public void onRTCSocketRouteUpdate(
+                        NostrRTCSocket socket,
+                        Collection<RTCTransportIceCandidate> candidates,
+                        String turnServer
+                    ) {
+                        try {
+                            NGEUtils.awaitNoThrow(signalingBFinal.sendRoutes(candidates, turnServer, a.localPeer.getPubkey()));
+                        } catch (Exception ignored) {}
                     }
-                }
 
-                @Override
-                public void onRTCSocketClose(NostrRTCSocket socket) {
-                }
+                    @Override
+                    public void onRTCSocketClose(NostrRTCSocket socket) {}
 
-                @Override
-                public void onRTCChannelReady(NostrRTCChannel channel) {
+                    @Override
+                    public void onRTCChannelReady(NostrRTCChannel channel) {}
                 }
-            });
+            );
 
             NostrRTCOfferSignal offer = NGEUtils.awaitNoThrow(a.socket.listen());
             assertNotNull(offer);
@@ -917,14 +943,18 @@ public class NostrRTCIntegrationTest {
                 }
             }
             assertTrue("Timed out waiting for relay-delivered answer", connected.getCount() == 0L);
-            awaitCondition(new BooleanSupplier() {
-                @Override
-                public boolean getAsBoolean() {
-                    boolean aReady = a.socket.isConnected() || routeAReceivedFromB.get();
-                    boolean bReady = b.socket.isConnected() || routeBReceivedFromA.get();
-                    return aReady && bReady;
-                }
-            }, 10000, "Timed out waiting for route exchange after answer");
+            awaitCondition(
+                new BooleanSupplier() {
+                    @Override
+                    public boolean getAsBoolean() {
+                        boolean aReady = a.socket.isConnected() || routeAReceivedFromB.get();
+                        boolean bReady = b.socket.isConnected() || routeBReceivedFromA.get();
+                        return aReady && bReady;
+                    }
+                },
+                10000,
+                "Timed out waiting for route exchange after answer"
+            );
         } finally {
             if (signalingA != null) {
                 signalingA.close();
@@ -947,7 +977,8 @@ public class NostrRTCIntegrationTest {
         pool.connectRelay(relay);
     }
 
-    private static String waitForSharedConnectedRelay(NostrPool poolA, NostrPool poolB, long timeoutMs) throws InterruptedException {
+    private static String waitForSharedConnectedRelay(NostrPool poolA, NostrPool poolB, long timeoutMs)
+        throws InterruptedException {
         long deadline = System.currentTimeMillis() + timeoutMs;
         while (System.currentTimeMillis() < deadline) {
             Set<String> connectedA = connectedRelayUrls(poolA);
@@ -1016,7 +1047,12 @@ public class NostrRTCIntegrationTest {
         }
     }
 
-    private static void sendUntilMessageReceived(NostrRTCChannel channel, MessageCapture capture, String message, long timeoutMs) throws Exception {
+    private static void sendUntilMessageReceived(
+        NostrRTCChannel channel,
+        MessageCapture capture,
+        String message,
+        long timeoutMs
+    ) throws Exception {
         sendUntilMessageReceived(channel, capture, message, timeoutMs, null);
     }
 
@@ -1041,7 +1077,9 @@ public class NostrRTCIntegrationTest {
         if (expectedTurn == null) {
             throw new AssertionError("Message not delivered within timeout: " + message);
         }
-        throw new AssertionError("Message not delivered within timeout on expected transport (" + expectedTurn + "): " + message);
+        throw new AssertionError(
+            "Message not delivered within timeout on expected transport (" + expectedTurn + "): " + message
+        );
     }
 
     private static boolean isTurnPathReady(NostrRTCChannel channel) {
@@ -1103,6 +1141,7 @@ public class NostrRTCIntegrationTest {
     }
 
     private static final class SocketContext {
+
         private NostrRTCSocket socket;
         private NostrRTCLocalPeer localPeer;
         private final NostrKeyPair roomKeyPair;
@@ -1137,19 +1176,18 @@ public class NostrRTCIntegrationTest {
         private void closeSocketOnly() {
             try {
                 socket.close();
-            } catch (Exception ignored) {
-            }
+            } catch (Exception ignored) {}
         }
 
         private void closeExecutorsOnly() {
             try {
                 executor.close();
-            } catch (Exception ignored) {
-            }
+            } catch (Exception ignored) {}
         }
     }
 
     private static final class MessageCapture implements NostrRTCChannelListener {
+
         private final CountDownLatch latch;
         private final List<String> messages = new CopyOnWriteArrayList<String>();
         private final List<Boolean> turnFlags = new CopyOnWriteArrayList<Boolean>();
@@ -1191,19 +1229,17 @@ public class NostrRTCIntegrationTest {
         }
 
         @Override
-        public void onRTCChannelError(NostrRTCChannel channel, Throwable e) {
-        }
+        public void onRTCChannelError(NostrRTCChannel channel, Throwable e) {}
 
         @Override
-        public void onRTCChannelClosed(NostrRTCChannel channel) {
-        }
+        public void onRTCChannelClosed(NostrRTCChannel channel) {}
 
         @Override
-        public void onRTCBufferedAmountLow(NostrRTCChannel channel) {
-        }
+        public void onRTCBufferedAmountLow(NostrRTCChannel channel) {}
     }
 
     private static final class TransportProfile {
+
         private final boolean rejectRtc;
         private final boolean transientDisconnect;
         private final long reconnectDelayMs;
@@ -1228,6 +1264,7 @@ public class NostrRTCIntegrationTest {
     }
 
     private static final class TestPlatform extends JVMAsyncPlatform {
+
         private final Map<String, TransportProfile> profilesByConnId = new ConcurrentHashMap<String, TransportProfile>();
         private final Map<String, FakeRTCTransport> rtcByConnId = new ConcurrentHashMap<String, FakeRTCTransport>();
         private final Map<String, List<byte[]>> binaryFramesByUrl = new ConcurrentHashMap<String, List<byte[]>>();
@@ -1305,23 +1342,34 @@ public class NostrRTCIntegrationTest {
 
             if (leftProfile.transientDisconnect || rightProfile.transientDisconnect) {
                 long delay = Math.max(leftProfile.reconnectDelayMs, rightProfile.reconnectDelayMs);
-                this.newAsyncExecutor("transient-link").runLater(() -> {
-                    left.notifyChannelClosed("simulated-drop");
-                    right.notifyChannelClosed("simulated-drop");
-                    left.notifyDisconnected("simulated-drop");
-                    right.notifyDisconnected("simulated-drop");
-                    this.newAsyncExecutor("transient-recover").runLater(() -> {
-                        left.notifyConnectedOnce();
-                        right.notifyConnectedOnce();
-                        return null;
-                    }, delay, TimeUnit.MILLISECONDS);
-                    return null;
-                }, 350, TimeUnit.MILLISECONDS);
+                this.newAsyncExecutor("transient-link")
+                    .runLater(
+                        () -> {
+                            left.notifyChannelClosed("simulated-drop");
+                            right.notifyChannelClosed("simulated-drop");
+                            left.notifyDisconnected("simulated-drop");
+                            right.notifyDisconnected("simulated-drop");
+                            this.newAsyncExecutor("transient-recover")
+                                .runLater(
+                                    () -> {
+                                        left.notifyConnectedOnce();
+                                        right.notifyConnectedOnce();
+                                        return null;
+                                    },
+                                    delay,
+                                    TimeUnit.MILLISECONDS
+                                );
+                            return null;
+                        },
+                        350,
+                        TimeUnit.MILLISECONDS
+                    );
             }
         }
     }
 
     private static final class CapturingWebsocketTransport implements WebsocketTransport {
+
         private final WebsocketTransport delegate;
         private final TestPlatform platform;
         private volatile String currentUrl;
@@ -1370,6 +1418,7 @@ public class NostrRTCIntegrationTest {
     }
 
     private static final class FakeRTCTransport implements RTCTransport {
+
         private final TestPlatform platform;
         private final String connId;
         private final List<RTCTransportListener> listeners = new CopyOnWriteArrayList<RTCTransportListener>();
@@ -1385,8 +1434,7 @@ public class NostrRTCIntegrationTest {
         }
 
         @Override
-        public void start(RTCSettings settings, AsyncExecutor executor, String connId, Collection<String> stunServers) {
-        }
+        public void start(RTCSettings settings, AsyncExecutor executor, String connId, Collection<String> stunServers) {}
 
         @Override
         public AsyncTask<String> listen() {
@@ -1417,7 +1465,14 @@ public class NostrRTCIntegrationTest {
         }
 
         @Override
-        public AsyncTask<RTCDataChannel> createDataChannel(String name, String protocol, boolean ordered, boolean reliable, int maxRetransmits, Duration maxPacketLifeTime) {
+        public AsyncTask<RTCDataChannel> createDataChannel(
+            String name,
+            String protocol,
+            boolean ordered,
+            boolean reliable,
+            int maxRetransmits,
+            Duration maxPacketLifeTime
+        ) {
             FakeRTCTransport peer = linkedPeer;
             if (peer == null || !connected.get()) {
                 return AsyncTask.failed(new IllegalStateException("Peer not connected"));
@@ -1428,8 +1483,24 @@ public class NostrRTCIntegrationTest {
                 return AsyncTask.completed(existing);
             }
 
-            FakeRTCDataChannel local = new FakeRTCDataChannel(this, name, protocol, ordered, reliable, maxRetransmits, maxPacketLifeTime);
-            FakeRTCDataChannel remote = new FakeRTCDataChannel(peer, name, protocol, ordered, reliable, maxRetransmits, maxPacketLifeTime);
+            FakeRTCDataChannel local = new FakeRTCDataChannel(
+                this,
+                name,
+                protocol,
+                ordered,
+                reliable,
+                maxRetransmits,
+                maxPacketLifeTime
+            );
+            FakeRTCDataChannel remote = new FakeRTCDataChannel(
+                peer,
+                name,
+                protocol,
+                ordered,
+                reliable,
+                maxRetransmits,
+                maxPacketLifeTime
+            );
             local.setPeer(remote);
             remote.setPeer(local);
             channels.put(name, local);
@@ -1440,8 +1511,7 @@ public class NostrRTCIntegrationTest {
         }
 
         @Override
-        public void addRemoteIceCandidates(Collection<RTCTransportIceCandidate> candidates) {
-        }
+        public void addRemoteIceCandidates(Collection<RTCTransportIceCandidate> candidates) {}
 
         @Override
         public void addListener(RTCTransportListener listener) {
@@ -1533,6 +1603,7 @@ public class NostrRTCIntegrationTest {
     }
 
     private static final class FakeRTCDataChannel extends RTCDataChannel {
+
         private final FakeRTCTransport owner;
         private volatile FakeRTCDataChannel peer;
         private volatile boolean closed;

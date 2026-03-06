@@ -30,16 +30,14 @@
  */
 package org.ngengine.nostr4j.rtc.signal;
 
+import jakarta.annotation.Nullable;
 import java.util.Collection;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
-
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
 import org.ngengine.nostr4j.signer.NostrSigner;
 import org.ngengine.platform.NGEPlatform;
 import org.ngengine.platform.NGEUtils;
-
-import jakarta.annotation.Nullable;
 
 /**
  * The local peer (ourselves). This is used to store our own information and configuration, such as the signer and TURN/STUN servers.
@@ -51,7 +49,6 @@ public class NostrRTCLocalPeer extends NostrRTCPeer {
     private final Collection<String> stunServers;
     private static final AtomicLong sessionIdCounter = new AtomicLong(0);
 
-
     private static String newSessionId() {
         String sessionId = "nostr4j";
         sessionId += System.currentTimeMillis();
@@ -61,26 +58,18 @@ public class NostrRTCLocalPeer extends NostrRTCPeer {
     }
 
     public NostrRTCLocalPeer(
-        NostrSigner signer, 
+        NostrSigner signer,
         Collection<String> stunServers,
         String applicationId,
         String protocolId,
         NostrKeyPair roomKeyPair,
         @Nullable String turnServer
     ) {
-        this(
-            signer, 
-            stunServers,
-            applicationId,
-            protocolId,
-            newSessionId(),
-            roomKeyPair,
-            turnServer    
-        );
+        this(signer, stunServers, applicationId, protocolId, newSessionId(), roomKeyPair, turnServer);
     }
 
     public NostrRTCLocalPeer(
-        NostrSigner signer, 
+        NostrSigner signer,
         Collection<String> stunServers,
         String applicationId,
         String protocolId,
@@ -94,7 +83,7 @@ public class NostrRTCLocalPeer extends NostrRTCPeer {
             protocolId,
             sessionId,
             roomKeyPair.getPublicKey(),
-            turnServer            
+            turnServer
         );
         Objects.requireNonNull(signer);
         Objects.requireNonNull(stunServers);
@@ -114,12 +103,22 @@ public class NostrRTCLocalPeer extends NostrRTCPeer {
     public String toString() {
         return (
             "NostrRTCLocalPeer{" +
-            "pubkey=" + getPubkey() +
-            ", applicationId='" + getApplicationId() + '\'' +
-            ", protocolId='" + getProtocolId() + '\'' +
-            ", sessionId='" + getSessionId() + '\'' +
-            ", turnServer='" + getTurnServer() + '\'' +
-            ", stunServers=" + stunServers +
+            "pubkey=" +
+            getPubkey() +
+            ", applicationId='" +
+            getApplicationId() +
+            '\'' +
+            ", protocolId='" +
+            getProtocolId() +
+            '\'' +
+            ", sessionId='" +
+            getSessionId() +
+            '\'' +
+            ", turnServer='" +
+            getTurnServer() +
+            '\'' +
+            ", stunServers=" +
+            stunServers +
             '}'
         );
     }

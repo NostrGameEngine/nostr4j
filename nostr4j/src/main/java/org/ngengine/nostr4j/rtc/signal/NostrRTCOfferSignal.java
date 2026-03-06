@@ -31,7 +31,6 @@
 package org.ngengine.nostr4j.rtc.signal;
 
 import java.util.Objects;
-
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.event.UnsignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
@@ -43,27 +42,21 @@ import org.ngengine.platform.NGEUtils;
  * A webRTC offer to connect with a peer, with the peer pubkey, sdp and metadata.
  */
 public class NostrRTCOfferSignal extends NostrRTCSignal {
+
     private static final long serialVersionUID = 2L;
     private final AsyncTask<String> offerString;
 
-    public NostrRTCOfferSignal(
-        NostrSigner localSigner,
-        NostrKeyPair roomKeyPair, 
-        NostrRTCPeer peer,
-        String offerString
-    ) {
-        super(localSigner,"offer", roomKeyPair, peer);
+    public NostrRTCOfferSignal(NostrSigner localSigner, NostrKeyPair roomKeyPair, NostrRTCPeer peer, String offerString) {
+        super(localSigner, "offer", roomKeyPair, peer);
         this.offerString = AsyncTask.completed(Objects.requireNonNull(offerString, "Offer string cannot be null"));
     }
 
-    public NostrRTCOfferSignal(
-        NostrSigner localSigner,
-        NostrKeyPair roomKeyPair, SignedNostrEvent event){
+    public NostrRTCOfferSignal(NostrSigner localSigner, NostrKeyPair roomKeyPair, SignedNostrEvent event) {
         super(localSigner, "offer", roomKeyPair, event);
         this.offerString = decrypt(event.getContent(), event.getPubkey());
     }
 
-    public String getOfferString()  {
+    public String getOfferString() {
         return NGEUtils.awaitNoThrow(offerString);
     }
 
@@ -71,15 +64,15 @@ public class NostrRTCOfferSignal extends NostrRTCSignal {
     public void await() {
         NGEUtils.awaitNoThrow(offerString);
     }
-    
+
     @Override
-    protected final AsyncTask<UnsignedNostrEvent> computeEvent(UnsignedNostrEvent event)  {
+    protected final AsyncTask<UnsignedNostrEvent> computeEvent(UnsignedNostrEvent event) {
         event.withContent(getOfferString());
         return AsyncTask.completed(event);
     }
 
     @Override
-    protected final  boolean requireRoomSignature(){
+    protected final boolean requireRoomSignature() {
         return true;
     }
 }

@@ -1,6 +1,6 @@
 plugins {
     id 'application'
-    id 'org.graalvm.buildtools.native' version '0.10.3'
+    alias(libs.plugins.graalvm.native)
 }
 
  
@@ -8,18 +8,17 @@ application {
     mainClass = 'org.ngengine.nostr4j.turn.ref.Main'
 }
 
-def jts = extensions.getByType(org.gradle.jvm.toolchain.JavaToolchainService)
-def graalLauncher = javaToolchains.launcherFor {
+def nativeImageLauncher = javaToolchains.launcherFor {
     languageVersion = JavaLanguageVersion.of(25)
-    vendor = JvmVendorSpec.ORACLE
+    nativeImageCapable = true
+    vendor = JvmVendorSpec.GRAAL_VM
 }
 
-java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(25)
-        vendor = JvmVendorSpec.ORACLE
-    }
+tasks.withType(JavaCompile).configureEach {
+    options.release = 25
 }
+
+
 
 graalvmNative {
     toolchainDetection = true
@@ -27,22 +26,33 @@ graalvmNative {
         main {
             imageName = 'nostr4j-turn-server'
             mainClass = application.mainClass.get()
-            javaLauncher = graalLauncher
+            javaLauncher = nativeImageLauncher
             fallback = false
             buildArgs.add('--no-fallback')
+            verbose = true
+            buildArgs.addAll([
+                '--no-fallback',
+                '--enable-monitoring=heapdump,jfr',
+                '--exact-reachability-metadata',
+                '-march=compatibility',
+                '--enable-all-security-services'
+
+            ])
         }
     }
 }
  
 dependencies {
+    def ngePlatformVersion = project.version.endsWith('-SNAPSHOT') ? libs.versions.ngePlatformSnapshot.get() : libs.versions.ngePlatform.get()
+
     implementation project(':nostr4j')
-    implementation "org.ngengine:nge-platform-common:${project.version.endsWith('-SNAPSHOT') ? rootProject.ext.ngePlatformVersionSnapshot : rootProject.ext.ngePlatformVersion}"
-    implementation 'com.google.code.gson:gson:2.12.1'
-    implementation 'org.eclipse.jetty:jetty-server:12.0.14'
-    implementation 'org.eclipse.jetty.ee10:jetty-ee10-servlet:12.0.14'
-    implementation 'org.eclipse.jetty.ee10.websocket:jetty-ee10-websocket-jetty-server:12.0.14'
-    testImplementation "junit:junit:4.13.2"
-    testImplementation "org.ngengine:nge-platform-jvm:${project.version.endsWith('-SNAPSHOT') ? rootProject.ext.ngePlatformVersionSnapshot : rootProject.ext.ngePlatformVersion}"
+    implementation "org.ngengine:nge-platform-common:${ngePlatformVersion}"
+    implementation libs.gson
+    implementation libs.jetty.server
+    implementation libs.jetty.ee10.servlet
+    implementation libs.jetty.ee10.websocket.server
+    testImplementation libs.junit4
+    implementation "org.ngengine:nge-platform-jvm:${ngePlatformVersion}"
 }
 
 tasks.named('test') {
@@ -53,4 +63,56 @@ tasks.register('buildNativeExecutable') {
     group = 'build'
     description = 'Builds GraalVM native executable for the TURN server module.'
     dependsOn tasks.named('nativeCompile')
+}
+
+
+// workaround for bad graalvm packaging
+import java.nio.file.Files
+import java.nio.file.LinkOption
+import java.nio.file.Path
+
+def fixSymlink = { Path target, Path expectedSrc ->
+    if (!Files.isRegularFile(expectedSrc, LinkOption.NOFOLLOW_LINKS)) {
+        logger.info("fixSymlink: expected is not regular, skip (expected: {})", expectedSrc)
+        return
+    }
+
+    if (!Files.isRegularFile(target, LinkOption.NOFOLLOW_LINKS) || Files.size(target) > 0) {
+        logger.info("fixSymlink: target is not regular or the file size > 0, skip (target: {})", target)
+        return
+    }
+
+    logger.warn("fixSymlink: {} -> {}", target, expectedSrc)
+    Files.deleteIfExists(target)
+    Files.createLink(target, expectedSrc)
+}
+
+tasks.named('nativeTestCompile') {
+    doFirst {
+        def testCompileOpt = project.extensions
+            .getByType(org.graalvm.buildtools.gradle.dsl.GraalVMExtension)
+            .binaries
+            .getByName('test')
+            .asCompileOptions()
+
+        def binPath = testCompileOpt.javaLauncher.get().executablePath.asFile.toPath().parent
+        def svmBinPath = binPath.resolve("../lib/svm/bin").normalize()
+
+        fixSymlink(binPath.resolve("native-image"), svmBinPath.resolve("native-image"))
+    }
+}
+
+tasks.named('nativeCompile') {
+    doFirst {
+        def mainCompileOpt = project.extensions
+            .getByType(org.graalvm.buildtools.gradle.dsl.GraalVMExtension)
+            .binaries
+            .getByName('main')
+            .asCompileOptions()
+
+        def binPath = mainCompileOpt.javaLauncher.get().executablePath.asFile.toPath().parent
+        def svmBinPath = binPath.resolve("../lib/svm/bin").normalize()
+
+        fixSymlink(binPath.resolve("native-image"), svmBinPath.resolve("native-image"))
+    }
 }

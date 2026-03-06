@@ -628,7 +628,7 @@ public final class NostrRelay {
             );
             loop();
         } catch (Exception e) {
-            logger.log(Level.SEVERE,"Error in onConnectionMessage", e);
+            logger.log(Level.SEVERE, "Error in onConnectionMessage", e);
         }
     }
 

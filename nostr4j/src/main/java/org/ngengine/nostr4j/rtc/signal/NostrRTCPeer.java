@@ -30,15 +30,10 @@
  */
 package org.ngengine.nostr4j.rtc.signal;
 
+import jakarta.annotation.Nullable;
 import java.time.Instant;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Objects;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
-import org.ngengine.platform.NGEUtils;
-
-import jakarta.annotation.Nullable;
 
 /**
  * Creates a new peer with the given information.
@@ -46,8 +41,8 @@ import jakarta.annotation.Nullable;
  * A peer is uniquely identified by the tuple (pubkey, applicationId, protocolId, sessionId, roomPubkey). This combination
  * is used to route messages to the correct peer and to distinguish between multiple sessions from the same pubkey.
  * <p>
- * Note: All fields except {@code pubkey} and {@code roomPubkey} can be freely chosen by applications. 
- * If two different applications donnect to a public room sharing the same user signer, they may impersonate one another. 
+ * Note: All fields except {@code pubkey} and {@code roomPubkey} can be freely chosen by applications.
+ * If two different applications donnect to a public room sharing the same user signer, they may impersonate one another.
  * If this is a concern, generate a random keypair and use that instead of the user-provided one (authentication can be handled off-protocol).
  */
 public class NostrRTCPeer {
@@ -71,7 +66,7 @@ public class NostrRTCPeer {
      * @param turnServer  TURN server URL, or {@code null} if unknown
      */
     public NostrRTCPeer(
-        NostrPublicKey pubkey, 
+        NostrPublicKey pubkey,
         String applicationId,
         String protocolId,
         String sessionId,
@@ -107,12 +102,10 @@ public class NostrRTCPeer {
         return turnServer;
     }
 
- 
     public NostrPublicKey getPubkey() {
         return pubkey;
     }
 
-  
     public Instant getLastSeen() {
         if (lastSeen == null) return Instant.now();
         return lastSeen;
@@ -127,11 +120,11 @@ public class NostrRTCPeer {
         if (this == obj) return true;
         if (obj == null || getClass() != obj.getClass()) return false;
         NostrRTCPeer that = (NostrRTCPeer) obj;
-        if(!pubkey.equals(that.pubkey)) return false;
-        if(!applicationId.equals(that.applicationId)) return false;
-        if(!protocolId.equals(that.protocolId)) return false;
-        if(!sessionId.equals(that.sessionId)) return false;    
-        if(!roomPubkey.equals(that.roomPubkey)) return false;  
+        if (!pubkey.equals(that.pubkey)) return false;
+        if (!applicationId.equals(that.applicationId)) return false;
+        if (!protocolId.equals(that.protocolId)) return false;
+        if (!sessionId.equals(that.sessionId)) return false;
+        if (!roomPubkey.equals(that.roomPubkey)) return false;
         return true;
     }
 
@@ -159,8 +152,7 @@ public class NostrRTCPeer {
             turnServer +
             '\'' +
             ", lastSeen=" +
-            lastSeen +      
-            
+            lastSeen +
             '}'
         );
     }

@@ -1,7 +1,37 @@
+/**
+ * BSD 3-Clause License
+ *
+ * Copyright (c) 2025, Riccardo Balbo
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the documentation
+ *    and/or other materials provided with the distribution.
+ *
+ * 3. Neither the name of the copyright holder nor the names of its
+ *    contributors may be used to endorse or promote products derived from
+ *    this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
 package org.ngengine.nostr4j.rtc.turn;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
@@ -15,7 +45,6 @@ import java.util.Queue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
-
 import org.junit.Test;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
@@ -32,9 +61,11 @@ import org.ngengine.platform.transport.WebsocketTransport;
 import org.ngengine.platform.transport.WebsocketTransportListener;
 
 public class TestTurnQueueDrain {
+
     private static final String APP_ID = "queue-app";
     private static final String PROTOCOL_ID = "queue-proto";
     private static final String CHANNEL = "primary";
+
     @Test
     public void testOutgoingQueueDrainsAfterAck() throws Exception {
         NostrKeyPair room = new NostrKeyPair();
@@ -55,22 +86,20 @@ public class TestTurnQueueDrain {
         setState(channel, 1);
 
         ByteBuffer ackFrame = NGEUtils.awaitNoThrow(
-            NostrTURNAckEvent.createAck(
-                alice,
-                aliceRemote,
-                room,
-                CHANNEL,
-                vsocketId
-            ).encodeToFrame(null)
+            NostrTURNAckEvent.createAck(alice, aliceRemote, room, CHANNEL, vsocketId).encodeToFrame(null)
         );
         channel.onBinaryMessage(ackFrame);
 
-        awaitCondition(new BooleanSupplier() {
-            @Override
-            public boolean getAsBoolean() {
-                return ws.getSentBinaryFrames().size() >= 1;
-            }
-        }, 4000, "Queued TURN outgoing payload did not drain");
+        awaitCondition(
+            new BooleanSupplier() {
+                @Override
+                public boolean getAsBoolean() {
+                    return ws.getSentBinaryFrames().size() >= 1;
+                }
+            },
+            4000,
+            "Queued TURN outgoing payload did not drain"
+        );
 
         ByteBuffer sentFrame = ws.getSentBinaryFrames().get(0).duplicate();
         SignedNostrEvent header = NostrTURNCodec.decodeHeader(sentFrame);
@@ -105,64 +134,56 @@ public class TestTurnQueueDrain {
 
         CountDownLatch payloadLatch = new CountDownLatch(1);
         List<String> received = new ArrayList<String>();
-        channel.addListener(new NostrTURNChannelListener() {
-            @Override
-            public void onTurnChannelReady(NostrTURNChannel channel) {
-            }
+        channel.addListener(
+            new NostrTURNChannelListener() {
+                @Override
+                public void onTurnChannelReady(NostrTURNChannel channel) {}
 
-            @Override
-            public void onTurnChannelClosed(NostrTURNChannel channel, String reason) {
-            }
+                @Override
+                public void onTurnChannelClosed(NostrTURNChannel channel, String reason) {}
 
-            @Override
-            public void onTurnChannelError(NostrTURNChannel channel, Throwable e) {
-            }
+                @Override
+                public void onTurnChannelError(NostrTURNChannel channel, Throwable e) {}
 
-            @Override
-            public void onTurnChannelMessage(NostrTURNChannel channel, ByteBuffer payload) {
-                ByteBuffer copy = payload.duplicate();
-                byte[] bytes = new byte[copy.remaining()];
-                copy.get(bytes);
-                received.add(new String(bytes, StandardCharsets.UTF_8));
-                payloadLatch.countDown();
+                @Override
+                public void onTurnChannelMessage(NostrTURNChannel channel, ByteBuffer payload) {
+                    ByteBuffer copy = payload.duplicate();
+                    byte[] bytes = new byte[copy.remaining()];
+                    copy.get(bytes);
+                    received.add(new String(bytes, StandardCharsets.UTF_8));
+                    payloadLatch.countDown();
+                }
             }
-        });
+        );
 
         byte[] key = NGEUtils.getPlatform().randomBytes(32);
         ByteBuffer dataFrame = NGEUtils.awaitNoThrow(
-            NostrTURNDataEvent.createOutgoing(
-                bob,
-                aliceRemote,
-                room,
-                CHANNEL,
-                vsocketId,
-                key
-            ).encodeToFrame(List.of(ByteBuffer.wrap("queued-turn-in".getBytes(StandardCharsets.UTF_8))))
+            NostrTURNDataEvent
+                .createOutgoing(bob, aliceRemote, room, CHANNEL, vsocketId, key)
+                .encodeToFrame(List.of(ByteBuffer.wrap("queued-turn-in".getBytes(StandardCharsets.UTF_8))))
         );
 
         channel.onBinaryMessage(dataFrame);
         assertEquals(1, queueSize(channel, "incomingPayloadQueue"));
 
         ByteBuffer ackFrame = NGEUtils.awaitNoThrow(
-            NostrTURNAckEvent.createAck(
-                alice,
-                aliceRemote,
-                room,
-                CHANNEL,
-                vsocketId
-            ).encodeToFrame(null)
+            NostrTURNAckEvent.createAck(alice, aliceRemote, room, CHANNEL, vsocketId).encodeToFrame(null)
         );
         channel.onBinaryMessage(ackFrame);
 
         assertTrue("Queued TURN incoming payload did not drain", payloadLatch.await(4, TimeUnit.SECONDS));
         assertEquals(1, received.size());
         assertEquals("queued-turn-in", received.get(0));
-        awaitCondition(new BooleanSupplier() {
-            @Override
-            public boolean getAsBoolean() {
-                return queueSize(channel, "incomingPayloadQueue") == 0;
-            }
-        }, 2000, "Incoming TURN queue did not drain to empty");
+        awaitCondition(
+            new BooleanSupplier() {
+                @Override
+                public boolean getAsBoolean() {
+                    return queueSize(channel, "incomingPayloadQueue") == 0;
+                }
+            },
+            2000,
+            "Incoming TURN queue did not drain to empty"
+        );
     }
 
     private static NostrRTCLocalPeer localPeer(String sessionId, NostrKeyPair room) {
@@ -232,6 +253,7 @@ public class TestTurnQueueDrain {
     }
 
     private static final class RecordingWebsocketTransport implements WebsocketTransport {
+
         private final List<WebsocketTransportListener> listeners = new ArrayList<WebsocketTransportListener>();
         private final List<ByteBuffer> sentBinaryFrames = new ArrayList<ByteBuffer>();
         private volatile boolean connected = true;

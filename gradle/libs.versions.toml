@@ -1,0 +1,43 @@
+[versions]
+foojayResolver = "1.0.0"
+spotbugsPlugin = "6.4.8"
+spotlessPlugin = "6.25.0"
+gradleNexusPublish = "2.0.0"
+gradleTestRetry = "1.5.2"
+graalvmNativePlugin = "0.11.5"
+spotbugs = "4.9.3"
+findsecbugs = "1.12.0"
+prettier = "2.8.8"
+prettierJava = "2.2.0"
+asm = "9.5"
+junit4 = "4.13.2"
+gson = "2.12.1"
+jakartaAnnotation = "2.1.1"
+slf4j = "2.0.12"
+jetty = "12.0.14"
+ngePlatform = "0.2.2"
+ngePlatformSnapshot = "0.3.0-SNAPSHOT"
+lnurl = "0.0.3"
+lnurlSnapshot = "0.0.3"
+bech32 = "1.0.3"
+bech32Snapshot = "1.0.3"
+
+[libraries]
+asm = { module = "org.ow2.asm:asm", version.ref = "asm" }
+asm-tree = { module = "org.ow2.asm:asm-tree", version.ref = "asm" }
+junit4 = { module = "junit:junit", version.ref = "junit4" }
+gson = { module = "com.google.code.gson:gson", version.ref = "gson" }
+jakarta-annotation-api = { module = "jakarta.annotation:jakarta.annotation-api", version.ref = "jakartaAnnotation" }
+slf4j-jdk14 = { module = "org.slf4j:slf4j-jdk14", version.ref = "slf4j" }
+jetty-server = { module = "org.eclipse.jetty:jetty-server", version.ref = "jetty" }
+jetty-ee10-servlet = { module = "org.eclipse.jetty.ee10:jetty-ee10-servlet", version.ref = "jetty" }
+jetty-ee10-websocket-server = { module = "org.eclipse.jetty.ee10.websocket:jetty-ee10-websocket-jetty-server", version.ref = "jetty" }
+findsecbugs-plugin = { module = "com.h3xstream.findsecbugs:findsecbugs-plugin", version.ref = "findsecbugs" }
+
+[plugins]
+foojay-resolver = { id = "org.gradle.toolchains.foojay-resolver-convention", version.ref = "foojayResolver" }
+spotbugs = { id = "com.github.spotbugs", version.ref = "spotbugsPlugin" }
+spotless = { id = "com.diffplug.spotless", version.ref = "spotlessPlugin" }
+nexus-publish = { id = "io.github.gradle-nexus.publish-plugin", version.ref = "gradleNexusPublish" }
+test-retry = { id = "org.gradle.test-retry", version.ref = "gradleTestRetry" }
+graalvm-native = { id = "org.graalvm.buildtools.native", version.ref = "graalvmNativePlugin" }

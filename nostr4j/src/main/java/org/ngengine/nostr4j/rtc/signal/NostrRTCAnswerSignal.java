@@ -41,29 +41,22 @@ import org.ngengine.platform.NGEUtils;
  * An answer to an offer with the peer pubkey, sdp and metadata.
  */
 public class NostrRTCAnswerSignal extends NostrRTCSignal {
+
     private static final long serialVersionUID = 2L;
     private final AsyncTask<String> sdp;
-    public NostrRTCAnswerSignal(
-        NostrSigner localSigner,
-        NostrKeyPair roomKeyPair,
-        NostrRTCPeer peer,
-        String sdp
-    ){
+
+    public NostrRTCAnswerSignal(NostrSigner localSigner, NostrKeyPair roomKeyPair, NostrRTCPeer peer, String sdp) {
         super(localSigner, "answer", roomKeyPair, peer);
         this.sdp = AsyncTask.completed(sdp);
     }
 
-    public NostrRTCAnswerSignal(
-        NostrSigner localSigner,
-        NostrKeyPair roomKeyPair, 
-        SignedNostrEvent event
-    ) {
+    public NostrRTCAnswerSignal(NostrSigner localSigner, NostrKeyPair roomKeyPair, SignedNostrEvent event) {
         super(localSigner, "answer", roomKeyPair, event);
         this.sdp = decrypt(event.getContent(), event.getPubkey());
     }
 
     @Override
-    public void await(){
+    public void await() {
         NGEUtils.awaitNoThrow(sdp);
     }
 
@@ -72,13 +65,13 @@ public class NostrRTCAnswerSignal extends NostrRTCSignal {
     }
 
     @Override
-    protected final AsyncTask<UnsignedNostrEvent> computeEvent(UnsignedNostrEvent event)  {
+    protected final AsyncTask<UnsignedNostrEvent> computeEvent(UnsignedNostrEvent event) {
         event.withContent(getSdp());
         return AsyncTask.completed(event);
     }
 
     @Override
-    protected final  boolean requireRoomSignature(){
+    protected final boolean requireRoomSignature() {
         return true;
     }
 }

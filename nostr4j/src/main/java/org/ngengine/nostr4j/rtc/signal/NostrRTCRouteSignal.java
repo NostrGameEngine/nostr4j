@@ -30,13 +30,12 @@
  */
 package org.ngengine.nostr4j.rtc.signal;
 
+import jakarta.annotation.Nullable;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.event.UnsignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
@@ -46,25 +45,27 @@ import org.ngengine.platform.NGEPlatform;
 import org.ngengine.platform.NGEUtils;
 import org.ngengine.platform.transport.RTCTransportIceCandidate;
 
-import jakarta.annotation.Nullable;
-
 /**
  * A collection of valid ice candidates that can be used to establish a
  * connection with a peer.
  */
 public class NostrRTCRouteSignal extends NostrRTCSignal {
-    private static final java.util.logging.Logger logger = java.util.logging.Logger.getLogger(NostrRTCRouteSignal.class.getName());
+
+    private static final java.util.logging.Logger logger = java.util.logging.Logger.getLogger(
+        NostrRTCRouteSignal.class.getName()
+    );
     private static final long serialVersionUID = 2L;
 
-    private static class Route{
+    private static class Route {
+
         public Collection<RTCTransportIceCandidate> candidates;
-        public String turnServer;    
-        Route(Collection<RTCTransportIceCandidate> candidates, String turnServer){
+        public String turnServer;
+
+        Route(Collection<RTCTransportIceCandidate> candidates, String turnServer) {
             this.candidates = Collections.unmodifiableCollection(candidates);
             this.turnServer = turnServer;
         }
     }
-
 
     private final AsyncTask<Route> route;
 
@@ -79,55 +80,51 @@ public class NostrRTCRouteSignal extends NostrRTCSignal {
         Collection<RTCTransportIceCandidate> safeCandidates = candidates == null
             ? Collections.emptyList()
             : Collections.unmodifiableCollection(candidates);
-        route = AsyncTask.completed(new Route(safeCandidates, turnServer));     
+        route = AsyncTask.completed(new Route(safeCandidates, turnServer));
     }
 
-    public NostrRTCRouteSignal(
-        NostrSigner localSigner,
-        NostrKeyPair roomKeyPair, 
-        SignedNostrEvent event
-    ) {
+    public NostrRTCRouteSignal(NostrSigner localSigner, NostrKeyPair roomKeyPair, SignedNostrEvent event) {
         super(localSigner, "route", roomKeyPair, event);
-        route = decrypt(event.getContent(), event.getPubkey()).then(decrypted -> {
-            Map<String, Object> map = NGEPlatform.get().fromJSON(decrypted, Map.class);
-            String turn = NGEUtils.safeString(map.get("turn"));
-            if(turn.trim().isEmpty()) turn = null;
-            ArrayList<RTCTransportIceCandidate> candidates = new ArrayList<>();
-            Collection<Map<String, Object>> cs = (Collection<Map<String, Object>>) map.get("candidates");
-            if (cs != null) {
-                for (Map<String, Object> c : cs) {
-                    if (c == null) continue;
-                    String candidate = NGEUtils.safeString(c.get("candidate"));
-                    String sdpMid = NGEUtils.safeString(c.get("sdpMid"));
-                    candidates.add(new RTCTransportIceCandidate(candidate, sdpMid));
-                }
-            }
-            return new Route(candidates, turn);
-        });
+        route =
+            decrypt(event.getContent(), event.getPubkey())
+                .then(decrypted -> {
+                    Map<String, Object> map = NGEPlatform.get().fromJSON(decrypted, Map.class);
+                    String turn = NGEUtils.safeString(map.get("turn"));
+                    if (turn.trim().isEmpty()) turn = null;
+                    ArrayList<RTCTransportIceCandidate> candidates = new ArrayList<>();
+                    Collection<Map<String, Object>> cs = (Collection<Map<String, Object>>) map.get("candidates");
+                    if (cs != null) {
+                        for (Map<String, Object> c : cs) {
+                            if (c == null) continue;
+                            String candidate = NGEUtils.safeString(c.get("candidate"));
+                            String sdpMid = NGEUtils.safeString(c.get("sdpMid"));
+                            candidates.add(new RTCTransportIceCandidate(candidate, sdpMid));
+                        }
+                    }
+                    return new Route(candidates, turn);
+                });
     }
 
- 
     public Collection<RTCTransportIceCandidate> getCandidates() {
         return NGEUtils.awaitNoThrow(route).candidates;
     }
 
     @Nullable
-    public String getTurnServer()   {
+    public String getTurnServer() {
         return NGEUtils.awaitNoThrow(route).turnServer;
     }
-    
+
     @Override
     public void await() {
         NGEUtils.awaitNoThrow(route);
     }
-    
 
     @Override
-    protected final AsyncTask<UnsignedNostrEvent> computeEvent(UnsignedNostrEvent event)  {
+    protected final AsyncTask<UnsignedNostrEvent> computeEvent(UnsignedNostrEvent event) {
         Map<String, Object> map = new HashMap<>();
         map.put("turn", getTurnServer());
         ArrayList<Map<String, Object>> cs = new ArrayList<>();
-        for(RTCTransportIceCandidate c : getCandidates()) {
+        for (RTCTransportIceCandidate c : getCandidates()) {
             HashMap<String, Object> cm = new HashMap<>();
             cm.put("candidate", c.getCandidate());
             cm.put("sdpMid", c.getSdpMid());
@@ -139,20 +136,19 @@ public class NostrRTCRouteSignal extends NostrRTCSignal {
         event.withContent(data);
         return AsyncTask.completed(event);
     }
-    
 
     public void updatePeer(NostrRTCPeer peer) {
-        try{
+        try {
             peer.setTurnServer(getTurnServer());
-        } catch(Exception e) {
-            if(logger.isLoggable(java.util.logging.Level.WARNING  )){
-                logger.log(java.util.logging.Level.WARNING, "Unable to set turn server",e);
+        } catch (Exception e) {
+            if (logger.isLoggable(java.util.logging.Level.WARNING)) {
+                logger.log(java.util.logging.Level.WARNING, "Unable to set turn server", e);
             }
         }
     }
 
     @Override
-    protected final  boolean requireRoomSignature(){
+    protected final boolean requireRoomSignature() {
         return true;
     }
 }

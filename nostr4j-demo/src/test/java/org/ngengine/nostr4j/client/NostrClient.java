@@ -1,22 +1,22 @@
 /**
  * BSD 3-Clause License
- * 
+ *
  * Copyright (c) 2025, Riccardo Balbo
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -588,7 +588,7 @@ public class NostrClient extends JFrame {
 
         // Subscribe to events
         NostrSubscription sub =
-            this.pool.subscribe(Arrays.asList(new NostrFilter().withKind(1).limit(21)), ()->new FailOnDoubleTracker());
+            this.pool.subscribe(Arrays.asList(new NostrFilter().withKind(1).limit(21)), () -> new FailOnDoubleTracker());
 
         sub.addEventListener((s, event, stored) -> addEventToFeed(event, true));
         sub.open();
@@ -786,12 +786,18 @@ public class NostrClient extends JFrame {
         loadMoreButton.setText("LOADING...");
 
         this.pool.fetch(
-                Arrays.asList(new NostrSearchFilter()
-                    .withKind(1)
-                    .search(searchBar.getText().trim())
-                    .until(Instant.ofEpochSecond(earliestEvent!=Long.MAX_VALUE?earliestEvent:Instant.now().getEpochSecond()))
-                    .limit(5)),
-                ()->new FailOnDoubleTracker(),
+                Arrays.asList(
+                    new NostrSearchFilter()
+                        .withKind(1)
+                        .search(searchBar.getText().trim())
+                        .until(
+                            Instant.ofEpochSecond(
+                                earliestEvent != Long.MAX_VALUE ? earliestEvent : Instant.now().getEpochSecond()
+                            )
+                        )
+                        .limit(5)
+                ),
+                () -> new FailOnDoubleTracker(),
                 NostrAllEOSEPoolFetchPolicy.get()
             )
             .catchException(e -> {

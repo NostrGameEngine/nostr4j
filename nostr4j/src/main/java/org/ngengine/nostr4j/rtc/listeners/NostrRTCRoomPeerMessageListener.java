@@ -39,5 +39,5 @@ import org.ngengine.nostr4j.rtc.signal.NostrRTCPeer;
 public interface NostrRTCRoomPeerMessageListener extends NostrRTCRoomListener {
     void onRoomPeerMessage(NostrRTCPeer peer, NostrRTCSocket socket, NostrRTCChannel channel, ByteBuffer bbf, boolean turn);
 
-    default void onRoomPeerBufferedAmountLow(NostrRTCPeer peer, NostrRTCSocket socket, NostrRTCChannel channel){}
+    default void onRoomPeerBufferedAmountLow(NostrRTCPeer peer, NostrRTCSocket socket, NostrRTCChannel channel) {}
 }

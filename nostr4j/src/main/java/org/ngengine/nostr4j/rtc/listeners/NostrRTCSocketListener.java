@@ -30,30 +30,22 @@
  */
 package org.ngengine.nostr4j.rtc.listeners;
 
+import jakarta.annotation.Nullable;
 import java.util.Collection;
-
 import org.ngengine.nostr4j.rtc.NostrRTCChannel;
 import org.ngengine.nostr4j.rtc.NostrRTCSocket;
 import org.ngengine.platform.transport.RTCTransportIceCandidate;
 
-import jakarta.annotation.Nullable;
-
 public interface NostrRTCSocketListener {
     void onRTCSocketRouteUpdate(
         NostrRTCSocket socket,
-        Collection<RTCTransportIceCandidate> candidates, 
+        Collection<RTCTransportIceCandidate> candidates,
         @Nullable String turnServer
     );
 
+    void onRTCSocketClose(NostrRTCSocket socket);
 
-    void onRTCSocketClose(
-        NostrRTCSocket socket
-    );
-
-
-    void onRTCChannelReady(
-        NostrRTCChannel channel
-    );
+    void onRTCChannelReady(NostrRTCChannel channel);
 
     default void onRTCSocketTransportSwitch(
         NostrRTCSocket socket,
@@ -62,9 +54,5 @@ public interface NostrRTCSocketListener {
         String reason
     ) {}
 
-    default void onRTCSocketTransportDegraded(
-        NostrRTCSocket socket,
-        NostrRTCSocket.TransportPath active,
-        String reason
-    ) {}
+    default void onRTCSocketTransportDegraded(NostrRTCSocket socket, NostrRTCSocket.TransportPath active, String reason) {}
 }

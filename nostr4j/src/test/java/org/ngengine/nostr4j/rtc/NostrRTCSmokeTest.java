@@ -1,3 +1,34 @@
+/**
+ * BSD 3-Clause License
+ *
+ * Copyright (c) 2025, Riccardo Balbo
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the documentation
+ *    and/or other materials provided with the distribution.
+ *
+ * 3. Neither the name of the copyright holder nor the names of its
+ *    contributors may be used to endorse or promote products derived from
+ *    this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
 package org.ngengine.nostr4j.rtc;
 
 import static org.junit.Assert.assertEquals;
@@ -10,7 +41,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -24,6 +54,7 @@ import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
 import org.ngengine.nostr4j.turn.ref.TurnServer;
 
 public class NostrRTCSmokeTest {
+
     private static final String APP_ID = "integration-app";
     private static final String PROTOCOL_ID = "integration-proto";
 
@@ -160,22 +191,11 @@ public class NostrRTCSmokeTest {
     }
 
     private static NostrRTCPeer remote(NostrRTCLocalPeer peer, NostrKeyPair room, String turn) {
-        return new NostrRTCPeer(
-            peer.getPubkey(),
-            APP_ID,
-            PROTOCOL_ID,
-            peer.getSessionId(),
-            room.getPublicKey(),
-            turn
-        );
+        return new NostrRTCPeer(peer.getPubkey(), APP_ID, PROTOCOL_ID, peer.getSessionId(), room.getPublicKey(), turn);
     }
 
-    private static void sendUntilDelivered(
-        NostrTURNChannel channel,
-        String payload,
-        CountDownLatch latch,
-        int timeoutSeconds
-    ) throws Exception {
+    private static void sendUntilDelivered(NostrTURNChannel channel, String payload, CountDownLatch latch, int timeoutSeconds)
+        throws Exception {
         long deadline = System.currentTimeMillis() + (timeoutSeconds * 1000L);
         byte[] data = payload.getBytes(StandardCharsets.UTF_8);
         while (System.currentTimeMillis() < deadline) {
@@ -188,6 +208,7 @@ public class NostrRTCSmokeTest {
     }
 
     private static class ReadyListener implements NostrTURNChannelListener {
+
         private final CountDownLatch ready;
 
         private ReadyListener(CountDownLatch ready) {
@@ -200,19 +221,17 @@ public class NostrRTCSmokeTest {
         }
 
         @Override
-        public void onTurnChannelClosed(NostrTURNChannel channel, String reason) {
-        }
+        public void onTurnChannelClosed(NostrTURNChannel channel, String reason) {}
 
         @Override
-        public void onTurnChannelError(NostrTURNChannel channel, Throwable e) {
-        }
+        public void onTurnChannelError(NostrTURNChannel channel, Throwable e) {}
 
         @Override
-        public void onTurnChannelMessage(NostrTURNChannel channel, ByteBuffer payload) {
-        }
+        public void onTurnChannelMessage(NostrTURNChannel channel, ByteBuffer payload) {}
     }
 
     private static final class ReadyAndMessageListener extends ReadyListener {
+
         private final CountDownLatch msgLatch;
         private final String[] payloads;
         private final int index;

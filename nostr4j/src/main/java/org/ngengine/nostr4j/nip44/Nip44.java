@@ -124,16 +124,16 @@ public class Nip44 {
     }
 
     public static String encryptSync(String plaintext, byte[] conversationKey, byte[] nonce) {
-        return NGEUtils.getPlatform().base64encode(encryptSyncBinary(plaintext.getBytes(StandardCharsets.UTF_8), conversationKey, nonce));
+        return NGEUtils
+            .getPlatform()
+            .base64encode(encryptSyncBinary(plaintext.getBytes(StandardCharsets.UTF_8), conversationKey, nonce));
     }
 
     public static String encryptSync(String plaintext, byte[] conversationKey) {
         return encryptSync(plaintext, conversationKey, null);
     }
 
-
     private static byte[][] decodePayload(byte[] data) {
-
         int dataLen = data.length;
         if (dataLen < (VERSION_SIZE + NONCE_SIZE + 1 + MAC_SIZE) || dataLen > 65603) {
             throw new IllegalArgumentException("invalid data length: " + dataLen);
@@ -153,7 +153,6 @@ public class Nip44 {
         if (conversationKey == null || conversationKey.length != CONVERSATION_KEY_SIZE) throw new IllegalArgumentException(
             "Conversation key must be 32 bytes"
         );
- 
 
         byte[][] decodedPayload = decodePayload(payloadData);
         byte[] nonce = decodedPayload[0];
@@ -187,7 +186,7 @@ public class Nip44 {
             throw new IllegalArgumentException("invalid padding");
         }
 
-        return  unpadded;
+        return unpadded;
     }
 
     public static String decryptSync(String payload, byte[] conversationKey) {
@@ -298,6 +297,4 @@ public class Nip44 {
             return decryptSyncBinary(payloadData, conversationKey);
         });
     }
-
-    
 }

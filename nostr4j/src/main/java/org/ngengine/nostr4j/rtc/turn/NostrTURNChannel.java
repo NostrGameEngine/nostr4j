@@ -1,3 +1,34 @@
+/**
+ * BSD 3-Clause License
+ *
+ * Copyright (c) 2025, Riccardo Balbo
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the documentation
+ *    and/or other materials provided with the distribution.
+ *
+ * 3. Neither the name of the copyright holder nor the names of its
+ *    contributors may be used to endorse or promote products derived from
+ *    this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
 package org.ngengine.nostr4j.rtc.turn;
 
 import java.nio.ByteBuffer;
@@ -8,7 +39,6 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCLocalPeer;
@@ -24,19 +54,21 @@ import org.ngengine.nostr4j.rtc.turn.event.NostrTURNEvent;
 import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.ExecutionQueue;
 import org.ngengine.platform.NGEPlatform;
+
 /**
  * A virtual socket (vsocket) over TURN protocol.
- * 
+ *
  * Represents an authenticated bidirectional channel between two peers via a TURN server.
  * The underlying session lifecycle is managed by NostrTURNPool.SessionManager.
- * 
+ *
  * This class is just a convenient handle to send/receive data and listen for events.
  */
 public final class NostrTURNChannel {
+
     private static final Logger logger = Logger.getLogger(NostrTURNChannel.class.getName());
     private static final AtomicLong VSOCKET_COUNTER = new AtomicLong(1L);
-    
-    private final List<NostrTURNChannelListener> listeners  = new CopyOnWriteArrayList<>();
+
+    private final List<NostrTURNChannelListener> listeners = new CopyOnWriteArrayList<>();
     private final Queue<ByteBuffer> incomingPayloadQueue = NGEPlatform.get().newConcurrentQueue(ByteBuffer.class);
     private final Queue<ByteBuffer> outgoingPayloadQueue = NGEPlatform.get().newConcurrentQueue(ByteBuffer.class);
     private final ExecutionQueue drainQueue = NGEPlatform.get().newExecutionQueue();
@@ -44,7 +76,7 @@ public final class NostrTURNChannel {
     private final Object drainLockReceive = new Object();
     private volatile boolean drainingSend = false;
     private volatile boolean drainingReceive = false;
-  
+
     private final byte[] encryptionKey;
 
     private volatile TURNTransport transport;
@@ -54,7 +86,7 @@ public final class NostrTURNChannel {
     private volatile int state = 0;
     private volatile boolean resurrecting = false;
     private volatile boolean closed = false;
-    
+
     private final NostrRTCLocalPeer localPeer;
     private final NostrRTCPeer remotePeer;
     private volatile String turnServer; // can change due to redirects
@@ -118,8 +150,8 @@ public final class NostrTURNChannel {
         if (current != null) {
             current.removeUser(this);
         }
-        this.outgoingDataEvent=null;
-        this.incomingDataEvent=null;
+        this.outgoingDataEvent = null;
+        this.incomingDataEvent = null;
         this.state = 0;
         setTransport(null);
     }
@@ -127,7 +159,7 @@ public final class NostrTURNChannel {
     public void redirectTo(String newTurnServer) {
         // set turn server and disconnect, this will force resurrection on the new turn
         this.turnServer = newTurnServer;
-        disconnect();      
+        disconnect();
     }
 
     void setTransport(TURNTransport transport) {
@@ -141,8 +173,8 @@ public final class NostrTURNChannel {
         }
     }
 
-    public boolean isReady(){
-        return state == 2&&this.transport!=null&&this.transport.isConnected();
+    public boolean isReady() {
+        return state == 2 && this.transport != null && this.transport.isConnected();
     }
 
     boolean isConnected() {
@@ -155,9 +187,9 @@ public final class NostrTURNChannel {
             return null;
         }
 
-        if(outgoingDataEvent==null){
+        if (outgoingDataEvent == null) {
             // outgoingDataEvent = new NostrTURNDataEvent(
-            //     localPeer.getSigner(), 
+            //     localPeer.getSigner(),
             //     roomKeyPair,
             //     remotePeer,
             //     sessionId,
@@ -167,31 +199,31 @@ public final class NostrTURNChannel {
             //     vSocketId,
             //     encryptionKey
             // );
-            outgoingDataEvent = NostrTURNDataEvent.createOutgoing(
-                localPeer,
-                remotePeer,
-                roomKeyPair,
-                channelLabel,
-                vSocketId,
-                encryptionKey
-            );
+            outgoingDataEvent =
+                NostrTURNDataEvent.createOutgoing(localPeer, remotePeer, roomKeyPair, channelLabel, vSocketId, encryptionKey);
         }
 
-        return outgoingDataEvent.encodeToFrame(List.of(payload)).then(bbf->{
-            TURNTransport activeTransport = this.transport;
-            if (activeTransport == null || activeTransport != currentTransport || !activeTransport.isConnected()) {
-                return (Void) null;
-            }
-            activeTransport.getTransport().sendBinary(bbf).catchException(ex->{
-                logger.log(Level.WARNING, "Failed to send TURN message", ex);
+        return outgoingDataEvent
+            .encodeToFrame(List.of(payload))
+            .then(bbf -> {
+                TURNTransport activeTransport = this.transport;
+                if (activeTransport == null || activeTransport != currentTransport || !activeTransport.isConnected()) {
+                    return (Void) null;
+                }
+                activeTransport
+                    .getTransport()
+                    .sendBinary(bbf)
+                    .catchException(ex -> {
+                        logger.log(Level.WARNING, "Failed to send TURN message", ex);
+                    });
+                return null;
+            })
+            .catchException(ex -> {
+                logger.log(Level.WARNING, "Failed to encode TURN data event", ex);
+            })
+            .then(r -> {
+                return null;
             });
-            return null;
-        }).catchException(ex->{
-            logger.log(Level.WARNING, "Failed to encode TURN data event", ex);
-        }).then(r->{
-            return null;
-        });
-
     }
 
     public AsyncTask<Void> write(ByteBuffer payload) {
@@ -202,7 +234,6 @@ public final class NostrTURNChannel {
             return null;
         }
         return task;
-
     }
 
     public void close(String reason) {
@@ -235,36 +266,35 @@ public final class NostrTURNChannel {
 
     void onError(Throwable e) {
         logger.log(Level.SEVERE, "TURN channel error", e);
-        for(NostrTURNChannelListener l : listeners){
-            try{
+        for (NostrTURNChannelListener l : listeners) {
+            try {
                 l.onTurnChannelError(this, e);
-            }catch(Exception ex){
+            } catch (Exception ex) {
                 logger.log(Level.WARNING, "Error in TURN channel listener", ex);
             }
         }
-
     }
+
     void onConnectionMessage(String msg) {
         logger.fine("TURN: Received connection message: " + msg);
     }
 
     private void onPayload(ByteBuffer payload) {
-        for(NostrTURNChannelListener l : listeners){
-            try{
+        for (NostrTURNChannelListener l : listeners) {
+            try {
                 l.onTurnChannelMessage(this, payload);
-            }catch(Exception ex){
+            } catch (Exception ex) {
                 logger.log(Level.WARNING, "Error in TURN channel listener", ex);
             }
         }
     }
-  
 
     /**
      * Try handling data packet.
      * When called without header, it will attempt the quick path -> compare with previous
      * header assuming the other peer is reusing it.
      * When called with header, it will go through the full parsing and validation.
-     * 
+     *
      * Call this first with no header to try the quick path
      *  -> if it returns false, try again after parsing the header for the slow path
      * @param msg
@@ -283,31 +313,24 @@ public final class NostrTURNChannel {
         }
 
         long envelopeVsocketId = NostrTURNCodec.extractVsocketId(msg);
-        incomingDataEvent = NostrTURNDataEvent.parseIncoming(
-            header,
-            localPeer,
-            remotePeer,
-            roomKeyPair,
-            channelLabel,
-            envelopeVsocketId
-        );
+        incomingDataEvent =
+            NostrTURNDataEvent.parseIncoming(header, localPeer, remotePeer, roomKeyPair, channelLabel, envelopeVsocketId);
 
-    
-        incomingDataEvent.decodeFramePayloads(msg).then(ps -> {
-            for (ByteBuffer payload : ps) {
-                onPayload(payload);
-            }
-            return null;
-        }).catchException(ex -> {
-            logger.log(Level.WARNING, "Failed to decode TURN data event", ex);            
-        });
+        incomingDataEvent
+            .decodeFramePayloads(msg)
+            .then(ps -> {
+                for (ByteBuffer payload : ps) {
+                    onPayload(payload);
+                }
+                return null;
+            })
+            .catchException(ex -> {
+                logger.log(Level.WARNING, "Failed to decode TURN data event", ex);
+            });
 
         return true;
-
     }
 
-
-    
     void onBinaryMessage(ByteBuffer msg) {
         long envelopeVsocketId;
         try {
@@ -328,129 +351,122 @@ public final class NostrTURNChannel {
             logger.warning("TURN: Invalid event kind " + header.getKind());
             return;
         }
-                
+
         String type = header.getFirstTagFirstValue("t");
         if (type == null || type.isEmpty()) {
             logger.warning("TURN: No event type in header");
             return;
         }
 
-        switch(type){
-            case "data":{
-                if (envelopeVsocketId == 0L) {
-                    throw new IllegalArgumentException("TURN data must have non-zero envelope vsocketId");
-                }
-                if (envelopeVsocketId != vSocketId) {
-                    return;
-                }
-                tryHandleData(msg, header);
-                break;
-            }
-            case "challenge":{
-                if (envelopeVsocketId != 0L) {
-                    throw new IllegalArgumentException("TURN challenge must have envelope vsocketId=0");
-                }
-                if(state != 0) {
-                    logger.warning("TURN: Received challenge in invalid state " + state);
-                    return;
-                }
-                NostrTURNChallengeEvent challengeEvent = NostrTURNChallengeEvent.parseIncoming(
-                    header,
-                    localPeer,
-                    maxDiff               
-                );
-                String redirect = challengeEvent.getRedirect();
-                if(redirect!=null&&!redirect.isEmpty()&&!redirect.equals(turnServer)) {
-                    logger.fine("TURN: Redirecting to " + redirect);
-                    redirectTo(redirect);
-                    return;
-                }
-                String challenge = challengeEvent.getChallenge();
-                int requiredDifficulty = challengeEvent.getRequiredDifficulty();
-                NostrTURNConnectEvent connection = NostrTURNConnectEvent.createConnect(
-                    localPeer,
-                    remotePeer,
-                    roomKeyPair,
-                    channelLabel,
-                    challenge,
-                    vSocketId,
-                    requiredDifficulty
-                );
-                state = 1;
-                sendControlEvent(connection);
-                break;
-            }
-            case "ack":{
-                if (envelopeVsocketId == 0L) {
-                    throw new IllegalArgumentException("TURN ack must have non-zero envelope vsocketId");
-                }
-                if (envelopeVsocketId != vSocketId) {
-                    return;
-                }
-                if(state != 1) {
-                    logger.warning("TURN: Received ack in invalid state " + state);
-                    return;
-                }
-                NostrTURNAckEvent.parseIncoming(
-                    header,
-                    envelopeVsocketId
-                );
-                state = 2;
-
-
-                // notify listeners
-                for(NostrTURNChannelListener l : listeners){
-                    try{
-                        l.onTurnChannelReady(this);
-                    }catch(Exception ex){
-                        logger.log(Level.WARNING, "Error in TURN channel listener", ex);
+        switch (type) {
+            case "data":
+                {
+                    if (envelopeVsocketId == 0L) {
+                        throw new IllegalArgumentException("TURN data must have non-zero envelope vsocketId");
                     }
+                    if (envelopeVsocketId != vSocketId) {
+                        return;
+                    }
+                    tryHandleData(msg, header);
+                    break;
                 }
+            case "challenge":
+                {
+                    if (envelopeVsocketId != 0L) {
+                        throw new IllegalArgumentException("TURN challenge must have envelope vsocketId=0");
+                    }
+                    if (state != 0) {
+                        logger.warning("TURN: Received challenge in invalid state " + state);
+                        return;
+                    }
+                    NostrTURNChallengeEvent challengeEvent = NostrTURNChallengeEvent.parseIncoming(header, localPeer, maxDiff);
+                    String redirect = challengeEvent.getRedirect();
+                    if (redirect != null && !redirect.isEmpty() && !redirect.equals(turnServer)) {
+                        logger.fine("TURN: Redirecting to " + redirect);
+                        redirectTo(redirect);
+                        return;
+                    }
+                    String challenge = challengeEvent.getChallenge();
+                    int requiredDifficulty = challengeEvent.getRequiredDifficulty();
+                    NostrTURNConnectEvent connection = NostrTURNConnectEvent.createConnect(
+                        localPeer,
+                        remotePeer,
+                        roomKeyPair,
+                        channelLabel,
+                        challenge,
+                        vSocketId,
+                        requiredDifficulty
+                    );
+                    state = 1;
+                    sendControlEvent(connection);
+                    break;
+                }
+            case "ack":
+                {
+                    if (envelopeVsocketId == 0L) {
+                        throw new IllegalArgumentException("TURN ack must have non-zero envelope vsocketId");
+                    }
+                    if (envelopeVsocketId != vSocketId) {
+                        return;
+                    }
+                    if (state != 1) {
+                        logger.warning("TURN: Received ack in invalid state " + state);
+                        return;
+                    }
+                    NostrTURNAckEvent.parseIncoming(header, envelopeVsocketId);
+                    state = 2;
 
-                // schedule drain for incoming and outgoing queues (race-free)
-                scheduleDrainReceive();
-                scheduleDrainSend();
-              
-                break;
-            }
-            case "disconnect":{
-                if (envelopeVsocketId == 0L) {
-                    throw new IllegalArgumentException("TURN disconnect must have non-zero envelope vsocketId");
-                }
-                if (envelopeVsocketId != vSocketId) {
-                    return;
-                }
-                NostrTURNDisconnectEvent disconnectEvent = NostrTURNDisconnectEvent.parseIncoming(
-                    header,
-                    localPeer,
-                    roomKeyPair,
-                    remotePeer,
-                    channelLabel,
-                    envelopeVsocketId
-                );
-                String reason = disconnectEvent.getReason();
-                boolean error = disconnectEvent.isError();
-                logger.fine("TURN: Disconnected by peer. Reason: " + reason + ", error  " + error);
-                if(error){
-                    for(NostrTURNChannelListener l : listeners){
-                        try{
-                            l.onTurnChannelError(this, new RuntimeException(  reason));
-                        }catch(Exception ex){
+                    // notify listeners
+                    for (NostrTURNChannelListener l : listeners) {
+                        try {
+                            l.onTurnChannelReady(this);
+                        } catch (Exception ex) {
                             logger.log(Level.WARNING, "Error in TURN channel listener", ex);
                         }
-                    } 
+                    }
+
+                    // schedule drain for incoming and outgoing queues (race-free)
+                    scheduleDrainReceive();
+                    scheduleDrainSend();
+
+                    break;
                 }
-         
-                disconnect();
-                break;
-            }
-       
+            case "disconnect":
+                {
+                    if (envelopeVsocketId == 0L) {
+                        throw new IllegalArgumentException("TURN disconnect must have non-zero envelope vsocketId");
+                    }
+                    if (envelopeVsocketId != vSocketId) {
+                        return;
+                    }
+                    NostrTURNDisconnectEvent disconnectEvent = NostrTURNDisconnectEvent.parseIncoming(
+                        header,
+                        localPeer,
+                        roomKeyPair,
+                        remotePeer,
+                        channelLabel,
+                        envelopeVsocketId
+                    );
+                    String reason = disconnectEvent.getReason();
+                    boolean error = disconnectEvent.isError();
+                    logger.fine("TURN: Disconnected by peer. Reason: " + reason + ", error  " + error);
+                    if (error) {
+                        for (NostrTURNChannelListener l : listeners) {
+                            try {
+                                l.onTurnChannelError(this, new RuntimeException(reason));
+                            } catch (Exception ex) {
+                                logger.log(Level.WARNING, "Error in TURN channel listener", ex);
+                            }
+                        }
+                    }
+
+                    disconnect();
+                    break;
+                }
             default:
                 logger.warning("TURN: Unknown event type " + type);
                 break;
         }
-
-
     }
 
     private void sendControlEvent(NostrTURNEvent event) {
@@ -462,15 +478,18 @@ public final class NostrTURNChannel {
             }
             return;
         }
-        event.encodeToFrame(null).compose(bbf->{
-            return currentTransport.getTransport().sendBinary(bbf);
-        }).catchException(ex->{
-            logger.log(Level.FINE, "Failed to send TURN event: {0}", ex);
-            if (event instanceof NostrTURNConnectEvent) {
-                state = 0;
-                setTransport(null);
-            }
-        });        
+        event
+            .encodeToFrame(null)
+            .compose(bbf -> {
+                return currentTransport.getTransport().sendBinary(bbf);
+            })
+            .catchException(ex -> {
+                logger.log(Level.FINE, "Failed to send TURN event: {0}", ex);
+                if (event instanceof NostrTURNConnectEvent) {
+                    state = 0;
+                    setTransport(null);
+                }
+            });
     }
 
     private void scheduleDrainSend() {
@@ -483,7 +502,10 @@ public final class NostrTURNChannel {
         drainQueue.enqueue(this::drainSendQueuedMessages);
     }
 
-    private void drainSendQueuedMessages(java.util.function.Consumer<Void> resolve, java.util.function.Consumer<Throwable> reject) {
+    private void drainSendQueuedMessages(
+        java.util.function.Consumer<Void> resolve,
+        java.util.function.Consumer<Throwable> reject
+    ) {
         ByteBuffer msg = outgoingPayloadQueue.poll();
         if (msg == null) {
             synchronized (drainLockSend) {
@@ -505,16 +527,18 @@ public final class NostrTURNChannel {
             }
             resolve.accept(null);
         } else {
-            writeTask.then(v -> {
-                drainSendQueuedMessages(resolve, reject);
-                return null;
-            }).catchException(e -> {
-                outgoingPayloadQueue.add(msg);
-                synchronized (drainLockSend) {
-                    drainingSend = false;
-                }
-                reject.accept(e);
-            });
+            writeTask
+                .then(v -> {
+                    drainSendQueuedMessages(resolve, reject);
+                    return null;
+                })
+                .catchException(e -> {
+                    outgoingPayloadQueue.add(msg);
+                    synchronized (drainLockSend) {
+                        drainingSend = false;
+                    }
+                    reject.accept(e);
+                });
         }
     }
 
@@ -528,7 +552,10 @@ public final class NostrTURNChannel {
         drainQueue.enqueue(this::drainReceiveQueuedMessages);
     }
 
-    private void drainReceiveQueuedMessages(java.util.function.Consumer<Void> resolve, java.util.function.Consumer<Throwable> reject) {
+    private void drainReceiveQueuedMessages(
+        java.util.function.Consumer<Void> resolve,
+        java.util.function.Consumer<Throwable> reject
+    ) {
         ByteBuffer msg = incomingPayloadQueue.poll();
         if (msg == null) {
             synchronized (drainLockReceive) {
@@ -563,8 +590,4 @@ public final class NostrTURNChannel {
             reject.accept(t);
         }
     }
-
-
-
-  
 }

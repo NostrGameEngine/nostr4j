@@ -9,11 +9,11 @@ buildscript {
 
 
 plugins {
-    id "org.gradle.toolchains.foojay-resolver-convention" version "0.9.0" apply false
-    id "com.github.spotbugs"                            version "5.1.3" apply false
-    id "com.diffplug.spotless"                          version "6.25.0" apply false
-    id "io.github.gradle-nexus.publish-plugin"          version "2.0.0" 
-    id "org.gradle.test-retry"                          version "1.5.2" apply false
+    alias(libs.plugins.foojay.resolver) apply false
+    alias(libs.plugins.spotbugs) apply false
+    alias(libs.plugins.spotless) apply false
+    alias(libs.plugins.nexus.publish)
+    alias(libs.plugins.test.retry) apply false
 }
 
 ext {
@@ -28,14 +28,6 @@ ext {
     license="BSD 3-Clause License"
     licenseUrl="https://opensource.org/licenses/BSD-3-Clause"
 
-    ngePlatformVersionSnapshot = "0.3.0-SNAPSHOT"
-    ngePlatformVersion = "0.2.2"
-
-    lnurlVersionSnapshot = "0.0.3"
-    lnurlVersion = "0.0.3"
-
-    bech32VersionSnapshot = "1.0.3"
-    bech32Version = "1.0.3"
 }
 
 if(System.getenv("SONATYPE_USERNAME") || project.findProperty("sonatypeUsername")){
@@ -85,7 +77,8 @@ def applyConf(proj){
     proj.java {
         toolchain {
             languageVersion = JavaLanguageVersion.of(25)
-            vendor = JvmVendorSpec.ORACLE
+            vendor = JvmVendorSpec.ADOPTIUM
+
         }
         withJavadocJar()
         withSourcesJar()
@@ -99,7 +92,7 @@ def applyConf(proj){
     proj.tasks.named('compileTestJava') {
         javaCompiler = jts.compilerFor {
             languageVersion = JavaLanguageVersion.of(25)
-            vendor = JvmVendorSpec.ORACLE
+            vendor = JvmVendorSpec.ADOPTIUM
         }
         options.release = 21
     }
@@ -107,7 +100,7 @@ def applyConf(proj){
     proj.tasks.named('test') {
         javaLauncher = jts.launcherFor {
             languageVersion = JavaLanguageVersion.of(25)
-            vendor = JvmVendorSpec.ORACLE
+            vendor = JvmVendorSpec.ADOPTIUM
         }
     }
 
@@ -267,14 +260,14 @@ subprojects { proj ->
         proj.spotbugs {
             ignoreFailures = true
             reportLevel     = com.github.spotbugs.snom.Confidence.valueOf("MEDIUM")
-            toolVersion     = "4.9.3"
+            toolVersion     = libs.versions.spotbugs.get()
             excludeFilter   = file("${proj.rootDir}/spotbugs-exclude.xml")
         }
         proj.spotbugsTest {
             enabled = false
         }
         proj.dependencies {
-            spotbugsPlugins "com.h3xstream.findsecbugs:findsecbugs-plugin:1.12.0"
+            spotbugsPlugins libs.findsecbugs.plugin
         }
         proj.tasks.withType(com.github.spotbugs.snom.SpotBugsTask).configureEach { task ->
             task.reports {
@@ -337,7 +330,7 @@ subprojects { proj ->
                 removeUnusedImports()
              
                 formatAnnotations()
-                prettier(["prettier": "2.8.8", "prettier-plugin-java": "2.2.0"])
+                prettier(["prettier": libs.versions.prettier.get(), "prettier-plugin-java": libs.versions.prettierJava.get()])
                         .config([
                             "parser": "java", 
                             "tabWidth": 4, 

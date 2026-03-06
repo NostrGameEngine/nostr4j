@@ -16,7 +16,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
-
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCLocalPeer;
@@ -25,13 +24,14 @@ import org.ngengine.nostr4j.rtc.turn.event.NostrTURNCodec;
 import org.ngengine.nostr4j.rtc.turn.event.NostrTURNEvent;
 import org.ngengine.platform.AsyncExecutor;
 import org.ngengine.platform.AsyncTask;
-import org.ngengine.platform.NGEUtils;
 import org.ngengine.platform.NGEPlatform;
+import org.ngengine.platform.NGEUtils;
 import org.ngengine.platform.transport.WebsocketTransport;
 import org.ngengine.platform.transport.WebsocketTransportListener;
+
 /**
  * Manages TURN server connections and virtual socket sessions.
- * 
+ *
  * Responsibilities:
  * - Pool websocket connections to TURN servers
  * - Manage session lifecycle (challenge -> connect -> ack)
@@ -39,19 +39,19 @@ import org.ngengine.platform.transport.WebsocketTransportListener;
  * - Handle protocol state transitions
  */
 public final class NostrTURNPool implements AutoCloseable {
+
     static final Logger logger = Logger.getLogger(NostrTURNPool.class.getName());
     private static final long loopInterval = 100;
 
     private final AsyncExecutor executor = NGEUtils.getPlatform().newAsyncExecutor(NostrTURNPool.class);
-  
+
     private volatile boolean closed;
 
     private final List<NostrTURNChannel> channels = new CopyOnWriteArrayList<>();
     private final Map<String, TURNTransport> transports = new ConcurrentHashMap<>();
     private final int maxAcceptedDiff;
 
-
-    public NostrTURNPool( ) {
+    public NostrTURNPool() {
         this(32);
     }
 
@@ -63,10 +63,10 @@ public final class NostrTURNPool implements AutoCloseable {
     /**
      * Connect local peer to remote peer via the
      * specified turn settings.
-     * 
-     * The returned channel is a logical channel that never 
+     *
+     * The returned channel is a logical channel that never
      * goes offline: if the underlying transport connection dies it will be
-     * transparently resurrected on a new transport connection. 
+     * transparently resurrected on a new transport connection.
      */
     public NostrTURNChannel connect(
         NostrRTCLocalPeer localPeer,
@@ -83,23 +83,28 @@ public final class NostrTURNPool implements AutoCloseable {
             channelLabel,
             maxAcceptedDiff
         );
-        channel.addListener(new NostrTURNChannelListener() {
-            @Override public void onTurnChannelReady(NostrTURNChannel channel) {}
-            @Override public void onTurnChannelMessage(NostrTURNChannel channel, ByteBuffer payload) { }
-            @Override public void onTurnChannelError(NostrTURNChannel channel, Throwable e) { }
+        channel.addListener(
+            new NostrTURNChannelListener() {
+                @Override
+                public void onTurnChannelReady(NostrTURNChannel channel) {}
 
-            @Override
-            public void onTurnChannelClosed(NostrTURNChannel channel, String reason) {
-               channels.remove(channel);
+                @Override
+                public void onTurnChannelMessage(NostrTURNChannel channel, ByteBuffer payload) {}
+
+                @Override
+                public void onTurnChannelError(NostrTURNChannel channel, Throwable e) {}
+
+                @Override
+                public void onTurnChannelClosed(NostrTURNChannel channel, String reason) {
+                    channels.remove(channel);
+                }
             }
-        });
+        );
 
         this.channels.add(channel);
         resurrectChannel(channel);
-        return channel;        
+        return channel;
     }
-
- 
 
     @Override
     public void close() {
@@ -113,109 +118,118 @@ public final class NostrTURNPool implements AutoCloseable {
         }
         transports.clear();
     }
-      
 
     /**
-     * Fetches or creates the underlying websocket transport for the 
-     * given channel. If an appropriate transport already exists it will 
+     * Fetches or creates the underlying websocket transport for the
+     * given channel. If an appropriate transport already exists it will
      * be used in multiplexing mode.
      * @param channel
      * @return
-     */ 
+     */
     private AsyncTask<TURNTransport> useWebsocketTransport(NostrTURNChannel channel) {
         String turnServerUrl = channel.getServerUrl();
-        return NGEPlatform.get().wrapPromise((res,rej)->{
-            // try to reuse existing transports
-            TURNTransport ws = transports.compute(turnServerUrl, (url, tr) -> {
-                if(tr==null||(!tr.isConnecting&&!tr.transport.isConnected())){
-                    TURNTransport wss = new TURNTransport(NGEPlatform.get().newTransport());
-                    attachCoreTransportListener(wss);
-                    wss.addUser(channel);
-                    wss.isConnecting = true;
-                    wss.transport.connect(url).then(v->{
-                        wss.isConnecting = false;
-                        return null;
-                    }).catchException(e->{
-                        logger.warning("Failed to connect to TURN server: " + e.getMessage());
-                        wss.isConnecting = false;
-                        wss.removeUser(channel);
-                        channel.setTransport(null);
-                        rej.accept(e);
-                    });
-                    tr = wss;
-                }
-                return tr;
-            });
+        return NGEPlatform
+            .get()
+            .wrapPromise((res, rej) -> {
+                // try to reuse existing transports
+                TURNTransport ws = transports.compute(
+                    turnServerUrl,
+                    (url, tr) -> {
+                        if (tr == null || (!tr.isConnecting && !tr.transport.isConnected())) {
+                            TURNTransport wss = new TURNTransport(NGEPlatform.get().newTransport());
+                            attachCoreTransportListener(wss);
+                            wss.addUser(channel);
+                            wss.isConnecting = true;
+                            wss.transport
+                                .connect(url)
+                                .then(v -> {
+                                    wss.isConnecting = false;
+                                    return null;
+                                })
+                                .catchException(e -> {
+                                    logger.warning("Failed to connect to TURN server: " + e.getMessage());
+                                    wss.isConnecting = false;
+                                    wss.removeUser(channel);
+                                    channel.setTransport(null);
+                                    rej.accept(e);
+                                });
+                            tr = wss;
+                        }
+                        return tr;
+                    }
+                );
 
-            ws.addUser(channel);
-            if(ws.transport.isConnected()){
-                channel.setTransport(ws);
-                ws.replayLastChallenge(channel);
-                res.accept(ws);
-                return;
-            }
-            attachHandshakeListener(ws, channel, res, rej);
-        });        
+                ws.addUser(channel);
+                if (ws.transport.isConnected()) {
+                    channel.setTransport(ws);
+                    ws.replayLastChallenge(channel);
+                    res.accept(ws);
+                    return;
+                }
+                attachHandshakeListener(ws, channel, res, rej);
+            });
     }
 
     private void attachCoreTransportListener(TURNTransport ws) {
         if (!ws.markCoreListenerAttached()) {
             return;
         }
-        ws.transport.addListener(new WebsocketTransportListener() {
-            @Override
-            public void onConnectionClosedByServer(String reason){
-                for (NostrTURNChannel user : ws.getUsers()) {
-                    user.setTransport(null);
+        ws.transport.addListener(
+            new WebsocketTransportListener() {
+                @Override
+                public void onConnectionClosedByServer(String reason) {
+                    for (NostrTURNChannel user : ws.getUsers()) {
+                        user.setTransport(null);
+                    }
                 }
-            }
 
-            @Override
-            public void onConnectionOpen(){
-                for (NostrTURNChannel user : ws.getUsers()) {
-                    user.setTransport(ws);
+                @Override
+                public void onConnectionOpen() {
+                    for (NostrTURNChannel user : ws.getUsers()) {
+                        user.setTransport(ws);
+                    }
                 }
-            }
-            
-            @Override
-            public void onConnectionMessage(String msg){
-                for (NostrTURNChannel user : ws.getUsers()) {
-                    user.onConnectionMessage(msg);
-                }
-            }
 
-            @Override
-            public void onConnectionBinaryMessage(ByteBuffer msg){
-                ByteBuffer source = msg.asReadOnlyBuffer();
-                source.rewind();
-                cacheChallengeFrameIfPresent(ws, source);
-                for (NostrTURNChannel user : ws.getUsers()) {
-                    ByteBuffer frame = source.asReadOnlyBuffer();
-                    frame.rewind();
-                    try {
-                        user.onBinaryMessage(frame);
-                    } catch (IllegalArgumentException ignored) {
-                        // Frame not meant for this logical channel.
-                    } catch (Exception ex) {
-                        user.onError(ex);
+                @Override
+                public void onConnectionMessage(String msg) {
+                    for (NostrTURNChannel user : ws.getUsers()) {
+                        user.onConnectionMessage(msg);
+                    }
+                }
+
+                @Override
+                public void onConnectionBinaryMessage(ByteBuffer msg) {
+                    ByteBuffer source = msg.asReadOnlyBuffer();
+                    source.rewind();
+                    cacheChallengeFrameIfPresent(ws, source);
+                    for (NostrTURNChannel user : ws.getUsers()) {
+                        ByteBuffer frame = source.asReadOnlyBuffer();
+                        frame.rewind();
+                        try {
+                            user.onBinaryMessage(frame);
+                        } catch (IllegalArgumentException ignored) {
+                            // Frame not meant for this logical channel.
+                        } catch (Exception ex) {
+                            user.onError(ex);
+                        }
+                    }
+                }
+
+                @Override
+                public void onConnectionClosedByClient(String reason) {
+                    for (NostrTURNChannel user : ws.getUsers()) {
+                        user.setTransport(null);
+                    }
+                }
+
+                @Override
+                public void onConnectionError(Throwable e) {
+                    for (NostrTURNChannel user : ws.getUsers()) {
+                        user.onError(e);
                     }
                 }
             }
-
-            @Override
-            public void onConnectionClosedByClient(String reason){
-                for (NostrTURNChannel user : ws.getUsers()) {
-                    user.setTransport(null);
-                }
-            }
-
-            @Override
-            public void onConnectionError(Throwable e){
-                for (NostrTURNChannel user : ws.getUsers()) {
-                    user.onError(e);
-                }
-            }
-        });
+        );
     }
 
     private void attachHandshakeListener(
@@ -225,65 +239,64 @@ public final class NostrTURNPool implements AutoCloseable {
         java.util.function.Consumer<Throwable> rej
     ) {
         WebsocketTransportListener[] ref = new WebsocketTransportListener[1];
-        ref[0] = new WebsocketTransportListener() {
-            private volatile boolean done;
+        ref[0] =
+            new WebsocketTransportListener() {
+                private volatile boolean done;
 
-            private void cleanup() {
-                WebsocketTransportListener listener = ref[0];
-                if (listener != null) {
-                    ws.transport.removeListener(listener);
+                private void cleanup() {
+                    WebsocketTransportListener listener = ref[0];
+                    if (listener != null) {
+                        ws.transport.removeListener(listener);
+                    }
                 }
-            }
 
-            private void resolveOnce() {
-                if (done) {
-                    return;
+                private void resolveOnce() {
+                    if (done) {
+                        return;
+                    }
+                    done = true;
+                    cleanup();
+                    channel.setTransport(ws);
+                    res.accept(ws);
                 }
-                done = true;
-                cleanup();
-                channel.setTransport(ws);
-                res.accept(ws);
-            }
 
-            private void rejectOnce(Throwable err) {
-                if (done) {
-                    return;
+                private void rejectOnce(Throwable err) {
+                    if (done) {
+                        return;
+                    }
+                    done = true;
+                    cleanup();
+                    channel.setTransport(null);
+                    ws.removeUser(channel);
+                    rej.accept(err);
                 }
-                done = true;
-                cleanup();
-                channel.setTransport(null);
-                ws.removeUser(channel);
-                rej.accept(err);
-            }
 
-            @Override
-            public void onConnectionClosedByServer(String reason) {
-                rejectOnce(new RuntimeException("Websocket closed by server: " + reason));
-            }
+                @Override
+                public void onConnectionClosedByServer(String reason) {
+                    rejectOnce(new RuntimeException("Websocket closed by server: " + reason));
+                }
 
-            @Override
-            public void onConnectionOpen() {
-                resolveOnce();
-            }
+                @Override
+                public void onConnectionOpen() {
+                    resolveOnce();
+                }
 
-            @Override
-            public void onConnectionMessage(String msg) {
-            }
+                @Override
+                public void onConnectionMessage(String msg) {}
 
-            @Override
-            public void onConnectionBinaryMessage(ByteBuffer msg) {
-            }
+                @Override
+                public void onConnectionBinaryMessage(ByteBuffer msg) {}
 
-            @Override
-            public void onConnectionClosedByClient(String reason) {
-                rejectOnce(new RuntimeException("Websocket closed by client: " + reason));
-            }
+                @Override
+                public void onConnectionClosedByClient(String reason) {
+                    rejectOnce(new RuntimeException("Websocket closed by client: " + reason));
+                }
 
-            @Override
-            public void onConnectionError(Throwable e) {
-                rejectOnce(e);
-            }
-        };
+                @Override
+                public void onConnectionError(Throwable e) {
+                    rejectOnce(e);
+                }
+            };
         ws.transport.addListener(ref[0]);
     }
 
@@ -310,58 +323,67 @@ public final class NostrTURNPool implements AutoCloseable {
      * @param channel
      */
     private void resurrectChannel(NostrTURNChannel channel) {
-        if(channel.isClosed() || channel.isConnected() || channel.isResurrecting()) {
+        if (channel.isClosed() || channel.isConnected() || channel.isResurrecting()) {
             return;
         }
         channel.setResurrecting(true);
-        useWebsocketTransport(channel).then(transport->{
-            channel.setResurrecting(false);
-            return null;
-        }).catchException(e->{
-            logger.warning("Failed to resurrect TURN channel: " + e.getMessage());
-            channel.setResurrecting(false);
-        });                    
+        useWebsocketTransport(channel)
+            .then(transport -> {
+                channel.setResurrecting(false);
+                return null;
+            })
+            .catchException(e -> {
+                logger.warning("Failed to resurrect TURN channel: " + e.getMessage());
+                channel.setResurrecting(false);
+            });
     }
-    
 
     private void loop() {
-        executor.runLater(() -> {
-            if (closed) {
-                return null;
-            }
-            try {
-                // cleanup idle connections          
-                Iterator<Entry<String, TURNTransport>> transportIterator = transports.entrySet().iterator();
-                while (transportIterator.hasNext()) {
-                    Entry<String, TURNTransport> entry = transportIterator.next();
-                    TURNTransport transport = entry.getValue();
-                    if (!transport.isUsed() || (!transport.isConnected() && !transport.isConnecting)) {
-                        transport.close("TURN pool cleanup: transport not connected or unused");
-                        transport.getUsers().forEach(channel -> {
-                            channel.setTransport(null);
-                        });
-                        transportIterator.remove();
+        executor.runLater(
+            () -> {
+                if (closed) {
+                    return null;
+                }
+                try {
+                    // cleanup idle connections
+                    Iterator<Entry<String, TURNTransport>> transportIterator = transports.entrySet().iterator();
+                    while (transportIterator.hasNext()) {
+                        Entry<String, TURNTransport> entry = transportIterator.next();
+                        TURNTransport transport = entry.getValue();
+                        if (!transport.isUsed() || (!transport.isConnected() && !transport.isConnecting)) {
+                            transport.close("TURN pool cleanup: transport not connected or unused");
+                            transport
+                                .getUsers()
+                                .forEach(channel -> {
+                                    channel.setTransport(null);
+                                });
+                            transportIterator.remove();
+                        }
                     }
-                }
 
-                // resurrect channels
-                for(NostrTURNChannel channel : channels) {
-                    resurrectChannel(channel);
+                    // resurrect channels
+                    for (NostrTURNChannel channel : channels) {
+                        resurrectChannel(channel);
+                    }
+                } catch (Exception e) {
+                    logger.warning("Error during TURN pool cleanup: " + e.getMessage());
                 }
-            } catch (Exception e) {
-                logger.warning("Error during TURN pool cleanup: " + e.getMessage());
-            }
-            loop();
-            return null;
-        }, loopInterval, TimeUnit.MILLISECONDS);
+                loop();
+                return null;
+            },
+            loopInterval,
+            TimeUnit.MILLISECONDS
+        );
     }
 
     static final class TURNTransport {
+
         private final WebsocketTransport transport;
         private final Set<NostrTURNChannel> users = Collections.synchronizedSet(new HashSet<>());
         private volatile boolean coreListenerAttached = false;
         private volatile byte[] lastChallengeFrame = null;
         boolean isConnecting = false;
+
         public TURNTransport(WebsocketTransport transport) {
             this.transport = transport;
         }
@@ -424,6 +446,4 @@ public final class NostrTURNPool implements AutoCloseable {
             }
         }
     }
-
-
 }

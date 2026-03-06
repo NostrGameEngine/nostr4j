@@ -1,3 +1,34 @@
+/**
+ * BSD 3-Clause License
+ *
+ * Copyright (c) 2025, Riccardo Balbo
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the documentation
+ *    and/or other materials provided with the distribution.
+ *
+ * 3. Neither the name of the copyright holder nor the names of its
+ *    contributors may be used to endorse or promote products derived from
+ *    this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
 package org.ngengine.nostr4j.turn.ref;
 
 import static org.junit.Assert.assertArrayEquals;
@@ -21,7 +52,6 @@ import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
-
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -40,6 +70,7 @@ import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
 import org.ngengine.platform.NGEUtils;
 
 public class TestTurnServerCompliance {
+
     private static final String APP_ID = "app-turn-test";
     private static final String PROTOCOL_ID = "proto-turn-test";
     private static final String CHANNEL_LABEL = "default";
@@ -87,10 +118,20 @@ public class TestTurnServerCompliance {
             .withTag("i", attacker.getProtocolId())
             .withTag("y", attacker.getApplicationId())
             .withTag("p", victimRemote.getPubkey().asHex(), CHANNEL_LABEL)
-            .withContent(NGEUtils.getPlatform().toJSON(Map.of("challenge", challenge.getChallenge(), "vsocketId", Long.toString(vsocketId))));
+            .withContent(
+                NGEUtils
+                    .getPlatform()
+                    .toJSON(Map.of("challenge", challenge.getChallenge(), "vsocketId", Long.toString(vsocketId)))
+            );
 
-        SignedNostrEvent signedConnect = NGEUtils.awaitNoThrow(attackerSigner.powSign(unsignedConnect, challenge.getRequiredDifficulty()));
-        ByteBuffer frame = NostrTURNCodec.encodeFrame(NostrTURNCodec.encodeHeader(signedConnect), vsocketId, Collections.emptyList());
+        SignedNostrEvent signedConnect = NGEUtils.awaitNoThrow(
+            attackerSigner.powSign(unsignedConnect, challenge.getRequiredDifficulty())
+        );
+        ByteBuffer frame = NostrTURNCodec.encodeFrame(
+            NostrTURNCodec.encodeHeader(signedConnect),
+            vsocketId,
+            Collections.emptyList()
+        );
         ws.send(frame);
 
         // Roomproof is mandatory: server should reject and close connection.
@@ -135,7 +176,8 @@ public class TestTurnServerCompliance {
         byte[] payload = "queued-before-bob-connects".getBytes();
         byte[] key = NGEUtils.getPlatform().randomBytes(32);
         ByteBuffer dataFrame = NGEUtils.awaitNoThrow(
-            NostrTURNDataEvent.createOutgoing(alice, bobRemoteForAlice, roomKeyPair, CHANNEL_LABEL, aliceVsocketId, key)
+            NostrTURNDataEvent
+                .createOutgoing(alice, bobRemoteForAlice, roomKeyPair, CHANNEL_LABEL, aliceVsocketId, key)
                 .encodeToFrame(Collections.singletonList(ByteBuffer.wrap(payload)))
         );
         aliceWs.send(dataFrame);
@@ -163,7 +205,9 @@ public class TestTurnServerCompliance {
             CHANNEL_LABEL,
             bobVsocketId
         );
-        Queue<ByteBuffer> decoded = new ConcurrentLinkedQueue<ByteBuffer>(NGEUtils.awaitNoThrow(incoming.decodeFramePayloads(drainedFrame)));
+        Queue<ByteBuffer> decoded = new ConcurrentLinkedQueue<ByteBuffer>(
+            NGEUtils.awaitNoThrow(incoming.decodeFramePayloads(drainedFrame))
+        );
         assertEquals(1, decoded.size());
         byte[] got = new byte[decoded.peek().remaining()];
         decoded.peek().get(got);
@@ -186,18 +230,30 @@ public class TestTurnServerCompliance {
         NostrRTCPeer senderBRemote = remotePeer(sharedSigner, roomKeyPair, senderB.getSessionId());
 
         WsClient wsSenderA = WsClient.connect(wsUri);
-        NostrTURNChallengeEvent challengeA = NostrTURNChallengeEvent.parseIncoming(waitForType(wsSenderA, "challenge", 2000), senderA, 64);
+        NostrTURNChallengeEvent challengeA = NostrTURNChallengeEvent.parseIncoming(
+            waitForType(wsSenderA, "challenge", 2000),
+            senderA,
+            64
+        );
         long sharedVsocketId = 333L;
         sendValidConnect(wsSenderA, senderA, receiverRemote, roomKeyPair, challengeA, sharedVsocketId);
         assertNotNull(waitForType(wsSenderA, "ack", 2000));
 
         WsClient wsSenderB = WsClient.connect(wsUri);
-        NostrTURNChallengeEvent challengeB = NostrTURNChallengeEvent.parseIncoming(waitForType(wsSenderB, "challenge", 2000), senderB, 64);
+        NostrTURNChallengeEvent challengeB = NostrTURNChallengeEvent.parseIncoming(
+            waitForType(wsSenderB, "challenge", 2000),
+            senderB,
+            64
+        );
         sendValidConnect(wsSenderB, senderB, receiverRemote, roomKeyPair, challengeB, sharedVsocketId);
         assertNotNull(waitForType(wsSenderB, "ack", 2000));
 
         WsClient wsReceiver = WsClient.connect(wsUri);
-        NostrTURNChallengeEvent challengeR = NostrTURNChallengeEvent.parseIncoming(waitForType(wsReceiver, "challenge", 2000), receiver, 64);
+        NostrTURNChallengeEvent challengeR = NostrTURNChallengeEvent.parseIncoming(
+            waitForType(wsReceiver, "challenge", 2000),
+            receiver,
+            64
+        );
         long receiverVsocketId = 444L;
         sendValidConnect(wsReceiver, receiver, senderARemote, roomKeyPair, challengeR, receiverVsocketId);
         assertNotNull(waitForType(wsReceiver, "ack", 2000));
@@ -205,7 +261,8 @@ public class TestTurnServerCompliance {
         byte[] key = NGEUtils.getPlatform().randomBytes(32);
         byte[] firstPayload = "from-sender-b-before-disconnect".getBytes();
         ByteBuffer dataFromB = NGEUtils.awaitNoThrow(
-            NostrTURNDataEvent.createOutgoing(senderB, receiverRemote, roomKeyPair, CHANNEL_LABEL, sharedVsocketId, key)
+            NostrTURNDataEvent
+                .createOutgoing(senderB, receiverRemote, roomKeyPair, CHANNEL_LABEL, sharedVsocketId, key)
                 .encodeToFrame(Collections.singletonList(ByteBuffer.wrap(firstPayload)))
         );
         wsSenderB.send(dataFromB);
@@ -226,7 +283,8 @@ public class TestTurnServerCompliance {
 
         byte[] secondPayload = "from-sender-b-after-sender-a-disconnect".getBytes();
         ByteBuffer secondFromB = NGEUtils.awaitNoThrow(
-            NostrTURNDataEvent.createOutgoing(senderB, receiverRemote, roomKeyPair, CHANNEL_LABEL, sharedVsocketId, key)
+            NostrTURNDataEvent
+                .createOutgoing(senderB, receiverRemote, roomKeyPair, CHANNEL_LABEL, sharedVsocketId, key)
                 .encodeToFrame(Collections.singletonList(ByteBuffer.wrap(secondPayload)))
         );
         wsSenderB.send(secondFromB);
@@ -245,7 +303,9 @@ public class TestTurnServerCompliance {
             CHANNEL_LABEL,
             receiverVsocketId
         );
-        Queue<ByteBuffer> payloads = new ConcurrentLinkedQueue<ByteBuffer>(NGEUtils.awaitNoThrow(decoded.decodeFramePayloads(receivedFrame)));
+        Queue<ByteBuffer> payloads = new ConcurrentLinkedQueue<ByteBuffer>(
+            NGEUtils.awaitNoThrow(decoded.decodeFramePayloads(receivedFrame))
+        );
         assertFalse(payloads.isEmpty());
 
         wsSenderA.closeNow();
@@ -260,15 +320,7 @@ public class TestTurnServerCompliance {
     }
 
     private static NostrRTCLocalPeer localPeer(NostrKeyPairSigner signer, NostrKeyPair roomKeyPair, String sessionId) {
-        return new NostrRTCLocalPeer(
-            signer,
-            Collections.emptyList(),
-            APP_ID,
-            PROTOCOL_ID,
-            sessionId,
-            roomKeyPair,
-            null
-        );
+        return new NostrRTCLocalPeer(signer, Collections.emptyList(), APP_ID, PROTOCOL_ID, sessionId, roomKeyPair, null);
     }
 
     private static NostrRTCPeer remotePeer(NostrKeyPairSigner signer, NostrKeyPair roomKeyPair, String sessionId) {
@@ -320,6 +372,7 @@ public class TestTurnServerCompliance {
     }
 
     private static final class WsClient implements WebSocket.Listener {
+
         private final LinkedBlockingQueue<ByteBuffer> frames = new LinkedBlockingQueue<ByteBuffer>();
         private final Queue<ByteBuffer> typedFrames = new ConcurrentLinkedQueue<ByteBuffer>();
         private final CompletableFuture<Void> closed = new CompletableFuture<Void>();
@@ -327,9 +380,7 @@ public class TestTurnServerCompliance {
 
         static WsClient connect(URI uri) {
             WsClient listener = new WsClient();
-            HttpClient client = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(5))
-                .build();
+            HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
             listener.ws = client.newWebSocketBuilder().buildAsync(uri, listener).join();
             return listener;
         }
@@ -389,8 +440,7 @@ public class TestTurnServerCompliance {
             if (ws != null) {
                 try {
                     ws.sendClose(WebSocket.NORMAL_CLOSURE, "test-done").join();
-                } catch (Exception ignored) {
-                }
+                } catch (Exception ignored) {}
             }
         }
 

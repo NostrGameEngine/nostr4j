@@ -30,8 +30,6 @@
  */
 package org.ngengine.nostr4j.rtc;
 
-import static org.ngengine.platform.NGEUtils.dbg;
-
 import java.io.Closeable;
 import java.nio.ByteBuffer;
 import java.util.*;
@@ -50,12 +48,12 @@ import org.ngengine.nostr4j.rtc.listeners.NostrRTCRoomPeerDisconnectListener;
 import org.ngengine.nostr4j.rtc.listeners.NostrRTCRoomPeerDiscoveredListener;
 import org.ngengine.nostr4j.rtc.listeners.NostrRTCRoomPeerMessageListener;
 import org.ngengine.nostr4j.rtc.listeners.NostrRTCSocketListener;
-import org.ngengine.nostr4j.rtc.signal.NostrRTCConnectSignal;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCAnswerSignal;
-import org.ngengine.nostr4j.rtc.signal.NostrRTCRouteSignal;
+import org.ngengine.nostr4j.rtc.signal.NostrRTCConnectSignal;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCLocalPeer;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCOfferSignal;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCPeer;
+import org.ngengine.nostr4j.rtc.signal.NostrRTCRouteSignal;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCSignaling;
 import org.ngengine.nostr4j.rtc.turn.NostrTURNPool;
 import org.ngengine.platform.AsyncExecutor;
@@ -66,6 +64,7 @@ import org.ngengine.platform.RTCSettings;
 import org.ngengine.platform.transport.RTCTransportIceCandidate;
 
 public class NostrRTCRoom implements Closeable {
+
     private static final Logger logger = Logger.getLogger(NostrRTCRoom.class.getName());
 
     private final Map<NostrRTCPeer, NostrRTCSocket> connections = new ConcurrentHashMap<>();
@@ -83,10 +82,8 @@ public class NostrRTCRoom implements Closeable {
     private final NostrKeyPair roomKeyPair;
     private final String turnServerUrl;
     private final NostrTURNPool turnPool;
-    
-    
-    
-    private static interface Listener extends NostrRTCSignaling.Listener, NostrRTCSocketListener, NostrRTCChannelListener{}
+
+    private static interface Listener extends NostrRTCSignaling.Listener, NostrRTCSocketListener, NostrRTCChannelListener {}
 
     private final Listener listener = new Listener() {
         @Override
@@ -125,10 +122,12 @@ public class NostrRTCRoom implements Closeable {
         }
 
         @Override
-        public void onRTCSocketRouteUpdate(NostrRTCSocket socket, Collection<RTCTransportIceCandidate> candidates,
-                String turnServer) {
+        public void onRTCSocketRouteUpdate(
+            NostrRTCSocket socket,
+            Collection<RTCTransportIceCandidate> candidates,
+            String turnServer
+        ) {
             NostrRTCRoom.this.onRTCSocketLocalIceCandidate(socket, candidates, turnServer);
-
         }
 
         @Override
@@ -149,8 +148,6 @@ public class NostrRTCRoom implements Closeable {
                 }
             }
         }
-
-      
 
         @Override
         public void onRTCChannelError(NostrRTCChannel channel, Throwable e) {
@@ -191,16 +188,13 @@ public class NostrRTCRoom implements Closeable {
                 }
             }
         }
-
     };
-
- 
 
     public NostrRTCRoom(
         RTCSettings settings,
         NostrRTCLocalPeer localPeer,
         NostrKeyPair roomKeyPair,
-        NostrPool signalingPool,      
+        NostrPool signalingPool,
         String turnServerUrl,
         NostrTURNPool turnPool
     ) {
@@ -213,7 +207,7 @@ public class NostrRTCRoom implements Closeable {
             new NostrRTCSignaling(
                 settings,
                 localPeer.getApplicationId(),
-                localPeer.getProtocolId(),               
+                localPeer.getProtocolId(),
                 localPeer,
                 roomKeyPair,
                 Objects.requireNonNull(signalingPool, "Signaling pool cannot be null")
@@ -223,14 +217,7 @@ public class NostrRTCRoom implements Closeable {
     }
 
     private NostrRTCSocket newSocket() {
-        return new NostrRTCSocket(
-            executor,
-            roomKeyPair,
-            localPeer,
-            settings,
-            turnServerUrl,
-            turnPool
-        );
+        return new NostrRTCSocket(executor, roomKeyPair, localPeer, settings, turnServerUrl, turnPool);
     }
 
     @Override
@@ -317,7 +304,7 @@ public class NostrRTCRoom implements Closeable {
                             NostrRTCPeer remotePeer = announce.getPeer();
                             NostrPublicKey remotePubkey = remotePeer.getPubkey();
 
-                            NostrRTCSocket socket  = connections.get(remotePeer);
+                            NostrRTCSocket socket = connections.get(remotePeer);
 
                             if (socket != null && (socket.isConnected() || socket.isPendingConnection())) continue;
                             if (socket != null && socket.isClosed()) {
@@ -329,7 +316,7 @@ public class NostrRTCRoom implements Closeable {
                             if (!shouldOfferConnection(remotePubkey)) continue;
 
                             logger.fine("Initiating connection to: " + remotePubkey);
-                            if(socket==null){
+                            if (socket == null) {
                                 socket = newSocket();
                                 socket.addListener(listener);
                                 connections.put(remotePeer, socket);
@@ -411,7 +398,7 @@ public class NostrRTCRoom implements Closeable {
         }
     }
 
-     /**
+    /**
      * Disconnect all peers associated with a pubkey
      * @param peer the peer to disconnect
      */
@@ -528,8 +515,6 @@ public class NostrRTCRoom implements Closeable {
         }
     }
 
-
-
     /**
      * Get some info about the local peer
      * @return the local peer info
@@ -632,7 +617,11 @@ public class NostrRTCRoom implements Closeable {
         }
     }
 
-    protected void onRTCSocketLocalIceCandidate(NostrRTCSocket socket, Collection<RTCTransportIceCandidate> candidates, String turn) {
+    protected void onRTCSocketLocalIceCandidate(
+        NostrRTCSocket socket,
+        Collection<RTCTransportIceCandidate> candidates,
+        String turn
+    ) {
         try {
             NostrRTCPeer remotePeer = socket.getRemotePeer();
             if (remotePeer == null) return;
@@ -644,7 +633,6 @@ public class NostrRTCRoom implements Closeable {
             logger.log(Level.WARNING, "Error sending local ICE candidate", e);
         }
     }
-
 
     /**
      * Send some data to a remote peer.
@@ -699,7 +687,6 @@ public class NostrRTCRoom implements Closeable {
         }
         return null;
     }
-
 
     private List<NostrRTCSocket> removeSocketsForPubkey(NostrPublicKey peer) {
         List<NostrRTCSocket> removed = new ArrayList<>();

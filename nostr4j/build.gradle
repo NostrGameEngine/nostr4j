@@ -1,25 +1,22 @@
-buildscript {
-    repositories { mavenCentral() }
-    dependencies {
-        classpath 'org.ow2.asm:asm:9.5'
-        classpath 'org.ow2.asm:asm-tree:9.5'
-    }
-}
 plugins {
     id 'java-library'
 }
 
 dependencies {
-    testImplementation "junit:junit:4.13.2"
-    testImplementation project(':nostr4j-turn-server')
-    implementation "org.ngengine:nge-platform-common:${project.version.endsWith('-SNAPSHOT') ? rootProject.ext.ngePlatformVersionSnapshot : rootProject.ext.ngePlatformVersion}"
-    testImplementation "org.ngengine:nge-platform-jvm:${project.version.endsWith('-SNAPSHOT') ? rootProject.ext.ngePlatformVersionSnapshot : rootProject.ext.ngePlatformVersion}"
-    testImplementation 'com.google.code.gson:gson:2.12.1'
-    implementation 'jakarta.annotation:jakarta.annotation-api:2.1.1'
-    implementation 'org.slf4j:slf4j-jdk14:2.0.12'
+    def ngePlatformVersion = project.version.endsWith('-SNAPSHOT') ? libs.versions.ngePlatformSnapshot.get() : libs.versions.ngePlatform.get()
+    def bech32Version = project.version.endsWith('-SNAPSHOT') ? libs.versions.bech32Snapshot.get() : libs.versions.bech32.get()
+    def lnurlVersion = project.version.endsWith('-SNAPSHOT') ? libs.versions.lnurlSnapshot.get() : libs.versions.lnurl.get()
 
-    api "org.ngengine:bech32:${project.version.endsWith('-SNAPSHOT') ? rootProject.ext.bech32VersionSnapshot : rootProject.ext.bech32Version}"
-    api "org.ngengine:lnurl4j:${project.version.endsWith('-SNAPSHOT') ? rootProject.ext.lnurlVersionSnapshot : rootProject.ext.lnurlVersion}"
+    testImplementation libs.junit4
+    testImplementation project(':nostr4j-turn-server')
+    implementation "org.ngengine:nge-platform-common:${ngePlatformVersion}"
+    testImplementation "org.ngengine:nge-platform-jvm:${ngePlatformVersion}"
+    testImplementation libs.gson
+    implementation libs.jakarta.annotation.api
+    implementation libs.slf4j.jdk14
+
+    api "org.ngengine:bech32:${bech32Version}"
+    api "org.ngengine:lnurl4j:${lnurlVersion}"
 }
  
 

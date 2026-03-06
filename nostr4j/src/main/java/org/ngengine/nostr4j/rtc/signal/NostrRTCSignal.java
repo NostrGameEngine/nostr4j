@@ -30,11 +30,11 @@
  */
 package org.ngengine.nostr4j.rtc.signal;
 
+import jakarta.annotation.Nullable;
 import java.io.Serializable;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
-
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.event.UnsignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
@@ -45,19 +45,18 @@ import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEPlatform;
 import org.ngengine.platform.NGEUtils;
 
-import jakarta.annotation.Nullable;
-
 /**
  * A signal for the RTC handshake.
  */
 
 public abstract class NostrRTCSignal implements Serializable {
+
     private final NostrKeyPair roomKeyPair;
     private final NostrRTCPeer peer;
     private final String type;
     private final NostrSigner localSigner;
 
-    protected NostrRTCSignal(NostrSigner localSigner, String type, NostrKeyPair roomKeyPair, NostrRTCPeer peer){
+    protected NostrRTCSignal(NostrSigner localSigner, String type, NostrKeyPair roomKeyPair, NostrRTCPeer peer) {
         Objects.requireNonNull(localSigner, "Local signer cannot be null");
         Objects.requireNonNull(type, "Type cannot be null");
         Objects.requireNonNull(roomKeyPair, "Room key pair cannot be null");
@@ -68,18 +67,17 @@ public abstract class NostrRTCSignal implements Serializable {
         this.peer = peer;
     }
 
-
-    protected NostrRTCSignal(NostrSigner localSigner, String type, NostrKeyPair roomKeyPair, SignedNostrEvent event){
+    protected NostrRTCSignal(NostrSigner localSigner, String type, NostrKeyPair roomKeyPair, SignedNostrEvent event) {
         Objects.requireNonNull(localSigner, "Local signer cannot be null");
         Objects.requireNonNull(type, "Type cannot be null");
         Objects.requireNonNull(roomKeyPair, "Room key pair cannot be null");
         Objects.requireNonNull(event, "Event cannot be null");
-        try{
-            if(!event.verify())throw new IllegalArgumentException("Event signature is invalid");
-        }catch(Exception e){
+        try {
+            if (!event.verify()) throw new IllegalArgumentException("Event signature is invalid");
+        } catch (Exception e) {
             throw new IllegalArgumentException("Event signature verification failed", e);
         }
-        if(event.getKind() != 25050) throw new IllegalArgumentException("Event kind must be 25050");
+        if (event.getKind() != 25050) throw new IllegalArgumentException("Event kind must be 25050");
         String eventType = NGEUtils.safeString(event.getFirstTagFirstValue("t"));
         if (!type.equals(eventType)) throw new IllegalArgumentException("Event type must be " + type);
 
@@ -91,37 +89,28 @@ public abstract class NostrRTCSignal implements Serializable {
             throw new IllegalArgumentException("Missing room pubkey tag P");
         }
         NostrPublicKey roomPubkey = NostrPublicKey.fromHex(roomHex);
-        if(!roomPubkey.equals(roomKeyPair.getPublicKey())) throw new IllegalArgumentException("Event room pubkey does not match the provided room");
-        if(event.isExpired()) throw new IllegalArgumentException("Event is expired");
+        if (!roomPubkey.equals(roomKeyPair.getPublicKey())) throw new IllegalArgumentException(
+            "Event room pubkey does not match the provided room"
+        );
+        if (event.isExpired()) throw new IllegalArgumentException("Event is expired");
         if (requiresRoomProof(type) && !verifyRoomProof(roomPubkey, event)) {
             throw new IllegalArgumentException("Invalid roomproof");
         }
-        this.peer = new NostrRTCPeer(
-            event.getPubkey(),
-            applicationId,
-            protocolId,
-            sessionId,
-            roomPubkey,
-            null
-        );
+        this.peer = new NostrRTCPeer(event.getPubkey(), applicationId, protocolId, sessionId, roomPubkey, null);
         this.roomKeyPair = roomKeyPair;
         this.type = type;
         this.localSigner = localSigner;
+    }
 
-    } 
-
-    public NostrPublicKey getRoomPubkey(){
+    public NostrPublicKey getRoomPubkey() {
         return roomKeyPair.getPublicKey();
     }
 
-    public NostrRTCPeer getPeer(){
+    public NostrRTCPeer getPeer() {
         return peer;
     }
 
-    protected final AsyncTask<String> encrypt(
-        String content, 
-        NostrPublicKey recipient
-    ) {
+    protected final AsyncTask<String> encrypt(String content, NostrPublicKey recipient) {
         return localSigner.encrypt(content, recipient);
     }
 
@@ -134,12 +123,10 @@ public abstract class NostrRTCSignal implements Serializable {
         return getClass().getSimpleName() + "{peer=" + getPeer() + ", roomPubkey=" + getRoomPubkey() + "}";
     }
 
-    protected abstract AsyncTask<UnsignedNostrEvent> computeEvent(UnsignedNostrEvent event)  ;
+    protected abstract AsyncTask<UnsignedNostrEvent> computeEvent(UnsignedNostrEvent event);
 
-
-    public final AsyncTask<SignedNostrEvent> toEvent(@Nullable NostrPublicKey toUser)  {
-        
-        NostrRTCPeer peer = getPeer();     
+    public final AsyncTask<SignedNostrEvent> toEvent(@Nullable NostrPublicKey toUser) {
+        NostrRTCPeer peer = getPeer();
         UnsignedNostrEvent connectEvent = new UnsignedNostrEvent();
         connectEvent.withKind(25050);
         connectEvent.createdAt(Instant.now());
@@ -147,22 +134,24 @@ public abstract class NostrRTCSignal implements Serializable {
         connectEvent.withTag("P", getRoomPubkey().asHex());
         connectEvent.withTag("d", peer.getSessionId());
         connectEvent.withTag("i", peer.getProtocolId());
-        connectEvent.withTag("y", peer.getApplicationId());        
+        connectEvent.withTag("y", peer.getApplicationId());
         if (toUser != null) {
-             connectEvent.withTag("p", toUser.asHex());
-         }
-         
+            connectEvent.withTag("p", toUser.asHex());
+        }
 
-        return computeEvent(connectEvent).compose(ev -> {
-            // encrypt if event  to user
-            if (toUser != null && !NGEUtils.safeString(ev.getContent()).isEmpty()) {
-                return encrypt(ev.getContent(), toUser).then(enc -> {
-                    ev.withContent(enc);
-                    return ev;
-                }).compose(this::signForRoom);
-            }
-            return signForRoom(ev);
-        });
+        return computeEvent(connectEvent)
+            .compose(ev -> {
+                // encrypt if event  to user
+                if (toUser != null && !NGEUtils.safeString(ev.getContent()).isEmpty()) {
+                    return encrypt(ev.getContent(), toUser)
+                        .then(enc -> {
+                            ev.withContent(enc);
+                            return ev;
+                        })
+                        .compose(this::signForRoom);
+                }
+                return signForRoom(ev);
+            });
     }
 
     protected AsyncTask<SignedNostrEvent> signForRoom(UnsignedNostrEvent event) {
@@ -175,21 +164,33 @@ public abstract class NostrRTCSignal implements Serializable {
             receiver = NostrPublicKey.fromHex(event.getFirstTag("p").get(0));
         }
         if (receiver == null) {
-            return NGEPlatform.get().wrapPromise((res, rej) -> rej.accept(new IllegalStateException("Missing receiver pubkey for roomproof")));
+            return NGEPlatform
+                .get()
+                .wrapPromise((res, rej) -> rej.accept(new IllegalStateException("Missing receiver pubkey for roomproof")));
         }
         String content = NGEUtils.safeString(event.getContent());
         String challenge = NGEUtils.getPlatform().toJSON(List.of(receiver.asHex(), content));
-        return localSigner.getPublicKey().compose(senderPubkey -> {
-            return NostrRoomProof.sign(roomKeyPair, event.getCreatedAt(), event.getKind(), senderPubkey, challenge).then(sig -> {
-                String id = NostrRoomProof.computeId(roomKeyPair.getPublicKey(), event.getCreatedAt(), event.getKind(), senderPubkey, challenge);
-                event.withTag("roomproof", id, sig);
-                return event;
-            });
-        }).compose(localSigner::sign);
+        return localSigner
+            .getPublicKey()
+            .compose(senderPubkey -> {
+                return NostrRoomProof
+                    .sign(roomKeyPair, event.getCreatedAt(), event.getKind(), senderPubkey, challenge)
+                    .then(sig -> {
+                        String id = NostrRoomProof.computeId(
+                            roomKeyPair.getPublicKey(),
+                            event.getCreatedAt(),
+                            event.getKind(),
+                            senderPubkey,
+                            challenge
+                        );
+                        event.withTag("roomproof", id, sig);
+                        return event;
+                    });
+            })
+            .compose(localSigner::sign);
     }
 
-   
-    protected boolean verifyRoomProof(  NostrPublicKey roomPubkey, SignedNostrEvent event) {
+    protected boolean verifyRoomProof(NostrPublicKey roomPubkey, SignedNostrEvent event) {
         if (!requiresRoomProof(type)) {
             return true;
         }
@@ -219,12 +220,7 @@ public abstract class NostrRTCSignal implements Serializable {
         return "offer".equals(type) || "answer".equals(type) || "route".equals(type);
     }
 
-
     protected abstract boolean requireRoomSignature();
-    
 
-    public void await(){
-
-    }
-
+    public void await() {}
 }

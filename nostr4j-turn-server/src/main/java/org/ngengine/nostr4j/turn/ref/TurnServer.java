@@ -1,5 +1,37 @@
+/**
+ * BSD 3-Clause License
+ *
+ * Copyright (c) 2025, Riccardo Balbo
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the documentation
+ *    and/or other materials provided with the distribution.
+ *
+ * 3. Neither the name of the copyright holder nor the names of its
+ *    contributors may be used to endorse or promote products derived from
+ *    this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
 package org.ngengine.nostr4j.turn.ref;
 
+import com.google.gson.JsonObject;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.util.ArrayDeque;
@@ -11,7 +43,6 @@ import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-
 import org.eclipse.jetty.ee10.servlet.ServletContextHandler;
 import org.eclipse.jetty.ee10.websocket.server.config.JettyWebSocketServletContainerInitializer;
 import org.eclipse.jetty.server.Server;
@@ -20,14 +51,11 @@ import org.eclipse.jetty.websocket.api.Callback;
 import org.eclipse.jetty.websocket.api.Session;
 import org.eclipse.jetty.websocket.api.StatusCode;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
-import org.ngengine.nostr4j.keypair.NostrPrivateKey;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.rtc.turn.event.NostrTURNCodec;
 import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
 import org.ngengine.nostr4j.utils.NostrRoomProof;
 import org.ngengine.platform.NGEUtils;
-
-import com.google.gson.JsonObject;
 
 /**
  * Minimal NIP-DC TURN reference server.
@@ -49,6 +77,7 @@ import com.google.gson.JsonObject;
  * - routing requires full tuple match in TurnVirtualSocket reciprocity checks
  */
 public final class TurnServer {
+
     static final Logger logger = Logger.getLogger(TurnServer.class.getName());
     private static final int DEFAULT_MAX_QUEUED_FRAMES = 2048;
     private static final int DEFAULT_QUEUE_MAX_AGE_SECONDS = 30;
@@ -75,6 +104,7 @@ public final class TurnServer {
      * (header and encrypted payload remain opaque and untouched).
      */
     private static final class QueuedFrame {
+
         private final TurnVirtualSocket senderSocket;
         private final Session senderSession;
         private final byte[] frameBytes;
@@ -89,6 +119,7 @@ public final class TurnServer {
     }
 
     private static final class ExpiredSender {
+
         private final Session session;
         private final long vsocketId;
 
@@ -99,6 +130,7 @@ public final class TurnServer {
     }
 
     public final class TurnHandler implements Session.Listener.AutoDemanding {
+
         private final TurnServer turnServer;
 
         /**
@@ -114,7 +146,11 @@ public final class TurnServer {
         public void onWebSocketOpen(Session session) {
             // 1) Attach websocket-scoped client state.
             this.wsSession = session;
-            TurnClientConnection connection = new TurnClientConnection(session, this.turnServer.difficulty, this.turnServer.challengeTtlSeconds);
+            TurnClientConnection connection = new TurnClientConnection(
+                session,
+                this.turnServer.difficulty,
+                this.turnServer.challengeTtlSeconds
+            );
             this.turnServer.clients.put(session, connection);
             // 2) Send challenge immediately as required by protocol.
             this.turnServer.sendChallenge(connection);
@@ -176,11 +212,27 @@ public final class TurnServer {
     }
 
     public TurnServer(int port, NostrKeyPairSigner serverSigner, int difficulty, int challengeTtlSeconds) {
-        this("127.0.0.1", port, serverSigner, difficulty, challengeTtlSeconds, DEFAULT_MAX_QUEUED_FRAMES, DEFAULT_QUEUE_MAX_AGE_SECONDS);
+        this(
+            "127.0.0.1",
+            port,
+            serverSigner,
+            difficulty,
+            challengeTtlSeconds,
+            DEFAULT_MAX_QUEUED_FRAMES,
+            DEFAULT_QUEUE_MAX_AGE_SECONDS
+        );
     }
 
     public TurnServer(String host, int port, NostrKeyPairSigner serverSigner, int difficulty, int challengeTtlSeconds) {
-        this(host, port, serverSigner, difficulty, challengeTtlSeconds, DEFAULT_MAX_QUEUED_FRAMES, DEFAULT_QUEUE_MAX_AGE_SECONDS);
+        this(
+            host,
+            port,
+            serverSigner,
+            difficulty,
+            challengeTtlSeconds,
+            DEFAULT_MAX_QUEUED_FRAMES,
+            DEFAULT_QUEUE_MAX_AGE_SECONDS
+        );
     }
 
     public TurnServer(
@@ -243,13 +295,19 @@ public final class TurnServer {
         this.jettyServer.setHandler(context);
 
         // Single endpoint for TURN websocket protocol.
-        JettyWebSocketServletContainerInitializer.configure(context, (servletContext, container) -> {
-            container.setMaxBinaryMessageSize(1024L * 1024L);
-            container.setIdleTimeout(java.time.Duration.ofSeconds(60));
-            container.addMapping("/turn", (upgradeRequest, upgradeResponse) -> {
-                return new TurnHandler(this);
-            });
-        });
+        JettyWebSocketServletContainerInitializer.configure(
+            context,
+            (servletContext, container) -> {
+                container.setMaxBinaryMessageSize(1024L * 1024L);
+                container.setIdleTimeout(java.time.Duration.ofSeconds(60));
+                container.addMapping(
+                    "/turn",
+                    (upgradeRequest, upgradeResponse) -> {
+                        return new TurnHandler(this);
+                    }
+                );
+            }
+        );
     }
 
     public void start() throws Exception {
@@ -335,7 +393,14 @@ public final class TurnServer {
         String applicationId = TurnJson.safeString(header.getFirstTagFirstValue("y"));
         String targetHex = TurnJson.safeString(header.getFirstTagFirstValue("p"));
         String channelLabel = TurnJson.safeString(header.getFirstTagSecondValue("p"));
-        if (roomHex.isEmpty() || senderSessionId.isEmpty() || protocolId.isEmpty() || applicationId.isEmpty() || targetHex.isEmpty() || channelLabel.isEmpty()) {
+        if (
+            roomHex.isEmpty() ||
+            senderSessionId.isEmpty() ||
+            protocolId.isEmpty() ||
+            applicationId.isEmpty() ||
+            targetHex.isEmpty() ||
+            channelLabel.isEmpty()
+        ) {
             closeConnection(connection.getWsSession(), "missing-connect-routing-tags");
             return;
         }
@@ -531,7 +596,11 @@ public final class TurnServer {
         return copy;
     }
 
-    private void queueFrameOrDisconnectSender(TurnClientConnection senderConnection, TurnVirtualSocket senderSocket, ByteBuffer fullFrame) {
+    private void queueFrameOrDisconnectSender(
+        TurnClientConnection senderConnection,
+        TurnVirtualSocket senderSocket,
+        ByteBuffer fullFrame
+    ) {
         // Snapshot frame bytes for deferred delivery.
         byte[] frameBytes = new byte[fullFrame.remaining()];
         fullFrame.asReadOnlyBuffer().get(frameBytes);
@@ -542,7 +611,9 @@ public final class TurnServer {
                 overflow = true;
             } else {
                 // Keep sender websocket + socket id so timeouts can target correct sender.
-                queuedFrames.addLast(new QueuedFrame(senderSocket, senderConnection.getWsSession(), frameBytes, System.currentTimeMillis()));
+                queuedFrames.addLast(
+                    new QueuedFrame(senderSocket, senderConnection.getWsSession(), frameBytes, System.currentTimeMillis())
+                );
             }
         }
         if (overflow) {
@@ -645,7 +716,4 @@ public final class TurnServer {
         removeQueuedFramesForSenderSocket(senderSession, senderVsocketId);
         sendFrame(senderSession, eventFactory.createDisconnect(senderSocket, reason, error), null, senderVsocketId);
     }
-
-
-   
 }

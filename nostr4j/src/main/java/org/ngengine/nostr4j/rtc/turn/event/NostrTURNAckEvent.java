@@ -4,18 +4,18 @@
  */
 package org.ngengine.nostr4j.rtc.turn.event;
 
+import org.ngengine.nostr4j.event.SignedNostrEvent;
+import org.ngengine.nostr4j.event.UnsignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCLocalPeer;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCPeer;
-import org.ngengine.nostr4j.event.SignedNostrEvent;
-import org.ngengine.nostr4j.event.UnsignedNostrEvent;
 import org.ngengine.platform.AsyncTask;
 
 /**
  * TURN ack event (`t=ack`).
  */
 public final class NostrTURNAckEvent extends NostrTURNEvent {
-  
+
     private final long vsocketId;
 
     public static NostrTURNAckEvent createAck(
@@ -27,6 +27,7 @@ public final class NostrTURNAckEvent extends NostrTURNEvent {
     ) {
         return new NostrTURNAckEvent(localPeer, remotePeer, roomKeyPair, channelLabel, vsocketId);
     }
+
     private NostrTURNAckEvent(
         NostrRTCLocalPeer localPeer,
         NostrRTCPeer remotePeer,
@@ -34,45 +35,25 @@ public final class NostrTURNAckEvent extends NostrTURNEvent {
         String channelLabel,
         long vsocketId
     ) {
-        super(
-            "ack",
-            localPeer, 
-            null,
-            null,
-            null
-        );
+        super("ack", localPeer, null, null, null);
         this.vsocketId = vsocketId;
         if (this.vsocketId == 0L) {
             throw new IllegalArgumentException("Invalid ack vsocketId: must be != 0");
         }
     }
 
-    public static NostrTURNAckEvent parseIncoming(
-        SignedNostrEvent event,
-        long envelopeVsocketId
-    ) {
+    public static NostrTURNAckEvent parseIncoming(SignedNostrEvent event, long envelopeVsocketId) {
         return new NostrTURNAckEvent(event, envelopeVsocketId);
     }
-    private NostrTURNAckEvent(
-        SignedNostrEvent event,
-        long envelopeVsocketId
-    ) {
-        super(
-            "ack",
-            event,
-            null,
-            null,
-            null,
-            null
-        );
+
+    private NostrTURNAckEvent(SignedNostrEvent event, long envelopeVsocketId) {
+        super("ack", event, null, null, null, null);
         this.vsocketId = envelopeVsocketId;
     }
 
-    
-     public long getVsocketId() {
+    public long getVsocketId() {
         return vsocketId;
     }
-
 
     @Override
     protected boolean shouldIncludeRoutingTags() {
@@ -84,14 +65,9 @@ public final class NostrTURNAckEvent extends NostrTURNEvent {
         return vsocketId;
     }
 
-
     @Override
     protected AsyncTask<UnsignedNostrEvent> computeEvent(UnsignedNostrEvent event) {
         event.withContent("");
         return AsyncTask.completed(event);
     }
-
- 
-
- 
 }

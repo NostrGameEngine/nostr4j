@@ -1,3 +1,34 @@
+/**
+ * BSD 3-Clause License
+ *
+ * Copyright (c) 2025, Riccardo Balbo
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the documentation
+ *    and/or other materials provided with the distribution.
+ *
+ * 3. Neither the name of the copyright holder nor the names of its
+ *    contributors may be used to endorse or promote products derived from
+ *    this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
 package org.ngengine.nostr4j.rtc;
 
 import java.io.Closeable;
@@ -8,19 +39,19 @@ import java.util.Queue;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
-
-import org.ngengine.platform.AsyncExecutor;
 import org.ngengine.nostr4j.rtc.listeners.NostrRTCChannelListener;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCPeer;
 import org.ngengine.nostr4j.rtc.turn.NostrTURNChannel;
 import org.ngengine.nostr4j.rtc.turn.NostrTURNChannelListener;
 import org.ngengine.nostr4j.rtc.turn.NostrTURNPool;
+import org.ngengine.platform.AsyncExecutor;
 import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.ExecutionQueue;
 import org.ngengine.platform.NGEPlatform;
 import org.ngengine.platform.transport.RTCDataChannel;
 
 public class NostrRTCChannel implements Closeable {
+
     private static final Logger logger = Logger.getLogger(NostrRTCChannel.class.getName());
     private RTCDataChannel channel;
     private final NostrRTCSocket socket;
@@ -35,7 +66,9 @@ public class NostrRTCChannel implements Closeable {
     private final CopyOnWriteArrayList<NostrRTCChannelListener> listeners = new CopyOnWriteArrayList<>();
     private final ExecutionQueue drainQueue = NGEPlatform.get().newExecutionQueue();
     private final Object drainLock = new Object();
-    private final AsyncExecutor retryExecutor = NGEPlatform.get().newAsyncExecutor(NostrRTCChannel.class.getSimpleName() + "-drain");
+    private final AsyncExecutor retryExecutor = NGEPlatform
+        .get()
+        .newAsyncExecutor(NostrRTCChannel.class.getSimpleName() + "-drain");
     private volatile boolean draining = false;
     private volatile AsyncTask<Void> retryDrainTask;
 
@@ -45,13 +78,13 @@ public class NostrRTCChannel implements Closeable {
     private volatile boolean resurrecting = false;
 
     NostrRTCChannel(
-        String name, 
+        String name,
         NostrRTCSocket socket,
         boolean ordered,
         boolean reliable,
         Number maxRetransmits,
         Duration maxPacketLifeTime
-    ){
+    ) {
         this.socket = socket;
         this.name = name;
         this.ordered = ordered;
@@ -60,7 +93,7 @@ public class NostrRTCChannel implements Closeable {
         this.maxPacketLifeTime = maxPacketLifeTime;
     }
 
-    public String getName(){
+    public String getName() {
         return name;
     }
 
@@ -76,11 +109,11 @@ public class NostrRTCChannel implements Closeable {
         return resurrecting;
     }
 
-    void setChannel(RTCDataChannel chan){
+    void setChannel(RTCDataChannel chan) {
         this.channel = chan;
         this.resurrecting = false;
-        if(chan!=null){
-            if(bufferedAmountThreshold>0)chan.setBufferedAmountLowThreshold(bufferedAmountThreshold);
+        if (chan != null) {
+            if (bufferedAmountThreshold > 0) chan.setBufferedAmountLowThreshold(bufferedAmountThreshold);
             disposeTurn();
         } else if (socket.isTurnFallbackAllowed()) {
             ensureTurn();
@@ -88,11 +121,9 @@ public class NostrRTCChannel implements Closeable {
         scheduleDrain();
     }
 
- 
-
     private AsyncTask<Void> writeToAvailablePath(ByteBuffer data) {
         RTCDataChannel currentChannel = this.channel;
-        if ( isConnected()) {
+        if (isConnected()) {
             AsyncTask<Void> task = currentChannel.write(data);
             if (task != null) {
                 return task;
@@ -111,7 +142,7 @@ public class NostrRTCChannel implements Closeable {
         return null;
     }
 
-    public AsyncTask<Void> write(ByteBuffer data){
+    public AsyncTask<Void> write(ByteBuffer data) {
         AsyncTask<Void> writeTask = writeToAvailablePath(data);
         if (writeTask != null) {
             return writeTask;
@@ -124,7 +155,6 @@ public class NostrRTCChannel implements Closeable {
         messageQueue.add(bbf.duplicate());
         scheduleDrain();
         return AsyncTask.completed(null);
-    
     }
 
     private void scheduleDrain() {
@@ -152,24 +182,26 @@ public class NostrRTCChannel implements Closeable {
         }
 
         AsyncTask<Void> writeTask = writeToAvailablePath(msg);
-        if(writeTask == null){
+        if (writeTask == null) {
             messageQueue.add(msg);
             synchronized (drainLock) {
                 draining = false;
             }
             scheduleDrainRetry();
-        }else{
-            writeTask.then(v -> {
-                drainQueuedMessages(resolve, reject);
-                return null;
-            }).catchException(e -> {
-                messageQueue.add(msg);
-                synchronized (drainLock) {
-                    draining = false;
-                }
-                scheduleDrainRetry();
-                reject.accept(e);
-            });
+        } else {
+            writeTask
+                .then(v -> {
+                    drainQueuedMessages(resolve, reject);
+                    return null;
+                })
+                .catchException(e -> {
+                    messageQueue.add(msg);
+                    synchronized (drainLock) {
+                        draining = false;
+                    }
+                    scheduleDrainRetry();
+                    reject.accept(e);
+                });
         }
     }
 
@@ -180,17 +212,21 @@ public class NostrRTCChannel implements Closeable {
         if (retryDrainTask != null) {
             return;
         }
-        retryDrainTask = retryExecutor.runLater(() -> {
-            retryDrainTask = null;
-            if (!closed) {
-                scheduleDrain();
-            }
-            return null;
-        }, 100, TimeUnit.MILLISECONDS);
+        retryDrainTask =
+            retryExecutor.runLater(
+                () -> {
+                    retryDrainTask = null;
+                    if (!closed) {
+                        scheduleDrain();
+                    }
+                    return null;
+                },
+                100,
+                TimeUnit.MILLISECONDS
+            );
     }
 
-
-    public void close(){
+    public void close() {
         if (closed) return;
         closed = true;
         AsyncTask<Void> retry = retryDrainTask;
@@ -200,109 +236,106 @@ public class NostrRTCChannel implements Closeable {
         retryDrainTask = null;
         try {
             retryExecutor.close();
-        } catch (Exception ignored) {
-        }
+        } catch (Exception ignored) {}
         if (channel != null) {
             channel.close();
         }
-        if(turnReceive!=null){
+        if (turnReceive != null) {
             turnReceive.close("rtc-closed");
         }
-        if(turnSend!=null){
+        if (turnSend != null) {
             turnSend.close("rtc-closed");
         }
-        for(NostrRTCChannelListener l : listeners){
+        for (NostrRTCChannelListener l : listeners) {
             l.onRTCChannelClosed(this);
         }
     }
 
-    public boolean isOrdered(){
-        if(channel!=null){
+    public boolean isOrdered() {
+        if (channel != null) {
             return channel.isOrdered();
-        } else{
+        } else {
             return ordered;
         }
     }
 
-    public boolean isReliable(){
-        if(channel!=null){
+    public boolean isReliable() {
+        if (channel != null) {
             return channel.isReliable();
-        } else{
+        } else {
             return reliable;
         }
     }
 
- 
     public int getMaxRetransmits() {
-        if(channel!=null){
+        if (channel != null) {
             return channel.getMaxRetransmits();
-        } else{
+        } else {
             return maxRetransmits.intValue();
         }
     }
 
     public Duration getMaxPacketLifeTime() {
-        if(channel!=null){
+        if (channel != null) {
             return channel.getMaxPacketLifeTime();
-        } else{
+        } else {
             return maxPacketLifeTime;
         }
     }
 
-    public  AsyncTask<Number> getMaxMessageSize(){
-        if(channel!=null){
+    public AsyncTask<Number> getMaxMessageSize() {
+        if (channel != null) {
             return channel.getMaxMessageSize();
-        } else{
+        } else {
             return AsyncTask.completed(-1);
         }
     }
 
-    public AsyncTask<Number> getAvailableAmount(){
-        if(channel!=null){
+    public AsyncTask<Number> getAvailableAmount() {
+        if (channel != null) {
             return channel.getAvailableAmount();
-        } else{
+        } else {
             return AsyncTask.completed(-1);
         }
     }
 
-    public AsyncTask<Number> getBufferedAmount(){
-        if(channel!=null){
+    public AsyncTask<Number> getBufferedAmount() {
+        if (channel != null) {
             return channel.getBufferedAmount();
-        } else{
+        } else {
             return AsyncTask.completed(0);
         }
     }
 
-    public AsyncTask<Void> setBufferedAmountLowThreshold(int threshold){
-         this.bufferedAmountThreshold = threshold;
-        if(channel!=null){
+    public AsyncTask<Void> setBufferedAmountLowThreshold(int threshold) {
+        this.bufferedAmountThreshold = threshold;
+        if (channel != null) {
             return channel.setBufferedAmountLowThreshold(threshold);
-        } else{
+        } else {
             return AsyncTask.completed(null);
         }
     }
 
-    int getBufferedAmountLowThreshold(){
+    int getBufferedAmountLowThreshold() {
         return bufferedAmountThreshold;
     }
 
- 
-    boolean isConnected(){
-        return channel!=null;
+    boolean isConnected() {
+        return channel != null;
     }
 
-    public boolean isClosed(){
+    public boolean isClosed() {
         return closed;
     }
 
     void onRTCChannelError(Throwable e) {
-        for(NostrRTCChannelListener l : listeners){
+        for (NostrRTCChannelListener l : listeners) {
             l.onRTCChannelError(this, e);
         }
     }
 
     void onRTCSocketMessage(ByteBuffer bbf) {
-        for(NostrRTCChannelListener l : listeners){
+        for (NostrRTCChannelListener l : listeners) {
             l.onRTCSocketMessage(this, bbf, false);
         }
     }
@@ -314,17 +347,16 @@ public class NostrRTCChannel implements Closeable {
     }
 
     void onRTCBufferedAmountLow() {
-        for(NostrRTCChannelListener l : listeners){
+        for (NostrRTCChannelListener l : listeners) {
             l.onRTCBufferedAmountLow(this);
         }
     }
 
-
-    public void addListener(NostrRTCChannelListener listener){
+    public void addListener(NostrRTCChannelListener listener) {
         listeners.addIfAbsent(listener);
     }
 
-    public void removeListener(NostrRTCChannelListener listener){
+    public void removeListener(NostrRTCChannelListener listener) {
         listeners.remove(listener);
     }
 
@@ -348,11 +380,11 @@ public class NostrRTCChannel implements Closeable {
         }
     }
 
-    private void ensureTurn () {
-        if (closed||socket.isClosed()) {
+    private void ensureTurn() {
+        if (closed || socket.isClosed()) {
             return;
         }
-        
+
         NostrTURNPool pool = socket.getTurnPool();
         if (pool == null) {
             return;
@@ -373,20 +405,12 @@ public class NostrRTCChannel implements Closeable {
             turnReceive.redirectTo(receiveTurn);
         }
 
-        boolean sharedTurn = sendTurn != null &&
-            !sendTurn.isEmpty() &&
-            Objects.equals(sendTurn, receiveTurn);
+        boolean sharedTurn = sendTurn != null && !sendTurn.isEmpty() && Objects.equals(sendTurn, receiveTurn);
 
         if (sharedTurn) {
             NostrTURNChannel shared = turnSend != null ? turnSend : turnReceive;
             if (shared == null) {
-                shared = pool.connect(
-                    this.socket.getLocalPeer(),
-                    remote,
-                    sendTurn,
-                    this.socket.getRoomKeyPair(),
-                    this.name
-                );
+                shared = pool.connect(this.socket.getLocalPeer(), remote, sendTurn, this.socket.getRoomKeyPair(), this.name);
                 bindTurnReceive(shared);
             }
             turnSend = shared;
@@ -395,52 +419,39 @@ public class NostrRTCChannel implements Closeable {
         }
 
         if (sendTurn != null && !sendTurn.isEmpty() && turnSend == null) {
-            turnSend = pool.connect(
-                this.socket.getLocalPeer(),
-                remote,
-                sendTurn,
-                this.socket.getRoomKeyPair(),
-                this.name
-            );
+            turnSend = pool.connect(this.socket.getLocalPeer(), remote, sendTurn, this.socket.getRoomKeyPair(), this.name);
         }
 
         if (receiveTurn != null && !receiveTurn.isEmpty() && turnReceive == null) {
-            turnReceive = pool.connect(
-                this.socket.getLocalPeer(),
-                remote,
-                receiveTurn,
-                this.socket.getRoomKeyPair(),
-                this.name
-            );
+            turnReceive =
+                pool.connect(this.socket.getLocalPeer(), remote, receiveTurn, this.socket.getRoomKeyPair(), this.name);
             bindTurnReceive(turnReceive);
         }
     }
 
     private void bindTurnReceive(NostrTURNChannel channel) {
-        channel.addListener(new NostrTURNChannelListener() {
+        channel.addListener(
+            new NostrTURNChannelListener() {
+                @Override
+                public void onTurnChannelReady(NostrTURNChannel channel) {
+                    scheduleDrain();
+                }
 
-            @Override
-            public void onTurnChannelReady(NostrTURNChannel channel) {
-                scheduleDrain();
-            }
+                @Override
+                public void onTurnChannelClosed(NostrTURNChannel channel, String reason) {
+                    disposeTurn();
+                }
 
-            @Override
-            public void onTurnChannelClosed(NostrTURNChannel channel, String reason) {
-                disposeTurn();
-            }
+                @Override
+                public void onTurnChannelError(NostrTURNChannel channel, Throwable e) {
+                    onRTCChannelError(e);
+                }
 
-            @Override
-            public void onTurnChannelError(NostrTURNChannel channel, Throwable e) {
-                onRTCChannelError(e);
+                @Override
+                public void onTurnChannelMessage(NostrTURNChannel channel, ByteBuffer payload) {
+                    onTURNSocketMessage(payload);
+                }
             }
-
-            @Override
-            public void onTurnChannelMessage(NostrTURNChannel channel, ByteBuffer payload) {
-                onTURNSocketMessage(payload);
-            }
-        });
+        );
     }
-
- 
- 
 }
