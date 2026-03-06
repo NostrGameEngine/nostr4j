@@ -5,8 +5,6 @@
 package org.ngengine.nostr4j.rtc.turn;
 
 import java.nio.ByteBuffer;
-import java.util.Collections;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -14,6 +12,7 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
@@ -379,7 +378,7 @@ public final class NostrTURNPool implements AutoCloseable {
     static final class TURNTransport {
 
         private final WebsocketTransport transport;
-        private final Set<NostrTURNChannel> users = Collections.synchronizedSet(new HashSet<>());
+        private final Set<NostrTURNChannel> users = new CopyOnWriteArraySet<>();
         private volatile boolean coreListenerAttached = false;
         private volatile byte[] lastChallengeFrame = null;
         boolean isConnecting = false;

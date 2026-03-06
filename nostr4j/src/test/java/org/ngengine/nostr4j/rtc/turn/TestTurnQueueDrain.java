@@ -32,9 +32,11 @@
 package org.ngengine.nostr4j.rtc.turn;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
+import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -186,6 +188,96 @@ public class TestTurnQueueDrain {
         );
     }
 
+    @Test
+    public void testTransportUserRemovalDuringBinaryDispatchDoesNotThrow() throws Exception {
+        NostrKeyPair room = new NostrKeyPair();
+        NostrRTCLocalPeer alice = localPeer("alice-dispatch", room);
+        NostrRTCLocalPeer bob = localPeer("bob-dispatch", room);
+        NostrRTCLocalPeer carol = localPeer("carol-dispatch", room);
+        NostrRTCPeer bobRemote = remotePeer(bob, room);
+        NostrRTCPeer carolRemote = remotePeer(carol, room);
+        NostrRTCPeer aliceRemote = remotePeer(alice, room);
+
+        NostrTURNChannel first = new NostrTURNChannel(alice, bobRemote, "ws://turn.test", room, CHANNEL, 24);
+        NostrTURNChannel second = new NostrTURNChannel(alice, carolRemote, "ws://turn.test", room, CHANNEL, 24);
+
+        RecordingWebsocketTransport ws = new RecordingWebsocketTransport();
+        TURNTransport transport = new TURNTransport(ws);
+        attachCoreTransportListener(transport);
+        transport.addUser(first);
+        transport.addUser(second);
+        first.setTransport(transport);
+        second.setTransport(transport);
+        setState(first, 1);
+        setState(second, 1);
+
+        CountDownLatch firstReady = new CountDownLatch(1);
+        CountDownLatch secondReady = new CountDownLatch(1);
+        first.addListener(
+            new NostrTURNChannelListener() {
+                @Override
+                public void onTurnChannelReady(NostrTURNChannel channel) {
+                    transport.removeUser(channel);
+                    firstReady.countDown();
+                }
+
+                @Override
+                public void onTurnChannelClosed(NostrTURNChannel channel, String reason) {}
+
+                @Override
+                public void onTurnChannelError(NostrTURNChannel channel, Throwable e) {}
+
+                @Override
+                public void onTurnChannelMessage(NostrTURNChannel channel, ByteBuffer payload) {}
+            }
+        );
+        second.addListener(
+            new NostrTURNChannelListener() {
+                @Override
+                public void onTurnChannelReady(NostrTURNChannel channel) {
+                    secondReady.countDown();
+                }
+
+                @Override
+                public void onTurnChannelClosed(NostrTURNChannel channel, String reason) {}
+
+                @Override
+                public void onTurnChannelError(NostrTURNChannel channel, Throwable e) {}
+
+                @Override
+                public void onTurnChannelMessage(NostrTURNChannel channel, ByteBuffer payload) {}
+            }
+        );
+
+        ByteBuffer firstAck = NGEUtils.awaitNoThrow(
+            NostrTURNAckEvent.createAck(alice, aliceRemote, room, CHANNEL, getVsocketId(first)).encodeToFrame(null)
+        );
+        ByteBuffer secondAck = NGEUtils.awaitNoThrow(
+            NostrTURNAckEvent.createAck(alice, aliceRemote, room, CHANNEL, getVsocketId(second)).encodeToFrame(null)
+        );
+
+        ws.emitBinary(firstAck);
+        ws.emitBinary(secondAck);
+
+        assertTrue("First channel did not become ready", firstReady.await(4, TimeUnit.SECONDS));
+        assertTrue("Second channel did not become ready", secondReady.await(4, TimeUnit.SECONDS));
+        assertFalse("First channel should have been removed from transport users", transport.getUsers().contains(first));
+        assertTrue("Second channel should remain registered", transport.getUsers().contains(second));
+    }
+
+    private static void attachCoreTransportListener(TURNTransport transport) {
+        NostrTURNPool pool = new NostrTURNPool();
+        try {
+            Method method = NostrTURNPool.class.getDeclaredMethod("attachCoreTransportListener", TURNTransport.class);
+            method.setAccessible(true);
+            method.invoke(pool, transport);
+        } catch (Exception e) {
+            throw new IllegalStateException("Unable to attach TURN core transport listener", e);
+        } finally {
+            pool.close();
+        }
+    }
+
     private static NostrRTCLocalPeer localPeer(String sessionId, NostrKeyPair room) {
         return new NostrRTCLocalPeer(
             NostrKeyPairSigner.generate(),
@@ -297,6 +389,14 @@ public class TestTurnQueueDrain {
         @Override
         public boolean isConnected() {
             return connected;
+        }
+
+        private void emitBinary(ByteBuffer payload) {
+            ByteBuffer copy = payload.asReadOnlyBuffer();
+            copy.rewind();
+            for (WebsocketTransportListener listener : listeners) {
+                listener.onConnectionBinaryMessage(copy.asReadOnlyBuffer());
+            }
         }
 
         private List<ByteBuffer> getSentBinaryFrames() {
