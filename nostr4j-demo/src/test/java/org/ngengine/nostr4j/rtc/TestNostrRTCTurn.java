@@ -31,10 +31,7 @@
 package org.ngengine.nostr4j.rtc;
 
 import java.nio.ByteBuffer;
-import java.time.Duration;
 import java.util.Collection;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.NostrPool;
@@ -42,13 +39,11 @@ import org.ngengine.nostr4j.NostrRelay;
 import org.ngengine.nostr4j.TestLogger;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
 import org.ngengine.nostr4j.keypair.NostrPrivateKey;
-import org.ngengine.nostr4j.rtc.listeners.NostrRTCSocketListener;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCLocalPeer;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCPeer;
 import org.ngengine.nostr4j.rtc.turn.NostrTURNPool;
 import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
 import org.ngengine.platform.RTCSettings;
-import org.ngengine.platform.transport.RTCTransportIceCandidate;
 
 public class TestNostrRTCTurn {
 
@@ -87,10 +82,10 @@ public class TestNostrRTCTurn {
 
         room.addPeerSocketAvailableListener((peerKey, socket) -> {
             System.out.println(name + " peer connected: " + peerKey);
-           
+
             room.send("channel1", peerKey, ByteBuffer.wrap(("Hello " + peerKey.getPubkey().asHex()).getBytes()));
         });
-         room.addMessageListener(
+        room.addMessageListener(
             (NostrRTCPeer peer, NostrRTCSocket sk, NostrRTCChannel channel, ByteBuffer bbf, boolean isTurn) -> {
                 byte[] bb = new byte[bbf.limit()];
                 bbf.get(bb);
@@ -98,17 +93,16 @@ public class TestNostrRTCTurn {
                 int n = 0;
                 try {
                     n = Integer.parseInt(msg.split(":")[1]);
-                } catch (Exception e) {
-                }
+                } catch (Exception e) {}
                 n++;
                 try {
                     Thread.sleep(1000);
-                } catch (InterruptedException e) {
-                }
+                } catch (InterruptedException e) {}
 
                 channel.write(ByteBuffer.wrap(("Hello back from " + name + ":" + n).getBytes()));
                 System.out.println(name + " incoming message: " + new String(bb) + " p2p:" + !isTurn);
-            });
+            }
+        );
 
         room.addDisconnectionListener((peerKey, socket) -> {
             System.out.println(name + " peer disconnected: " + peerKey);
@@ -132,7 +126,7 @@ public class TestNostrRTCTurn {
         // A nostr pool abstract relay connections and subscriptions management
         // for simplicity we always use a pool even for a single relay connection
         NostrPool pool = new NostrPool();
-        
+
         pool.addRelay(new NostrRelay("wss://nostr.rblb.it"));
         pool.addRelay(new NostrRelay("wss://relay.ngengine.org"));
         pool.addRelay(new NostrRelay("wss://relay2.ngengine.org"));

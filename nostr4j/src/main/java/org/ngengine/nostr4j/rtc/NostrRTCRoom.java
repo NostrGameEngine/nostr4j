@@ -30,6 +30,7 @@
  */
 package org.ngengine.nostr4j.rtc;
 
+import jakarta.annotation.Nullable;
 import java.io.Closeable;
 import java.nio.ByteBuffer;
 import java.time.Duration;
@@ -43,8 +44,8 @@ import org.ngengine.nostr4j.NostrPool;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.rtc.listeners.NostrRTCChannelListener;
-import org.ngengine.nostr4j.rtc.listeners.NostrRTCRoomListener;
 import org.ngengine.nostr4j.rtc.listeners.NostrRTCPeerSocketAvailableListener;
+import org.ngengine.nostr4j.rtc.listeners.NostrRTCRoomListener;
 import org.ngengine.nostr4j.rtc.listeners.NostrRTCRoomPeerDisconnectListener;
 import org.ngengine.nostr4j.rtc.listeners.NostrRTCRoomPeerDiscoveredListener;
 import org.ngengine.nostr4j.rtc.listeners.NostrRTCRoomPeerMessageListener;
@@ -63,8 +64,6 @@ import org.ngengine.platform.NGEPlatform;
 import org.ngengine.platform.NGEUtils;
 import org.ngengine.platform.RTCSettings;
 import org.ngengine.platform.transport.RTCTransportIceCandidate;
-
-import jakarta.annotation.Nullable;
 
 public class NostrRTCRoom implements Closeable {
 
@@ -221,7 +220,15 @@ public class NostrRTCRoom implements Closeable {
     }
 
     private NostrRTCSocket newSocket(NostrRTCPeer remotePeer) {
-        NostrRTCSocket socket = new NostrRTCSocket(executor, remotePeer, roomKeyPair, localPeer, settings, turnServerUrl, turnPool);
+        NostrRTCSocket socket = new NostrRTCSocket(
+            executor,
+            remotePeer,
+            roomKeyPair,
+            localPeer,
+            settings,
+            turnServerUrl,
+            turnPool
+        );
         socket.setForceTURN(forceTURN);
         return socket;
     }
@@ -324,37 +331,33 @@ public class NostrRTCRoom implements Closeable {
                             NostrRTCSocket socket = connections.get(remotePeer);
 
                             if (socket != null && (socket.isConnected() || socket.isPendingConnection())) continue;
-                            synchronized(this){
-                                socket = connections.get(remotePeer);   // make sure we have a fresh reference to the socket
-                                                                        // it could have changed while we were waiting for the lock
-                                if(socket != null && socket.isConnected()) continue;
+                            synchronized (this) {
+                                socket = connections.get(remotePeer); // make sure we have a fresh reference to the socket
+                                // it could have changed while we were waiting for the lock
+                                if (socket != null && socket.isConnected()) continue;
                                 if (socket != null && socket.isClosed()) {
                                     logger.fine("Dropping closed socket for peer: " + remotePubkey);
                                     connections.remove(remotePeer, socket);
                                     socket = null;
-                                    
                                 }
 
                                 if (!shouldOfferConnection(remotePubkey)) continue;
 
                                 logger.fine("Initiating connection to: " + remotePubkey);
                                 if (socket == null) {
-                                        socket = newSocket(remotePeer);
-                                        socket.addListener(listener);
-                                        connections.put(remotePeer, socket);
-                                        for (NostrRTCPeerSocketAvailableListener listener : onSocketAvailable) {
-                                            try {
-                                                listener.onRoomPeerSocketAvailable(remotePeer, socket);
-                                            } catch (Exception e) {
-                                                logger.log(Level.WARNING, "Error notifying listener", e);
-                                            }
+                                    socket = newSocket(remotePeer);
+                                    socket.addListener(listener);
+                                    connections.put(remotePeer, socket);
+                                    for (NostrRTCPeerSocketAvailableListener listener : onSocketAvailable) {
+                                        try {
+                                            listener.onRoomPeerSocketAvailable(remotePeer, socket);
+                                        } catch (Exception e) {
+                                            logger.log(Level.WARNING, "Error notifying listener", e);
                                         }
-                                    
+                                    }
                                 } else {
-                                        socket.reset();
-                                    
+                                    socket.reset();
                                 }
-
 
                                 // send offer to remote peer
                                 socket
@@ -557,7 +560,7 @@ public class NostrRTCRoom implements Closeable {
     }
 
     protected void onReceiveOffer(NostrRTCOfferSignal offer) {
-        synchronized(this){
+        synchronized (this) {
             NostrRTCPeer remotePeer = offer.getPeer();
             // offer received from remote peer
             NostrRTCSocket existing = connections.get(remotePeer);
@@ -608,11 +611,11 @@ public class NostrRTCRoom implements Closeable {
                     }
                     return null;
                 });
-            }
+        }
     }
 
     protected void onReceiveAnswer(NostrRTCAnswerSignal answer) {
-        synchronized(this){
+        synchronized (this) {
             // answer received from remote peer
             NostrRTCPeer remotePeer = answer.getPeer();
 
@@ -633,7 +636,6 @@ public class NostrRTCRoom implements Closeable {
             }
         }
     }
- 
 
     protected void onReceiveCandidates(NostrRTCRouteSignal candidate) {
         logger.fine("Received ICE candidate: " + candidate);
@@ -711,8 +713,8 @@ public class NostrRTCRoom implements Closeable {
     }
 
     public NostrRTCChannel createChannel(
-        NostrRTCPeer peer, 
-        String channel, 
+        NostrRTCPeer peer,
+        String channel,
         boolean ordered,
         boolean reliable,
         @Nullable Integer maxRetransmits,
@@ -749,7 +751,6 @@ public class NostrRTCRoom implements Closeable {
                 return null;
             });
     }
-
 
     private List<NostrRTCSocket> removeSocketsForPubkey(NostrPublicKey peer) {
         List<NostrRTCSocket> removed = new ArrayList<>();

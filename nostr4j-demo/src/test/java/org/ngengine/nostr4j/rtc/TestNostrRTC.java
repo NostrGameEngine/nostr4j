@@ -32,8 +32,6 @@ package org.ngengine.nostr4j.rtc;
 
 import java.nio.ByteBuffer;
 import java.util.Collection;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.NostrPool;
@@ -41,13 +39,11 @@ import org.ngengine.nostr4j.NostrRelay;
 import org.ngengine.nostr4j.TestLogger;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
 import org.ngengine.nostr4j.keypair.NostrPrivateKey;
-import org.ngengine.nostr4j.rtc.listeners.NostrRTCSocketListener;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCLocalPeer;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCPeer;
 import org.ngengine.nostr4j.rtc.turn.NostrTURNPool;
 import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
 import org.ngengine.platform.RTCSettings;
-import org.ngengine.platform.transport.RTCTransportIceCandidate;
 
 public class TestNostrRTC {
 
@@ -83,13 +79,12 @@ public class TestNostrRTC {
         // room
         NostrRTCRoom room = new NostrRTCRoom(RTCSettings.DEFAULT, localPeer, roomKeyPair, pool, turn, turnPool);
 
- 
         room.addPeerSocketAvailableListener((peerKey, socket) -> {
             System.out.println(name + " peer connected: " + peerKey);
-            
+
             room.send("channel1", peerKey, ByteBuffer.wrap(("Hello " + peerKey.getPubkey().asHex()).getBytes()));
         });
-        
+
         room.addMessageListener(
             (NostrRTCPeer peer, NostrRTCSocket sk, NostrRTCChannel channel, ByteBuffer bbf, boolean isTurn) -> {
                 byte[] bb = new byte[bbf.limit()];

@@ -455,8 +455,6 @@ public class NostrRTCSocket implements Closeable {
         }
     }
 
- 
-
     /**
      * Get the local peer.
      * @return The local peer.
@@ -473,7 +471,6 @@ public class NostrRTCSocket implements Closeable {
         return remotePeer;
     }
 
- 
     NostrKeyPair getRoomKeyPair() {
         return roomKeyPair;
     }
@@ -731,6 +728,7 @@ public class NostrRTCSocket implements Closeable {
         resurrectChannel(channel);
         return channel;
     }
+
     final NostrRTCChannel createChannel(String name) {
         return createChannel(name, true, true, null, null);
     }
@@ -749,7 +747,7 @@ public class NostrRTCSocket implements Closeable {
             this.channels.computeIfAbsent(
                     channelName,
                     n -> {
-                        NostrRTCChannel nchan =  new NostrRTCChannel(
+                        NostrRTCChannel nchan = new NostrRTCChannel(
                             channelName,
                             this,
                             ordered,
@@ -758,7 +756,7 @@ public class NostrRTCSocket implements Closeable {
                             maxPacketLifeTime
                         );
                         // emitChannelReady(nchan);
-                        return nchan;        
+                        return nchan;
                     }
                 );
         chan.activateFallbackIfNeeded();

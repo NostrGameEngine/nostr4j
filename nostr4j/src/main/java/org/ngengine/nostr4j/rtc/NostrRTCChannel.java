@@ -115,7 +115,7 @@ public class NostrRTCChannel implements Closeable {
         if (closed) {
             return;
         }
-        if(!readyNotificationEmitted.getAndSet(true)) {
+        if (!readyNotificationEmitted.getAndSet(true)) {
             socket.emitChannelReady(this);
         }
     }
@@ -141,7 +141,7 @@ public class NostrRTCChannel implements Closeable {
                 return task;
             }
         }
-        if (socket.isTurnFallbackAllowed()||socket.isForceTURN()) {
+        if (socket.isTurnFallbackAllowed() || socket.isForceTURN()) {
             ensureTurn();
         }
         NostrTURNChannel currentTurnSend = this.turnSend;
@@ -447,7 +447,7 @@ public class NostrRTCChannel implements Closeable {
                 @Override
                 public void onTurnChannelReady(NostrTURNChannel channel) {
                     emitChannelReady();
-                    scheduleDrain();                   
+                    scheduleDrain();
                 }
 
                 @Override

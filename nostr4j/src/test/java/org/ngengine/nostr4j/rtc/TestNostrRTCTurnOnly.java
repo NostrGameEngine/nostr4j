@@ -136,7 +136,6 @@ public class TestNostrRTCTurnOnly {
                         readyLatch.countDown();
                     }
                 }
-
             };
             socketA.addListener(listener);
             socketB.addListener(listener);
