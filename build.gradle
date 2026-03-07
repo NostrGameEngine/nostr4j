@@ -358,10 +358,13 @@ subprojects { proj ->
         }
 
         proj.tasks.withType(Test) {
+            boolean retryEnabled = !"false".equalsIgnoreCase(
+                String.valueOf(System.getProperty("org.gradle.test-retry.enabled", "true"))
+            )
             retry {
-                maxRetries = 3
-                failOnPassedAfterRetry = false                
-                maxFailures = 10
+                maxRetries = retryEnabled ? 3 : 0
+                failOnPassedAfterRetry = false
+                maxFailures = retryEnabled ? 10 : 1
             }
             
             

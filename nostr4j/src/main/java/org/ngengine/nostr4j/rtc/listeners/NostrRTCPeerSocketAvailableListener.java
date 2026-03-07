@@ -34,6 +34,6 @@ import org.ngengine.nostr4j.rtc.NostrRTCSocket;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCPeer;
 
 @FunctionalInterface
-public interface NostrRTCRoomPeerConnectedListener extends NostrRTCRoomListener {
-    void onRoomPeerConnected(NostrRTCPeer peer, NostrRTCSocket conn);
+public interface NostrRTCPeerSocketAvailableListener extends NostrRTCRoomListener {
+    void onRoomPeerSocketAvailable(NostrRTCPeer peer, NostrRTCSocket conn);
 }

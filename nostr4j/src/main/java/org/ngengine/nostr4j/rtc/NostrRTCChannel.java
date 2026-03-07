@@ -38,6 +38,7 @@ import java.util.Objects;
 import java.util.Queue;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.rtc.listeners.NostrRTCChannelListener;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCPeer;
@@ -76,6 +77,7 @@ public class NostrRTCChannel implements Closeable {
     private volatile NostrTURNChannel turnSend;
     // private volatile boolean turnBootstrapInProgress = false;
     private volatile boolean resurrecting = false;
+    private final AtomicBoolean readyNotificationEmitted = new AtomicBoolean(false);
 
     NostrRTCChannel(
         String name,
@@ -109,11 +111,21 @@ public class NostrRTCChannel implements Closeable {
         return resurrecting;
     }
 
+    private void emitChannelReady() {
+        if (closed) {
+            return;
+        }
+        if(!readyNotificationEmitted.getAndSet(true)) {
+            socket.emitChannelReady(this);
+        }
+    }
+
     void setChannel(RTCDataChannel chan) {
         this.channel = chan;
         this.resurrecting = false;
         if (chan != null) {
             if (bufferedAmountThreshold > 0) chan.setBufferedAmountLowThreshold(bufferedAmountThreshold);
+            emitChannelReady();
             disposeTurn();
         } else if (socket.isTurnFallbackAllowed()) {
             ensureTurn();
@@ -123,13 +135,13 @@ public class NostrRTCChannel implements Closeable {
 
     private AsyncTask<Void> writeToAvailablePath(ByteBuffer data) {
         RTCDataChannel currentChannel = this.channel;
-        if (isConnected()) {
+        if (isConnected() && !socket.isForceTURN()) {
             AsyncTask<Void> task = currentChannel.write(data);
             if (task != null) {
                 return task;
             }
         }
-        if (socket.isTurnFallbackAllowed()) {
+        if (socket.isTurnFallbackAllowed()||socket.isForceTURN()) {
             ensureTurn();
         }
         NostrTURNChannel currentTurnSend = this.turnSend;
@@ -434,7 +446,8 @@ public class NostrRTCChannel implements Closeable {
             new NostrTURNChannelListener() {
                 @Override
                 public void onTurnChannelReady(NostrTURNChannel channel) {
-                    scheduleDrain();
+                    emitChannelReady();
+                    scheduleDrain();                   
                 }
 
                 @Override

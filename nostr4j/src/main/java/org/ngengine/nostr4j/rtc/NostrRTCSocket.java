@@ -42,7 +42,6 @@ import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
 import org.ngengine.nostr4j.rtc.listeners.NostrRTCSocketListener;
@@ -80,7 +79,7 @@ public class NostrRTCSocket implements Closeable {
 
     public static final String DEFAULT_CHANNEL_NAME = "default";
     private static final Logger logger = Logger.getLogger(NostrRTCSocket.class.getName());
-    private static final long RTC_CONNECT_TIMEOUT_MS = 7_000;
+    private static final long RTC_CONNECT_TIMEOUT_MS = 1000;
 
     public static enum TransportPath {
         NONE,
@@ -102,13 +101,14 @@ public class NostrRTCSocket implements Closeable {
     private final String turnServerUrl;
 
     private volatile RTCTransport transport;
-    private volatile NostrRTCPeer remotePeer;
+    private final NostrRTCPeer remotePeer;
     private volatile boolean connected = false, stopped = false;
     private volatile AsyncTask<Void> delayedCandidateEmission;
     private volatile Instant pendingConnectionSince;
     private volatile AsyncTask<Void> rtcConnectDeadlineTask;
     private volatile TransportPath activeTransportPath = TransportPath.NONE;
     private volatile boolean turnFallbackAllowed = false;
+    private volatile boolean forceTURN = false;
 
     private class NostrRTCListener implements RTCTransportListener {
 
@@ -207,7 +207,6 @@ public class NostrRTCSocket implements Closeable {
                 channel.getMaxPacketLifeTime()
             );
             logicalChannel.setChannel(channel);
-            emitChannelReady(logicalChannel);
             logger.fine("RTC Channel ready: " + channel.getName());
         }
 
@@ -255,8 +254,9 @@ public class NostrRTCSocket implements Closeable {
 
     private final NostrRTCListener rtcListener = new NostrRTCListener(this);
 
-    public NostrRTCSocket(
+    NostrRTCSocket(
         AsyncExecutor executor,
+        NostrRTCPeer remotePeer,
         NostrKeyPair roomKeyPair,
         NostrRTCLocalPeer localPeer,
         RTCSettings settings,
@@ -267,6 +267,7 @@ public class NostrRTCSocket implements Closeable {
         this.settings = Objects.requireNonNull(settings, "Settings cannot be null");
         this.localPeer = Objects.requireNonNull(localPeer, "Local Peer cannot be null");
         this.roomKeyPair = Objects.requireNonNull(roomKeyPair, "Room Key Pair cannot be null");
+        this.remotePeer = Objects.requireNonNull(remotePeer, "Remote Peer cannot be null");
         this.turnPool = turnPool;
         this.turnServerUrl = turnServerUrl;
     }
@@ -372,6 +373,14 @@ public class NostrRTCSocket implements Closeable {
         return null;
     }
 
+    public void setForceTURN(boolean forceTURN) {
+        this.forceTURN = forceTURN;
+    }
+
+    public boolean isForceTURN() {
+        return forceTURN;
+    }
+
     private void resurrectChannel(NostrRTCChannel channel) {
         if (transport == null || !transport.isConnected()) return;
         if (!channel.isConnected() && !channel.isClosed() && !channel.isResurrecting()) {
@@ -392,7 +401,6 @@ public class NostrRTCSocket implements Closeable {
                 .then(newChannel -> {
                     channel.setResurrecting(false);
                     channel.setChannel(newChannel);
-                    emitChannelReady(channel);
                     logger.fine("Channel " + channel.getName() + " resurrected");
                     return null;
                 })
@@ -428,7 +436,16 @@ public class NostrRTCSocket implements Closeable {
         return localPeer.getPubkey().asHex().compareTo(remote.getPubkey().asHex()) < 0;
     }
 
-    private void emitChannelReady(NostrRTCChannel channel) {
+    private static String normalizeChannelName(String name) {
+        String nativeName = DEFAULT_CHANNEL_NAME.equals(name) ? RTCTransport.DEFAULT_CHANNEL : name;
+        if (nativeName == null || nativeName.isEmpty()) {
+            nativeName = DEFAULT_CHANNEL_NAME;
+        }
+        return nativeName;
+    }
+
+    void emitChannelReady(NostrRTCChannel channel) {
+        if (channel == null || channel.isClosed()) return;
         for (NostrRTCSocketListener listener : listeners) {
             try {
                 listener.onRTCChannelReady(channel);
@@ -437,6 +454,8 @@ public class NostrRTCSocket implements Closeable {
             }
         }
     }
+
+ 
 
     /**
      * Get the local peer.
@@ -454,6 +473,7 @@ public class NostrRTCSocket implements Closeable {
         return remotePeer;
     }
 
+ 
     NostrKeyPair getRoomKeyPair() {
         return roomKeyPair;
     }
@@ -526,7 +546,6 @@ public class NostrRTCSocket implements Closeable {
         logger.fine("Resetting RTC Socket");
         connected = false;
         turnFallbackAllowed = false;
-        remotePeer = null;
         cancelRtcConnectTimeout();
         for (NostrRTCChannel channel : channels.values()) {
             channel.setChannel(null);
@@ -548,11 +567,11 @@ public class NostrRTCSocket implements Closeable {
         }
     }
 
-    public void addListener(NostrRTCSocketListener listener) {
+    void addListener(NostrRTCSocketListener listener) {
         listeners.add(listener);
     }
 
-    public void removeListener(NostrRTCSocketListener listener) {
+    void removeListener(NostrRTCSocketListener listener) {
         listeners.remove(listener);
     }
 
@@ -655,16 +674,15 @@ public class NostrRTCSocket implements Closeable {
             this.transport = platform.newRTCTransport(settings, localPeer.getSessionId(), localPeer.getStunServers());
             this.transport.addListener(rtcListener);
             logger.fine("Use offer to connect");
-            this.remotePeer =
-                Objects.requireNonNull(((NostrRTCOfferSignal) offerOrAnswer).getPeer(), "Remote Peer cannot be null");
+            this.remotePeer.merge(((NostrRTCOfferSignal) offerOrAnswer).getPeer());
+            // this.remotePeer =
+            //     Objects.requireNonNull(((NostrRTCOfferSignal) offerOrAnswer).getPeer(), "Remote Peer cannot be null");
             emitCandidates();
             connectString = ((NostrRTCOfferSignal) offerOrAnswer).getOfferString();
         } else if (offerOrAnswer instanceof NostrRTCAnswerSignal) {
             // logger.fine("Use answer to connect");
             if (this.transport == null) throw new IllegalStateException("Not connected");
-
-            this.remotePeer =
-                Objects.requireNonNull(((NostrRTCAnswerSignal) offerOrAnswer).getPeer(), "Remote Peer cannot be null");
+            this.remotePeer.merge(((NostrRTCAnswerSignal) offerOrAnswer).getPeer());
             emitCandidates();
             connectString = ((NostrRTCAnswerSignal) offerOrAnswer).getSdp();
         } else {
@@ -703,14 +721,8 @@ public class NostrRTCSocket implements Closeable {
         this.transport.addRemoteIceCandidates(candidate.getCandidates());
     }
 
-    public NostrRTCChannel getChannel(String name) {
-        String nativeName = name;
-        if (DEFAULT_CHANNEL_NAME.equals(name)) {
-            nativeName = RTCTransport.DEFAULT_CHANNEL;
-        }
-        if (nativeName == null || nativeName.isEmpty()) {
-            nativeName = DEFAULT_CHANNEL_NAME;
-        }
+    NostrRTCChannel getChannel(String name) {
+        String nativeName = normalizeChannelName(name);
         NostrRTCChannel channel = channels.get(nativeName);
         if (channel == null) {
             return null;
@@ -719,31 +731,25 @@ public class NostrRTCSocket implements Closeable {
         resurrectChannel(channel);
         return channel;
     }
-
-    public final NostrRTCChannel createChannel(String name) {
+    final NostrRTCChannel createChannel(String name) {
         return createChannel(name, true, true, null, null);
     }
 
-    public NostrRTCChannel createChannel(
+    NostrRTCChannel createChannel(
         String name,
         boolean ordered,
         boolean reliable,
         @Nullable Integer maxRetransmits,
         @Nullable Duration maxPacketLifeTime
     ) {
-        String nativeName = DEFAULT_CHANNEL_NAME.equals(name) ? RTCTransport.DEFAULT_CHANNEL : name;
-        if (nativeName == null || nativeName.isEmpty()) {
-            nativeName = DEFAULT_CHANNEL_NAME;
-        }
+        String nativeName = normalizeChannelName(name);
         final String channelName = nativeName;
         Integer normalizedMaxRetransmits = maxRetransmits != null ? maxRetransmits : Integer.valueOf(0);
-        AtomicBoolean created = new AtomicBoolean(false);
         NostrRTCChannel chan =
             this.channels.computeIfAbsent(
                     channelName,
                     n -> {
-                        created.set(true);
-                        return new NostrRTCChannel(
+                        NostrRTCChannel nchan =  new NostrRTCChannel(
                             channelName,
                             this,
                             ordered,
@@ -751,11 +757,10 @@ public class NostrRTCSocket implements Closeable {
                             normalizedMaxRetransmits,
                             maxPacketLifeTime
                         );
+                        // emitChannelReady(nchan);
+                        return nchan;        
                     }
                 );
-        if (created.get()) {
-            emitChannelReady(chan);
-        }
         chan.activateFallbackIfNeeded();
         return chan;
         // NostrRTCChannel channel = channels.computeIfAbsent(nativeName, n -> new NostrRTCChannel(
@@ -793,19 +798,6 @@ public class NostrRTCSocket implements Closeable {
         // }
         return getChannel(DEFAULT_CHANNEL_NAME).write(bbf);
     }
-
-    // TODO reimplement turn
-    // /**
-    //  * Force the usage of TURN server.
-    //  * @param forceTURN
-    //  */
-    // public void setForceTURN(boolean forceTURN) {
-    //     this.forceTURN = forceTURN;
-    //     if (!useTURN && forceTURN) {
-    //         logger.fine("Forcing TURN usage");
-    //         useTURN(true);
-    //     }
-    // }
 
     boolean isPendingConnection() {
         if (pendingConnectionSince == null) return false;

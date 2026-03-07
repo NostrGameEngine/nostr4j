@@ -45,6 +45,7 @@ import java.util.function.Consumer;
 import org.junit.Test;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCLocalPeer;
+import org.ngengine.nostr4j.rtc.signal.NostrRTCPeer;
 import org.ngengine.nostr4j.rtc.turn.NostrTURNPool;
 import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
 import org.ngengine.platform.AsyncExecutor;
@@ -75,7 +76,15 @@ public class TestRtcQueueDrain {
                 room,
                 null
             );
-            socket = new NostrRTCSocket(executor, room, local, RTCSettings.DEFAULT, null, turnPool);
+            NostrRTCPeer remote = new NostrRTCPeer(
+                org.ngengine.platform.NGEUtils.awaitNoThrow(NostrKeyPairSigner.generate().getPublicKey()),
+                APP_ID,
+                PROTOCOL_ID,
+                "rtc-queue-remote",
+                room.getPublicKey(),
+                null
+            );
+            socket = new NostrRTCSocket(executor, remote, room, local, RTCSettings.DEFAULT, null, turnPool);
             channel = new NostrRTCChannel("primary", socket, true, true, Integer.valueOf(0), null);
 
             AsyncTask<Void> writeTask = channel.write(ByteBuffer.wrap("queued-rtc".getBytes(StandardCharsets.UTF_8)));

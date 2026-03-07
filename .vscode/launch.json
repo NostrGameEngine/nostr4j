@@ -6,6 +6,13 @@
     "configurations": [
         {
             "type": "java",
+            "name": "TestNostrRTCTurn",
+            "request": "launch",
+            "mainClass": "org.ngengine.nostr4j.rtc.TestNostrRTCTurn",
+            "projectName": "nostr4j-demo"
+        },
+        {
+            "type": "java",
             "name": "Propagator",
             "request": "launch",
             "mainClass": "org.ngengine.nostr4j.Propagator",

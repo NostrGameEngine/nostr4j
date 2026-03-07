@@ -18,6 +18,7 @@ dependencies {
     def ngePlatformVersion = project.version.endsWith('-SNAPSHOT') ? libs.versions.ngePlatformSnapshot.get() : libs.versions.ngePlatform.get()
 
     testImplementation libs.junit4
+    testImplementation project(":nostr4j-turn-server")
     implementation project(":nostr4j")
     implementation "org.ngengine:nge-platform-common:${ngePlatformVersion}"
     implementation "org.ngengine:nge-platform-jvm:${ngePlatformVersion}"   

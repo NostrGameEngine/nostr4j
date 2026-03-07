@@ -772,8 +772,7 @@ public class NostrRTCIntegrationTest {
         NostrTURNPool pool = overridePool != null ? overridePool : new NostrTURNPool(TURN_MAX_DIFF);
         AsyncExecutor executor = NGEPlatform.get().newAsyncExecutor("test-" + user + "-" + sessionId);
         NostrRTCLocalPeer localPeer = newLocalPeer(user, sessionId, roomKeyPair, turnServer);
-        NostrRTCSocket socket = new NostrRTCSocket(executor, roomKeyPair, localPeer, RTCSettings.DEFAULT, null, pool);
-        return new SocketContext(socket, localPeer, roomKeyPair, executor, pool, overridePool != null);
+        return new SocketContext(null, localPeer, roomKeyPair, executor, pool, overridePool != null);
     }
 
     private static NostrRTCLocalPeer newLocalPeer(String user, String sessionId, NostrKeyPair roomKeyPair, String turnServer) {
@@ -783,6 +782,29 @@ public class NostrRTCIntegrationTest {
     }
 
     private static void connect(SocketContext a, SocketContext b) throws Exception {
+        a.closeSocketOnly();
+        b.closeSocketOnly();
+        a.socket =
+            new NostrRTCSocket(
+                a.executor,
+                socketRemotePeerFromLocal(b.localPeer, a.roomKeyPair),
+                a.roomKeyPair,
+                a.localPeer,
+                RTCSettings.DEFAULT,
+                null,
+                a.turnPool
+            );
+        b.socket =
+            new NostrRTCSocket(
+                b.executor,
+                socketRemotePeerFromLocal(a.localPeer, b.roomKeyPair),
+                b.roomKeyPair,
+                b.localPeer,
+                RTCSettings.DEFAULT,
+                null,
+                b.turnPool
+            );
+
         NostrPool poolA = new NostrPool();
         NostrPool poolB = new NostrPool();
         NostrRTCSignaling signalingA = null;
@@ -1176,7 +1198,9 @@ public class NostrRTCIntegrationTest {
 
         private void closeSocketOnly() {
             try {
-                socket.close();
+                if (socket != null) {
+                    socket.close();
+                }
             } catch (Exception ignored) {}
         }
 
@@ -1185,6 +1209,17 @@ public class NostrRTCIntegrationTest {
                 executor.close();
             } catch (Exception ignored) {}
         }
+    }
+
+    private static NostrRTCPeer socketRemotePeerFromLocal(NostrRTCLocalPeer localPeer, NostrKeyPair roomKeyPair) {
+        return new NostrRTCPeer(
+            localPeer.getPubkey(),
+            localPeer.getApplicationId(),
+            localPeer.getProtocolId(),
+            localPeer.getSessionId(),
+            roomKeyPair.getPublicKey(),
+            localPeer.getTurnServer()
+        );
     }
 
     private static final class MessageCapture implements NostrRTCChannelListener {

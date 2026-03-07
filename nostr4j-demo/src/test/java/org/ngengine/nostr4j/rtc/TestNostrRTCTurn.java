@@ -31,6 +31,7 @@
 package org.ngengine.nostr4j.rtc;
 
 import java.nio.ByteBuffer;
+import java.time.Duration;
 import java.util.Collection;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -49,7 +50,7 @@ import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
 import org.ngengine.platform.RTCSettings;
 import org.ngengine.platform.transport.RTCTransportIceCandidate;
 
-public class TestNostrRTC {
+public class TestNostrRTCTurn {
 
     private static final Logger logger = TestLogger.getRoot(Level.INFO);
     private static final String APPLICATION_ID = "nostr4j-rtc-test";
@@ -68,7 +69,7 @@ public class TestNostrRTC {
         // pool.connectRelay(new NostrRelay("wss://relay2.ngengine.org"));
 
         // turn server, used for fallback when direct p2p connection fails.
-        String turn = null;
+        String turn = "ws://127.0.0.1:8081/turn";
 
         // stun servers, used to fetch our public IP
         Collection<String> stun = RTCSettings.PUBLIC_STUN_SERVERS;
@@ -82,15 +83,14 @@ public class TestNostrRTC {
 
         // room
         NostrRTCRoom room = new NostrRTCRoom(RTCSettings.DEFAULT, localPeer, roomKeyPair, pool, turn, turnPool);
+        room.setForceTURN(true);
 
- 
         room.addPeerSocketAvailableListener((peerKey, socket) -> {
             System.out.println(name + " peer connected: " + peerKey);
-            
+           
             room.send("channel1", peerKey, ByteBuffer.wrap(("Hello " + peerKey.getPubkey().asHex()).getBytes()));
         });
-        
-        room.addMessageListener(
+         room.addMessageListener(
             (NostrRTCPeer peer, NostrRTCSocket sk, NostrRTCChannel channel, ByteBuffer bbf, boolean isTurn) -> {
                 byte[] bb = new byte[bbf.limit()];
                 bbf.get(bb);
@@ -98,20 +98,22 @@ public class TestNostrRTC {
                 int n = 0;
                 try {
                     n = Integer.parseInt(msg.split(":")[1]);
-                } catch (Exception e) {}
+                } catch (Exception e) {
+                }
                 n++;
                 try {
                     Thread.sleep(1000);
-                } catch (InterruptedException e) {}
+                } catch (InterruptedException e) {
+                }
 
                 channel.write(ByteBuffer.wrap(("Hello back from " + name + ":" + n).getBytes()));
                 System.out.println(name + " incoming message: " + new String(bb) + " p2p:" + !isTurn);
-            }
-        );
+            });
 
         room.addDisconnectionListener((peerKey, socket) -> {
             System.out.println(name + " peer disconnected: " + peerKey);
         });
+
         // beging rtc handling
         room.start();
     }
@@ -130,6 +132,7 @@ public class TestNostrRTC {
         // A nostr pool abstract relay connections and subscriptions management
         // for simplicity we always use a pool even for a single relay connection
         NostrPool pool = new NostrPool();
+        
         pool.addRelay(new NostrRelay("wss://nostr.rblb.it"));
         pool.addRelay(new NostrRelay("wss://relay.ngengine.org"));
         pool.addRelay(new NostrRelay("wss://relay2.ngengine.org"));

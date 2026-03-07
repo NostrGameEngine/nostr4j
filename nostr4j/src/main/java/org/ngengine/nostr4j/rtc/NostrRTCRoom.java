@@ -32,6 +32,7 @@ package org.ngengine.nostr4j.rtc;
 
 import java.io.Closeable;
 import java.nio.ByteBuffer;
+import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -43,7 +44,7 @@ import org.ngengine.nostr4j.keypair.NostrKeyPair;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.rtc.listeners.NostrRTCChannelListener;
 import org.ngengine.nostr4j.rtc.listeners.NostrRTCRoomListener;
-import org.ngengine.nostr4j.rtc.listeners.NostrRTCRoomPeerConnectedListener;
+import org.ngengine.nostr4j.rtc.listeners.NostrRTCPeerSocketAvailableListener;
 import org.ngengine.nostr4j.rtc.listeners.NostrRTCRoomPeerDisconnectListener;
 import org.ngengine.nostr4j.rtc.listeners.NostrRTCRoomPeerDiscoveredListener;
 import org.ngengine.nostr4j.rtc.listeners.NostrRTCRoomPeerMessageListener;
@@ -63,6 +64,8 @@ import org.ngengine.platform.NGEUtils;
 import org.ngengine.platform.RTCSettings;
 import org.ngengine.platform.transport.RTCTransportIceCandidate;
 
+import jakarta.annotation.Nullable;
+
 public class NostrRTCRoom implements Closeable {
 
     private static final Logger logger = Logger.getLogger(NostrRTCRoom.class.getName());
@@ -70,7 +73,7 @@ public class NostrRTCRoom implements Closeable {
     private final Map<NostrRTCPeer, NostrRTCSocket> connections = new ConcurrentHashMap<>();
     private final Collection<NostrPublicKey> bannedPeers = new CopyOnWriteArrayList<>();
 
-    private final List<NostrRTCRoomPeerConnectedListener> onConnectionListeners = new CopyOnWriteArrayList<>();
+    private final List<NostrRTCPeerSocketAvailableListener> onSocketAvailable = new CopyOnWriteArrayList<>();
     private final List<NostrRTCRoomPeerDisconnectListener> onDisconnectionListeners = new CopyOnWriteArrayList<>();
     private final List<NostrRTCRoomPeerMessageListener> onMessageListeners = new CopyOnWriteArrayList<>();
     private final List<NostrRTCRoomPeerDiscoveredListener> onPeerDiscoveredListeners = new CopyOnWriteArrayList<>();
@@ -82,6 +85,7 @@ public class NostrRTCRoom implements Closeable {
     private final NostrKeyPair roomKeyPair;
     private final String turnServerUrl;
     private final NostrTURNPool turnPool;
+    private volatile boolean forceTURN = false;
 
     private static interface Listener extends NostrRTCSignaling.Listener, NostrRTCSocketListener, NostrRTCChannelListener {}
 
@@ -216,8 +220,10 @@ public class NostrRTCRoom implements Closeable {
         this.executor = NGEUtils.getPlatform().newAsyncExecutor(NostrRTCRoom.class);
     }
 
-    private NostrRTCSocket newSocket() {
-        return new NostrRTCSocket(executor, roomKeyPair, localPeer, settings, turnServerUrl, turnPool);
+    private NostrRTCSocket newSocket(NostrRTCPeer remotePeer) {
+        NostrRTCSocket socket = new NostrRTCSocket(executor, remotePeer, roomKeyPair, localPeer, settings, turnServerUrl, turnPool);
+        socket.setForceTURN(forceTURN);
+        return socket;
     }
 
     @Override
@@ -247,8 +253,8 @@ public class NostrRTCRoom implements Closeable {
         return this;
     }
 
-    public NostrRTCRoom addConnectionListener(NostrRTCRoomPeerConnectedListener listener) {
-        this.onConnectionListeners.add(listener);
+    public NostrRTCRoom addPeerSocketAvailableListener(NostrRTCPeerSocketAvailableListener listener) {
+        this.onSocketAvailable.add(listener);
         return this;
     }
 
@@ -262,9 +268,20 @@ public class NostrRTCRoom implements Closeable {
         return this;
     }
 
+    public void setForceTURN(boolean forceTURN) {
+        this.forceTURN = forceTURN;
+        for (NostrRTCSocket socket : connections.values()) {
+            socket.setForceTURN(forceTURN);
+        }
+    }
+
+    public boolean isForceTURN() {
+        return forceTURN;
+    }
+
     public NostrRTCRoom addListener(NostrRTCRoomListener listener) {
-        if (listener instanceof NostrRTCRoomPeerConnectedListener) {
-            this.addConnectionListener((NostrRTCRoomPeerConnectedListener) listener);
+        if (listener instanceof NostrRTCPeerSocketAvailableListener) {
+            this.addPeerSocketAvailableListener((NostrRTCPeerSocketAvailableListener) listener);
         }
         if (listener instanceof NostrRTCRoomPeerDisconnectListener) {
             this.addDisconnectionListener((NostrRTCRoomPeerDisconnectListener) listener);
@@ -279,8 +296,8 @@ public class NostrRTCRoom implements Closeable {
     }
 
     public NostrRTCRoom removeListener(NostrRTCRoomListener listener) {
-        if (listener instanceof NostrRTCRoomPeerConnectedListener) {
-            this.onConnectionListeners.remove(listener);
+        if (listener instanceof NostrRTCPeerSocketAvailableListener) {
+            this.onSocketAvailable.remove(listener);
         }
         if (listener instanceof NostrRTCRoomPeerDisconnectListener) {
             this.onDisconnectionListeners.remove(listener);
@@ -307,36 +324,52 @@ public class NostrRTCRoom implements Closeable {
                             NostrRTCSocket socket = connections.get(remotePeer);
 
                             if (socket != null && (socket.isConnected() || socket.isPendingConnection())) continue;
-                            if (socket != null && socket.isClosed()) {
-                                logger.fine("Dropping closed socket for peer: " + remotePubkey);
-                                connections.remove(remotePeer, socket);
-                                socket = null;
+                            synchronized(this){
+                                socket = connections.get(remotePeer);   // make sure we have a fresh reference to the socket
+                                                                        // it could have changed while we were waiting for the lock
+                                if(socket != null && socket.isConnected()) continue;
+                                if (socket != null && socket.isClosed()) {
+                                    logger.fine("Dropping closed socket for peer: " + remotePubkey);
+                                    connections.remove(remotePeer, socket);
+                                    socket = null;
+                                    
+                                }
+
+                                if (!shouldOfferConnection(remotePubkey)) continue;
+
+                                logger.fine("Initiating connection to: " + remotePubkey);
+                                if (socket == null) {
+                                        socket = newSocket(remotePeer);
+                                        socket.addListener(listener);
+                                        connections.put(remotePeer, socket);
+                                        for (NostrRTCPeerSocketAvailableListener listener : onSocketAvailable) {
+                                            try {
+                                                listener.onRoomPeerSocketAvailable(remotePeer, socket);
+                                            } catch (Exception e) {
+                                                logger.log(Level.WARNING, "Error notifying listener", e);
+                                            }
+                                        }
+                                    
+                                } else {
+                                        socket.reset();
+                                    
+                                }
+
+
+                                // send offer to remote peer
+                                socket
+                                    .listen()
+                                    .then(offer -> {
+                                        try {
+                                            logger.fine("Sending offer to remote peer: " + remotePubkey);
+                                            this.signaling.sendOffer(offer.getOfferString(), remotePubkey);
+                                        } catch (Exception e) {
+                                            // e.printStackTrace();
+                                            logger.log(Level.WARNING, "Error sending offer", e);
+                                        }
+                                        return null;
+                                    });
                             }
-
-                            if (!shouldOfferConnection(remotePubkey)) continue;
-
-                            logger.fine("Initiating connection to: " + remotePubkey);
-                            if (socket == null) {
-                                socket = newSocket();
-                                socket.addListener(listener);
-                                connections.put(remotePeer, socket);
-                            } else {
-                                socket.reset();
-                            }
-
-                            // send offer to remote peer
-                            socket
-                                .listen()
-                                .then(offer -> {
-                                    try {
-                                        logger.fine("Sending offer to remote peer: " + remotePubkey);
-                                        this.signaling.sendOffer(offer.getOfferString(), remotePubkey);
-                                    } catch (Exception e) {
-                                        // e.printStackTrace();
-                                        logger.log(Level.WARNING, "Error sending offer", e);
-                                    }
-                                    return null;
-                                });
                         }
                     } catch (Exception e) {
                         logger.warning("Error in loop: " + e.getMessage());
@@ -524,85 +557,83 @@ public class NostrRTCRoom implements Closeable {
     }
 
     protected void onReceiveOffer(NostrRTCOfferSignal offer) {
-        NostrRTCPeer remotePeer = offer.getPeer();
-        // offer received from remote peer
-        NostrRTCSocket existing = connections.get(remotePeer);
-        NostrRTCSocket socket = null;
-        if (existing != null && existing.isPendingConnection() && !shouldOfferConnection(remotePeer.getPubkey())) {
-            // if there is already a connection initiated to this peer, forfeit it if the
-            // remote has precedence over local.
-            logger.fine(
-                "Forfeiting connection to peer: " +
-                remotePeer +
-                " because remote peer has precedence over local peer and is initiating the connection"
-            );
-            connections.remove(remotePeer, existing);
-            existing.close();
-        } else if (existing != null && existing.isConnected()) {
-            logger.fine("Socket already exists for peer: " + remotePeer + ", ignoring offer");
-            return;
-        } else if (existing != null && !existing.isClosed()) {
-            socket = existing;
-            socket.reset();
-        }
-
-        logger.fine("Connecting to peer: " + remotePeer);
-        if (socket == null) {
-            socket = newSocket();
-            socket.addListener(listener);
-            connections.put(remotePeer, socket);
-        }
-
-        // send answer to remote peer
-        socket
-            .connect(offer)
-            .then(answer -> {
-                try {
-                    logger.fine("Sending answer to remote peer: " + remotePeer);
-                    if (answer != null) {
-                        this.signaling.sendAnswer(answer.getSdp(), remotePeer.getPubkey());
-                    }
-                } catch (Exception e) {
-                    logger.log(Level.WARNING, "Error sending answer", e);
-                }
-                return null;
-            });
-        for (NostrRTCRoomPeerConnectedListener listener : onConnectionListeners) {
-            try {
-                listener.onRoomPeerConnected(remotePeer, socket);
-            } catch (Exception e) {
-                logger.log(Level.WARNING, "Error notifying listener", e);
+        synchronized(this){
+            NostrRTCPeer remotePeer = offer.getPeer();
+            // offer received from remote peer
+            NostrRTCSocket existing = connections.get(remotePeer);
+            NostrRTCSocket socket = null;
+            if (existing != null && existing.isPendingConnection() && !shouldOfferConnection(remotePeer.getPubkey())) {
+                // if there is already a connection initiated to this peer, forfeit it if the
+                // remote has precedence over local.
+                logger.fine(
+                    "Forfeiting connection to peer: " +
+                    remotePeer +
+                    " because remote peer has precedence over local peer and is initiating the connection"
+                );
+                connections.remove(remotePeer, existing);
+                existing.close();
+            } else if (existing != null && existing.isConnected()) {
+                logger.fine("Socket already exists for peer: " + remotePeer + ", ignoring offer");
+                return;
+            } else if (existing != null && !existing.isClosed()) {
+                socket = existing;
+                socket.reset();
             }
-        }
+
+            logger.fine("Connecting to peer: " + remotePeer);
+            if (socket == null) {
+                socket = newSocket(remotePeer);
+                socket.addListener(listener);
+                connections.put(remotePeer, socket);
+                for (NostrRTCPeerSocketAvailableListener listener : onSocketAvailable) {
+                    try {
+                        listener.onRoomPeerSocketAvailable(remotePeer, socket);
+                    } catch (Exception e) {
+                        logger.log(Level.WARNING, "Error notifying listener", e);
+                    }
+                }
+            }
+
+            // send answer to remote peer
+            socket
+                .connect(offer)
+                .then(answer -> {
+                    try {
+                        logger.fine("Sending answer to remote peer: " + remotePeer);
+                        if (answer != null) {
+                            this.signaling.sendAnswer(answer.getSdp(), remotePeer.getPubkey());
+                        }
+                    } catch (Exception e) {
+                        logger.log(Level.WARNING, "Error sending answer", e);
+                    }
+                    return null;
+                });
+            }
     }
 
     protected void onReceiveAnswer(NostrRTCAnswerSignal answer) {
-        // answer received from remote peer
-        NostrRTCPeer remotePeer = answer.getPeer();
+        synchronized(this){
+            // answer received from remote peer
+            NostrRTCPeer remotePeer = answer.getPeer();
 
-        NostrRTCSocket socket = connections.get(remotePeer);
-        if (socket != null && socket.isPendingConnection() && shouldOfferConnection(remotePeer.getPubkey())) {
-            logger.fine("Received answer, finalizing connection to peer: " + remotePeer);
-            // complete the connection
-            socket
-                .connect(answer)
-                .then(ignored -> {
-                    logger.fine("Connected to peer: " + remotePeer);
-                    // connection completed
-                    return null;
-                });
-            for (NostrRTCRoomPeerConnectedListener listener : onConnectionListeners) {
-                try {
-                    listener.onRoomPeerConnected(remotePeer, socket);
-                } catch (Exception e) {
-                    logger.log(Level.WARNING, "Error notifying listener", e);
-                }
+            NostrRTCSocket socket = connections.get(remotePeer);
+            if (socket != null && socket.isPendingConnection() && shouldOfferConnection(remotePeer.getPubkey())) {
+                logger.fine("Received answer, finalizing connection to peer: " + remotePeer);
+                // complete the connection
+                socket
+                    .connect(answer)
+                    .then(ignored -> {
+                        logger.fine("Connected to peer: " + remotePeer);
+                        // connection completed
+                        return null;
+                    });
+            } else {
+                // if there is no pending connection, just ignore it
+                logger.warning("No pending connection for peer: " + remotePeer);
             }
-        } else {
-            // if there is no pending connection, just ignore it
-            logger.warning("No pending connection for peer: " + remotePeer);
         }
     }
+ 
 
     protected void onReceiveCandidates(NostrRTCRouteSignal candidate) {
         logger.fine("Received ICE candidate: " + candidate);
@@ -641,14 +672,55 @@ public class NostrRTCRoom implements Closeable {
      * @return an async task that will complete when the data is sent or fail if
      * the peer is not connected
      */
-    public AsyncTask<Void> send(NostrPublicKey peer, ByteBuffer bbf) {
+    public AsyncTask<Void> send(NostrRTCPeer peer, ByteBuffer bbf) {
         return send(NostrRTCSocket.DEFAULT_CHANNEL_NAME, peer, bbf);
     }
 
-    public AsyncTask<Void> send(String channel, NostrPublicKey peer, ByteBuffer bbf) {
-        NostrRTCSocket socket = findSocketByPubkey(peer);
+    public AsyncTask<Void> send(String channel, NostrRTCPeer peer, ByteBuffer bbf) {
+        NostrRTCSocket socket = connections.get(peer);
         if (socket != null) {
-            return socket.getChannel(channel).write(bbf);
+            NostrRTCChannel target = socket.getChannel(channel);
+            if (target == null) {
+                target = socket.createChannel(channel);
+            }
+            return target.write(bbf);
+        } else {
+            logger.warning("No socket found for peer: " + peer);
+            throw new IllegalStateException("No socket found for peer: " + peer);
+        }
+    }
+
+    public NostrRTCChannel getChannel(NostrRTCPeer peer, String channel) {
+        NostrRTCSocket socket = connections.get(peer);
+        if (socket != null) {
+            return socket.getChannel(channel);
+        } else {
+            logger.warning("No socket found for peer: " + peer);
+            throw new IllegalStateException("No socket found for peer: " + peer);
+        }
+    }
+
+    public NostrRTCChannel createChannel(NostrRTCPeer peer, String channel) {
+        NostrRTCSocket socket = connections.get(peer);
+        if (socket != null) {
+            return socket.createChannel(channel);
+        } else {
+            logger.warning("No socket found for peer: " + peer);
+            throw new IllegalStateException("No socket found for peer: " + peer);
+        }
+    }
+
+    public NostrRTCChannel createChannel(
+        NostrRTCPeer peer, 
+        String channel, 
+        boolean ordered,
+        boolean reliable,
+        @Nullable Integer maxRetransmits,
+        @Nullable Duration maxPacketLifeTime
+    ) {
+        NostrRTCSocket socket = connections.get(peer);
+        if (socket != null) {
+            return socket.createChannel(channel, ordered, reliable, maxRetransmits, maxPacketLifeTime);
         } else {
             logger.warning("No socket found for peer: " + peer);
             throw new IllegalStateException("No socket found for peer: " + peer);
@@ -678,15 +750,6 @@ public class NostrRTCRoom implements Closeable {
             });
     }
 
-    private NostrRTCSocket findSocketByPubkey(NostrPublicKey peer) {
-        for (Map.Entry<NostrRTCPeer, NostrRTCSocket> entry : connections.entrySet()) {
-            NostrRTCPeer key = entry.getKey();
-            if (key != null && key.getPubkey().equals(peer)) {
-                return entry.getValue();
-            }
-        }
-        return null;
-    }
 
     private List<NostrRTCSocket> removeSocketsForPubkey(NostrPublicKey peer) {
         List<NostrRTCSocket> removed = new ArrayList<>();

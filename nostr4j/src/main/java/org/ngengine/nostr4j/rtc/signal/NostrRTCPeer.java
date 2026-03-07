@@ -81,10 +81,20 @@ public class NostrRTCPeer {
         this.turnServer = turnServer;
     }
 
-    void setTurnServer(String turnServer) {
-        this.turnServer = turnServer;
+    public void merge(NostrRTCPeer other) {
+        if (other == null) return;
+        if (!this.equals(other)) {
+            throw new IllegalArgumentException("Cannot merge peers with different identity");
+        }
+        if (this.turnServer == null && other.turnServer != null) {
+            this.turnServer = other.turnServer;
+        }
     }
 
+    public void setTurnServer(String turnServer) {
+        this.turnServer = turnServer;
+    }
+    
     public String getApplicationId() {
         return applicationId;
     }

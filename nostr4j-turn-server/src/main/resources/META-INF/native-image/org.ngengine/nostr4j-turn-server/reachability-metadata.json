@@ -2,6 +2,11 @@
   "reflection": [
     {
       "type": "org.eclipse.jetty.ee10.servlet.ServletHandler$Default404Servlet"
-    }
+    },
+    { "type": "org.eclipse.jetty.ee10.servlet.ServletHandler$Default404Servlet", "methods": [ { "name": "<init>", "parameterTypes": [] } ] },
+      {
+    "type": "org.ngengine.nostr4j.turn.ref.TurnServer$TurnHandler"
+  }
+
   ]
 }
