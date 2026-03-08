@@ -134,9 +134,9 @@ public class TestRtcPendingSendRecovery {
         if (queue == null) {
             throw new AssertionError("pending queue not found");
         }
-        java.lang.reflect.Method method = queue.getClass().getDeclaredMethod("restartIfStuck");
+        java.lang.reflect.Method method = queue.getClass().getDeclaredMethod("restartIfStuck", long.class);
         method.setAccessible(true);
-        method.invoke(queue);
+        method.invoke(queue, Long.valueOf(0L));
     }
 
     private static void waitUntil(Check check, long timeoutMs, String error) throws Exception {

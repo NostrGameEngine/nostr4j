@@ -101,8 +101,11 @@ public class NostrRTCIntegrationTest {
     private static final String APP_ID = "integration-app";
     private static final String PROTOCOL_ID = "integration-proto";
     private static final int TURN_MAX_DIFF = 24;
-    private static final String REAL_RELAY_A = "wss://relay.ngengine.org";
-    private static final String REAL_RELAY_B = "wss://relay2.ngengine.org";
+    private static final List<String> REAL_RELAYS = List.of(
+        "wss://nostr.rblb.it",
+        "wss://relay.ngengine.org",
+        "wss://relay2.ngengine.org"
+    );
 
     private static NGEPlatform previousPlatform;
     private static TestPlatform testPlatform;
@@ -825,10 +828,10 @@ public class NostrRTCIntegrationTest {
         AtomicBoolean routeAReceivedFromB = new AtomicBoolean(false);
         AtomicBoolean routeBReceivedFromA = new AtomicBoolean(false);
         try {
-            attachRelay(poolA, REAL_RELAY_A);
-            attachRelay(poolA, REAL_RELAY_B);
-            attachRelay(poolB, REAL_RELAY_A);
-            attachRelay(poolB, REAL_RELAY_B);
+            for (String relayUrl : REAL_RELAYS) {
+                attachRelay(poolA, relayUrl);
+                attachRelay(poolB, relayUrl);
+            }
 
             String sharedRelay = waitForSharedConnectedRelay(poolA, poolB, 20_000);
             assertNotNull("No shared connected relay for peer A/B", sharedRelay);

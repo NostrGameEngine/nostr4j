@@ -8,7 +8,6 @@ package org.ngengine.nostr4j.rtc;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.Collections;
@@ -22,39 +21,64 @@ import org.ngengine.nostr4j.rtc.signal.NostrRTCLocalPeer;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCPeer;
 import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
 import org.ngengine.platform.AsyncExecutor;
+import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEUtils;
 import org.ngengine.platform.RTCSettings;
-import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.transport.RTCDataChannel;
 import org.ngengine.platform.transport.RTCTransportIceCandidate;
 
 public class TestNostrRTCSocketReadyEmission {
 
     @Test
-    public void testReadyIsEmittedOncePerChannel() throws Exception {
+    public void testCreateChannelEmitsSocketChannelEvent() throws Exception {
+        AsyncExecutor executor = NGEUtils.getPlatform().newAsyncExecutor("ready-create-channel-test");
+        NostrRTCSocket socket = null;
+        try {
+            socket = newSocket(executor);
+            Map<String, Integer> channelEvents = new HashMap<String, Integer>();
+            socket.addListener(
+                new NostrRTCSocketListener() {
+                    @Override
+                    public void onRTCSocketRouteUpdate(
+                        NostrRTCSocket socket,
+                        java.util.Collection<RTCTransportIceCandidate> candidates,
+                        String turnServer
+                    ) {}
+
+                    @Override
+                    public void onRTCSocketClose(NostrRTCSocket socket) {}
+
+                    @Override
+                    public void onRTCChannelReady(NostrRTCChannel channel) {}
+
+                    @Override
+                    public void onRTCChannel(NostrRTCChannel channel) {
+                        channelEvents.merge(channel.getName(), Integer.valueOf(1), Integer::sum);
+                    }
+                }
+            );
+
+            socket.createChannel("alpha");
+            socket.createChannel("beta");
+
+            assertEquals(Integer.valueOf(1), channelEvents.get("alpha"));
+            assertEquals(Integer.valueOf(1), channelEvents.get("beta"));
+            assertEquals(2, channelEvents.size());
+        } finally {
+            if (socket != null) {
+                socket.close();
+            }
+            executor.close();
+        }
+    }
+
+    @Test
+    public void testSetChannelEmitsReady() throws Exception {
         AsyncExecutor executor = NGEUtils.getPlatform().newAsyncExecutor("ready-emission-test");
         NostrRTCSocket socket = null;
         try {
-            NostrKeyPair roomKeyPair = new NostrKeyPair();
-            NostrRTCLocalPeer localPeer = new NostrRTCLocalPeer(
-                NostrKeyPairSigner.generate(),
-                Collections.emptyList(),
-                "ready-app",
-                "ready-proto",
-                roomKeyPair,
-                null
-            );
-            NostrRTCPeer remotePeer = new NostrRTCPeer(
-                NGEUtils.awaitNoThrow(NostrKeyPairSigner.generate().getPublicKey()),
-                "ready-app",
-                "ready-proto",
-                "remote-ready-session",
-                roomKeyPair.getPublicKey(),
-                null
-            );
-            socket = new NostrRTCSocket(executor, remotePeer, roomKeyPair, localPeer, RTCSettings.DEFAULT, null, null);
-
-            Map<String, Integer> readyCountByChannel = new HashMap<>();
+            socket = newSocket(executor);
+            Map<String, Integer> readyCountByChannel = new HashMap<String, Integer>();
             socket.addListener(
                 new NostrRTCSocketListener() {
                     @Override
@@ -73,27 +97,18 @@ public class TestNostrRTCSocketReadyEmission {
                     }
 
                     @Override
-                    public void onRTCChannel(NostrRTCChannel channel) {
-                       
-                    }
+                    public void onRTCChannel(NostrRTCChannel channel) {}
                 }
             );
 
             NostrRTCChannel alpha = socket.createChannel("alpha");
             NostrRTCChannel beta = socket.createChannel("beta");
+            alpha.setChannel(new CapturingRTCDataChannel("alpha", "ready-proto", true, true, 0, null));
+            beta.setChannel(new CapturingRTCDataChannel("beta", "ready-proto", true, true, 0, null));
 
-            Method emitReady = NostrRTCChannel.class.getDeclaredMethod("emitChannelReady");
-            emitReady.setAccessible(true);
-            emitReady.invoke(alpha);
-            emitReady.invoke(beta);
-            emitReady.invoke(alpha);
-            emitReady.invoke(beta);
-
-            assertEquals("alpha should emit once", Integer.valueOf(1), readyCountByChannel.get("alpha"));
-            assertEquals("beta should emit once", Integer.valueOf(1), readyCountByChannel.get("beta"));
-            assertEquals("two channels should emit ready", 2, readyCountByChannel.size());
-            assertTrue("missing alpha ready callback", readyCountByChannel.containsKey("alpha"));
-            assertTrue("missing beta ready callback", readyCountByChannel.containsKey("beta"));
+            assertEquals(Integer.valueOf(1), readyCountByChannel.get("alpha"));
+            assertEquals(Integer.valueOf(1), readyCountByChannel.get("beta"));
+            assertEquals(2, readyCountByChannel.size());
         } finally {
             if (socket != null) {
                 socket.close();
@@ -103,100 +118,11 @@ public class TestNostrRTCSocketReadyEmission {
     }
 
     @Test
-    public void testChannelListenersAreBoundWhenChannelIsCreated() throws Exception {
-        AsyncExecutor executor = NGEUtils.getPlatform().newAsyncExecutor("channel-bind-test");
-        NostrRTCSocket socket = null;
-        try {
-            NostrKeyPair roomKeyPair = new NostrKeyPair();
-            NostrRTCLocalPeer localPeer = new NostrRTCLocalPeer(
-                NostrKeyPairSigner.generate(),
-                Collections.emptyList(),
-                "ready-app",
-                "ready-proto",
-                roomKeyPair,
-                null
-            );
-            NostrRTCPeer remotePeer = new NostrRTCPeer(
-                NGEUtils.awaitNoThrow(NostrKeyPairSigner.generate().getPublicKey()),
-                "ready-app",
-                "ready-proto",
-                "remote-ready-session",
-                roomKeyPair.getPublicKey(),
-                null
-            );
-            socket = new NostrRTCSocket(executor, remotePeer, roomKeyPair, localPeer, RTCSettings.DEFAULT, null, null);
-
-            final int[] messageCount = new int[] { 0 };
-            class CompositeListener implements NostrRTCSocketListener, NostrRTCChannelListener {
-                @Override
-                public void onRTCSocketRouteUpdate(
-                    NostrRTCSocket socket,
-                    java.util.Collection<RTCTransportIceCandidate> candidates,
-                    String turnServer
-                ) {}
-
-                @Override
-                public void onRTCSocketClose(NostrRTCSocket socket) {}
-
-                @Override
-                public void onRTCChannelReady(NostrRTCChannel channel) {}
-
-                @Override
-                public void onRTCSocketMessage(NostrRTCChannel channel, ByteBuffer bbf, boolean isTurn) {
-                    messageCount[0]++;
-                }
-
-                @Override
-                public void onRTCChannelError(NostrRTCChannel channel, Throwable e) {}
-
-                @Override
-                public void onRTCChannelClosed(NostrRTCChannel channel) {}
-
-                @Override
-                public void onRTCBufferedAmountLow(NostrRTCChannel channel) {}
-
-                @Override
-                public void onRTCChannel(NostrRTCChannel channel) {
-                   
-                }
-            }
-            socket.addListener(new CompositeListener());
-
-            NostrRTCChannel alpha = socket.createChannel("alpha");
-            alpha.onRTCSocketMessage(ByteBuffer.wrap(new byte[] { 1 }));
-
-            assertEquals("channel listener should already be bound on creation", 1, messageCount[0]);
-        } finally {
-            if (socket != null) {
-                socket.close();
-            }
-            executor.close();
-        }
-    }
-
-    @Test
-    public void testRtcBinaryBeforeReadyStillReachesChannelListener() throws Exception {
+    public void testBinaryMessageReachesExistingLogicalChannelListener() throws Exception {
         AsyncExecutor executor = NGEUtils.getPlatform().newAsyncExecutor("binary-before-ready-test");
         NostrRTCSocket socket = null;
         try {
-            NostrKeyPair roomKeyPair = new NostrKeyPair();
-            NostrRTCLocalPeer localPeer = new NostrRTCLocalPeer(
-                NostrKeyPairSigner.generate(),
-                Collections.emptyList(),
-                "ready-app",
-                "ready-proto",
-                roomKeyPair,
-                null
-            );
-            NostrRTCPeer remotePeer = new NostrRTCPeer(
-                NGEUtils.awaitNoThrow(NostrKeyPairSigner.generate().getPublicKey()),
-                "ready-app",
-                "ready-proto",
-                "remote-ready-session",
-                roomKeyPair.getPublicKey(),
-                null
-            );
-            socket = new NostrRTCSocket(executor, remotePeer, roomKeyPair, localPeer, RTCSettings.DEFAULT, null, null);
+            socket = newSocket(executor);
 
             final int[] messageCount = new int[] { 0 };
             class CompositeListener implements NostrRTCSocketListener, NostrRTCChannelListener {
@@ -214,6 +140,11 @@ public class TestNostrRTCSocketReadyEmission {
                 public void onRTCChannelReady(NostrRTCChannel channel) {}
 
                 @Override
+                public void onRTCChannel(NostrRTCChannel channel) {
+                    channel.addListener(this);
+                }
+
+                @Override
                 public void onRTCSocketMessage(NostrRTCChannel channel, ByteBuffer bbf, boolean isTurn) {
                     messageCount[0]++;
                 }
@@ -226,16 +157,13 @@ public class TestNostrRTCSocketReadyEmission {
 
                 @Override
                 public void onRTCBufferedAmountLow(NostrRTCChannel channel) {}
-
-                @Override
-                public void onRTCChannel(NostrRTCChannel channel) {
-                   
-                }
             }
-            socket.addListener(new CompositeListener());
+            CompositeListener listener = new CompositeListener();
+            socket.addListener(listener);
+            socket.createChannel("alpha");
 
             Object rtcListener = readField(socket, "rtcListener");
-            Method onBinaryMessage = rtcListener
+            java.lang.reflect.Method onBinaryMessage = rtcListener
                 .getClass()
                 .getDeclaredMethod("onRTCBinaryMessage", RTCDataChannel.class, ByteBuffer.class);
             onBinaryMessage.setAccessible(true);
@@ -243,13 +171,34 @@ public class TestNostrRTCSocketReadyEmission {
             RTCDataChannel channel = new CapturingRTCDataChannel("alpha", "ready-proto", true, true, 0, null);
             onBinaryMessage.invoke(rtcListener, channel, ByteBuffer.wrap(new byte[] { 1 }));
 
-            assertEquals("binary message should create/bind logical channel eagerly", 1, messageCount[0]);
+            assertEquals(1, messageCount[0]);
         } finally {
             if (socket != null) {
                 socket.close();
             }
             executor.close();
         }
+    }
+
+    private static NostrRTCSocket newSocket(AsyncExecutor executor) throws Exception {
+        NostrKeyPair roomKeyPair = new NostrKeyPair();
+        NostrRTCLocalPeer localPeer = new NostrRTCLocalPeer(
+            NostrKeyPairSigner.generate(),
+            Collections.emptyList(),
+            "ready-app",
+            "ready-proto",
+            roomKeyPair,
+            null
+        );
+        NostrRTCPeer remotePeer = new NostrRTCPeer(
+            NGEUtils.awaitNoThrow(NostrKeyPairSigner.generate().getPublicKey()),
+            "ready-app",
+            "ready-proto",
+            "remote-ready-session",
+            roomKeyPair.getPublicKey(),
+            null
+        );
+        return new NostrRTCSocket(executor, remotePeer, roomKeyPair, localPeer, RTCSettings.DEFAULT, null, null);
     }
 
     private static Object readField(Object target, String fieldName) {
