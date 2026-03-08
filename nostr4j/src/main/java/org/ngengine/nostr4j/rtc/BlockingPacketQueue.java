@@ -159,12 +159,10 @@ public final class BlockingPacketQueue<T> implements AutoCloseable {
                             enqueued.resolve.accept(null);
                         }
                     } else {
+                        // Packet could not be processed yet: pause queue without rejecting the caller.
+                        // The same head packet remains queued and will be retried on restart().
                         stop();
-                        IllegalStateException err = new IllegalStateException(failureMessage);
-                        reject.accept(err);
-                        if (enqueued.reject != null) {
-                            enqueued.reject.accept(err);
-                        }
+                        resolve.accept(null);
                     }
                     return null;
                 })
