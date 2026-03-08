@@ -315,9 +315,9 @@ public final class NostrTURNChannel {
         for (NostrTURNChannelListener l : listeners) {
             try {
                 l.onTurnChannelMessage(this, payload);
-             } catch (Throwable e) {
-                    logger.log(Level.SEVERE, "Exception in listener", e);
-                }
+            } catch (Throwable e) {
+                logger.log(Level.SEVERE, "Exception in listener", e);
+            }
         }
     }
 

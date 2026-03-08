@@ -172,7 +172,7 @@ public final class NostrRTCChannel {
             turnSend.close("rtc-closed");
         }
         for (NostrRTCChannelListener l : listeners) {
-            try{
+            try {
                 l.onRTCChannelClosed(this);
             } catch (Throwable e) {
                 logger.log(Level.SEVERE, "Exception in listener", e);
@@ -259,7 +259,7 @@ public final class NostrRTCChannel {
 
     void onRTCChannelError(Throwable e) {
         for (NostrRTCChannelListener l : listeners) {
-            try{
+            try {
                 l.onRTCChannelError(this, e);
             } catch (Throwable ex) {
                 logger.log(Level.SEVERE, "Exception in listener", ex);
@@ -269,7 +269,7 @@ public final class NostrRTCChannel {
 
     void onRTCSocketMessage(ByteBuffer bbf) {
         for (NostrRTCChannelListener l : listeners) {
-            try{
+            try {
                 l.onRTCSocketMessage(this, bbf, false);
             } catch (Throwable e) {
                 logger.log(Level.SEVERE, "Exception in listener", e);
@@ -279,7 +279,7 @@ public final class NostrRTCChannel {
 
     void onTURNSocketMessage(ByteBuffer bbf) {
         for (NostrRTCChannelListener listener : listeners) {
-            try{
+            try {
                 listener.onRTCSocketMessage(this, bbf, true);
             } catch (Throwable e) {
                 logger.log(Level.SEVERE, "Exception in listener", e);
@@ -289,7 +289,7 @@ public final class NostrRTCChannel {
 
     void onRTCBufferedAmountLow() {
         for (NostrRTCChannelListener l : listeners) {
-            try{
+            try {
                 l.onRTCBufferedAmountLow(this);
             } catch (Throwable e) {
                 logger.log(Level.SEVERE, "Exception in listener", e);

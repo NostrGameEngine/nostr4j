@@ -628,7 +628,7 @@ public final class NostrRTCSocket {
                                     new ArrayList<RTCTransportIceCandidate>(localIceCandidates),
                                     localPeer.getTurnServer()
                                 );
-                             } catch (Throwable e) {
+                            } catch (Throwable e) {
                                 logger.log(Level.SEVERE, "Exception in listener", e);
                             }
                         }

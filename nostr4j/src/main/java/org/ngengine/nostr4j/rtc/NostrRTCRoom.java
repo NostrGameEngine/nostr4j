@@ -160,7 +160,7 @@ public final class NostrRTCRoom implements Closeable {
             for (NostrRTCRoomPeerMessageListener listener : onMessageListeners) {
                 try {
                     listener.onRoomPeerMessage(remotePeer, socket, channel, bbf, turn);
-                 } catch (Throwable e) {
+                } catch (Throwable e) {
                     logger.log(Level.SEVERE, "Exception in listener", e);
                 }
             }
@@ -561,7 +561,7 @@ public final class NostrRTCRoom implements Closeable {
                     NostrRTCRoomPeerDiscoveredListener.NostrRTCRoomPeerDiscoveredState.ONLINE
                 );
             } catch (Throwable e) {
-                    logger.log(Level.SEVERE, "Exception in listener", e);
+                logger.log(Level.SEVERE, "Exception in listener", e);
             }
         }
     }
