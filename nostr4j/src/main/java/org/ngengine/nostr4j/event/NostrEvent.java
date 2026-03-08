@@ -162,7 +162,6 @@ public interface NostrEvent extends Cloneable, Serializable {
         return tagValue.get(2);
     }
 
-
     Set<String> listTagKeys();
 
     List<List<String>> getTagRows();

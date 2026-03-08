@@ -78,9 +78,7 @@ public class TestTurnQueueDrain {
         NostrTURNChannel channel = new NostrTURNChannel(alice, bobRemote, "ws://turn.test", room, CHANNEL, 24);
         long vsocketId = getVsocketId(channel);
 
-        assertFalse(
-            NGEUtils.awaitNoThrow(channel.write(ByteBuffer.wrap("queued-turn-out".getBytes(StandardCharsets.UTF_8))))
-        );
+        assertFalse(NGEUtils.awaitNoThrow(channel.write(ByteBuffer.wrap("queued-turn-out".getBytes(StandardCharsets.UTF_8)))));
 
         RecordingWebsocketTransport ws = new RecordingWebsocketTransport();
         channel.setTransport(new TURNTransport(ws));
@@ -97,7 +95,9 @@ public class TestTurnQueueDrain {
         ByteBuffer sentFrame = ws.getSentBinaryFrames().get(0).duplicate();
         int sentMessageId = NostrTURNCodec.extractMessageId(sentFrame.duplicate());
         ByteBuffer deliveryAckFrame = NGEUtils.awaitNoThrow(
-            NostrTURNDeliveryAckEvent.createOutgoing(bob, aliceRemote, room, CHANNEL, vsocketId).encodeToFrame(null, sentMessageId)
+            NostrTURNDeliveryAckEvent
+                .createOutgoing(bob, aliceRemote, room, CHANNEL, vsocketId)
+                .encodeToFrame(null, sentMessageId)
         );
         channel.onBinaryMessage(deliveryAckFrame);
         assertTrue(NGEUtils.awaitNoThrow(writeTask));

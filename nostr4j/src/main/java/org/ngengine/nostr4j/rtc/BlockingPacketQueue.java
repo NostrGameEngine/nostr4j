@@ -62,6 +62,7 @@ public final class BlockingPacketQueue<T> implements AutoCloseable {
     }
 
     private static final class Enqueued<T> {
+
         final T packet;
         final Consumer<Void> resolve;
         final Consumer<Throwable> reject;

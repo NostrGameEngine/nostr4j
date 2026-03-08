@@ -421,9 +421,7 @@ public class NostrRTCIntegrationTest {
                     }
 
                     @Override
-                    public void onRTCChannel(NostrRTCChannel channel) {
-                       
-                    }
+                    public void onRTCChannel(NostrRTCChannel channel) {}
                 }
             );
             bob.socket.addListener(
@@ -446,9 +444,7 @@ public class NostrRTCIntegrationTest {
                     }
 
                     @Override
-                    public void onRTCChannel(NostrRTCChannel channel) {
-                         
-                    }
+                    public void onRTCChannel(NostrRTCChannel channel) {}
                 }
             );
 
@@ -946,9 +942,7 @@ public class NostrRTCIntegrationTest {
                     public void onRTCChannelReady(NostrRTCChannel channel) {}
 
                     @Override
-                    public void onRTCChannel(NostrRTCChannel channel) {
-                        
-                    }
+                    public void onRTCChannel(NostrRTCChannel channel) {}
                 }
             );
 
@@ -972,9 +966,7 @@ public class NostrRTCIntegrationTest {
                     public void onRTCChannelReady(NostrRTCChannel channel) {}
 
                     @Override
-                    public void onRTCChannel(NostrRTCChannel channel) {
-                         
-                    }
+                    public void onRTCChannel(NostrRTCChannel channel) {}
                 }
             );
 

@@ -44,7 +44,6 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
-import org.ngengine.nostr4j.rtc.listeners.NostrRTCChannelListener;
 import org.ngengine.nostr4j.rtc.listeners.NostrRTCSocketListener;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCAnswerSignal;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCLocalPeer;
@@ -322,11 +321,9 @@ public class NostrRTCSocket implements Closeable {
     //             return c;
     //         }
     //     );
-         
+
     //     return channel;
     // }
-
- 
 
     private void switchActiveTransport(TransportPath next, String reason) {
         TransportPath previous = this.activeTransportPath;
@@ -497,8 +494,6 @@ public class NostrRTCSocket implements Closeable {
         }
     }
 
- 
-
     /**
      * Get the local peer.
      * @return The local peer.
@@ -515,7 +510,6 @@ public class NostrRTCSocket implements Closeable {
         return remotePeer;
     }
 
- 
     NostrKeyPair getRoomKeyPair() {
         return roomKeyPair;
     }
@@ -773,6 +767,7 @@ public class NostrRTCSocket implements Closeable {
         resurrectChannel(channel);
         return channel;
     }
+
     final NostrRTCChannel createChannel(String name) {
         return createChannel(name, true, true, null, null);
     }
@@ -791,7 +786,7 @@ public class NostrRTCSocket implements Closeable {
             this.channels.computeIfAbsent(
                     channelName,
                     n -> {
-                        NostrRTCChannel nchan =  new NostrRTCChannel(
+                        NostrRTCChannel nchan = new NostrRTCChannel(
                             channelName,
                             this,
                             ordered,
@@ -799,7 +794,7 @@ public class NostrRTCSocket implements Closeable {
                             normalizedMaxRetransmits,
                             maxPacketLifeTime
                         );
-                        for(NostrRTCSocketListener listener : listeners) {
+                        for (NostrRTCSocketListener listener : listeners) {
                             try {
                                 listener.onRTCChannel(nchan);
                             } catch (Exception e) {
@@ -807,7 +802,7 @@ public class NostrRTCSocket implements Closeable {
                             }
                         }
                         // emitChannelReady(nchan);
-                        return nchan;        
+                        return nchan;
                     }
                 );
         RTCTransport currentTransport = this.transport;

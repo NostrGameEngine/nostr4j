@@ -67,7 +67,11 @@ public class TestRtcPendingSendRecovery {
             HangingRTCDataChannel hanging = new HangingRTCDataChannel("primary", PROTOCOL_ID, true, true, 0, null);
             channel.setChannel(hanging);
 
-            AsyncTask<Void> sendTask = room.send("primary", remote, ByteBuffer.wrap("stuck-then-recover".getBytes(StandardCharsets.UTF_8)));
+            AsyncTask<Void> sendTask = room.send(
+                "primary",
+                remote,
+                ByteBuffer.wrap("stuck-then-recover".getBytes(StandardCharsets.UTF_8))
+            );
             assertNotNull(sendTask);
             waitUntil(() -> pendingQueueSize(roomRef, channel) == 1, 2000, "queue should contain hanging payload");
 

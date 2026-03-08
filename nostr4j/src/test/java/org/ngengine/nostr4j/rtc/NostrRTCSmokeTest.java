@@ -131,10 +131,10 @@ public class NostrRTCSmokeTest {
         NostrTURNPool alicePool = new NostrTURNPool(24);
         NostrTURNPool bobPool = new NostrTURNPool(24);
         try {
-            NostrTURNChannel aToB = alicePool.connect(alice, bobRemote, turnUrlB, room, "primary",null);
-            NostrTURNChannel bFromA = bobPool.connect(bob, aliceRemote, turnUrlB, room, "primary",null);
-            NostrTURNChannel bToA = bobPool.connect(bob, aliceRemote, turnUrlA, room, "primary",null);
-            NostrTURNChannel aFromB = alicePool.connect(alice, bobRemote, turnUrlA, room, "primary",null);
+            NostrTURNChannel aToB = alicePool.connect(alice, bobRemote, turnUrlB, room, "primary", null);
+            NostrTURNChannel bFromA = bobPool.connect(bob, aliceRemote, turnUrlB, room, "primary", null);
+            NostrTURNChannel bToA = bobPool.connect(bob, aliceRemote, turnUrlA, room, "primary", null);
+            NostrTURNChannel aFromB = alicePool.connect(alice, bobRemote, turnUrlA, room, "primary", null);
 
             CountDownLatch readyLatch = new CountDownLatch(4);
             CountDownLatch aToBLatch = new CountDownLatch(1);

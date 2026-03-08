@@ -98,6 +98,7 @@ public final class NostrTURNChannel {
     private final AsyncExecutor ackTimeoutExecutor;
 
     private static final class PendingWrite {
+
         private final Consumer<Boolean> resolve;
         private final Consumer<Throwable> reject;
         private volatile AsyncTask<Void> timeoutTask;
@@ -180,7 +181,7 @@ public final class NostrTURNChannel {
     }
 
     void setTransport(TURNTransport transport) {
-      this.resurrecting = false;
+        this.resurrecting = false;
         TURNTransport previous = this.transport;
         this.transport = transport;
         if (transport == null || previous != transport) {
@@ -197,7 +198,7 @@ public final class NostrTURNChannel {
     }
 
     boolean isConnected() {
-        return state > 0 &&  this.transport != null && this.transport.isConnected();
+        return state > 0 && this.transport != null && this.transport.isConnected();
     }
 
     public AsyncTask<Boolean> write(ByteBuffer payload) {
@@ -225,7 +226,9 @@ public final class NostrTURNChannel {
                     () -> {
                         PendingWrite timedOut = pendingWrites.remove(Integer.valueOf(messageId));
                         if (timedOut != null) {
-                            timedOut.reject.accept(new RuntimeException("TURN delivery ack timeout for messageId=" + messageId));
+                            timedOut.reject.accept(
+                                new RuntimeException("TURN delivery ack timeout for messageId=" + messageId)
+                            );
                         }
                         return null;
                     },
@@ -422,7 +425,13 @@ public final class NostrTURNChannel {
                         logger.warning("TURN: Received delivery_ack in invalid state " + state);
                         return;
                     }
-                    NostrTURNDeliveryAckEvent.parseIncoming(header, localPeer, remotePeer, envelopeVsocketId, envelopeMessageId);
+                    NostrTURNDeliveryAckEvent.parseIncoming(
+                        header,
+                        localPeer,
+                        remotePeer,
+                        envelopeVsocketId,
+                        envelopeMessageId
+                    );
                     completePendingWrite(envelopeMessageId);
                     break;
                 }
@@ -487,7 +496,6 @@ public final class NostrTURNChannel {
                         }
                     }
 
-            
                     break;
                 }
             case "disconnect":
@@ -597,13 +605,8 @@ public final class NostrTURNChannel {
             return;
         }
         if (outgoingDeliveryAckEvent == null) {
-            outgoingDeliveryAckEvent = NostrTURNDeliveryAckEvent.createOutgoing(
-                localPeer,
-                remotePeer,
-                roomKeyPair,
-                channelLabel,
-                vSocketId
-            );
+            outgoingDeliveryAckEvent =
+                NostrTURNDeliveryAckEvent.createOutgoing(localPeer, remotePeer, roomKeyPair, channelLabel, vSocketId);
         }
         outgoingDeliveryAckEvent
             .encodeToFrame(null, messageId)

@@ -57,6 +57,7 @@ import org.ngengine.platform.AsyncTask;
  * Forwarding to the opposite direction requires finding a reciprocal socket.
  */
 final class TurnVirtualSocket implements AutoCloseable {
+
     private static final Logger logger = Logger.getLogger(TurnVirtualSocket.class.getName());
 
     // Client-generated and server-accepted virtual socket id for this websocket session.
@@ -80,6 +81,7 @@ final class TurnVirtualSocket implements AutoCloseable {
     private volatile boolean ackSent = false;
 
     static final class QueuedOutgoingFrame {
+
         private final byte[] frameBytes;
 
         private QueuedOutgoingFrame(byte[] frameBytes) {
@@ -113,26 +115,25 @@ final class TurnVirtualSocket implements AutoCloseable {
         this.protocolId = protocolId;
         this.applicationId = applicationId;
         this.channelLabel = channelLabel;
-        this.queuedOutgoingFrames = new BlockingPacketQueue<QueuedOutgoingFrame>(
-             new BlockingPacketQueue.PacketHandler<TurnVirtualSocket.QueuedOutgoingFrame>() {
-                @Override
-                public AsyncTask<Boolean> handle(TurnVirtualSocket.QueuedOutgoingFrame frame) {
-                    return processQueuedFrame.apply(TurnVirtualSocket.this, frame);
-                }
+        this.queuedOutgoingFrames =
+            new BlockingPacketQueue<QueuedOutgoingFrame>(
+                new BlockingPacketQueue.PacketHandler<TurnVirtualSocket.QueuedOutgoingFrame>() {
+                    @Override
+                    public AsyncTask<Boolean> handle(TurnVirtualSocket.QueuedOutgoingFrame frame) {
+                        return processQueuedFrame.apply(TurnVirtualSocket.this, frame);
+                    }
 
-                @Override
-                public boolean isReady() {
-                    return ackSent && hasReachableRecipient.apply(TurnVirtualSocket.this);
-                }
-            },
-            logger,
-            "TURN outgoing queue blocked"
-        );
+                    @Override
+                    public boolean isReady() {
+                        return ackSent && hasReachableRecipient.apply(TurnVirtualSocket.this);
+                    }
+                },
+                logger,
+                "TURN outgoing queue blocked"
+            );
         // Do not drain any queued sender data before the connect ACK has been sent.
         this.queuedOutgoingFrames.stop();
     }
-
-    
 
     long getVsocketId() {
         return vsocketId;

@@ -6,7 +6,6 @@
 package org.ngengine.nostr4j.rtc;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 
 import java.nio.ByteBuffer;
 import java.time.Duration;
@@ -126,6 +125,7 @@ public class TestNostrRTCSocketReadyEmission {
 
             final int[] messageCount = new int[] { 0 };
             class CompositeListener implements NostrRTCSocketListener, NostrRTCChannelListener {
+
                 @Override
                 public void onRTCSocketRouteUpdate(
                     NostrRTCSocket socket,

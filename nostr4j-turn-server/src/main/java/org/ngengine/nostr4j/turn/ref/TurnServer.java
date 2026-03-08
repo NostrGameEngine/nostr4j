@@ -37,8 +37,8 @@ import java.time.Instant;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.eclipse.jetty.ee10.servlet.ServletContextHandler;
@@ -50,7 +50,6 @@ import org.eclipse.jetty.websocket.api.Session;
 import org.eclipse.jetty.websocket.api.StatusCode;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
-import org.ngengine.nostr4j.rtc.BlockingPacketQueue;
 import org.ngengine.nostr4j.rtc.turn.event.NostrTURNCodec;
 import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
 import org.ngengine.nostr4j.utils.NostrRoomProof;
@@ -95,7 +94,7 @@ public final class TurnServer {
     private final int maxQueuedFrames;
     private final AsyncExecutor loopExecutor;
     private volatile boolean running = false;
-    
+
     public final class TurnHandler implements Session.Listener.AutoDemanding {
 
         private final TurnServer turnServer;
@@ -111,7 +110,7 @@ public final class TurnServer {
 
         @Override
         public void onWebSocketOpen(Session session) {
-            try{
+            try {
                 // 1) Attach websocket-scoped client state.
                 this.wsSession = session;
                 TurnClientConnection connection = new TurnClientConnection(
@@ -132,7 +131,7 @@ public final class TurnServer {
         public void onWebSocketBinary(ByteBuffer payload, Callback callback) {
             try {
                 // Copy incoming payload to decouple from Jetty buffer lifecycle.
-                ByteBuffer incomingFrame =  ByteBuffer.allocate(payload.remaining());
+                ByteBuffer incomingFrame = ByteBuffer.allocate(payload.remaining());
                 incomingFrame.put(payload.slice());
                 incomingFrame.flip();
                 callback.succeed();
@@ -212,13 +211,7 @@ public final class TurnServer {
         this(host, port, serverSigner, difficulty, challengeTtlSeconds, DEFAULT_MAX_QUEUED_FRAMES);
     }
 
-    public TurnServer(
-        int port,
-        NostrKeyPairSigner serverSigner,
-        int difficulty,
-        int challengeTtlSeconds,
-        int maxQueuedFrames
-    ) {
+    public TurnServer(int port, NostrKeyPairSigner serverSigner, int difficulty, int challengeTtlSeconds, int maxQueuedFrames) {
         this("127.0.0.1", port, serverSigner, difficulty, challengeTtlSeconds, maxQueuedFrames);
     }
 
@@ -419,7 +412,6 @@ public final class TurnServer {
             channelLabel,
             this::processQueuedFrame,
             this::hasReachableRecipient
-           
         );
 
         // Store accepted socket then ack it.
@@ -590,8 +582,6 @@ public final class TurnServer {
             session.close(StatusCode.NORMAL, reason, Callback.NOOP);
         }
     }
-
-    
 
     private void disconnectSenderSocket(Session senderSession, long senderVsocketId, String reason, boolean error) {
         // Best-effort targeted disconnect for one sender socket.

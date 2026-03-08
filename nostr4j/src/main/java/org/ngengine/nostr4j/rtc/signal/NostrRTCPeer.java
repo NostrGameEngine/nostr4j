@@ -94,7 +94,7 @@ public class NostrRTCPeer {
     public void setTurnServer(String turnServer) {
         this.turnServer = turnServer;
     }
-    
+
     public String getApplicationId() {
         return applicationId;
     }

@@ -107,7 +107,7 @@ public class NostrRTCChannel implements Closeable {
     void setChannel(RTCDataChannel chan) {
         this.channel = chan;
         this.resurrecting = false;
-        if (chan != null&&!socket.isForceTURN()) {
+        if (chan != null && !socket.isForceTURN()) {
             if (bufferedAmountThreshold > 0) chan.setBufferedAmountLowThreshold(bufferedAmountThreshold);
             emitChannelReady();
             disposeTurn();
@@ -119,21 +119,25 @@ public class NostrRTCChannel implements Closeable {
     AsyncTask<Boolean> write(ByteBuffer data) {
         RTCDataChannel currentChannel = this.channel;
         if (isConnected() && !socket.isForceTURN()) {
-            return NGEPlatform.get().wrapPromise((res,rej)->{
-                if(!isConnected()){
-                    res.accept(false);
-                    return;
-                }
-                currentChannel.write(data).then(r->{
-                    res.accept(true);
-                    return null;
-                }).catchException(ex->{
-                    res.accept(false);
+            return NGEPlatform
+                .get()
+                .wrapPromise((res, rej) -> {
+                    if (!isConnected()) {
+                        res.accept(false);
+                        return;
+                    }
+                    currentChannel
+                        .write(data)
+                        .then(r -> {
+                            res.accept(true);
+                            return null;
+                        })
+                        .catchException(ex -> {
+                            res.accept(false);
+                        });
                 });
-            });
-            
         }
-        if (socket.isTurnFallbackAllowed()||socket.isForceTURN()) {
+        if (socket.isTurnFallbackAllowed() || socket.isForceTURN()) {
             ensureTurn();
         }
         NostrTURNChannel currentTurnSend = this.turnSend;
@@ -156,8 +160,6 @@ public class NostrRTCChannel implements Closeable {
         }
         return false;
     }
-
-   
 
     public void close() {
         if (closed) return;
@@ -292,7 +294,6 @@ public class NostrRTCChannel implements Closeable {
     }
 
     private void disposeTurn() {
-
         NostrTURNChannel receive = turnReceive;
         NostrTURNChannel send = turnSend;
         turnReceive = null;
@@ -317,7 +318,6 @@ public class NostrRTCChannel implements Closeable {
 
         NostrRTCPeer remote = this.socket.getRemotePeer();
         if (remote == null) {
- 
             return;
         }
 
@@ -326,11 +326,9 @@ public class NostrRTCChannel implements Closeable {
         boolean sharedTurn = sendTurn != null && !sendTurn.isEmpty() && Objects.equals(sendTurn, receiveTurn);
 
         if (turnSend != null && !Objects.equals(sendTurn, turnSend.getServerUrl())) {
-  
             turnSend.redirectTo(sendTurn);
         }
         if (turnReceive != null && !Objects.equals(receiveTurn, turnReceive.getServerUrl())) {
-  
             turnReceive.redirectTo(receiveTurn);
         }
 
@@ -401,35 +399,35 @@ public class NostrRTCChannel implements Closeable {
         }
 
         if (receiveTurn != null && !receiveTurn.isEmpty() && turnReceive == null) {
-           
             turnReceive =
                 pool.connect(
-                    this.socket.getLocalPeer(), 
-                    remote, receiveTurn, 
-                    this.socket.getRoomKeyPair(), 
+                    this.socket.getLocalPeer(),
+                    remote,
+                    receiveTurn,
+                    this.socket.getRoomKeyPair(),
                     this.name,
                     new NostrTURNChannelListener() {
-                @Override
-                public void onTurnChannelReady(NostrTURNChannel channel) {
-                    // receive path is ready; write readiness is signaled by turnSend
-                }
+                        @Override
+                        public void onTurnChannelReady(NostrTURNChannel channel) {
+                            // receive path is ready; write readiness is signaled by turnSend
+                        }
 
-                @Override
-                public void onTurnChannelClosed(NostrTURNChannel channel, String reason) {
-                    disposeTurn();
-                }
+                        @Override
+                        public void onTurnChannelClosed(NostrTURNChannel channel, String reason) {
+                            disposeTurn();
+                        }
 
-                @Override
-                public void onTurnChannelError(NostrTURNChannel channel, Throwable e) {
-                    onRTCChannelError(e);
-                }
+                        @Override
+                        public void onTurnChannelError(NostrTURNChannel channel, Throwable e) {
+                            onRTCChannelError(e);
+                        }
 
-                @Override
-                public void onTurnChannelMessage(NostrTURNChannel channel, ByteBuffer payload) {
-                    onTURNSocketMessage(payload);
-                }
-            }
+                        @Override
+                        public void onTurnChannelMessage(NostrTURNChannel channel, ByteBuffer payload) {
+                            onTURNSocketMessage(payload);
+                        }
+                    }
                 );
-         }
-    } 
+        }
+    }
 }
