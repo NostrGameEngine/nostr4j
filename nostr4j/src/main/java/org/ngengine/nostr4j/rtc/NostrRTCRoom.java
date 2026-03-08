@@ -336,6 +336,17 @@ public class NostrRTCRoom implements Closeable {
         return this;
     }
 
+    private void onSocketAvailable(NostrRTCPeer peer, NostrRTCSocket socket) {
+        socket.createChannel(NostrRTCSocket.DEFAULT_CHANNEL_NAME);
+        for (NostrRTCPeerSocketAvailableListener listener : onSocketAvailable) {
+            try {
+                listener.onRoomPeerSocketAvailable(peer, socket);
+            } catch (Exception e) {
+                logger.log(Level.WARNING, "Error notifying listener", e);
+            }
+        }
+    }
+
     private void loop() {
         this.executor.runLater(
                 () -> {
@@ -367,13 +378,7 @@ public class NostrRTCRoom implements Closeable {
                                         socket = newSocket(remotePeer);
                                         socket.addListener(listener);
                                         connections.put(remotePeer, socket);
-                                        for (NostrRTCPeerSocketAvailableListener listener : onSocketAvailable) {
-                                            try {
-                                                listener.onRoomPeerSocketAvailable(remotePeer, socket);
-                                            } catch (Exception e) {
-                                                logger.log(Level.WARNING, "Error notifying listener", e);
-                                            }
-                                        }
+                                        onSocketAvailable(remotePeer, socket);
                                     
                                 } else {
                                     socket.reset();
@@ -610,13 +615,7 @@ public class NostrRTCRoom implements Closeable {
                 socket = newSocket(remotePeer);
                 socket.addListener(listener);
                 connections.put(remotePeer, socket);
-                for (NostrRTCPeerSocketAvailableListener listener : onSocketAvailable) {
-                    try {
-                        listener.onRoomPeerSocketAvailable(remotePeer, socket);
-                    } catch (Exception e) {
-                        logger.log(Level.WARNING, "Error notifying listener", e);
-                    }
-                }
+                onSocketAvailable(remotePeer, socket);
             }
 
             // send answer to remote peer
@@ -707,7 +706,10 @@ public class NostrRTCRoom implements Closeable {
             logger.warning("No socket found for peer: " + peer);
             throw new IllegalStateException("No socket found for peer: " + peer);
         }
-        NostrRTCChannel chan = socket.createChannel(channel);
+        NostrRTCChannel chan = socket.getChannel(channel);
+        if(chan==null){
+            throw new IllegalStateException("No channel named " + channel + " found for peer: " + peer+" use createChannel method to create it first");
+        }
         BlockingPacketQueue<ByteBuffer> q =
             pendingSends.computeIfAbsent(
                 chan,
@@ -733,7 +735,8 @@ public class NostrRTCRoom implements Closeable {
         });      
     }
 
-    public AsyncTask<Void> send(NostrRTCChannel chan, NostrRTCPeer peer, ByteBuffer bbf) {
+    public AsyncTask<Void> send(NostrRTCChannel chan,  ByteBuffer bbf) {
+        NostrRTCPeer peer = chan.getSocket().getRemotePeer();
         NostrRTCSocket socket = connections.get(peer);
         if (socket == null) {
             logger.warning("No socket found for peer: " + peer);
@@ -765,15 +768,16 @@ public class NostrRTCRoom implements Closeable {
     }
 
 
-    public NostrRTCChannel getChannel(NostrRTCPeer peer, String channel) {
-        NostrRTCSocket socket = connections.get(peer);
-        if (socket != null) {
-            return socket.getChannel(channel);
-        } else {
-            logger.warning("No socket found for peer: " + peer);
-            throw new IllegalStateException("No socket found for peer: " + peer);
-        }
-    }
+    // public NostrRTCChannel getChannel(NostrRTCPeer peer, String channel) {
+    //     // NostrRTCSocket socket = connections.get(peer);
+    //     // if (socket != null) {
+    //     //     return socket.getChannel(channel);
+    //     // } else {
+    //     //     logger.warning("No socket found for peer: " + peer);
+    //     //     throw new IllegalStateException("No socket found for peer: " + peer);
+    //     // }
+    //     return createChannel(peer, channel);
+    // }
 
     public NostrRTCChannel createChannel(NostrRTCPeer peer, String channel) {
         NostrRTCSocket socket = connections.get(peer);

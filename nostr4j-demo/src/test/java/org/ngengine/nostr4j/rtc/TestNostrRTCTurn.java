@@ -84,10 +84,11 @@ public class TestNostrRTCTurn {
         // room
         NostrRTCRoom room = new NostrRTCRoom(RTCSettings.DEFAULT, localPeer, roomKeyPair, pool, turn, turnPool);
         room.setForceTURN(true);
+        
 
         room.addPeerSocketAvailableListener((peerKey, socket) -> {
             System.out.println(name + " peer connected: " + peerKey);
-           
+            room.createChannel(peerKey, "channel1");
             room.send("channel1", peerKey, ByteBuffer.wrap(("Hello " + peerKey.getPubkey().asHex()).getBytes()));
         });
          room.addMessageListener(
@@ -106,7 +107,7 @@ public class TestNostrRTCTurn {
                 } catch (InterruptedException e) {
                 }
 
-                channel.write(ByteBuffer.wrap(("Hello back from " + name + ":" + n).getBytes()));
+                room.send(channel, ByteBuffer.wrap(("Hello back from " + name + ":" + n).getBytes()));
                 System.out.println(name + " incoming message: " + new String(bb) + " p2p:" + !isTurn+" on channel: " + channel.getName());
             });
 

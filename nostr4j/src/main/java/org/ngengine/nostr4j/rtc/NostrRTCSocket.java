@@ -166,9 +166,21 @@ public class NostrRTCSocket implements Closeable {
             //     }
             // }
             NostrRTCChannel logicalChannel = channels.get(chan.getName());
+            // if (logicalChannel == null && isDefaultChannelName(chan.getName())) {
+            //     logicalChannel =
+            //         getOrCreateLogicalChannel(
+            //             chan.getName(),
+            //             chan.isOrdered(),
+            //             chan.isReliable(),
+            //             chan.getMaxRetransmits(),
+            //             chan.getMaxPacketLifeTime()
+            //         );
+            // }
             if (logicalChannel != null) {
                 logicalChannel.setChannel(chan);
                 logicalChannel.onRTCSocketMessage(bbf);
+            } else {
+                logger.fine("Dropping binary for unknown logical channel: " + chan.getName());
             }
         }
 
@@ -201,13 +213,21 @@ public class NostrRTCSocket implements Closeable {
 
         @Override
         public void onRTCChannelReady(RTCDataChannel channel) {
-            NostrRTCChannel logicalChannel = getOrCreateLogicalChannel(
-                channel.getName(),
-                channel.isOrdered(),
-                channel.isReliable(),
-                channel.getMaxRetransmits(),
-                channel.getMaxPacketLifeTime()
-            );
+            NostrRTCChannel logicalChannel = channels.get(channel.getName());
+            // if (logicalChannel == null && isDefaultChannelName(channel.getName())) {
+            //     logicalChannel =
+            //         getOrCreateLogicalChannel(
+            //             channel.getName(),
+            //             channel.isOrdered(),
+            //             channel.isReliable(),
+            //             channel.getMaxRetransmits(),
+            //             channel.getMaxPacketLifeTime()
+            //         );
+            // }
+            if (logicalChannel == null) {
+                logger.fine("Ignoring ready for unknown logical channel: " + channel.getName());
+                return;
+            }
             logicalChannel.setChannel(channel);
             logger.fine("RTC Channel ready: " + channel.getName());
         }
@@ -274,37 +294,37 @@ public class NostrRTCSocket implements Closeable {
         this.turnServerUrl = turnServerUrl;
     }
 
-    private NostrRTCChannel getOrCreateLogicalChannel(
-        String name,
-        boolean ordered,
-        boolean reliable,
-        @Nullable Integer maxRetransmits,
-        @Nullable Duration maxPacketLifeTime
-    ) {
-        NostrRTCChannel channel = channels.computeIfAbsent(
-            name,
-            n -> {
-                NostrRTCChannel c = new NostrRTCChannel(
-                    name,
-                    this,
-                    ordered,
-                    reliable,
-                    maxRetransmits != null ? maxRetransmits : Integer.valueOf(0),
-                    maxPacketLifeTime
-                );
-                for(NostrRTCSocketListener listener : listeners) {
-                    try {
-                        listener.onRTCChannel(c);
-                    } catch (Exception e) {
-                        logger.severe("Error emitting channel: " + e.getMessage());
-                    }
-                }
-                return c;
-            }
-        );
+    // private NostrRTCChannel getOrCreateLogicalChannel(
+    //     String name,
+    //     boolean ordered,
+    //     boolean reliable,
+    //     @Nullable Integer maxRetransmits,
+    //     @Nullable Duration maxPacketLifeTime
+    // ) {
+    //     NostrRTCChannel channel = channels.computeIfAbsent(
+    //         name,
+    //         n -> {
+    //             NostrRTCChannel c = new NostrRTCChannel(
+    //                 name,
+    //                 this,
+    //                 ordered,
+    //                 reliable,
+    //                 maxRetransmits != null ? maxRetransmits : Integer.valueOf(0),
+    //                 maxPacketLifeTime
+    //             );
+    //             for(NostrRTCSocketListener listener : listeners) {
+    //                 try {
+    //                     listener.onRTCChannel(c);
+    //                 } catch (Exception e) {
+    //                     logger.severe("Error emitting channel: " + e.getMessage());
+    //                 }
+    //             }
+    //             return c;
+    //         }
+    //     );
          
-        return channel;
-    }
+    //     return channel;
+    // }
 
  
 
@@ -457,6 +477,13 @@ public class NostrRTCSocket implements Closeable {
             nativeName = DEFAULT_CHANNEL_NAME;
         }
         return nativeName;
+    }
+
+    private static boolean isDefaultChannelName(String channelName) {
+        if (channelName == null) {
+            return false;
+        }
+        return DEFAULT_CHANNEL_NAME.equals(channelName) || RTCTransport.DEFAULT_CHANNEL.equals(channelName);
     }
 
     void emitChannelReady(NostrRTCChannel channel) {
@@ -783,6 +810,13 @@ public class NostrRTCSocket implements Closeable {
                         return nchan;        
                     }
                 );
+        RTCTransport currentTransport = this.transport;
+        if (currentTransport != null) {
+            RTCDataChannel existingChannel = currentTransport.getDataChannel(channelName);
+            if (existingChannel != null) {
+                chan.setChannel(existingChannel);
+            }
+        }
         chan.activateFallbackIfNeeded();
         return chan;
         // NostrRTCChannel channel = channels.computeIfAbsent(nativeName, n -> new NostrRTCChannel(

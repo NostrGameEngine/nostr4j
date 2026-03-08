@@ -82,11 +82,11 @@ public class TestNostrRTC {
 
         // room
         NostrRTCRoom room = new NostrRTCRoom(RTCSettings.DEFAULT, localPeer, roomKeyPair, pool, turn, turnPool);
-
+        
  
         room.addPeerSocketAvailableListener((peerKey, socket) -> {
             System.out.println(name + " peer connected: " + peerKey);
-            
+            room.createChannel(peerKey, "channel1");
             room.send("channel1", peerKey, ByteBuffer.wrap(("Hello " + peerKey.getPubkey().asHex()).getBytes()));
         });
         
@@ -106,7 +106,7 @@ public class TestNostrRTC {
                 } catch (InterruptedException e) {}
                 System.out.println("incoming message from " + peer.getPubkey() + " on channel " + channel.getName() + " turn:" + isTurn);
                     System.out.println("   Message content: " +  msg);
-                channel.write(ByteBuffer.wrap(("Hello back from " + name + ":" + n).getBytes()));
+                room.send(channel, ByteBuffer.wrap(("Hello back from " + name + ":" + n).getBytes()));
             }
         );
 
