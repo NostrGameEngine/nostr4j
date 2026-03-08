@@ -41,7 +41,7 @@ import org.ngengine.platform.AsyncTask;
  * Announce the peer can accept connections.
  * (unencrypted)
  */
-public class NostrRTCDisconnectSignal extends NostrRTCSignal {
+public final class NostrRTCDisconnectSignal extends NostrRTCSignal {
 
     private static final long serialVersionUID = 2L;
     private final String message;

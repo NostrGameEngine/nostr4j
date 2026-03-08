@@ -2,7 +2,7 @@
  * BSD 3-Clause License
  * Copyright (c) 2025, Riccardo Balbo
  */
-package org.ngengine.nostr4j.rtc.turn;
+package org.ngengine.nostr4j.rtc;
 
 import java.nio.ByteBuffer;
 import java.util.Iterator;
@@ -17,10 +17,11 @@ import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
+import org.ngengine.nostr4j.rtc.listeners.NostrTURNChannelListener;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCLocalPeer;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCPeer;
-import org.ngengine.nostr4j.rtc.turn.event.NostrTURNCodec;
-import org.ngengine.nostr4j.rtc.turn.event.NostrTURNEvent;
+import org.ngengine.nostr4j.rtc.turn.NostrTURNCodec;
+import org.ngengine.nostr4j.rtc.turn.NostrTURNEvent;
 import org.ngengine.platform.AsyncExecutor;
 import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEPlatform;
@@ -67,7 +68,7 @@ public final class NostrTURNPool implements AutoCloseable {
      * goes offline: if the underlying transport connection dies it will be
      * transparently resurrected on a new transport connection.
      */
-    public NostrTURNChannel connect(
+    NostrTURNChannel connect(
         NostrRTCLocalPeer localPeer,
         NostrRTCPeer remotePeer,
         String turnServerUrl,

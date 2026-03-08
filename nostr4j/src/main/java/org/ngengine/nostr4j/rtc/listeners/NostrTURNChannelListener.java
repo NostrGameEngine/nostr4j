@@ -29,9 +29,11 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package org.ngengine.nostr4j.rtc.turn;
+package org.ngengine.nostr4j.rtc.listeners;
 
 import java.nio.ByteBuffer;
+
+import org.ngengine.nostr4j.rtc.NostrTURNChannel;
 
 public interface NostrTURNChannelListener {
     void onTurnChannelReady(NostrTURNChannel channel);

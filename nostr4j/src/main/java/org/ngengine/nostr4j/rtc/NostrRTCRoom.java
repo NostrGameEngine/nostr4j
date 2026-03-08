@@ -57,7 +57,6 @@ import org.ngengine.nostr4j.rtc.signal.NostrRTCOfferSignal;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCPeer;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCRouteSignal;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCSignaling;
-import org.ngengine.nostr4j.rtc.turn.NostrTURNPool;
 import org.ngengine.platform.AsyncExecutor;
 import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEPlatform;
@@ -65,7 +64,7 @@ import org.ngengine.platform.NGEUtils;
 import org.ngengine.platform.RTCSettings;
 import org.ngengine.platform.transport.RTCTransportIceCandidate;
 
-public class NostrRTCRoom implements Closeable {
+public final class NostrRTCRoom implements Closeable {
 
     private static final Logger logger = Logger.getLogger(NostrRTCRoom.class.getName());
 
@@ -442,33 +441,24 @@ public class NostrRTCRoom implements Closeable {
     }
 
     /**
-     * Disconnect a peer. The peer can reconnect immediately.
-     * @param peer the peer to disconnect
+     * @deprecated Use {@link #disconnect(NostrRTCPeer)} instead.
      */
     public void kick(NostrRTCPeer peer) {
-        List<NostrRTCSocket> sockets = removeSocketsForPeer(peer);
-        if (sockets.isEmpty()) {
-            logger.warning("No socket found for peer: " + peer);
-            return;
-        }
-        logger.fine("Kicking peer: " + peer);
-        for (NostrRTCSocket socket : sockets) {
-            socket.close();
-            for (NostrRTCRoomPeerDisconnectListener listener : onDisconnectionListeners) {
-                try {
-                    listener.onRoomPeerDisconnected(peer, socket);
-                } catch (Exception e) {
-                    logger.log(Level.WARNING, "Error notifying listener", e);
-                }
-            }
-        }
+        disconnect(peer);
+    }
+
+    /**
+     * @deprecated Use {@link #kick(NostrPublicKey)} instead. 
+     */
+    public void kick(NostrPublicKey peer) {
+        disconnect(peer);
     }
 
     /**
      * Disconnect all peers associated with a pubkey
      * @param peer the peer to disconnect
      */
-    public void kick(NostrPublicKey peer) {
+    public void disconnect(NostrPublicKey peer) {
         List<NostrRTCSocket> sockets = removeSocketsForPubkey(peer);
         if (sockets.isEmpty()) {
             logger.warning("No socket found for peer: " + peer);
@@ -487,21 +477,40 @@ public class NostrRTCRoom implements Closeable {
         }
     }
 
-    protected void onRTCSocketClose(NostrRTCSocket socket) {
+    /**
+     * Disconnect a peer
+     * @param peer
+     */
+    public void disconnect(NostrRTCPeer peer){
+        NostrRTCSocket socket = connections.remove(peer);
+        if(socket!=null){
+            socket.close();
+            for (NostrRTCRoomPeerDisconnectListener listener : onDisconnectionListeners) {
+                try {
+                    listener.onRoomPeerDisconnected(peer, socket);
+                } catch (Exception e) {
+                    logger.log(Level.WARNING, "Error notifying listener", e);
+                }
+            }
+        }
+    }
+
+    private void onRTCSocketClose(NostrRTCSocket socket) {
         // if the socket is closed remotely, we remove it from the list of connections
         // and notify the listeners
         NostrRTCPeer remotePeer = socket.getRemotePeer();
         if (remotePeer == null || remotePeer.getPubkey() == null) return;
         NostrRTCSocket current = connections.get(remotePeer);
         if (current != socket) return;
-        connections.remove(remotePeer, socket);
-
-        logger.fine("Closed peer: " + remotePeer);
-        for (NostrRTCRoomPeerDisconnectListener listener : onDisconnectionListeners) {
-            try {
-                listener.onRoomPeerDisconnected(remotePeer, socket);
-            } catch (Exception e) {
-                logger.log(Level.WARNING, "Error notifying listener", e);
+        boolean removed = connections.remove(remotePeer, socket);
+        if(removed){
+            logger.fine("Closed peer: " + remotePeer);
+            for (NostrRTCRoomPeerDisconnectListener listener : onDisconnectionListeners) {
+                try {
+                    listener.onRoomPeerDisconnected(remotePeer, socket);
+                } catch (Exception e) {
+                    logger.log(Level.WARNING, "Error notifying listener", e);
+                }
             }
         }
     }
@@ -529,7 +538,7 @@ public class NostrRTCRoom implements Closeable {
         bannedPeers.remove(peer);
     }
 
-    protected void onAddAnnounce(NostrRTCConnectSignal announce) {
+    private void onAddAnnounce(NostrRTCConnectSignal announce) {
         for (NostrRTCRoomPeerDiscoveredListener listener : onPeerDiscoveredListeners) {
             try {
                 listener.onRoomPeerDiscovered(
@@ -543,7 +552,7 @@ public class NostrRTCRoom implements Closeable {
         }
     }
 
-    protected void onUpdateAnnounce(NostrRTCConnectSignal announce) {
+    private void onUpdateAnnounce(NostrRTCConnectSignal announce) {
         for (NostrRTCRoomPeerDiscoveredListener listener : onPeerDiscoveredListeners) {
             try {
                 listener.onRoomPeerDiscovered(
@@ -557,7 +566,7 @@ public class NostrRTCRoom implements Closeable {
         }
     }
 
-    protected void onRemoveAnnounce(NostrRTCConnectSignal announce, NostrRTCSignaling.Listener.RemoveReason reason) {
+    private void onRemoveAnnounce(NostrRTCConnectSignal announce, NostrRTCSignaling.Listener.RemoveReason reason) {
         // we use the announce as keep alive signaling. If the announce is not updated in a while
         // the peer is considered offline and the logical socket is closed.
         NostrRTCPeer remotePeer = announce.getPeer();
@@ -589,7 +598,7 @@ public class NostrRTCRoom implements Closeable {
         return this.localPeer;
     }
 
-    protected void onReceiveOffer(NostrRTCOfferSignal offer) {
+    private void onReceiveOffer(NostrRTCOfferSignal offer) {
         synchronized (this) {
             NostrRTCPeer remotePeer = offer.getPeer();
             // offer received from remote peer
@@ -638,7 +647,7 @@ public class NostrRTCRoom implements Closeable {
         }
     }
 
-    protected void onReceiveAnswer(NostrRTCAnswerSignal answer) {
+    private void onReceiveAnswer(NostrRTCAnswerSignal answer) {
         synchronized (this) {
             // answer received from remote peer
             NostrRTCPeer remotePeer = answer.getPeer();
@@ -661,7 +670,7 @@ public class NostrRTCRoom implements Closeable {
         }
     }
 
-    protected void onReceiveCandidates(NostrRTCRouteSignal candidate) {
+    private void onReceiveCandidates(NostrRTCRouteSignal candidate) {
         logger.fine("Received ICE candidate: " + candidate);
         NostrRTCPeer remotePeer = candidate.getPeer();
 
@@ -674,7 +683,7 @@ public class NostrRTCRoom implements Closeable {
         }
     }
 
-    protected void onRTCSocketLocalIceCandidate(
+    private void onRTCSocketLocalIceCandidate(
         NostrRTCSocket socket,
         Collection<RTCTransportIceCandidate> candidates,
         String turn
@@ -848,15 +857,15 @@ public class NostrRTCRoom implements Closeable {
         return removed;
     }
 
-    private List<NostrRTCSocket> removeSocketsForPeer(NostrRTCPeer peer) {
-        List<NostrRTCSocket> removed = new ArrayList<>();
-        for (Map.Entry<NostrRTCPeer, NostrRTCSocket> entry : new ArrayList<>(connections.entrySet())) {
-            NostrRTCPeer key = entry.getKey();
-            if (key == null || !key.equals(peer)) continue;
-            if (connections.remove(key, entry.getValue())) {
-                removed.add(entry.getValue());
-            }
-        }
-        return removed;
-    }
+    // private List<NostrRTCSocket> removeSocketsForPeer(NostrRTCPeer peer) {
+    //     List<NostrRTCSocket> removed = new ArrayList<>();
+    //     for (Map.Entry<NostrRTCPeer, NostrRTCSocket> entry : new ArrayList<>(connections.entrySet())) {
+    //         NostrRTCPeer key = entry.getKey();
+    //         if (key == null || !key.equals(peer)) continue;
+    //         if (connections.remove(key, entry.getValue())) {
+    //             removed.add(entry.getValue());
+    //         }
+    //     }
+    //     return removed;
+    // }
 }

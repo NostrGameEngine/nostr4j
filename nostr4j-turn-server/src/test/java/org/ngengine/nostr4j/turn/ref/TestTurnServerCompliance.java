@@ -60,12 +60,12 @@ import org.ngengine.nostr4j.event.UnsignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCLocalPeer;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCPeer;
-import org.ngengine.nostr4j.rtc.turn.event.NostrTURNAckEvent;
-import org.ngengine.nostr4j.rtc.turn.event.NostrTURNChallengeEvent;
-import org.ngengine.nostr4j.rtc.turn.event.NostrTURNCodec;
-import org.ngengine.nostr4j.rtc.turn.event.NostrTURNConnectEvent;
-import org.ngengine.nostr4j.rtc.turn.event.NostrTURNDataEvent;
-import org.ngengine.nostr4j.rtc.turn.event.NostrTURNDisconnectEvent;
+import org.ngengine.nostr4j.rtc.turn.NostrTURNAckEvent;
+import org.ngengine.nostr4j.rtc.turn.NostrTURNChallengeEvent;
+import org.ngengine.nostr4j.rtc.turn.NostrTURNCodec;
+import org.ngengine.nostr4j.rtc.turn.NostrTURNConnectEvent;
+import org.ngengine.nostr4j.rtc.turn.NostrTURNDataEvent;
+import org.ngengine.nostr4j.rtc.turn.NostrTURNDisconnectEvent;
 import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
 import org.ngengine.platform.NGEUtils;
 

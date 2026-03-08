@@ -2,7 +2,7 @@
  * BSD 3-Clause License
  * Copyright (c) 2025, Riccardo Balbo
  */
-package org.ngengine.nostr4j.rtc.turn.event;
+package org.ngengine.nostr4j.rtc.turn;
 
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.event.UnsignedNostrEvent;

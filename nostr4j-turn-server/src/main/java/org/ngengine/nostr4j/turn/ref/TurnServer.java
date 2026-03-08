@@ -50,7 +50,7 @@ import org.eclipse.jetty.websocket.api.Session;
 import org.eclipse.jetty.websocket.api.StatusCode;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
-import org.ngengine.nostr4j.rtc.turn.event.NostrTURNCodec;
+import org.ngengine.nostr4j.rtc.turn.NostrTURNCodec;
 import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
 import org.ngengine.nostr4j.utils.NostrRoomProof;
 import org.ngengine.platform.AsyncExecutor;

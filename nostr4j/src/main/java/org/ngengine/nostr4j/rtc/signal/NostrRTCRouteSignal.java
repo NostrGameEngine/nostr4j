@@ -49,7 +49,7 @@ import org.ngengine.platform.transport.RTCTransportIceCandidate;
  * A collection of valid ice candidates that can be used to establish a
  * connection with a peer.
  */
-public class NostrRTCRouteSignal extends NostrRTCSignal {
+public final class NostrRTCRouteSignal extends NostrRTCSignal {
 
     private static final java.util.logging.Logger logger = java.util.logging.Logger.getLogger(
         NostrRTCRouteSignal.class.getName()

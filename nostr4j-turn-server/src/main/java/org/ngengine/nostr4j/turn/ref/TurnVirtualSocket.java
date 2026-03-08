@@ -37,7 +37,7 @@ import java.util.function.Function;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.rtc.BlockingPacketQueue;
-import org.ngengine.nostr4j.rtc.turn.event.NostrTURNCodec;
+import org.ngengine.nostr4j.rtc.turn.NostrTURNCodec;
 import org.ngengine.platform.AsyncTask;
 
 /**

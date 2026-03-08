@@ -50,7 +50,6 @@ import org.ngengine.nostr4j.rtc.listeners.NostrRTCChannelListener;
 import org.ngengine.nostr4j.rtc.listeners.NostrRTCSocketListener;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCLocalPeer;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCPeer;
-import org.ngengine.nostr4j.rtc.turn.NostrTURNPool;
 import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
 import org.ngengine.nostr4j.turn.ref.TurnServer;
 import org.ngengine.platform.AsyncExecutor;
@@ -502,9 +501,9 @@ public class TestNostrRTCTurnOnly {
     }
 
     private static boolean isTurnReady(Object turnChannelObj) {
-        if (!(turnChannelObj instanceof org.ngengine.nostr4j.rtc.turn.NostrTURNChannel)) {
+        if (!(turnChannelObj instanceof org.ngengine.nostr4j.rtc.NostrTURNChannel)) {
             return false;
         }
-        return ((org.ngengine.nostr4j.rtc.turn.NostrTURNChannel) turnChannelObj).isReady();
+        return ((org.ngengine.nostr4j.rtc.NostrTURNChannel) turnChannelObj).isReady();
     }
 }

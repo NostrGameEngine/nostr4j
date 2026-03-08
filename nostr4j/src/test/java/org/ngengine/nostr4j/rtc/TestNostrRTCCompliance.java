@@ -55,8 +55,8 @@ import org.ngengine.nostr4j.rtc.signal.NostrRTCLocalPeer;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCOfferSignal;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCPeer;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCRouteSignal;
-import org.ngengine.nostr4j.rtc.turn.event.NostrTURNCodec;
-import org.ngengine.nostr4j.rtc.turn.event.NostrTURNConnectEvent;
+import org.ngengine.nostr4j.rtc.turn.NostrTURNCodec;
+import org.ngengine.nostr4j.rtc.turn.NostrTURNConnectEvent;
 import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
 import org.ngengine.platform.NGEUtils;
 import org.ngengine.platform.transport.RTCTransportIceCandidate;
@@ -139,7 +139,7 @@ public class TestNostrRTCCompliance {
         assertNotNull(event);
         assertEquals(
             12,
-            org.ngengine.nostr4j.rtc.turn.event.NostrTURNChallengeEvent.parseIncoming(event, local, 24).getRequiredDifficulty()
+            org.ngengine.nostr4j.rtc.turn.NostrTURNChallengeEvent.parseIncoming(event, local, 24).getRequiredDifficulty()
         );
     }
 

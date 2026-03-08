@@ -29,8 +29,9 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package org.ngengine.nostr4j.rtc.turn;
+package org.ngengine.nostr4j.rtc;
 
+import java.io.Closeable;
 import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Map;
@@ -45,17 +46,18 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
+import org.ngengine.nostr4j.rtc.NostrTURNPool.TURNTransport;
+import org.ngengine.nostr4j.rtc.listeners.NostrTURNChannelListener;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCLocalPeer;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCPeer;
-import org.ngengine.nostr4j.rtc.turn.NostrTURNPool.TURNTransport;
-import org.ngengine.nostr4j.rtc.turn.event.NostrTURNAckEvent;
-import org.ngengine.nostr4j.rtc.turn.event.NostrTURNChallengeEvent;
-import org.ngengine.nostr4j.rtc.turn.event.NostrTURNCodec;
-import org.ngengine.nostr4j.rtc.turn.event.NostrTURNConnectEvent;
-import org.ngengine.nostr4j.rtc.turn.event.NostrTURNDataEvent;
-import org.ngengine.nostr4j.rtc.turn.event.NostrTURNDeliveryAckEvent;
-import org.ngengine.nostr4j.rtc.turn.event.NostrTURNDisconnectEvent;
-import org.ngengine.nostr4j.rtc.turn.event.NostrTURNEvent;
+import org.ngengine.nostr4j.rtc.turn.NostrTURNAckEvent;
+import org.ngengine.nostr4j.rtc.turn.NostrTURNChallengeEvent;
+import org.ngengine.nostr4j.rtc.turn.NostrTURNCodec;
+import org.ngengine.nostr4j.rtc.turn.NostrTURNConnectEvent;
+import org.ngengine.nostr4j.rtc.turn.NostrTURNDataEvent;
+import org.ngengine.nostr4j.rtc.turn.NostrTURNDeliveryAckEvent;
+import org.ngengine.nostr4j.rtc.turn.NostrTURNDisconnectEvent;
+import org.ngengine.nostr4j.rtc.turn.NostrTURNEvent;
 import org.ngengine.platform.AsyncExecutor;
 import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEPlatform;
@@ -68,7 +70,7 @@ import org.ngengine.platform.NGEPlatform;
  *
  * This class is just a convenient handle to send/receive data and listen for events.
  */
-public final class NostrTURNChannel {
+public final class NostrTURNChannel  {
 
     private static final Logger logger = Logger.getLogger(NostrTURNChannel.class.getName());
     private static final AtomicLong VSOCKET_COUNTER = new AtomicLong(1L);
@@ -141,15 +143,15 @@ public final class NostrTURNChannel {
         return id;
     }
 
-    public void addListener(NostrTURNChannelListener listener) {
+    void addListener(NostrTURNChannelListener listener) {
         listeners.add(listener);
     }
 
-    public void removeListener(NostrTURNChannelListener listener) {
+    void removeListener(NostrTURNChannelListener listener) {
         listeners.remove(listener);
     }
 
-    public String getServerUrl() {
+    String getServerUrl() {
         return turnServer;
     }
 
@@ -174,7 +176,7 @@ public final class NostrTURNChannel {
         setTransport(null);
     }
 
-    public void redirectTo(String newTurnServer) {
+    void redirectTo(String newTurnServer) {
         // set turn server and disconnect, this will force resurrection on the new turn
         this.turnServer = newTurnServer;
         disconnect();
@@ -193,7 +195,7 @@ public final class NostrTURNChannel {
         }
     }
 
-    public boolean isReady() {
+    boolean isReady() {
         return state == 2 && this.transport != null && this.transport.isConnected();
     }
 
@@ -201,7 +203,7 @@ public final class NostrTURNChannel {
         return state > 0 && this.transport != null && this.transport.isConnected();
     }
 
-    public AsyncTask<Boolean> write(ByteBuffer payload) {
+    AsyncTask<Boolean> write(ByteBuffer payload) {
         TURNTransport currentTransport = this.transport;
         if (!isReady() || currentTransport == null || !currentTransport.isConnected()) {
             return AsyncTask.completed(Boolean.FALSE);
@@ -264,7 +266,8 @@ public final class NostrTURNChannel {
         });
     }
 
-    public void close(String reason) {
+  
+    void close(String reason) {
         if (isConnected()) {
             NostrTURNDisconnectEvent disconnectEvent = NostrTURNDisconnectEvent.createDisconnect(
                 localPeer,

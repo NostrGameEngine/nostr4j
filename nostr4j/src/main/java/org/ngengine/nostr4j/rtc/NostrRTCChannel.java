@@ -38,15 +38,13 @@ import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.rtc.listeners.NostrRTCChannelListener;
+import org.ngengine.nostr4j.rtc.listeners.NostrTURNChannelListener;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCPeer;
-import org.ngengine.nostr4j.rtc.turn.NostrTURNChannel;
-import org.ngengine.nostr4j.rtc.turn.NostrTURNChannelListener;
-import org.ngengine.nostr4j.rtc.turn.NostrTURNPool;
 import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEPlatform;
 import org.ngengine.platform.transport.RTCDataChannel;
 
-public class NostrRTCChannel implements Closeable {
+public final  class NostrRTCChannel  {
 
     private static final Logger logger = Logger.getLogger(NostrRTCChannel.class.getName());
     private RTCDataChannel channel;
@@ -161,7 +159,7 @@ public class NostrRTCChannel implements Closeable {
         return false;
     }
 
-    public void close() {
+    void close() {
         if (closed) return;
         closed = true;
         if (channel != null) {
@@ -279,11 +277,11 @@ public class NostrRTCChannel implements Closeable {
         }
     }
 
-    public void addListener(NostrRTCChannelListener listener) {
+    void addListener(NostrRTCChannelListener listener) {
         listeners.addIfAbsent(listener);
     }
 
-    public void removeListener(NostrRTCChannelListener listener) {
+    void removeListener(NostrRTCChannelListener listener) {
         listeners.remove(listener);
     }
 

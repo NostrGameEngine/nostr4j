@@ -29,7 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package org.ngengine.nostr4j.rtc.turn.event;
+package org.ngengine.nostr4j.rtc.turn;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;

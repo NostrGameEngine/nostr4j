@@ -77,9 +77,8 @@ import org.ngengine.nostr4j.rtc.signal.NostrRTCOfferSignal;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCPeer;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCRouteSignal;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCSignaling;
-import org.ngengine.nostr4j.rtc.turn.NostrTURNPool;
-import org.ngengine.nostr4j.rtc.turn.event.NostrTURNAckEvent;
-import org.ngengine.nostr4j.rtc.turn.event.NostrTURNDataEvent;
+import org.ngengine.nostr4j.rtc.turn.NostrTURNAckEvent;
+import org.ngengine.nostr4j.rtc.turn.NostrTURNDataEvent;
 import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
 import org.ngengine.nostr4j.turn.ref.TurnServer;
 import org.ngengine.platform.AsyncExecutor;
@@ -155,11 +154,11 @@ public class NostrRTCIntegrationTest {
         ByteBuffer ackFrame = NGEUtils.awaitNoThrow(
             NostrTURNAckEvent.createAck(bobLocal, aliceRemote, roomKeyPair, "default", vsocketId).encodeToFrame(null)
         );
-        SignedNostrEvent signed = org.ngengine.nostr4j.rtc.turn.event.NostrTURNCodec.decodeHeader(ackFrame);
+        SignedNostrEvent signed = org.ngengine.nostr4j.rtc.turn.NostrTURNCodec.decodeHeader(ackFrame);
 
         NostrTURNAckEvent incoming = NostrTURNAckEvent.parseIncoming(
             signed,
-            org.ngengine.nostr4j.rtc.turn.event.NostrTURNCodec.extractVsocketId(ackFrame)
+            org.ngengine.nostr4j.rtc.turn.NostrTURNCodec.extractVsocketId(ackFrame)
         );
 
         assertEquals(vsocketId, incoming.getVsocketId());
@@ -192,14 +191,14 @@ public class NostrRTCIntegrationTest {
         ByteBuffer payload = ByteBuffer.wrap("hello over turn".getBytes());
         ByteBuffer frame = NGEUtils.awaitNoThrow(aliceOutgoing.encodeToFrame(List.of(payload)));
 
-        SignedNostrEvent header = org.ngengine.nostr4j.rtc.turn.event.NostrTURNCodec.decodeHeader(frame);
+        SignedNostrEvent header = org.ngengine.nostr4j.rtc.turn.NostrTURNCodec.decodeHeader(frame);
         NostrTURNDataEvent bobIncoming = NostrTURNDataEvent.parseIncoming(
             header,
             bobLocal,
             aliceRemote,
             roomKeyPair,
             "default",
-            org.ngengine.nostr4j.rtc.turn.event.NostrTURNCodec.extractVsocketId(frame)
+            org.ngengine.nostr4j.rtc.turn.NostrTURNCodec.extractVsocketId(frame)
         );
 
         Collection<ByteBuffer> decoded = NGEUtils.awaitNoThrow(bobIncoming.decodeFramePayloads(frame));
@@ -1135,10 +1134,10 @@ public class NostrRTCIntegrationTest {
     }
 
     private static boolean isTurnReady(Object turnChannelObj) {
-        if (!(turnChannelObj instanceof org.ngengine.nostr4j.rtc.turn.NostrTURNChannel)) {
+        if (!(turnChannelObj instanceof org.ngengine.nostr4j.rtc.NostrTURNChannel)) {
             return false;
         }
-        return ((org.ngengine.nostr4j.rtc.turn.NostrTURNChannel) turnChannelObj).isReady();
+        return ((org.ngengine.nostr4j.rtc.NostrTURNChannel) turnChannelObj).isReady();
     }
 
     private static boolean contains(byte[] haystack, byte[] needle) {

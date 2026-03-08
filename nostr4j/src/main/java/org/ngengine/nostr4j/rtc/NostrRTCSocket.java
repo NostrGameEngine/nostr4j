@@ -51,7 +51,6 @@ import org.ngengine.nostr4j.rtc.signal.NostrRTCOfferSignal;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCPeer;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCRouteSignal;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCSignal;
-import org.ngengine.nostr4j.rtc.turn.NostrTURNPool;
 import org.ngengine.platform.AsyncExecutor;
 import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEPlatform;
@@ -75,7 +74,7 @@ import org.ngengine.platform.transport.RTCTransportListener;
  *      signaling protocol: when the signaling announce is stale, the socket should be closed using close().
  *      So keep in mind that you need to handle keep-alive youself, if you want to use this class by itself (without the signaling protocol).
  */
-public class NostrRTCSocket implements Closeable {
+public final class NostrRTCSocket  {
 
     public static final String DEFAULT_CHANNEL_NAME = "default";
     private static final Logger logger = Logger.getLogger(NostrRTCSocket.class.getName());
@@ -405,11 +404,11 @@ public class NostrRTCSocket implements Closeable {
         return null;
     }
 
-    public void setForceTURN(boolean forceTURN) {
+    void setForceTURN(boolean forceTURN) {
         this.forceTURN = forceTURN;
     }
 
-    public boolean isForceTURN() {
+    boolean isForceTURN() {
         return forceTURN;
     }
 
@@ -537,7 +536,7 @@ public class NostrRTCSocket implements Closeable {
     /**
      * Close the socket.
      */
-    public void close() {
+    void close() {
         stopped = true;
         logger.fine("Closing RTC Socket");
 
@@ -578,7 +577,7 @@ public class NostrRTCSocket implements Closeable {
         switchActiveTransport(TransportPath.NONE, "socket-closed");
     }
 
-    public void reset() {
+    void reset() {
         logger.fine("Resetting RTC Socket");
         connected = false;
         turnFallbackAllowed = false;
@@ -835,7 +834,7 @@ public class NostrRTCSocket implements Closeable {
      * @deprecated use getChannel(DEFAULT_CHANNEL_NAME).write(ByteBuffer)
      */
     @Deprecated
-    public AsyncTask<Boolean> write(ByteBuffer bbf) {
+    AsyncTask<Boolean> write(ByteBuffer bbf) {
         // if (this.useTURN) {
         //     assert dbg(() -> {
         //         logger.finest("Send message with turn");
