@@ -41,7 +41,7 @@ import org.ngengine.platform.NGEUtils;
 /**
  * A webRTC offer to connect with a peer, with the peer pubkey, sdp and metadata.
  */
-public final  class NostrRTCOfferSignal extends NostrRTCSignal {
+public final class NostrRTCOfferSignal extends NostrRTCSignal {
 
     private static final long serialVersionUID = 2L;
     private final AsyncTask<String> offerString;

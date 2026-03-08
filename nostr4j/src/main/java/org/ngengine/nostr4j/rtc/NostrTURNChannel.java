@@ -31,7 +31,6 @@
 
 package org.ngengine.nostr4j.rtc;
 
-import java.io.Closeable;
 import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Map;
@@ -70,7 +69,7 @@ import org.ngengine.platform.NGEPlatform;
  *
  * This class is just a convenient handle to send/receive data and listen for events.
  */
-public final class NostrTURNChannel  {
+public final class NostrTURNChannel {
 
     private static final Logger logger = Logger.getLogger(NostrTURNChannel.class.getName());
     private static final AtomicLong VSOCKET_COUNTER = new AtomicLong(1L);
@@ -266,7 +265,6 @@ public final class NostrTURNChannel  {
         });
     }
 
-  
     void close(String reason) {
         if (isConnected()) {
             NostrTURNDisconnectEvent disconnectEvent = NostrTURNDisconnectEvent.createDisconnect(

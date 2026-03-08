@@ -31,7 +31,6 @@
 package org.ngengine.nostr4j.rtc;
 
 import jakarta.annotation.Nullable;
-import java.io.Closeable;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.time.Instant;
@@ -74,7 +73,7 @@ import org.ngengine.platform.transport.RTCTransportListener;
  *      signaling protocol: when the signaling announce is stale, the socket should be closed using close().
  *      So keep in mind that you need to handle keep-alive youself, if you want to use this class by itself (without the signaling protocol).
  */
-public final class NostrRTCSocket  {
+public final class NostrRTCSocket {
 
     public static final String DEFAULT_CHANNEL_NAME = "default";
     private static final Logger logger = Logger.getLogger(NostrRTCSocket.class.getName());

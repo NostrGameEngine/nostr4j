@@ -448,7 +448,7 @@ public final class NostrRTCRoom implements Closeable {
     }
 
     /**
-     * @deprecated Use {@link #kick(NostrPublicKey)} instead. 
+     * @deprecated Use {@link #kick(NostrPublicKey)} instead.
      */
     public void kick(NostrPublicKey peer) {
         disconnect(peer);
@@ -481,9 +481,9 @@ public final class NostrRTCRoom implements Closeable {
      * Disconnect a peer
      * @param peer
      */
-    public void disconnect(NostrRTCPeer peer){
+    public void disconnect(NostrRTCPeer peer) {
         NostrRTCSocket socket = connections.remove(peer);
-        if(socket!=null){
+        if (socket != null) {
             socket.close();
             for (NostrRTCRoomPeerDisconnectListener listener : onDisconnectionListeners) {
                 try {
@@ -503,7 +503,7 @@ public final class NostrRTCRoom implements Closeable {
         NostrRTCSocket current = connections.get(remotePeer);
         if (current != socket) return;
         boolean removed = connections.remove(remotePeer, socket);
-        if(removed){
+        if (removed) {
             logger.fine("Closed peer: " + remotePeer);
             for (NostrRTCRoomPeerDisconnectListener listener : onDisconnectionListeners) {
                 try {
@@ -856,7 +856,6 @@ public final class NostrRTCRoom implements Closeable {
         }
         return removed;
     }
-
     // private List<NostrRTCSocket> removeSocketsForPeer(NostrRTCPeer peer) {
     //     List<NostrRTCSocket> removed = new ArrayList<>();
     //     for (Map.Entry<NostrRTCPeer, NostrRTCSocket> entry : new ArrayList<>(connections.entrySet())) {

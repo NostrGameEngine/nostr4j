@@ -43,7 +43,7 @@ import org.ngengine.platform.NGEUtils;
  * The local peer (ourselves). This is used to store our own information and configuration, such as the signer and TURN/STUN servers.
  * {@inheritDoc}
  */
-public final  class NostrRTCLocalPeer extends NostrRTCPeer {
+public final class NostrRTCLocalPeer extends NostrRTCPeer {
 
     private final NostrSigner signer;
     private final Collection<String> stunServers;

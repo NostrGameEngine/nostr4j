@@ -31,7 +31,6 @@
 
 package org.ngengine.nostr4j.rtc;
 
-import java.io.Closeable;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.Objects;
@@ -44,7 +43,7 @@ import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEPlatform;
 import org.ngengine.platform.transport.RTCDataChannel;
 
-public final  class NostrRTCChannel  {
+public final class NostrRTCChannel {
 
     private static final Logger logger = Logger.getLogger(NostrRTCChannel.class.getName());
     private RTCDataChannel channel;

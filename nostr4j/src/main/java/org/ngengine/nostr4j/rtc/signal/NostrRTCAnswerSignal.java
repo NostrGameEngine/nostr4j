@@ -40,7 +40,7 @@ import org.ngengine.platform.NGEUtils;
 /**
  * An answer to an offer with the peer pubkey, sdp and metadata.
  */
-public final  class NostrRTCAnswerSignal extends NostrRTCSignal {
+public final class NostrRTCAnswerSignal extends NostrRTCSignal {
 
     private static final long serialVersionUID = 2L;
     private final AsyncTask<String> sdp;
