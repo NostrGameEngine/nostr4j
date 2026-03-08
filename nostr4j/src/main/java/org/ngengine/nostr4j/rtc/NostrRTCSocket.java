@@ -41,6 +41,7 @@ import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
 import org.ngengine.nostr4j.rtc.listeners.NostrRTCSocketListener;
@@ -146,8 +147,8 @@ public final class NostrRTCSocket {
             for (NostrRTCSocketListener listener : listeners) {
                 try {
                     listener.onRTCSocketTransportDegraded(socket, activeTransportPath, reason);
-                } catch (Exception e) {
-                    logger.severe("Error emitting transport degraded: " + e.getMessage());
+                } catch (Throwable e) {
+                    logger.log(Level.SEVERE, "Exception in listener", e);
                 }
             }
             ensureTurnForDownChannels("rtc-disconnected:" + reason);
@@ -330,7 +331,7 @@ public final class NostrRTCSocket {
         for (NostrRTCSocketListener listener : listeners) {
             try {
                 listener.onRTCSocketTransportSwitch(this, previous, next, reason);
-            } catch (Exception e) {
+            } catch (Throwable e) {
                 logger.severe("Error emitting transport switch: " + e.getMessage());
             }
         }
@@ -355,8 +356,8 @@ public final class NostrRTCSocket {
                     for (NostrRTCSocketListener listener : listeners) {
                         try {
                             listener.onRTCSocketTransportDegraded(this, activeTransportPath, "rtc-timeout");
-                        } catch (Exception e) {
-                            logger.severe("Error emitting transport degraded: " + e.getMessage());
+                        } catch (Throwable e) {
+                            logger.log(Level.SEVERE, "Exception in listener", e);
                         }
                     }
                     ensureTurnForDownChannels("rtc-timeout:" + reason);
@@ -486,8 +487,8 @@ public final class NostrRTCSocket {
         for (NostrRTCSocketListener listener : listeners) {
             try {
                 listener.onRTCChannelReady(channel);
-            } catch (Exception e) {
-                logger.severe("Error emitting channel ready: " + e.getMessage());
+            } catch (Throwable e) {
+                logger.log(Level.SEVERE, "Exception in listener", e);
             }
         }
     }
@@ -567,8 +568,8 @@ public final class NostrRTCSocket {
         for (NostrRTCSocketListener listener : listeners) {
             try {
                 listener.onRTCSocketClose(this);
-            } catch (Exception e) {
-                logger.severe("Error closing socket: " + e.getMessage());
+            } catch (Throwable e) {
+                logger.log(Level.SEVERE, "Exception in listener", e);
             }
         }
         listeners.clear();
@@ -627,8 +628,8 @@ public final class NostrRTCSocket {
                                     new ArrayList<RTCTransportIceCandidate>(localIceCandidates),
                                     localPeer.getTurnServer()
                                 );
-                            } catch (Exception e) {
-                                logger.severe("Error emitting ICE candidates: " + e.getMessage());
+                             } catch (Throwable e) {
+                                logger.log(Level.SEVERE, "Exception in listener", e);
                             }
                         }
                         return null;
@@ -795,8 +796,8 @@ public final class NostrRTCSocket {
                         for (NostrRTCSocketListener listener : listeners) {
                             try {
                                 listener.onRTCChannel(nchan);
-                            } catch (Exception e) {
-                                logger.severe("Error emitting channel: " + e.getMessage());
+                            } catch (Throwable e) {
+                                logger.log(Level.SEVERE, "Exception in listener", e);
                             }
                         }
                         // emitChannelReady(nchan);

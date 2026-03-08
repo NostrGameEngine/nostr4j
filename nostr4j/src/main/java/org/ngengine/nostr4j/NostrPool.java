@@ -497,7 +497,7 @@ public class NostrPool {
                 for (NostrNoticeListener listener : noticeListener) {
                     try {
                         listener.onNotice(relay, eventMessage, null);
-                    } catch (Exception e) {
+                    } catch (Throwable e) {
                         logger.log(Level.WARNING, "Error in notice listener", e);
                     }
                 }
@@ -602,7 +602,7 @@ public class NostrPool {
         for (NostrNoticeListener listener : noticeListener) {
             try {
                 listener.onNotice(relay, error.getMessage(), error);
-            } catch (Exception e) {
+            } catch (Throwable e) {
                 logger.log(Level.WARNING, "Error in notice listener", e);
             }
         }

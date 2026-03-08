@@ -187,7 +187,7 @@ public class NostrRTCSignaling implements Closeable {
                                 for (Listener listener : listeners) {
                                     try {
                                         listener.onAddAnnounce(receivedSignal);
-                                    } catch (Exception e) {
+                                    } catch (Throwable e) {
                                         logger.log(Level.WARNING, "Error in onAddAnnounce", e);
                                     }
                                 }
@@ -199,7 +199,7 @@ public class NostrRTCSignaling implements Closeable {
                                 for (Listener listener : listeners) {
                                     try {
                                         listener.onUpdateAnnounce(ann);
-                                    } catch (Exception e) {
+                                    } catch (Throwable e) {
                                         logger.log(Level.WARNING, "Error in onUpdateAnnounce", e);
                                     }
                                 }
@@ -229,7 +229,7 @@ public class NostrRTCSignaling implements Closeable {
                                 for (Listener listener : listeners) {
                                     try {
                                         listener.onRemoveAnnounce(announce, Listener.RemoveReason.DISCONNECTED);
-                                    } catch (Exception e) {
+                                    } catch (Throwable e) {
                                         logger.log(Level.WARNING, "Error in onRemoveAnnounce", e);
                                     }
                                 }
@@ -250,7 +250,7 @@ public class NostrRTCSignaling implements Closeable {
                             for (Listener listener : listeners) {
                                 try {
                                     listener.onReceiveOffer(offer);
-                                } catch (Exception e) {
+                                } catch (Throwable e) {
                                     logger.log(Level.WARNING, "Error in onReceiveOffer", e);
                                 }
                             }
@@ -265,7 +265,7 @@ public class NostrRTCSignaling implements Closeable {
                             for (Listener listener : listeners) {
                                 try {
                                     listener.onReceiveAnswer(answer);
-                                } catch (Exception e) {
+                                } catch (Throwable e) {
                                     logger.log(Level.WARNING, "Error in onReceiveAnswer", e);
                                 }
                             }
@@ -280,7 +280,7 @@ public class NostrRTCSignaling implements Closeable {
                             for (Listener listener : listeners) {
                                 try {
                                     listener.onReceiveCandidates(route);
-                                } catch (Exception e) {
+                                } catch (Throwable e) {
                                     logger.log(Level.WARNING, "Error in onReceiveCandidates", e);
                                 }
                             }
@@ -367,7 +367,7 @@ public class NostrRTCSignaling implements Closeable {
                             for (Listener listener : listeners) {
                                 try {
                                     listener.onRemoveAnnounce(announce, Listener.RemoveReason.EXPIRED);
-                                } catch (Exception e) {
+                                } catch (Throwable e) {
                                     logger.log(Level.WARNING, "Error in onRemoveAnnounce", e);
                                 }
                             }

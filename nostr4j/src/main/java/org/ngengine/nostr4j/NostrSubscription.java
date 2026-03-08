@@ -319,11 +319,12 @@ public class NostrSubscription extends NostrMessage {
         for (NostrSubEoseListener listener : onEoseListeners) {
             this.getExecutor()
                 .run(() -> {
-                    listener.onSubEose(this, relay, everyWhere);
+                    try {
+                        listener.onSubEose(this, relay, everyWhere);
+                    } catch (Throwable ex) {
+                        logger.warning("Error calling EOSE listener: " + listener + " " + ex);
+                    }
                     return null;
-                })
-                .catchException(ex -> {
-                    logger.warning("Error calling EOSE listener: " + listener + " " + ex);
                 });
         }
     }
@@ -333,11 +334,12 @@ public class NostrSubscription extends NostrMessage {
         for (NostrSubEventListener listener : onEventListeners) {
             this.getExecutor()
                 .run(() -> {
-                    listener.onSubEvent(this, event, stored);
+                    try {
+                        listener.onSubEvent(this, event, stored);
+                    } catch (Throwable ex) {
+                        logger.warning("Error calling Event listener: " + listener + " " + ex);
+                    }
                     return null;
-                })
-                .catchException(ex -> {
-                    logger.warning("Error calling Event listener: " + listener + " " + ex);
                 });
         }
     }
@@ -347,11 +349,12 @@ public class NostrSubscription extends NostrMessage {
         for (NostrSubCloseListener listener : onCloseListeners) {
             this.getExecutor()
                 .run(() -> {
-                    listener.onSubClose(this, closeReasons);
+                    try {
+                        listener.onSubClose(this, closeReasons);
+                    } catch (Throwable ex) {
+                        logger.warning("Error calling Close listener: " + listener + " " + ex);
+                    }
                     return null;
-                })
-                .catchException(ex -> {
-                    logger.warning("Error calling Close listener: " + listener + " " + ex);
                 });
         }
     }
@@ -361,11 +364,12 @@ public class NostrSubscription extends NostrMessage {
         for (NostrSubOpenListener listener : onOpenListeners) {
             this.getExecutor()
                 .run(() -> {
-                    listener.onSubOpen(this);
+                    try {
+                        listener.onSubOpen(this);
+                    } catch (Throwable ex) {
+                        logger.warning("Error calling Open listener: " + listener + " " + ex);
+                    }
                     return null;
-                })
-                .catchException(ex -> {
-                    logger.warning("Error calling Open listener: " + listener + " " + ex);
                 });
         }
     }

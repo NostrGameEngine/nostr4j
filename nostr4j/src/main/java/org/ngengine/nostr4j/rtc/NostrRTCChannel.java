@@ -35,6 +35,7 @@ import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.rtc.listeners.NostrRTCChannelListener;
 import org.ngengine.nostr4j.rtc.listeners.NostrTURNChannelListener;
@@ -171,7 +172,11 @@ public final class NostrRTCChannel {
             turnSend.close("rtc-closed");
         }
         for (NostrRTCChannelListener l : listeners) {
-            l.onRTCChannelClosed(this);
+            try{
+                l.onRTCChannelClosed(this);
+            } catch (Throwable e) {
+                logger.log(Level.SEVERE, "Exception in listener", e);
+            }
         }
     }
 
@@ -254,25 +259,41 @@ public final class NostrRTCChannel {
 
     void onRTCChannelError(Throwable e) {
         for (NostrRTCChannelListener l : listeners) {
-            l.onRTCChannelError(this, e);
+            try{
+                l.onRTCChannelError(this, e);
+            } catch (Throwable ex) {
+                logger.log(Level.SEVERE, "Exception in listener", ex);
+            }
         }
     }
 
     void onRTCSocketMessage(ByteBuffer bbf) {
         for (NostrRTCChannelListener l : listeners) {
-            l.onRTCSocketMessage(this, bbf, false);
+            try{
+                l.onRTCSocketMessage(this, bbf, false);
+            } catch (Throwable e) {
+                logger.log(Level.SEVERE, "Exception in listener", e);
+            }
         }
     }
 
     void onTURNSocketMessage(ByteBuffer bbf) {
         for (NostrRTCChannelListener listener : listeners) {
-            listener.onRTCSocketMessage(this, bbf, true);
+            try{
+                listener.onRTCSocketMessage(this, bbf, true);
+            } catch (Throwable e) {
+                logger.log(Level.SEVERE, "Exception in listener", e);
+            }
         }
     }
 
     void onRTCBufferedAmountLow() {
         for (NostrRTCChannelListener l : listeners) {
-            l.onRTCBufferedAmountLow(this);
+            try{
+                l.onRTCBufferedAmountLow(this);
+            } catch (Throwable e) {
+                logger.log(Level.SEVERE, "Exception in listener", e);
+            }
         }
     }
 

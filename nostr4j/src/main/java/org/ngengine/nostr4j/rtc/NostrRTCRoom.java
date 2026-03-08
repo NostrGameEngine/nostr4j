@@ -160,8 +160,8 @@ public final class NostrRTCRoom implements Closeable {
             for (NostrRTCRoomPeerMessageListener listener : onMessageListeners) {
                 try {
                     listener.onRoomPeerMessage(remotePeer, socket, channel, bbf, turn);
-                } catch (Exception e) {
-                    logger.log(Level.WARNING, "Error notifying listener", e);
+                 } catch (Throwable e) {
+                    logger.log(Level.SEVERE, "Exception in listener", e);
                 }
             }
         }
@@ -201,8 +201,8 @@ public final class NostrRTCRoom implements Closeable {
             for (NostrRTCRoomPeerMessageListener listener : onMessageListeners) {
                 try {
                     listener.onRoomPeerBufferedAmountLow(remotePeer, socket, channel);
-                } catch (Exception e) {
-                    logger.log(Level.WARNING, "Error notifying listener", e);
+                } catch (Throwable e) {
+                    logger.log(Level.SEVERE, "Exception in listener", e);
                 }
             }
             drainQueue(channel);
@@ -347,7 +347,7 @@ public final class NostrRTCRoom implements Closeable {
         for (NostrRTCPeerSocketAvailableListener listener : onSocketAvailable) {
             try {
                 listener.onRoomPeerSocketAvailable(peer, socket);
-            } catch (Exception e) {
+            } catch (Throwable e) {
                 logger.log(Level.WARNING, "Error notifying listener", e);
             }
         }
@@ -470,8 +470,8 @@ public final class NostrRTCRoom implements Closeable {
             for (NostrRTCRoomPeerDisconnectListener listener : onDisconnectionListeners) {
                 try {
                     listener.onRoomPeerDisconnected(socket.getRemotePeer(), socket);
-                } catch (Exception e) {
-                    logger.log(Level.WARNING, "Error notifying listener", e);
+                } catch (Throwable e) {
+                    logger.log(Level.SEVERE, "Exception in listener", e);
                 }
             }
         }
@@ -488,8 +488,8 @@ public final class NostrRTCRoom implements Closeable {
             for (NostrRTCRoomPeerDisconnectListener listener : onDisconnectionListeners) {
                 try {
                     listener.onRoomPeerDisconnected(peer, socket);
-                } catch (Exception e) {
-                    logger.log(Level.WARNING, "Error notifying listener", e);
+                } catch (Throwable e) {
+                    logger.log(Level.SEVERE, "Exception in listener", e);
                 }
             }
         }
@@ -508,8 +508,8 @@ public final class NostrRTCRoom implements Closeable {
             for (NostrRTCRoomPeerDisconnectListener listener : onDisconnectionListeners) {
                 try {
                     listener.onRoomPeerDisconnected(remotePeer, socket);
-                } catch (Exception e) {
-                    logger.log(Level.WARNING, "Error notifying listener", e);
+                } catch (Throwable e) {
+                    logger.log(Level.SEVERE, "Exception in listener", e);
                 }
             }
         }
@@ -546,8 +546,8 @@ public final class NostrRTCRoom implements Closeable {
                     announce,
                     NostrRTCRoomPeerDiscoveredListener.NostrRTCRoomPeerDiscoveredState.ONLINE
                 );
-            } catch (Exception e) {
-                logger.log(Level.WARNING, "Error notifying listener", e);
+            } catch (Throwable e) {
+                logger.log(Level.SEVERE, "Exception in listener", e);
             }
         }
     }
@@ -560,8 +560,8 @@ public final class NostrRTCRoom implements Closeable {
                     announce,
                     NostrRTCRoomPeerDiscoveredListener.NostrRTCRoomPeerDiscoveredState.ONLINE
                 );
-            } catch (Exception e) {
-                logger.log(Level.WARNING, "Error notifying listener", e);
+            } catch (Throwable e) {
+                    logger.log(Level.SEVERE, "Exception in listener", e);
             }
         }
     }
@@ -578,8 +578,8 @@ public final class NostrRTCRoom implements Closeable {
                     announce,
                     NostrRTCRoomPeerDiscoveredListener.NostrRTCRoomPeerDiscoveredState.OFFLINE
                 );
-            } catch (Exception e) {
-                logger.log(Level.WARNING, "Error notifying listener", e);
+            } catch (Throwable e) {
+                logger.log(Level.SEVERE, "Exception in listener", e);
             }
         }
 

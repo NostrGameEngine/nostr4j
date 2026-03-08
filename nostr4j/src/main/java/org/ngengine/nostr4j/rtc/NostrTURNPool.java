@@ -211,7 +211,7 @@ public final class NostrTURNPool implements AutoCloseable {
                             user.onBinaryMessage(frame);
                         } catch (IllegalArgumentException ignored) {
                             // Frame not meant for this logical channel.
-                        } catch (Exception ex) {
+                        } catch (Throwable ex) {
                             user.onError(ex);
                         }
                     }

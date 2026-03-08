@@ -283,8 +283,8 @@ public final class NostrTURNChannel {
         for (NostrTURNChannelListener l : listeners) {
             try {
                 l.onTurnChannelClosed(this, reason);
-            } catch (Exception ex) {
-                logger.log(Level.WARNING, "Error in TURN channel listener", ex);
+            } catch (Throwable e) {
+                logger.log(Level.SEVERE, "Exception in listener", e);
             }
         }
         ackTimeoutExecutor.close();
@@ -301,8 +301,8 @@ public final class NostrTURNChannel {
         for (NostrTURNChannelListener l : listeners) {
             try {
                 l.onTurnChannelError(this, e);
-            } catch (Exception ex) {
-                logger.log(Level.WARNING, "Error in TURN channel listener", ex);
+            } catch (Throwable e2) {
+                logger.log(Level.SEVERE, "Exception in listener", e2);
             }
         }
     }
@@ -315,9 +315,9 @@ public final class NostrTURNChannel {
         for (NostrTURNChannelListener l : listeners) {
             try {
                 l.onTurnChannelMessage(this, payload);
-            } catch (Exception ex) {
-                logger.log(Level.WARNING, "Error in TURN channel listener", ex);
-            }
+             } catch (Throwable e) {
+                    logger.log(Level.SEVERE, "Exception in listener", e);
+                }
         }
     }
 
@@ -492,8 +492,8 @@ public final class NostrTURNChannel {
                     for (NostrTURNChannelListener l : listeners) {
                         try {
                             l.onTurnChannelReady(this);
-                        } catch (Exception ex) {
-                            logger.log(Level.WARNING, "Error in TURN channel listener", ex);
+                        } catch (Throwable e) {
+                            logger.log(Level.SEVERE, "Exception in listener", e);
                         }
                     }
 
@@ -525,8 +525,8 @@ public final class NostrTURNChannel {
                         for (NostrTURNChannelListener l : listeners) {
                             try {
                                 l.onTurnChannelError(this, new RuntimeException(reason));
-                            } catch (Exception ex) {
-                                logger.log(Level.WARNING, "Error in TURN channel listener", ex);
+                            } catch (Throwable e) {
+                                logger.log(Level.SEVERE, "Exception in listener", e);
                             }
                         }
                     }

@@ -100,7 +100,11 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
          * @param reason
          */
         void cancel(String reason) {
-            onError.accept(new Exception("Request cancelled: " + reason));
+            try {
+                onError.accept(new Exception("Request cancelled: " + reason));
+            } catch (Throwable e) {
+                logger.log(Level.WARNING, "Error in response listener cancel callback", e);
+            }
         }
 
         ResponseListener(String method, Consumer<String> onSuccess, Consumer<Throwable> onError, Duration expireAfter) {
@@ -117,7 +121,11 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
         private final Consumer<Throwable> close;
 
         public void close(Throwable t) {
-            this.close.accept(t);
+            try {
+                this.close.accept(t);
+            } catch (Throwable e) {
+                logger.log(Level.WARNING, "Error in challenge close callback", e);
+            }
         }
 
         PendingChallenge(String url, Consumer<Throwable> close) {
@@ -191,7 +199,7 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
                     Entry<String, PendingChallenge> entry = it.next();
                     if (entry.getValue().createdAt.plus(challengesTimeout).isBefore(now)) {
                         logger.fine("Cancelling expired challenge: " + entry.getValue());
-                        entry.getValue().close.accept(new Exception("Challenge expired"));
+                        entry.getValue().close(new Exception("Challenge expired"));
                         it.remove();
                     }
                 }
@@ -209,7 +217,7 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
                     }
                 }
             }
-        } catch (Exception e) {
+        } catch (Throwable e) {
             logger.warning("Error in loop: " + e.getMessage());
         }
 
@@ -252,14 +260,14 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
 
                 if (this.pendingChallenges != null) {
                     for (PendingChallenge c : pendingChallenges.values()) {
-                        c.close.accept(new Exception("Closed"));
+                        c.close(new Exception("Closed"));
                     }
                 }
                 res.accept(this);
                 if (this.executor != null) {
                     this.executor.close();
                 }
-            } catch (Exception e) {
+            } catch (Throwable e) {
                 rej.accept(e);
             }
         });
@@ -608,7 +616,11 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
                 // call the listener
                 if (!error.isBlank()) {
                     logger.finest("Error for id: " + id + " with method: " + listener.method + " " + result + " " + error);
-                    listener.onError.accept(new Exception(error));
+                    try {
+                        listener.onError.accept(new Exception(error));
+                    } catch (Throwable callbackError) {
+                        logger.log(Level.WARNING, "Error in response listener onError callback", callbackError);
+                    }
                 } else {
                     assert dbg(() -> logger.finest("Success for id: " + id + " with method: " + listener.method + " " + result)
                     );
@@ -618,20 +630,32 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
                             logger.warning(
                                 "Received spontaneous connection response, but we are already got connected in the meantime"
                             );
-                            listener.onError.accept(new Exception("Already connected"));
+                            try {
+                                listener.onError.accept(new Exception("Already connected"));
+                            } catch (Throwable callbackError) {
+                                logger.log(Level.WARNING, "Error in response listener onError callback", callbackError);
+                            }
                         } else {
                             // if we are registering a spontaneous connection, we need to set the signer
                             // pubkey
                             logger.fine("Registering signer pubkey for spontaneous connection: " + pubkey);
                             this.signerPubkey = pubkey;
-                            listener.onSuccess.accept(result);
+                            try {
+                                listener.onSuccess.accept(result);
+                            } catch (Throwable callbackError) {
+                                logger.log(Level.WARNING, "Error in response listener onSuccess callback", callbackError);
+                            }
                         }
                     } else {
-                        listener.onSuccess.accept(result);
+                        try {
+                            listener.onSuccess.accept(result);
+                        } catch (Throwable callbackError) {
+                            logger.log(Level.WARNING, "Error in response listener onSuccess callback", callbackError);
+                        }
                     }
                 }
             }
-        } catch (Exception e) {
+        } catch (Throwable e) {
             logger.log(Level.WARNING, "Error processing event", e);
         }
     }
