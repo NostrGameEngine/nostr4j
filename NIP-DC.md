@@ -231,7 +231,7 @@ All communications happen over a secure WebSocket connection between client and 
 
 A virtual socket is uniquely identified by:
 
-`(roomPubkey, channelLabel, sessionId, protocolId, applicationId, clientPubkey, targetPubkey)`
+`(roomPubkey, channelLabel, clientSessionId, targetSessionId, protocolId, applicationId, clientPubkey, targetPubkey)`
 
 After receiving the initial `challenge`, the client MAY create additional virtual sockets by sending additional `connect` events with different parameters, without needing to resolve a new `challenge` for each socket.
 
@@ -244,6 +244,10 @@ VERSION            uint8                    // always 2
 VSOCKET_ID         int64                    // big-endian
                                             // MUST be 0 for challenge
                                             // MUST be != 0 for all other events
+MESSAGE_ID         int32                    // big-endian
+                                            // per-vsocket packet id
+                                            // MUST be 0 for challenge/connect/ack/disconnect
+                                            // MUST be != 0 for data/delivery_ack
 HEADER_SIZE        uint16                   // MUST be > 0
 HEADER_BYTES       uint8[HEADER_SIZE]       // signed nostr event JSON (UTF-8)
 NUM_PAYLOADS       uint16
@@ -255,7 +259,7 @@ for (i=0; i<NUM_PAYLOADS; i++):
 All integers are big-endian.
 
 `vsocketId=0` is reserved and means no virtual socket exists yet. It is used only by `challenge`.
-All `connect`, `ack`, `data`, and `disconnect` frames MUST carry `vsocketId != 0`.
+All `connect`, `ack`, `data`, `delivery_ack`, and `disconnect` frames MUST carry `vsocketId != 0`.
 
 ## Header shape (kind 25051)
 
@@ -264,13 +268,13 @@ All `connect`, `ack`, `data`, and `disconnect` frames MUST carry `vsocketId != 0
   "kind": 25051,
   "content": <event specific payload>,
   "tags": [
-    ["t", "<challenge|connect|ack|disconnect|data>"],
+    ["t", "<challenge|connect|ack|disconnect|data|delivery_ack>"],
     ["r", "<optional redirect URL>"],
     ["P", "<roomPubkeyHex>"],
-    ["d", "<sessionId>"],
+    ["d", "<source sessionId>"],
     ["i", "<protocolId>"],
     ["y", "<applicationId>"],
-    ["p", "<remote target peer pubkey>", "<channel label>"],
+    ["p", "<remote target peer pubkey>", "<channel label>", "<remote target sessionId>"],
     ["enc", "nip44-v2", "<nip44 encrypted secret for symmetric encryption>"],
     ["nonce", "<nonce>", "<difficulty>"],
     ["roomproof", "<id>", "<sig>"],
@@ -289,6 +293,7 @@ Not every tag is required in every message type; required tags depend on the mes
 Sent immediately after the WebSocket connection opens. It communicates the PoW difficulty and provides a random challenge token.
 
 Envelope rule: `VSOCKET_ID` MUST be `0`.
+`MESSAGE_ID` MUST be `0`.
 
 ```yaml
 {
@@ -317,11 +322,14 @@ Requests creation of a virtual socket. The `connect` MUST include:
 * PoW meeting the server’s difficulty,
 * the `roomproof`,
 * the copied challenge token in `content`,
-* a client-generated `vsocketId` in `content` and in the envelope.
+* a client-generated `vsocketId` in `content` and in the envelope,
+* routing identifiers for both source and destination sessions (`d` and `p[2]`).
 
 Envelope rule: `VSOCKET_ID` MUST be `!= 0`.
+`MESSAGE_ID` MUST be `0`.
 `content.vsocketId` MUST exactly match the envelope `VSOCKET_ID`.
 The server MUST reject `connect` if `VSOCKET_ID == 0`, if `content.vsocketId` mismatches the envelope value, or if `VSOCKET_ID` collides with an already active socket on that websocket connection.
+The server MUST also reject `connect` if `d` is missing/blank, or if `p` does not include a non-empty destination session id as its third value (after pubkey and channel label).
 
 ```yaml
 {
@@ -329,10 +337,10 @@ The server MUST reject `connect` if `VSOCKET_ID == 0`, if `content.vsocketId` mi
   "tags": [
     ["t", "connect"],
     ["P", "<room pub key>"],
-    ["d", "<sessionId>"],
+    ["d", "<source sessionId>"],
     ["i", "<protocolId>"],
     ["y", "<applicationId>"],
-    ["p", "<remote target peer pubkey>", "<channel label>"],
+    ["p", "<remote target peer pubkey>", "<channel label>", "<remote target sessionId>"],
     ["nonce", "<nonce>", "<difficulty>"],
     ["roomproof", "<roomproof.id>", "<roomproof.sig>"]
   ],
@@ -351,9 +359,10 @@ The `roomproof` challenge for this event is the `challenge` string copied into `
 
 `server -> client`
 
-Confirms the `connect` was accepted.
+Confirms the `connect` was accepted. This ACK is for virtual-socket establishment only (not data delivery).
 
 Envelope rule: `VSOCKET_ID` MUST be the same non-zero value accepted from `connect`.
+`MESSAGE_ID` MUST be `0`.
 
 ```yaml
 {
@@ -374,6 +383,7 @@ No payloads.
 Terminates a virtual socket.
 
 Envelope rule: `VSOCKET_ID` MUST be `!= 0`.
+`MESSAGE_ID` MUST be `0`.
 The server MUST ignore `disconnect` messages carrying `VSOCKET_ID == 0`, unknown `VSOCKET_ID`, or stale `VSOCKET_ID`.
 
 ```yaml
@@ -403,6 +413,7 @@ Carries encrypted payload bytes. The server routes by envelope `VSOCKET_ID` and 
 
 Envelope rule: `VSOCKET_ID` MUST be `!= 0`.
 The server MUST ignore `data` messages carrying `VSOCKET_ID == 0`, unknown `VSOCKET_ID`, or stale `VSOCKET_ID`.
+`MESSAGE_ID` MUST be `!= 0` and unique per `(sender socket, direction)` at least within the sender retransmission/timeout window.
 
 The payload is encrypted using a nip-44 like scheme, where:
 - a 32-byte symmetric secret is used as conversation key
@@ -438,7 +449,9 @@ Payload: one or more encrypted binary blobs.
 Acceptance and offline queueing:
 
 * The server processes `data` only for sockets that were previously accepted (sender received `ack`).
+* A receiver socket is reciprocal only if room/protocol/application/channel match and `(clientPubkey, sourceSessionId)` and `(targetPubkey, targetSessionId)` are inverted between sender and receiver.
 * When relaying to a reciprocal receiver socket, the server MUST rewrite the envelope `VSOCKET_ID` to the receiver socket id before forwarding the frame.
+* When relaying to a reciprocal receiver socket, the server MUST preserve `MESSAGE_ID` unchanged.
 * If the target peer is offline, the server queues payloads.
 * Queued payloads are delivered only after the target peer connects and completes a matching accepted `connect`.
 * If the queue grows too large or the target does not connect within a server-defined timeframe, the server may `disconnect` with `reason="peer unreachable", error=true`.
@@ -446,6 +459,35 @@ Acceptance and offline queueing:
 Because payloads are opaque, replay protection must be implemented inside the encrypted payload by the application protocol (if needed).
 
 The header may be cached by the sender for efficiency, as long as the sender reuses the same signed header event for subsequent `data` messages.
+
+## Delivery Ack (`t=delivery_ack`)
+
+`client2 -> server -> client1`
+
+Confirms delivery of a specific `data` packet identified by `MESSAGE_ID`.
+
+Envelope rule: `VSOCKET_ID` MUST be `!= 0`.
+`MESSAGE_ID` MUST be `!= 0` and MUST match a previously received `data` message on the reciprocal socket.
+
+```yaml
+{
+  "kind": 25051,
+  "tags": [
+    ["t", "delivery_ack"]
+  ],
+  "content": ""
+}
+```
+
+No payloads.
+
+Delivery semantics:
+
+* The receiver MUST emit `delivery_ack` only after the corresponding `data` payload has been fully delivered to the receiver-side application/channel API.
+* The sender MAY treat receipt of `delivery_ack` as write completion for that `MESSAGE_ID`.
+* If `delivery_ack` is not received before a sender-defined timeout, the sender SHOULD fail the pending write for that `MESSAGE_ID`.
+* The server MUST route `delivery_ack` using reciprocal socket matching, rewriting only `VSOCKET_ID` for the opposite direction and preserving `MESSAGE_ID`.
+* The `delivery_ack` header MAY be cached and reused for subsequent acknowledgements on the same virtual socket; each frame MUST carry the acknowledged packet `MESSAGE_ID` in the envelope.
 
 
 ---
