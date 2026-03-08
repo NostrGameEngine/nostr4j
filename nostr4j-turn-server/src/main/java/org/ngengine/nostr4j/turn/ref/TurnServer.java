@@ -34,12 +34,10 @@ package org.ngengine.nostr4j.turn.ref;
 import com.google.gson.JsonObject;
 import java.nio.ByteBuffer;
 import java.time.Instant;
-import java.util.ArrayDeque;
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -52,9 +50,12 @@ import org.eclipse.jetty.websocket.api.Session;
 import org.eclipse.jetty.websocket.api.StatusCode;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
+import org.ngengine.nostr4j.rtc.BlockingPacketQueue;
 import org.ngengine.nostr4j.rtc.turn.event.NostrTURNCodec;
 import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
 import org.ngengine.nostr4j.utils.NostrRoomProof;
+import org.ngengine.platform.AsyncExecutor;
+import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEUtils;
 
 /**
@@ -65,10 +66,11 @@ import org.ngengine.platform.NGEUtils;
  * 2) Client sends signed `connect` with PoW + roomproof + routing tags.
  * 3) Server validates and creates websocket-scoped virtual socket mapping.
  * 4) Server sends `ack` for accepted virtual socket.
- * 5) `data` frames are forwarded to reciprocal sockets; if no reciprocal target exists,
- *    frames are queued temporarily.
- * 6) Queue overflow/timeout results in sender `disconnect` with peer-unreachable error.
- * 7) `disconnect` tears down the virtual socket and is relayed to reciprocal side.
+ * 5) `data` frames are always enqueued per sender socket and drained in order.
+ * 6) Drain attempts deliver to reciprocal sockets; failure stops the queue.
+ * 7) Queue watchdog restarts delivery attempts periodically.
+ * 8) Queue overflow results in sender `disconnect` with peer-unreachable error.
+ * 9) `disconnect` tears down the virtual socket and is relayed to reciprocal side.
  *
  * <p>Security and isolation principles:
  * - signatures are always verified before semantic handling
@@ -80,8 +82,8 @@ public final class TurnServer {
 
     static final Logger logger = Logger.getLogger(TurnServer.class.getName());
     private static final int DEFAULT_MAX_QUEUED_FRAMES = 2048;
-    private static final int DEFAULT_QUEUE_MAX_AGE_SECONDS = 30;
     private static final String PEER_UNREACHABLE_REASON = "peer unreachable";
+    private static final long SOCKET_LOOP_MS = 250L;
 
     // Active websocket clients keyed by session object.
     final Map<Session, TurnClientConnection> clients = new ConcurrentHashMap<Session, TurnClientConnection>();
@@ -91,44 +93,9 @@ public final class TurnServer {
     final int challengeTtlSeconds;
     final String host;
     private final int maxQueuedFrames;
-    private final long queueMaxAgeMillis;
-    // Separate lock guarding queuedFrames composite operations.
-    private final Object queuedFramesLock = new Object();
-    // FIFO queue of frames awaiting reciprocal target connect.
-    private final ArrayDeque<QueuedFrame> queuedFrames = new ArrayDeque<QueuedFrame>();
-
-    /**
-     * One queued data frame entry.
-     *
-     * <p>Stored as raw frame bytes so we can rewrite only VSOCKET_ID at delivery time
-     * (header and encrypted payload remain opaque and untouched).
-     */
-    private static final class QueuedFrame {
-
-        private final TurnVirtualSocket senderSocket;
-        private final Session senderSession;
-        private final byte[] frameBytes;
-        private final long queuedAtMillis;
-
-        QueuedFrame(TurnVirtualSocket senderSocket, Session senderSession, byte[] frameBytes, long queuedAtMillis) {
-            this.senderSocket = senderSocket;
-            this.senderSession = senderSession;
-            this.frameBytes = frameBytes;
-            this.queuedAtMillis = queuedAtMillis;
-        }
-    }
-
-    private static final class ExpiredSender {
-
-        private final Session session;
-        private final long vsocketId;
-
-        ExpiredSender(Session session, long vsocketId) {
-            this.session = session;
-            this.vsocketId = vsocketId;
-        }
-    }
-
+    private final AsyncExecutor loopExecutor;
+    private volatile boolean running = false;
+    
     public final class TurnHandler implements Session.Listener.AutoDemanding {
 
         private final TurnServer turnServer;
@@ -144,23 +111,30 @@ public final class TurnServer {
 
         @Override
         public void onWebSocketOpen(Session session) {
-            // 1) Attach websocket-scoped client state.
-            this.wsSession = session;
-            TurnClientConnection connection = new TurnClientConnection(
-                session,
-                this.turnServer.difficulty,
-                this.turnServer.challengeTtlSeconds
-            );
-            this.turnServer.clients.put(session, connection);
-            // 2) Send challenge immediately as required by protocol.
-            this.turnServer.sendChallenge(connection);
+            try{
+                // 1) Attach websocket-scoped client state.
+                this.wsSession = session;
+                TurnClientConnection connection = new TurnClientConnection(
+                    session,
+                    this.turnServer.difficulty,
+                    this.turnServer.challengeTtlSeconds
+                );
+                this.turnServer.clients.put(session, connection);
+                // 2) Send challenge immediately as required by protocol.
+                this.turnServer.sendChallenge(connection);
+            } catch (Exception ex) {
+                TurnServer.logger.log(Level.WARNING, "Error during TURN handshake", ex);
+                this.turnServer.closeConnection(session, "handshake-error");
+            }
         }
 
         @Override
         public void onWebSocketBinary(ByteBuffer payload, Callback callback) {
             try {
                 // Copy incoming payload to decouple from Jetty buffer lifecycle.
-                ByteBuffer incomingFrame = TurnServer.deepCopy(payload);
+                ByteBuffer incomingFrame =  ByteBuffer.allocate(payload.remaining());
+                incomingFrame.put(payload.slice());
+                incomingFrame.flip();
                 callback.succeed();
 
                 TurnClientConnection connection = this.turnServer.clients.get(this.wsSession);
@@ -171,6 +145,7 @@ public final class TurnServer {
 
                 // Envelope-level decode.
                 long envelopeVsocketId = NostrTURNCodec.extractVsocketId(incomingFrame.asReadOnlyBuffer());
+                int envelopeMessageId = NostrTURNCodec.extractMessageId(incomingFrame.asReadOnlyBuffer());
 
                 // Header decode + signature verification.
                 SignedNostrEvent header = NostrTURNCodec.decodeHeader(incomingFrame.asReadOnlyBuffer());
@@ -179,14 +154,32 @@ public final class TurnServer {
                 // Dispatch by control type.
                 String type = TurnJson.safeString(header.getFirstTagFirstValue("t"));
                 if ("connect".equals(type)) {
+                    if (envelopeMessageId != 0) {
+                        this.turnServer.closeConnection(this.wsSession, "invalid-message-id");
+                        return;
+                    }
                     this.turnServer.handleConnect(connection, header, envelopeVsocketId);
                     return;
                 }
                 if ("data".equals(type)) {
+                    if (envelopeMessageId == 0) {
+                        return;
+                    }
+                    this.turnServer.handleData(connection, header, incomingFrame, envelopeVsocketId);
+                    return;
+                }
+                if ("delivery_ack".equals(type)) {
+                    if (envelopeMessageId == 0) {
+                        return;
+                    }
                     this.turnServer.handleData(connection, header, incomingFrame, envelopeVsocketId);
                     return;
                 }
                 if ("disconnect".equals(type)) {
+                    if (envelopeMessageId != 0) {
+                        this.turnServer.closeConnection(this.wsSession, "invalid-message-id");
+                        return;
+                    }
                     this.turnServer.handleDisconnect(connection, header, envelopeVsocketId);
                     return;
                 }
@@ -212,27 +205,11 @@ public final class TurnServer {
     }
 
     public TurnServer(int port, NostrKeyPairSigner serverSigner, int difficulty, int challengeTtlSeconds) {
-        this(
-            "127.0.0.1",
-            port,
-            serverSigner,
-            difficulty,
-            challengeTtlSeconds,
-            DEFAULT_MAX_QUEUED_FRAMES,
-            DEFAULT_QUEUE_MAX_AGE_SECONDS
-        );
+        this("127.0.0.1", port, serverSigner, difficulty, challengeTtlSeconds, DEFAULT_MAX_QUEUED_FRAMES);
     }
 
     public TurnServer(String host, int port, NostrKeyPairSigner serverSigner, int difficulty, int challengeTtlSeconds) {
-        this(
-            host,
-            port,
-            serverSigner,
-            difficulty,
-            challengeTtlSeconds,
-            DEFAULT_MAX_QUEUED_FRAMES,
-            DEFAULT_QUEUE_MAX_AGE_SECONDS
-        );
+        this(host, port, serverSigner, difficulty, challengeTtlSeconds, DEFAULT_MAX_QUEUED_FRAMES);
     }
 
     public TurnServer(
@@ -240,10 +217,9 @@ public final class TurnServer {
         NostrKeyPairSigner serverSigner,
         int difficulty,
         int challengeTtlSeconds,
-        int maxQueuedFrames,
-        int queueMaxAgeSeconds
+        int maxQueuedFrames
     ) {
-        this("127.0.0.1", port, serverSigner, difficulty, challengeTtlSeconds, maxQueuedFrames, queueMaxAgeSeconds);
+        this("127.0.0.1", port, serverSigner, difficulty, challengeTtlSeconds, maxQueuedFrames);
     }
 
     public TurnServer(
@@ -252,8 +228,7 @@ public final class TurnServer {
         NostrKeyPairSigner serverSigner,
         int difficulty,
         int challengeTtlSeconds,
-        int maxQueuedFrames,
-        int queueMaxAgeSeconds
+        int maxQueuedFrames
     ) {
         // Validate constructor parameters early; these values shape server behavior.
         if (host == null || host.trim().isEmpty()) {
@@ -271,17 +246,13 @@ public final class TurnServer {
         if (maxQueuedFrames <= 0) {
             throw new IllegalArgumentException("maxQueuedFrames must be > 0");
         }
-        if (queueMaxAgeSeconds <= 0) {
-            throw new IllegalArgumentException("queueMaxAgeSeconds must be > 0");
-        }
-
         // Initialize signer/event factory and queue policy configuration.
         this.eventFactory = new TurnEventFactory(Objects.requireNonNull(serverSigner, "serverSigner cannot be null"));
         this.host = host.trim();
         this.difficulty = difficulty;
         this.challengeTtlSeconds = challengeTtlSeconds;
         this.maxQueuedFrames = maxQueuedFrames;
-        this.queueMaxAgeMillis = queueMaxAgeSeconds * 1000L;
+        this.loopExecutor = NGEUtils.getPlatform().newAsyncExecutor(TurnServer.class.getSimpleName() + "-loop");
 
         // Jetty bootstrap.
         this.jettyServer = new Server();
@@ -312,6 +283,8 @@ public final class TurnServer {
 
     public void start() throws Exception {
         this.jettyServer.start();
+        this.running = true;
+        loop();
     }
 
     public void join() throws InterruptedException {
@@ -319,7 +292,14 @@ public final class TurnServer {
     }
 
     public void stop() throws Exception {
+        this.running = false;
+        for (TurnClientConnection connection : clients.values()) {
+            for (TurnVirtualSocket socket : connection.getSockets().values()) {
+                socket.close();
+            }
+        }
         this.jettyServer.stop();
+        this.loopExecutor.close();
     }
 
     public int getPort() {
@@ -349,8 +329,6 @@ public final class TurnServer {
      * Handshake step 2: validate connect and issue ack + vsocketId.
      */
     void handleConnect(TurnClientConnection connection, SignedNostrEvent header, long envelopeVsocketId) {
-        // Periodic opportunistic cleanup so stale queues don't accumulate.
-        pruneExpiredQueuedFrames();
         // Challenge must still be valid for this websocket client.
         if (connection.getChallenge() == null || Instant.now().isAfter(connection.getChallengeExpiresAt())) {
             closeConnection(connection.getWsSession(), "challenge-expired");
@@ -393,13 +371,19 @@ public final class TurnServer {
         String applicationId = TurnJson.safeString(header.getFirstTagFirstValue("y"));
         String targetHex = TurnJson.safeString(header.getFirstTagFirstValue("p"));
         String channelLabel = TurnJson.safeString(header.getFirstTagSecondValue("p"));
+        org.ngengine.nostr4j.event.NostrEvent.TagValue pTag = header.getFirstTag("p");
+        String targetSessionId = "";
+        if (pTag != null && pTag.size() > 2) {
+            targetSessionId = TurnJson.safeString(pTag.get(2));
+        }
         if (
             roomHex.isEmpty() ||
             senderSessionId.isEmpty() ||
             protocolId.isEmpty() ||
             applicationId.isEmpty() ||
             targetHex.isEmpty() ||
-            channelLabel.isEmpty()
+            channelLabel.isEmpty() ||
+            targetSessionId.isEmpty()
         ) {
             closeConnection(connection.getWsSession(), "missing-connect-routing-tags");
             return;
@@ -429,23 +413,44 @@ public final class TurnServer {
             senderPubkey,
             targetPubkey,
             senderSessionId,
+            targetSessionId,
             protocolId,
             applicationId,
-            channelLabel
+            channelLabel,
+            this::processQueuedFrame,
+            this::hasReachableRecipient
+           
         );
 
         // Store accepted socket then ack it.
         connection.getSockets().put(Long.valueOf(vsocketId), senderSocket);
-        sendFrame(connection.getWsSession(), eventFactory.createAck(senderSocket), null, vsocketId);
-        // Recipient might already be connected now; flush matching queued frames.
-        drainQueuedFramesForRecipient(connection, senderSocket);
+        sendFrame(
+            connection.getWsSession(),
+            eventFactory.createAck(senderSocket),
+            null,
+            vsocketId,
+            0,
+            new Callback() {
+                @Override
+                public void succeed() {
+                    senderSocket.markAckSent();
+                }
+
+                @Override
+                public void fail(Throwable x) {
+                    logger.log(Level.FINE, "Failed to send TURN ack", x);
+                    closeConnection(connection.getWsSession(), "ack-send-failed");
+                }
+            }
+        );
     }
 
     /**
      * Data step: server is blind to payload, only routes by header identity + reciprocal socket.
+     *
+     * Frames are always enqueued first to preserve strict per-socket ordering.
      */
     void handleData(TurnClientConnection connection, SignedNostrEvent header, ByteBuffer fullFrame, long envelopeVsocketId) {
-        pruneExpiredQueuedFrames();
         // VSOCKET_ID=0 data is invalid and ignored by policy.
         if (envelopeVsocketId == 0L) {
             return;
@@ -460,36 +465,13 @@ public final class TurnServer {
         if (!senderSocket.getClientPubkey().equals(header.getPubkey())) {
             return;
         }
-
-        // Try immediate delivery to all currently connected reciprocal sockets.
-        boolean delivered = false;
-        for (TurnClientConnection recipientConnection : clients.values()) {
-            if (recipientConnection == connection) {
-                continue;
-            }
-            for (TurnVirtualSocket recipientSocket : recipientConnection.getSockets().values()) {
-                if (!senderSocket.isReciprocal(recipientSocket)) {
-                    continue;
-                }
-                Session session = recipientConnection.getWsSession();
-                if (session != null && session.isOpen()) {
-                    // Rewrite envelope VSOCKET_ID to recipient's accepted socket id.
-                    ByteBuffer forwardedFrame = NostrTURNCodec.withVsocketId(fullFrame, recipientSocket.getVsocketId());
-                    session.sendBinary(forwardedFrame, Callback.NOOP);
-                    delivered = true;
-                }
-            }
+        // Always enqueue to preserve ordering even when recipient is currently online.
+        if (!senderSocket.out(fullFrame, maxQueuedFrames)) {
+            disconnectSenderSocket(connection.getWsSession(), senderSocket.getVsocketId(), PEER_UNREACHABLE_REASON, true);
         }
-
-        if (delivered) {
-            return;
-        }
-        // No reciprocal target online: queue frame for delayed drain.
-        queueFrameOrDisconnectSender(connection, senderSocket, fullFrame);
     }
 
     void handleDisconnect(TurnClientConnection connection, SignedNostrEvent header, long envelopeVsocketId) {
-        pruneExpiredQueuedFrames();
         // Disconnect content is optional-ish for routing but parsed for reason/error propagation.
         JsonObject content = TurnJson.parseObject(header.getContent());
         String reason = TurnJson.readString(content, "reason");
@@ -506,7 +488,7 @@ public final class TurnServer {
         }
 
         // Remove any queued outbound frames still associated with this sender socket.
-        removeQueuedFramesForSenderSocket(connection.getWsSession(), senderSocket.getVsocketId());
+        senderSocket.close();
         // Relay disconnect to reciprocal side(s).
         relayDisconnectToReciprocal(senderSocket, reason, error);
     }
@@ -551,10 +533,31 @@ public final class TurnServer {
 
     void sendChallenge(TurnClientConnection connection) {
         // Envelope VSOCKET_ID must be 0 for challenge.
-        sendFrame(connection.getWsSession(), eventFactory.createChallenge(connection), null, 0L);
+        sendFrame(connection.getWsSession(), eventFactory.createChallenge(connection), null, 0L, 0);
     }
 
     private void sendFrame(Session session, SignedNostrEvent header, java.util.List<byte[]> payloads, long vsocketId) {
+        sendFrame(session, header, payloads, vsocketId, 0, Callback.NOOP);
+    }
+
+    private void sendFrame(
+        Session session,
+        SignedNostrEvent header,
+        java.util.List<byte[]> payloads,
+        long vsocketId,
+        int messageId
+    ) {
+        sendFrame(session, header, payloads, vsocketId, messageId, Callback.NOOP);
+    }
+
+    private void sendFrame(
+        Session session,
+        SignedNostrEvent header,
+        java.util.List<byte[]> payloads,
+        long vsocketId,
+        int messageId,
+        Callback callback
+    ) {
         // Silently drop sends to closed session.
         if (session == null || !session.isOpen() || header == null) {
             return;
@@ -562,8 +565,8 @@ public final class TurnServer {
 
         // Encode full TURN frame and write.
         java.util.List<byte[]> safePayloads = payloads == null ? Collections.<byte[]>emptyList() : payloads;
-        ByteBuffer frame = NostrTURNCodec.encodeFrame(NostrTURNCodec.encodeHeader(header), vsocketId, safePayloads);
-        session.sendBinary(frame.asReadOnlyBuffer(), Callback.NOOP);
+        ByteBuffer frame = NostrTURNCodec.encodeFrame(NostrTURNCodec.encodeHeader(header), vsocketId, messageId, safePayloads);
+        session.sendBinary(frame.asReadOnlyBuffer(), callback == null ? Callback.NOOP : callback);
     }
 
     void closeConnection(Session session, String reason) {
@@ -577,8 +580,8 @@ public final class TurnServer {
         if (removed != null) {
             for (TurnVirtualSocket virtualSocket : removed.getSockets().values()) {
                 relayDisconnectToReciprocal(virtualSocket, "peer unreachable", true);
+                virtualSocket.close();
             }
-            removeQueuedFramesForSession(session);
             removed.getSockets().clear();
         }
 
@@ -588,116 +591,7 @@ public final class TurnServer {
         }
     }
 
-    static ByteBuffer deepCopy(ByteBuffer payload) {
-        // Defensive copy because incoming buffers can be reused by transport layer.
-        ByteBuffer copy = ByteBuffer.allocate(payload.remaining());
-        copy.put(payload.slice());
-        copy.flip();
-        return copy;
-    }
-
-    private void queueFrameOrDisconnectSender(
-        TurnClientConnection senderConnection,
-        TurnVirtualSocket senderSocket,
-        ByteBuffer fullFrame
-    ) {
-        // Snapshot frame bytes for deferred delivery.
-        byte[] frameBytes = new byte[fullFrame.remaining()];
-        fullFrame.asReadOnlyBuffer().get(frameBytes);
-        boolean overflow = false;
-        synchronized (queuedFramesLock) {
-            if (queuedFrames.size() >= maxQueuedFrames) {
-                // Queue hard limit reached: sender gets unreachable disconnect.
-                overflow = true;
-            } else {
-                // Keep sender websocket + socket id so timeouts can target correct sender.
-                queuedFrames.addLast(
-                    new QueuedFrame(senderSocket, senderConnection.getWsSession(), frameBytes, System.currentTimeMillis())
-                );
-            }
-        }
-        if (overflow) {
-            disconnectSenderSocket(senderConnection.getWsSession(), senderSocket.getVsocketId(), PEER_UNREACHABLE_REASON, true);
-        }
-    }
-
-    private void drainQueuedFramesForRecipient(TurnClientConnection recipientConnection, TurnVirtualSocket recipientSocket) {
-        // Pull all queued frames whose sender is reciprocal with this recipient socket.
-        ArrayList<byte[]> toForward = new ArrayList<byte[]>();
-        synchronized (queuedFramesLock) {
-            Iterator<QueuedFrame> iterator = queuedFrames.iterator();
-            while (iterator.hasNext()) {
-                QueuedFrame queued = iterator.next();
-                if (!queued.senderSocket.isReciprocal(recipientSocket)) {
-                    continue;
-                }
-                toForward.add(queued.frameBytes);
-                iterator.remove();
-            }
-        }
-
-        Session recipientSession = recipientConnection.getWsSession();
-        if (recipientSession == null || !recipientSession.isOpen()) {
-            return;
-        }
-        // Forward drained frames with recipient socket id rewrite.
-        for (byte[] frameBytes : toForward) {
-            ByteBuffer queuedFrame = ByteBuffer.wrap(frameBytes).asReadOnlyBuffer();
-            ByteBuffer rewritten = NostrTURNCodec.withVsocketId(queuedFrame, recipientSocket.getVsocketId());
-            recipientSession.sendBinary(rewritten, Callback.NOOP);
-        }
-    }
-
-    private void removeQueuedFramesForSession(Session session) {
-        // Drop all pending queued frames originating from a closed websocket.
-        if (session == null) {
-            return;
-        }
-        synchronized (queuedFramesLock) {
-            Iterator<QueuedFrame> iterator = queuedFrames.iterator();
-            while (iterator.hasNext()) {
-                QueuedFrame queued = iterator.next();
-                if (queued.senderSession == session) {
-                    iterator.remove();
-                }
-            }
-        }
-    }
-
-    private void removeQueuedFramesForSenderSocket(Session senderSession, long senderVsocketId) {
-        // Remove only frames belonging to one logical sender socket.
-        synchronized (queuedFramesLock) {
-            Iterator<QueuedFrame> iterator = queuedFrames.iterator();
-            while (iterator.hasNext()) {
-                QueuedFrame queued = iterator.next();
-                if (queued.senderSession == senderSession && queued.senderSocket.getVsocketId() == senderVsocketId) {
-                    iterator.remove();
-                }
-            }
-        }
-    }
-
-    private void pruneExpiredQueuedFrames() {
-        // TTL-based queue cleanup; stale frames trigger peer-unreachable to sender.
-        long now = System.currentTimeMillis();
-        ArrayList<ExpiredSender> expiredSenders = new ArrayList<ExpiredSender>();
-        synchronized (queuedFramesLock) {
-            Iterator<QueuedFrame> iterator = queuedFrames.iterator();
-            while (iterator.hasNext()) {
-                QueuedFrame queued = iterator.next();
-                if (now - queued.queuedAtMillis <= queueMaxAgeMillis) {
-                    continue;
-                }
-                // Collect sender socket to notify after lock release.
-                expiredSenders.add(new ExpiredSender(queued.senderSession, queued.senderSocket.getVsocketId()));
-                iterator.remove();
-            }
-        }
-        // Notify each expired sender socket exactly once per expired queued entry set.
-        for (ExpiredSender expired : expiredSenders) {
-            disconnectSenderSocket(expired.session, expired.vsocketId, PEER_UNREACHABLE_REASON, true);
-        }
-    }
+    
 
     private void disconnectSenderSocket(Session senderSession, long senderVsocketId, String reason, boolean error) {
         // Best-effort targeted disconnect for one sender socket.
@@ -713,7 +607,87 @@ public final class TurnServer {
             return;
         }
         // Clear residual queued payloads from this sender socket and emit disconnect.
-        removeQueuedFramesForSenderSocket(senderSession, senderVsocketId);
+        senderSocket.close();
         sendFrame(senderSession, eventFactory.createDisconnect(senderSocket, reason, error), null, senderVsocketId);
+    }
+
+    private AsyncTask<Boolean> processQueuedFrame(
+        TurnVirtualSocket senderSocket,
+        TurnVirtualSocket.QueuedOutgoingFrame queued
+    ) {
+        if (senderSocket == null || queued == null) {
+            return AsyncTask.completed(Boolean.TRUE);
+        }
+        boolean delivered = false;
+        for (TurnClientConnection recipientConnection : clients.values()) {
+            if (recipientConnection == null) {
+                continue;
+            }
+            for (TurnVirtualSocket recipientSocket : recipientConnection.getSockets().values()) {
+                if (!senderSocket.isReciprocal(recipientSocket)) {
+                    continue;
+                }
+                if (!recipientSocket.isAckSent()) {
+                    continue;
+                }
+                Session recipientSession = recipientConnection.getWsSession();
+                if (recipientSession == null || !recipientSession.isOpen()) {
+                    continue;
+                }
+                ByteBuffer rewritten = senderSocket.in(queued, recipientSocket.getVsocketId());
+                if (rewritten == null) {
+                    continue;
+                }
+                recipientSession.sendBinary(rewritten, Callback.NOOP);
+                delivered = true;
+            }
+        }
+        return AsyncTask.completed(Boolean.valueOf(delivered));
+    }
+
+    private boolean hasReachableRecipient(TurnVirtualSocket senderSocket) {
+        if (senderSocket == null) {
+            return false;
+        }
+        for (TurnClientConnection recipientConnection : clients.values()) {
+            if (recipientConnection == null) {
+                continue;
+            }
+            Session recipientSession = recipientConnection.getWsSession();
+            if (recipientSession == null || !recipientSession.isOpen()) {
+                continue;
+            }
+            for (TurnVirtualSocket recipientSocket : recipientConnection.getSockets().values()) {
+                if (senderSocket.isReciprocal(recipientSocket) && recipientSocket.isAckSent()) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private void loop() {
+        if (!running) {
+            return;
+        }
+        for (TurnClientConnection connection : clients.values()) {
+            if (connection == null) {
+                continue;
+            }
+            for (TurnVirtualSocket socket : connection.getSockets().values()) {
+                if (socket == null) {
+                    continue;
+                }
+                socket.loop();
+            }
+        }
+        loopExecutor.runLater(
+            () -> {
+                loop();
+                return null;
+            },
+            SOCKET_LOOP_MS,
+            TimeUnit.MILLISECONDS
+        );
     }
 }

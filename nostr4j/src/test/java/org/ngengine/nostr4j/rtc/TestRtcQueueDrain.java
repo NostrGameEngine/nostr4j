@@ -87,7 +87,7 @@ public class TestRtcQueueDrain {
             socket = new NostrRTCSocket(executor, remote, room, local, RTCSettings.DEFAULT, null, turnPool);
             channel = new NostrRTCChannel("primary", socket, true, true, Integer.valueOf(0), null);
 
-            AsyncTask<Void> writeTask = channel.write(ByteBuffer.wrap("queued-rtc".getBytes(StandardCharsets.UTF_8)));
+            AsyncTask<Boolean> writeTask = channel.write(ByteBuffer.wrap("queued-rtc".getBytes(StandardCharsets.UTF_8)));
             assertNotNull(writeTask);
             assertEquals(1, queueSize(channel));
 

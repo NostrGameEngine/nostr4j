@@ -44,6 +44,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
+import org.ngengine.nostr4j.rtc.listeners.NostrRTCChannelListener;
 import org.ngengine.nostr4j.rtc.listeners.NostrRTCSocketListener;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCAnswerSignal;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCLocalPeer;
@@ -166,6 +167,7 @@ public class NostrRTCSocket implements Closeable {
             // }
             NostrRTCChannel logicalChannel = channels.get(chan.getName());
             if (logicalChannel != null) {
+                logicalChannel.setChannel(chan);
                 logicalChannel.onRTCSocketMessage(bbf);
             }
         }
@@ -279,19 +281,32 @@ public class NostrRTCSocket implements Closeable {
         @Nullable Integer maxRetransmits,
         @Nullable Duration maxPacketLifeTime
     ) {
-        return channels.computeIfAbsent(
+        NostrRTCChannel channel = channels.computeIfAbsent(
             name,
-            n ->
-                new NostrRTCChannel(
+            n -> {
+                NostrRTCChannel c = new NostrRTCChannel(
                     name,
                     this,
                     ordered,
                     reliable,
                     maxRetransmits != null ? maxRetransmits : Integer.valueOf(0),
                     maxPacketLifeTime
-                )
+                );
+                for(NostrRTCSocketListener listener : listeners) {
+                    try {
+                        listener.onRTCChannel(c);
+                    } catch (Exception e) {
+                        logger.severe("Error emitting channel: " + e.getMessage());
+                    }
+                }
+                return c;
+            }
         );
+         
+        return channel;
     }
+
+ 
 
     private void switchActiveTransport(TransportPath next, String reason) {
         TransportPath previous = this.activeTransportPath;
@@ -431,7 +446,7 @@ public class NostrRTCSocket implements Closeable {
     private boolean shouldCreateDataChannelLocally() {
         NostrRTCPeer remote = remotePeer;
         if (remote == null || remote.getPubkey() == null || localPeer.getPubkey() == null) {
-            return true;
+            throw new IllegalStateException("Cannot determine channel initiator, missing peer information");
         }
         return localPeer.getPubkey().asHex().compareTo(remote.getPubkey().asHex()) < 0;
     }
@@ -757,6 +772,13 @@ public class NostrRTCSocket implements Closeable {
                             normalizedMaxRetransmits,
                             maxPacketLifeTime
                         );
+                        for(NostrRTCSocketListener listener : listeners) {
+                            try {
+                                listener.onRTCChannel(nchan);
+                            } catch (Exception e) {
+                                logger.severe("Error emitting channel: " + e.getMessage());
+                            }
+                        }
                         // emitChannelReady(nchan);
                         return nchan;        
                     }
@@ -784,7 +806,7 @@ public class NostrRTCSocket implements Closeable {
      * @deprecated use getChannel(DEFAULT_CHANNEL_NAME).write(ByteBuffer)
      */
     @Deprecated
-    public AsyncTask<Void> write(ByteBuffer bbf) {
+    public AsyncTask<Boolean> write(ByteBuffer bbf) {
         // if (this.useTURN) {
         //     assert dbg(() -> {
         //         logger.finest("Send message with turn");

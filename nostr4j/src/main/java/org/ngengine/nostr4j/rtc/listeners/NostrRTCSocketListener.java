@@ -46,6 +46,7 @@ public interface NostrRTCSocketListener {
     void onRTCSocketClose(NostrRTCSocket socket);
 
     void onRTCChannelReady(NostrRTCChannel channel);
+    void onRTCChannel(NostrRTCChannel channel);
 
     default void onRTCSocketTransportSwitch(
         NostrRTCSocket socket,

@@ -37,6 +37,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.NostrPool;
@@ -71,6 +72,7 @@ public class NostrRTCRoom implements Closeable {
     private static final Logger logger = Logger.getLogger(NostrRTCRoom.class.getName());
 
     private final Map<NostrRTCPeer, NostrRTCSocket> connections = new ConcurrentHashMap<>();
+    private final Map<NostrRTCChannel, BlockingPacketQueue<ByteBuffer>> pendingSends = new ConcurrentHashMap<>();
     private final Collection<NostrPublicKey> bannedPeers = new CopyOnWriteArrayList<>();
 
     private final List<NostrRTCPeerSocketAvailableListener> onSocketAvailable = new CopyOnWriteArrayList<>();
@@ -87,6 +89,12 @@ public class NostrRTCRoom implements Closeable {
     private final NostrTURNPool turnPool;
     private volatile boolean forceTURN = false;
 
+    private void drainQueue(NostrRTCChannel channel){
+        BlockingPacketQueue<ByteBuffer> queue = pendingSends.get(channel);
+        if(queue!=null){
+            queue.restart();
+        }
+    }
     private static interface Listener extends NostrRTCSignaling.Listener, NostrRTCSocketListener, NostrRTCChannelListener {}
 
     private final Listener listener = new Listener() {
@@ -133,10 +141,17 @@ public class NostrRTCRoom implements Closeable {
         ) {
             NostrRTCRoom.this.onRTCSocketLocalIceCandidate(socket, candidates, turnServer);
         }
-
+        
+        @Override
+        public void onRTCChannel(NostrRTCChannel channel) {
+            channel.addListener(this);
+            drainQueue(channel);
+        }
+        
         @Override
         public void onRTCChannelReady(NostrRTCChannel channel) {
-            channel.addListener(this);
+            // channel.addListener(this);
+            drainQueue(channel);
         }
 
         @Override
@@ -184,6 +199,7 @@ public class NostrRTCRoom implements Closeable {
             NostrRTCSocket socket = channel.getSocket();
             NostrRTCPeer remotePeer = socket.getRemotePeer();
             if (remotePeer == null || remotePeer.getPubkey() == null) return;
+            
             for (NostrRTCRoomPeerMessageListener listener : onMessageListeners) {
                 try {
                     listener.onRoomPeerBufferedAmountLow(remotePeer, socket, channel);
@@ -191,6 +207,7 @@ public class NostrRTCRoom implements Closeable {
                     logger.log(Level.WARNING, "Error notifying listener", e);
                 }
             }
+            drainQueue(channel);
         }
     };
 
@@ -236,6 +253,14 @@ public class NostrRTCRoom implements Closeable {
                 logger.log(Level.WARNING, "Error closing socket", e);
             }
         }
+        for (BlockingPacketQueue<ByteBuffer> queue : pendingSends.values()) {
+            try {
+                queue.close();
+            } catch (Exception e) {
+                logger.log(Level.FINE, "Error closing pending send queue", e);
+            }
+        }
+        pendingSends.clear();
         try {
             this.signaling.close();
         } catch (Exception e) {
@@ -351,7 +376,7 @@ public class NostrRTCRoom implements Closeable {
                                         }
                                     
                                 } else {
-                                        socket.reset();
+                                    socket.reset();
                                     
                                 }
 
@@ -678,17 +703,67 @@ public class NostrRTCRoom implements Closeable {
 
     public AsyncTask<Void> send(String channel, NostrRTCPeer peer, ByteBuffer bbf) {
         NostrRTCSocket socket = connections.get(peer);
-        if (socket != null) {
-            NostrRTCChannel target = socket.getChannel(channel);
-            if (target == null) {
-                target = socket.createChannel(channel);
-            }
-            return target.write(bbf);
-        } else {
+        if (socket == null) {
             logger.warning("No socket found for peer: " + peer);
             throw new IllegalStateException("No socket found for peer: " + peer);
         }
+        NostrRTCChannel chan = socket.createChannel(channel);
+        BlockingPacketQueue<ByteBuffer> q =
+            pendingSends.computeIfAbsent(
+                chan,
+                ignored -> new BlockingPacketQueue<ByteBuffer>(
+                    new BlockingPacketQueue.PacketHandler<ByteBuffer>() {
+                        @Override
+                        public AsyncTask<Boolean> handle(ByteBuffer packet) {
+                            return chan.write(packet);
+                        }
+
+                        @Override
+                        public boolean isReady() {
+                            return chan.isWriteReady();
+                        }
+                    },
+                    logger,
+                    "Failed to send data to peer"
+                )
+            );
+        return NGEUtils.getPlatform().wrapPromise((rs,rj)->{
+            q.enqueue(bbf.duplicate(), rs, rj);
+            drainQueue(chan);
+        });      
     }
+
+    public AsyncTask<Void> send(NostrRTCChannel chan, NostrRTCPeer peer, ByteBuffer bbf) {
+        NostrRTCSocket socket = connections.get(peer);
+        if (socket == null) {
+            logger.warning("No socket found for peer: " + peer);
+            throw new IllegalStateException("No socket found for peer: " + peer);
+        }
+        BlockingPacketQueue<ByteBuffer> q =
+            pendingSends.computeIfAbsent(
+                chan,
+                ignored -> new BlockingPacketQueue<ByteBuffer>(
+                    new BlockingPacketQueue.PacketHandler<ByteBuffer>() {
+                        @Override
+                        public AsyncTask<Boolean> handle(ByteBuffer packet) {
+                            return chan.write(packet);
+                        }
+
+                        @Override
+                        public boolean isReady() {
+                            return chan.isWriteReady();
+                        }
+                    },
+                    logger,
+                    "Failed to send data to peer"
+                )
+            );
+        return NGEUtils.getPlatform().wrapPromise((rs,rj)->{
+            q.enqueue(bbf.duplicate(), rs, rj);
+            drainQueue(chan);
+        });      
+    }
+
 
     public NostrRTCChannel getChannel(NostrRTCPeer peer, String channel) {
         NostrRTCSocket socket = connections.get(peer);
@@ -739,8 +814,8 @@ public class NostrRTCRoom implements Closeable {
 
     public AsyncTask<Void> broadcast(String channel, ByteBuffer bbf) {
         ArrayList<AsyncTask<Void>> tasks = new ArrayList<>(connections.size());
-        for (NostrRTCSocket socket : connections.values()) {
-            tasks.add(socket.getChannel(channel).write(bbf));
+        for (NostrRTCPeer peer : connections.keySet()) {
+            tasks.add(send(channel, peer, bbf));
         }
         NGEPlatform platform = NGEUtils.getPlatform();
         return platform

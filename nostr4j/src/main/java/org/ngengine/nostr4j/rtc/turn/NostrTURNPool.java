@@ -72,7 +72,8 @@ public final class NostrTURNPool implements AutoCloseable {
         NostrRTCPeer remotePeer,
         String turnServerUrl,
         NostrKeyPair roomKeyPair,
-        String channelLabel
+        String channelLabel,
+        NostrTURNChannelListener listener
     ) {
         NostrTURNChannel channel = new NostrTURNChannel(
             localPeer,
@@ -82,6 +83,7 @@ public final class NostrTURNPool implements AutoCloseable {
             channelLabel,
             maxAcceptedDiff
         );
+        if(listener!=null)channel.addListener(listener);
         channel.addListener(
             new NostrTURNChannelListener() {
                 @Override
@@ -177,6 +179,7 @@ public final class NostrTURNPool implements AutoCloseable {
             new WebsocketTransportListener() {
                 @Override
                 public void onConnectionClosedByServer(String reason) {
+
                     for (NostrTURNChannel user : ws.getUsers()) {
                         user.setTransport(null);
                     }

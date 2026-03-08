@@ -33,10 +33,14 @@ package org.ngengine.nostr4j.rtc.turn;
 
 import java.nio.ByteBuffer;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
-import java.util.Queue;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
@@ -49,10 +53,11 @@ import org.ngengine.nostr4j.rtc.turn.event.NostrTURNChallengeEvent;
 import org.ngengine.nostr4j.rtc.turn.event.NostrTURNCodec;
 import org.ngengine.nostr4j.rtc.turn.event.NostrTURNConnectEvent;
 import org.ngengine.nostr4j.rtc.turn.event.NostrTURNDataEvent;
+import org.ngengine.nostr4j.rtc.turn.event.NostrTURNDeliveryAckEvent;
 import org.ngengine.nostr4j.rtc.turn.event.NostrTURNDisconnectEvent;
 import org.ngengine.nostr4j.rtc.turn.event.NostrTURNEvent;
+import org.ngengine.platform.AsyncExecutor;
 import org.ngengine.platform.AsyncTask;
-import org.ngengine.platform.ExecutionQueue;
 import org.ngengine.platform.NGEPlatform;
 
 /**
@@ -67,21 +72,16 @@ public final class NostrTURNChannel {
 
     private static final Logger logger = Logger.getLogger(NostrTURNChannel.class.getName());
     private static final AtomicLong VSOCKET_COUNTER = new AtomicLong(1L);
+    private static final long DELIVERY_ACK_TIMEOUT_MS = 5000L;
 
     private final List<NostrTURNChannelListener> listeners = new CopyOnWriteArrayList<>();
-    private final Queue<ByteBuffer> incomingPayloadQueue = NGEPlatform.get().newConcurrentQueue(ByteBuffer.class);
-    private final Queue<ByteBuffer> outgoingPayloadQueue = NGEPlatform.get().newConcurrentQueue(ByteBuffer.class);
-    private final ExecutionQueue drainQueue = NGEPlatform.get().newExecutionQueue();
-    private final Object drainLockSend = new Object();
-    private final Object drainLockReceive = new Object();
-    private volatile boolean drainingSend = false;
-    private volatile boolean drainingReceive = false;
 
     private final byte[] encryptionKey;
 
     private volatile TURNTransport transport;
     private volatile NostrTURNDataEvent incomingDataEvent;
     private volatile NostrTURNDataEvent outgoingDataEvent;
+    private volatile NostrTURNDeliveryAckEvent outgoingDeliveryAckEvent;
     private final long vSocketId;
     private volatile int state = 0;
     private volatile boolean resurrecting = false;
@@ -93,6 +93,20 @@ public final class NostrTURNChannel {
     private final NostrKeyPair roomKeyPair;
     private final String channelLabel;
     private final int maxDiff;
+    private final AtomicInteger outgoingMessageCounter = new AtomicInteger(1);
+    private final Map<Integer, PendingWrite> pendingWrites = new ConcurrentHashMap<Integer, PendingWrite>();
+    private final AsyncExecutor ackTimeoutExecutor;
+
+    private static final class PendingWrite {
+        private final Consumer<Boolean> resolve;
+        private final Consumer<Throwable> reject;
+        private volatile AsyncTask<Void> timeoutTask;
+
+        private PendingWrite(Consumer<Boolean> resolve, Consumer<Throwable> reject) {
+            this.resolve = resolve;
+            this.reject = reject;
+        }
+    }
 
     // private final String channelLabel;
     // private final String sessionId;
@@ -115,6 +129,7 @@ public final class NostrTURNChannel {
         this.channelLabel = Objects.requireNonNull(channelLabel, "Channel label cannot be null");
         this.maxDiff = maxDiff;
         this.vSocketId = nextVsocketId();
+        this.ackTimeoutExecutor = NGEPlatform.get().newAsyncExecutor(NostrTURNChannel.class.getSimpleName() + "-ack-timeout");
     }
 
     private static long nextVsocketId() {
@@ -152,6 +167,8 @@ public final class NostrTURNChannel {
         }
         this.outgoingDataEvent = null;
         this.incomingDataEvent = null;
+        this.outgoingDeliveryAckEvent = null;
+        failPendingWrites(new IllegalStateException("TURN channel disconnected"));
         this.state = 0;
         setTransport(null);
     }
@@ -163,12 +180,14 @@ public final class NostrTURNChannel {
     }
 
     void setTransport(TURNTransport transport) {
-        this.resurrecting = false;
+      this.resurrecting = false;
         TURNTransport previous = this.transport;
         this.transport = transport;
         if (transport == null || previous != transport) {
             this.outgoingDataEvent = null;
             this.incomingDataEvent = null;
+            this.outgoingDeliveryAckEvent = null;
+            failPendingWrites(new IllegalStateException("TURN transport changed"));
             this.state = 0;
         }
     }
@@ -178,62 +197,68 @@ public final class NostrTURNChannel {
     }
 
     boolean isConnected() {
-        return state > 0 && this.transport != null && this.transport.isConnected();
+        return state > 0 &&  this.transport != null && this.transport.isConnected();
     }
 
-    private AsyncTask<Void> writeToActiveTransport(ByteBuffer payload) {
+    public AsyncTask<Boolean> write(ByteBuffer payload) {
         TURNTransport currentTransport = this.transport;
         if (!isReady() || currentTransport == null || !currentTransport.isConnected()) {
-            return null;
+            return AsyncTask.completed(Boolean.FALSE);
         }
 
         if (outgoingDataEvent == null) {
-            // outgoingDataEvent = new NostrTURNDataEvent(
-            //     localPeer.getSigner(),
-            //     roomKeyPair,
-            //     remotePeer,
-            //     sessionId,
-            //     protocolId,
-            //     applicationId,
-            //     channelLabel,
-            //     vSocketId,
-            //     encryptionKey
-            // );
             outgoingDataEvent =
                 NostrTURNDataEvent.createOutgoing(localPeer, remotePeer, roomKeyPair, channelLabel, vSocketId, encryptionKey);
         }
 
-        return outgoingDataEvent
-            .encodeToFrame(List.of(payload))
-            .then(bbf -> {
-                TURNTransport activeTransport = this.transport;
-                if (activeTransport == null || activeTransport != currentTransport || !activeTransport.isConnected()) {
-                    return (Void) null;
-                }
-                activeTransport
-                    .getTransport()
-                    .sendBinary(bbf)
-                    .catchException(ex -> {
-                        logger.log(Level.WARNING, "Failed to send TURN message", ex);
-                    });
-                return null;
-            })
-            .catchException(ex -> {
-                logger.log(Level.WARNING, "Failed to encode TURN data event", ex);
-            })
-            .then(r -> {
-                return null;
-            });
-    }
+        final int messageId = nextOutgoingMessageId();
+        return AsyncTask.create((resolve, reject) -> {
+            PendingWrite pendingWrite = new PendingWrite(resolve, reject);
+            PendingWrite existing = pendingWrites.put(Integer.valueOf(messageId), pendingWrite);
+            if (existing != null) {
+                reject.accept(new IllegalStateException("Duplicate TURN message id: " + messageId));
+                return;
+            }
 
-    public AsyncTask<Void> write(ByteBuffer payload) {
-        AsyncTask<Void> task = writeToActiveTransport(payload);
-        if (task == null) {
-            logger.warning("TURN channel is not ready, cannot send message");
-            outgoingPayloadQueue.add(payload);
-            return null;
-        }
-        return task;
+            pendingWrite.timeoutTask =
+                ackTimeoutExecutor.runLater(
+                    () -> {
+                        PendingWrite timedOut = pendingWrites.remove(Integer.valueOf(messageId));
+                        if (timedOut != null) {
+                            timedOut.reject.accept(new RuntimeException("TURN delivery ack timeout for messageId=" + messageId));
+                        }
+                        return null;
+                    },
+                    DELIVERY_ACK_TIMEOUT_MS,
+                    TimeUnit.MILLISECONDS
+                );
+
+            outgoingDataEvent
+                .encodeToFrame(List.of(payload), messageId)
+                .compose(bbf -> {
+                    TURNTransport activeTransport = this.transport;
+                    if (activeTransport == null || activeTransport != currentTransport || !activeTransport.isConnected()) {
+                        clearPendingWrite(messageId);
+                        return AsyncTask.completed(Boolean.FALSE);
+                    }
+                    return activeTransport.getTransport().sendBinary(bbf).then(v -> Boolean.TRUE);
+                })
+                .then(sent -> {
+                    if (!Boolean.TRUE.equals(sent)) {
+                        PendingWrite pending = clearPendingWrite(messageId);
+                        if (pending != null) {
+                            pending.resolve.accept(Boolean.FALSE);
+                        }
+                    }
+                    return null;
+                })
+                .catchException(ex -> {
+                    PendingWrite pending = clearPendingWrite(messageId);
+                    if (pending != null) {
+                        pending.reject.accept(ex);
+                    }
+                });
+        });
     }
 
     public void close(String reason) {
@@ -250,6 +275,7 @@ public final class NostrTURNChannel {
             sendControlEvent(disconnectEvent);
         }
         closed = true;
+        failPendingWrites(new IllegalStateException("TURN channel closed: " + reason));
         for (NostrTURNChannelListener l : listeners) {
             try {
                 l.onTurnChannelClosed(this, reason);
@@ -257,6 +283,7 @@ public final class NostrTURNChannel {
                 logger.log(Level.WARNING, "Error in TURN channel listener", ex);
             }
         }
+        ackTimeoutExecutor.close();
         disconnect();
     }
 
@@ -265,6 +292,7 @@ public final class NostrTURNChannel {
     }
 
     void onError(Throwable e) {
+        failPendingWrites(e == null ? new RuntimeException("TURN channel error") : e);
         logger.log(Level.SEVERE, "TURN channel error", e);
         for (NostrTURNChannelListener l : listeners) {
             try {
@@ -301,13 +329,12 @@ public final class NostrTURNChannel {
      * @param header
      * @return true if the message was handled, false otherwise
      */
-    boolean tryHandleData(ByteBuffer msg, SignedNostrEvent header) {
+    boolean tryHandleData(ByteBuffer msg, SignedNostrEvent header, int messageId) {
         if (header == null) {
             return false;
         }
 
         if (state != 2) {
-            incomingPayloadQueue.add(msg);
             logger.warning("TURN: Received data in invalid state " + state);
             return true;
         }
@@ -322,6 +349,7 @@ public final class NostrTURNChannel {
                 for (ByteBuffer payload : ps) {
                     onPayload(payload);
                 }
+                sendDeliveryAck(messageId);
                 return null;
             })
             .catchException(ex -> {
@@ -333,8 +361,10 @@ public final class NostrTURNChannel {
 
     void onBinaryMessage(ByteBuffer msg) {
         long envelopeVsocketId;
+        int envelopeMessageId;
         try {
             envelopeVsocketId = NostrTURNCodec.extractVsocketId(msg);
+            envelopeMessageId = NostrTURNCodec.extractMessageId(msg);
         } catch (Exception e) {
             logger.log(Level.WARNING, "TURN: Invalid binary frame", e);
             return;
@@ -364,16 +394,45 @@ public final class NostrTURNChannel {
                     if (envelopeVsocketId == 0L) {
                         throw new IllegalArgumentException("TURN data must have non-zero envelope vsocketId");
                     }
+                    if (envelopeMessageId == 0) {
+                        throw new IllegalArgumentException("TURN data must have non-zero messageId");
+                    }
                     if (envelopeVsocketId != vSocketId) {
                         return;
                     }
-                    tryHandleData(msg, header);
+                    if (state != 2) {
+                        logger.warning("TURN: Received data in invalid state " + state);
+                        return;
+                    }
+                    tryHandleData(msg, header, envelopeMessageId);
+                    break;
+                }
+            case "delivery_ack":
+                {
+                    if (envelopeVsocketId == 0L) {
+                        throw new IllegalArgumentException("TURN delivery_ack must have non-zero envelope vsocketId");
+                    }
+                    if (envelopeMessageId == 0) {
+                        throw new IllegalArgumentException("TURN delivery_ack must have non-zero messageId");
+                    }
+                    if (envelopeVsocketId != vSocketId) {
+                        return;
+                    }
+                    if (state != 2) {
+                        logger.warning("TURN: Received delivery_ack in invalid state " + state);
+                        return;
+                    }
+                    NostrTURNDeliveryAckEvent.parseIncoming(header, localPeer, remotePeer, envelopeVsocketId, envelopeMessageId);
+                    completePendingWrite(envelopeMessageId);
                     break;
                 }
             case "challenge":
                 {
                     if (envelopeVsocketId != 0L) {
                         throw new IllegalArgumentException("TURN challenge must have envelope vsocketId=0");
+                    }
+                    if (envelopeMessageId != 0) {
+                        throw new IllegalArgumentException("TURN challenge must have messageId=0");
                     }
                     if (state != 0) {
                         logger.warning("TURN: Received challenge in invalid state " + state);
@@ -406,6 +465,9 @@ public final class NostrTURNChannel {
                     if (envelopeVsocketId == 0L) {
                         throw new IllegalArgumentException("TURN ack must have non-zero envelope vsocketId");
                     }
+                    if (envelopeMessageId != 0) {
+                        throw new IllegalArgumentException("TURN ack must have messageId=0");
+                    }
                     if (envelopeVsocketId != vSocketId) {
                         return;
                     }
@@ -425,16 +487,16 @@ public final class NostrTURNChannel {
                         }
                     }
 
-                    // schedule drain for incoming and outgoing queues (race-free)
-                    scheduleDrainReceive();
-                    scheduleDrainSend();
-
+            
                     break;
                 }
             case "disconnect":
                 {
                     if (envelopeVsocketId == 0L) {
                         throw new IllegalArgumentException("TURN disconnect must have non-zero envelope vsocketId");
+                    }
+                    if (envelopeMessageId != 0) {
+                        throw new IllegalArgumentException("TURN disconnect must have messageId=0");
                     }
                     if (envelopeVsocketId != vSocketId) {
                         return;
@@ -492,102 +554,68 @@ public final class NostrTURNChannel {
             });
     }
 
-    private void scheduleDrainSend() {
-        synchronized (drainLockSend) {
-            if (drainingSend) {
-                return;
-            }
-            drainingSend = true;
+    private int nextOutgoingMessageId() {
+        int id = outgoingMessageCounter.getAndIncrement();
+        if (id == 0) {
+            return outgoingMessageCounter.getAndIncrement();
         }
-        drainQueue.enqueue(this::drainSendQueuedMessages);
+        return id;
     }
 
-    private void drainSendQueuedMessages(
-        java.util.function.Consumer<Void> resolve,
-        java.util.function.Consumer<Throwable> reject
-    ) {
-        ByteBuffer msg = outgoingPayloadQueue.poll();
-        if (msg == null) {
-            synchronized (drainLockSend) {
-                drainingSend = false;
-                if (!outgoingPayloadQueue.isEmpty()) {
-                    drainingSend = true;
-                    drainQueue.enqueue(this::drainSendQueuedMessages);
+    private PendingWrite clearPendingWrite(int messageId) {
+        PendingWrite removed = pendingWrites.remove(Integer.valueOf(messageId));
+        if (removed != null && removed.timeoutTask != null) {
+            removed.timeoutTask.cancel();
+        }
+        return removed;
+    }
+
+    private void completePendingWrite(int messageId) {
+        PendingWrite pending = clearPendingWrite(messageId);
+        if (pending != null) {
+            pending.resolve.accept(Boolean.TRUE);
+        }
+    }
+
+    private void failPendingWrites(Throwable error) {
+        RuntimeException fallback = new RuntimeException("TURN write failed");
+        Throwable cause = error == null ? fallback : error;
+        for (Integer key : pendingWrites.keySet()) {
+            PendingWrite pending = clearPendingWrite(key.intValue());
+            if (pending != null) {
+                pending.reject.accept(cause);
+            }
+        }
+    }
+
+    private void sendDeliveryAck(int messageId) {
+        if (messageId == 0 || state != 2) {
+            return;
+        }
+        TURNTransport currentTransport = this.transport;
+        if (currentTransport == null || !currentTransport.isConnected()) {
+            return;
+        }
+        if (outgoingDeliveryAckEvent == null) {
+            outgoingDeliveryAckEvent = NostrTURNDeliveryAckEvent.createOutgoing(
+                localPeer,
+                remotePeer,
+                roomKeyPair,
+                channelLabel,
+                vSocketId
+            );
+        }
+        outgoingDeliveryAckEvent
+            .encodeToFrame(null, messageId)
+            .compose(bbf -> {
+                TURNTransport activeTransport = this.transport;
+                if (activeTransport == null || activeTransport != currentTransport || !activeTransport.isConnected()) {
+                    return AsyncTask.completed(null);
                 }
-            }
-            resolve.accept(null);
-            return;
-        }
-
-        AsyncTask<Void> writeTask = writeToActiveTransport(msg);
-        if (writeTask == null) {
-            outgoingPayloadQueue.add(msg);
-            synchronized (drainLockSend) {
-                drainingSend = false;
-            }
-            resolve.accept(null);
-        } else {
-            writeTask
-                .then(v -> {
-                    drainSendQueuedMessages(resolve, reject);
-                    return null;
-                })
-                .catchException(e -> {
-                    outgoingPayloadQueue.add(msg);
-                    synchronized (drainLockSend) {
-                        drainingSend = false;
-                    }
-                    reject.accept(e);
-                });
-        }
-    }
-
-    private void scheduleDrainReceive() {
-        synchronized (drainLockReceive) {
-            if (drainingReceive) {
-                return;
-            }
-            drainingReceive = true;
-        }
-        drainQueue.enqueue(this::drainReceiveQueuedMessages);
-    }
-
-    private void drainReceiveQueuedMessages(
-        java.util.function.Consumer<Void> resolve,
-        java.util.function.Consumer<Throwable> reject
-    ) {
-        ByteBuffer msg = incomingPayloadQueue.poll();
-        if (msg == null) {
-            synchronized (drainLockReceive) {
-                drainingReceive = false;
-                if (!incomingPayloadQueue.isEmpty()) {
-                    drainingReceive = true;
-                    drainQueue.enqueue(this::drainReceiveQueuedMessages);
-                }
-            }
-            resolve.accept(null);
-            return;
-        }
-
-        if (state != 2) {
-            // connection dropped or not ready, requeue and stop draining
-            incomingPayloadQueue.add(msg);
-            synchronized (drainLockReceive) {
-                drainingReceive = false;
-            }
-            resolve.accept(null);
-            return;
-        }
-
-        try {
-            onBinaryMessage(msg);
-            drainReceiveQueuedMessages(resolve, reject);
-        } catch (Throwable t) {
-            incomingPayloadQueue.add(msg);
-            synchronized (drainLockReceive) {
-                drainingReceive = false;
-            }
-            reject.accept(t);
-        }
+                return activeTransport.getTransport().sendBinary(bbf);
+            })
+            .catchException(ex -> {
+                logger.log(Level.FINE, "Failed to send TURN delivery_ack: {0}", ex);
+            });
     }
 }

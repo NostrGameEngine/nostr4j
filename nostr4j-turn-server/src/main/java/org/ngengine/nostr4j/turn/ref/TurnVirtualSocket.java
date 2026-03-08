@@ -31,7 +31,14 @@
 
 package org.ngengine.nostr4j.turn.ref;
 
+import java.nio.ByteBuffer;
+import java.util.function.BiFunction;
+import java.util.function.Function;
+import java.util.logging.Logger;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
+import org.ngengine.nostr4j.rtc.BlockingPacketQueue;
+import org.ngengine.nostr4j.rtc.turn.event.NostrTURNCodec;
+import org.ngengine.platform.AsyncTask;
 
 /**
  * Represents one accepted virtual socket on a websocket session.
@@ -49,7 +56,8 @@ import org.ngengine.nostr4j.keypair.NostrPublicKey;
  * sender(clientPubkey/session) -> target(targetPubkey/session).
  * Forwarding to the opposite direction requires finding a reciprocal socket.
  */
-final class TurnVirtualSocket {
+final class TurnVirtualSocket implements AutoCloseable {
+    private static final Logger logger = Logger.getLogger(TurnVirtualSocket.class.getName());
 
     // Client-generated and server-accepted virtual socket id for this websocket session.
     private final long vsocketId;
@@ -59,33 +67,72 @@ final class TurnVirtualSocket {
     private final NostrPublicKey clientPubkey;
     // Destination pubkey declared in the connect routing tag.
     private final NostrPublicKey targetPubkey;
-    // Sender session id (`d` tag) - allows same pubkey with multiple sessions.
-    private final String sessionId;
+    // Sender session id (`d` tag).
+    private final String sourceSessionId;
+    // Target session id (`p` tag third value).
+    private final String targetSessionId;
     // Protocol/application dimensions (`i` / `y`) for namespace isolation.
     private final String protocolId;
     private final String applicationId;
     // Channel label (`p` tag second value) for per-channel multiplexing.
     private final String channelLabel;
+    private final BlockingPacketQueue<QueuedOutgoingFrame> queuedOutgoingFrames;
+    private volatile boolean ackSent = false;
+
+    static final class QueuedOutgoingFrame {
+        private final byte[] frameBytes;
+
+        private QueuedOutgoingFrame(byte[] frameBytes) {
+            this.frameBytes = frameBytes;
+        }
+
+        byte[] getFrameBytes() {
+            return frameBytes;
+        }
+    }
 
     TurnVirtualSocket(
         long vsocketId,
         NostrPublicKey roomPubkey,
         NostrPublicKey clientPubkey,
         NostrPublicKey targetPubkey,
-        String sessionId,
+        String sourceSessionId,
+        String targetSessionId,
         String protocolId,
         String applicationId,
-        String channelLabel
+        String channelLabel,
+        BiFunction<TurnVirtualSocket, QueuedOutgoingFrame, AsyncTask<Boolean>> processQueuedFrame,
+        Function<TurnVirtualSocket, Boolean> hasReachableRecipient
     ) {
         this.vsocketId = vsocketId;
         this.roomPubkey = roomPubkey;
         this.clientPubkey = clientPubkey;
         this.targetPubkey = targetPubkey;
-        this.sessionId = sessionId;
+        this.sourceSessionId = sourceSessionId;
+        this.targetSessionId = targetSessionId;
         this.protocolId = protocolId;
         this.applicationId = applicationId;
         this.channelLabel = channelLabel;
+        this.queuedOutgoingFrames = new BlockingPacketQueue<QueuedOutgoingFrame>(
+             new BlockingPacketQueue.PacketHandler<TurnVirtualSocket.QueuedOutgoingFrame>() {
+                @Override
+                public AsyncTask<Boolean> handle(TurnVirtualSocket.QueuedOutgoingFrame frame) {
+                    return processQueuedFrame.apply(TurnVirtualSocket.this, frame);
+                }
+
+                @Override
+                public boolean isReady() {
+                    return ackSent && hasReachableRecipient.apply(TurnVirtualSocket.this);
+                }
+            },
+            logger,
+            "TURN outgoing queue blocked"
+        );
+        // Do not drain any queued sender data before the connect ACK has been sent.
+        this.queuedOutgoingFrames.stop();
     }
+
+    
 
     long getVsocketId() {
         return vsocketId;
@@ -99,8 +146,12 @@ final class TurnVirtualSocket {
         return clientPubkey;
     }
 
-    String getSessionId() {
-        return sessionId;
+    String getSourceSessionId() {
+        return sourceSessionId;
+    }
+
+    String getTargetSessionId() {
+        return targetSessionId;
     }
 
     String getProtocolId() {
@@ -115,6 +166,50 @@ final class TurnVirtualSocket {
         return channelLabel;
     }
 
+    boolean enqueueOutgoing(byte[] frameBytes, int maxQueuedFrames) {
+        BlockingPacketQueue<QueuedOutgoingFrame> queue = this.queuedOutgoingFrames;
+        if (queue.size() >= maxQueuedFrames) {
+            return false;
+        }
+        queue.enqueue(new QueuedOutgoingFrame(frameBytes));
+        return true;
+    }
+
+    boolean out(ByteBuffer frame, int maxQueuedFrames) {
+        if (frame == null) {
+            return false;
+        }
+        byte[] frameBytes = new byte[frame.remaining()];
+        frame.asReadOnlyBuffer().get(frameBytes);
+        return enqueueOutgoing(frameBytes, maxQueuedFrames);
+    }
+
+    ByteBuffer in(QueuedOutgoingFrame queued, long recipientVsocketId) {
+        if (queued == null) {
+            return null;
+        }
+        ByteBuffer queuedFrame = ByteBuffer.wrap(queued.getFrameBytes()).asReadOnlyBuffer();
+        return NostrTURNCodec.withVsocketId(queuedFrame, recipientVsocketId);
+    }
+
+    void loop() {
+        this.queuedOutgoingFrames.loop();
+    }
+
+    void markAckSent() {
+        this.ackSent = true;
+        this.queuedOutgoingFrames.restart();
+    }
+
+    boolean isAckSent() {
+        return ackSent;
+    }
+
+    @Override
+    public void close() {
+        this.queuedOutgoingFrames.close();
+    }
+
     /**
      * Two virtual sockets are reciprocal when one socket's sender is the other's target
      * and all routing dimensions match.
@@ -126,9 +221,8 @@ final class TurnVirtualSocket {
      * - channel label
      * - inverted sender/target pubkeys
      *
-     * <p>Session id is not used in reciprocity here because each socket already
-     * belongs to a concrete websocket-scoped accepted connect tuple, and reciprocity
-     * is checked against that concrete accepted entry.
+     * <p>Session ids are part of reciprocity to avoid cross-routing when the same
+     * pubkey has multiple active sessions.
      */
     boolean isReciprocal(TurnVirtualSocket other) {
         if (!this.roomPubkey.equals(other.roomPubkey)) {
@@ -147,6 +241,12 @@ final class TurnVirtualSocket {
             return false;
         }
         if (!this.targetPubkey.equals(other.clientPubkey)) {
+            return false;
+        }
+        if (!this.sourceSessionId.equals(other.targetSessionId)) {
+            return false;
+        }
+        if (!this.targetSessionId.equals(other.sourceSessionId)) {
             return false;
         }
         return true;

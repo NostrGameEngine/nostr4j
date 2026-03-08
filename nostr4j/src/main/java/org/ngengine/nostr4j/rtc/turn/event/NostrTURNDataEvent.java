@@ -35,6 +35,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.event.UnsignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
@@ -51,6 +52,7 @@ public final class NostrTURNDataEvent extends NostrTURNEvent {
     private final NostrRTCPeer remotePeer;
     private AsyncTask<SignedNostrEvent> event;
     private final AsyncTask<byte[]> encryptionKey;
+    private final AtomicInteger messageCounter = new AtomicInteger(1);
 
     // created locally to send
     public static NostrTURNDataEvent createOutgoing(
@@ -167,6 +169,13 @@ public final class NostrTURNDataEvent extends NostrTURNEvent {
 
     @Override
     public AsyncTask<ByteBuffer> encodeToFrame(Collection<ByteBuffer> payloads) {
+        return encodeToFrame(payloads, nextMessageId());
+    }
+
+    public AsyncTask<ByteBuffer> encodeToFrame(Collection<ByteBuffer> payloads, int messageId) {
+        if (messageId == 0) {
+            throw new IllegalArgumentException("TURN data messageId must be != 0");
+        }
         List<AsyncTask<byte[]>> encryptedTasks = new ArrayList<>();
         for (ByteBuffer payload : payloads) {
             byte[] payloadBytes = new byte[payload.remaining()];
@@ -182,9 +191,17 @@ public final class NostrTURNDataEvent extends NostrTURNEvent {
             .compose(encryptedPayloads -> {
                 return toEncodedHeader()
                     .then(header -> {
-                        return NostrTURNCodec.encodeFrame(header, getEnvelopeVsocketId(), encryptedPayloads);
+                        return NostrTURNCodec.encodeFrame(header, getEnvelopeVsocketId(), messageId, encryptedPayloads);
                     });
             });
+    }
+
+    private int nextMessageId() {
+        int id = messageCounter.getAndIncrement();
+        if (id == 0) {
+            return messageCounter.getAndIncrement();
+        }
+        return id;
     }
 
     @Override

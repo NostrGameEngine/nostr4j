@@ -107,7 +107,7 @@ public class TestNostrRTCTurn {
                 }
 
                 channel.write(ByteBuffer.wrap(("Hello back from " + name + ":" + n).getBytes()));
-                System.out.println(name + " incoming message: " + new String(bb) + " p2p:" + !isTurn);
+                System.out.println(name + " incoming message: " + new String(bb) + " p2p:" + !isTurn+" on channel: " + channel.getName());
             });
 
         room.addDisconnectionListener((peerKey, socket) -> {

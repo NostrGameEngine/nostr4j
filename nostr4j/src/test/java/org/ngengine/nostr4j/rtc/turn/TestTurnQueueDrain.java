@@ -33,7 +33,6 @@ package org.ngengine.nostr4j.rtc.turn;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import java.lang.reflect.Method;
@@ -43,7 +42,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
-import java.util.Queue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
@@ -56,6 +54,7 @@ import org.ngengine.nostr4j.rtc.turn.NostrTURNPool.TURNTransport;
 import org.ngengine.nostr4j.rtc.turn.event.NostrTURNAckEvent;
 import org.ngengine.nostr4j.rtc.turn.event.NostrTURNCodec;
 import org.ngengine.nostr4j.rtc.turn.event.NostrTURNDataEvent;
+import org.ngengine.nostr4j.rtc.turn.event.NostrTURNDeliveryAckEvent;
 import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
 import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEUtils;
@@ -69,7 +68,7 @@ public class TestTurnQueueDrain {
     private static final String CHANNEL = "primary";
 
     @Test
-    public void testOutgoingQueueDrainsAfterAck() throws Exception {
+    public void testWriteReportsUndeliverableUntilAck() throws Exception {
         NostrKeyPair room = new NostrKeyPair();
         NostrRTCLocalPeer alice = localPeer("alice-q-out", room);
         NostrRTCLocalPeer bob = localPeer("bob-q-out", room);
@@ -79,9 +78,9 @@ public class TestTurnQueueDrain {
         NostrTURNChannel channel = new NostrTURNChannel(alice, bobRemote, "ws://turn.test", room, CHANNEL, 24);
         long vsocketId = getVsocketId(channel);
 
-        AsyncTask<Void> writeTask = channel.write(ByteBuffer.wrap("queued-turn-out".getBytes(StandardCharsets.UTF_8)));
-        assertNull("Write should be queued while TURN channel is not ready", writeTask);
-        assertEquals(1, queueSize(channel, "outgoingPayloadQueue"));
+        assertFalse(
+            NGEUtils.awaitNoThrow(channel.write(ByteBuffer.wrap("queued-turn-out".getBytes(StandardCharsets.UTF_8))))
+        );
 
         RecordingWebsocketTransport ws = new RecordingWebsocketTransport();
         channel.setTransport(new TURNTransport(ws));
@@ -92,18 +91,17 @@ public class TestTurnQueueDrain {
         );
         channel.onBinaryMessage(ackFrame);
 
-        awaitCondition(
-            new BooleanSupplier() {
-                @Override
-                public boolean getAsBoolean() {
-                    return ws.getSentBinaryFrames().size() >= 1;
-                }
-            },
-            4000,
-            "Queued TURN outgoing payload did not drain"
-        );
+        AsyncTask<Boolean> writeTask = channel.write(ByteBuffer.wrap("queued-turn-out".getBytes(StandardCharsets.UTF_8)));
+        awaitCondition(() -> ws.getSentBinaryFrames().size() >= 1, 4000, "TURN payload was not sent after ack");
 
         ByteBuffer sentFrame = ws.getSentBinaryFrames().get(0).duplicate();
+        int sentMessageId = NostrTURNCodec.extractMessageId(sentFrame.duplicate());
+        ByteBuffer deliveryAckFrame = NGEUtils.awaitNoThrow(
+            NostrTURNDeliveryAckEvent.createOutgoing(bob, aliceRemote, room, CHANNEL, vsocketId).encodeToFrame(null, sentMessageId)
+        );
+        channel.onBinaryMessage(deliveryAckFrame);
+        assertTrue(NGEUtils.awaitNoThrow(writeTask));
+
         SignedNostrEvent header = NostrTURNCodec.decodeHeader(sentFrame);
         NostrTURNDataEvent incomingAtBob = NostrTURNDataEvent.parseIncoming(
             header,
@@ -119,11 +117,10 @@ public class TestTurnQueueDrain {
         byte[] decoded = new byte[only.remaining()];
         only.get(decoded);
         assertEquals("queued-turn-out", new String(decoded, StandardCharsets.UTF_8));
-        assertEquals(0, queueSize(channel, "outgoingPayloadQueue"));
     }
 
     @Test
-    public void testIncomingQueueDrainsAfterAck() throws Exception {
+    public void testIncomingDataBeforeAckIsIgnored() throws Exception {
         NostrKeyPair room = new NostrKeyPair();
         NostrRTCLocalPeer alice = localPeer("alice-q-in", room);
         NostrRTCLocalPeer bob = localPeer("bob-q-in", room);
@@ -166,26 +163,14 @@ public class TestTurnQueueDrain {
         );
 
         channel.onBinaryMessage(dataFrame);
-        assertEquals(1, queueSize(channel, "incomingPayloadQueue"));
 
         ByteBuffer ackFrame = NGEUtils.awaitNoThrow(
             NostrTURNAckEvent.createAck(alice, aliceRemote, room, CHANNEL, vsocketId).encodeToFrame(null)
         );
         channel.onBinaryMessage(ackFrame);
 
-        assertTrue("Queued TURN incoming payload did not drain", payloadLatch.await(4, TimeUnit.SECONDS));
-        assertEquals(1, received.size());
-        assertEquals("queued-turn-in", received.get(0));
-        awaitCondition(
-            new BooleanSupplier() {
-                @Override
-                public boolean getAsBoolean() {
-                    return queueSize(channel, "incomingPayloadQueue") == 0;
-                }
-            },
-            2000,
-            "Incoming TURN queue did not drain to empty"
-        );
+        assertFalse("TURN payload sent before ack should not be delivered", payloadLatch.await(500, TimeUnit.MILLISECONDS));
+        assertEquals(0, received.size());
     }
 
     @Test
@@ -308,18 +293,6 @@ public class TestTurnQueueDrain {
             stateField.setInt(channel, state);
         } catch (Exception e) {
             throw new IllegalStateException("Unable to set TURN channel state", e);
-        }
-    }
-
-    private static int queueSize(NostrTURNChannel channel, String fieldName) {
-        try {
-            java.lang.reflect.Field queueField = NostrTURNChannel.class.getDeclaredField(fieldName);
-            queueField.setAccessible(true);
-            @SuppressWarnings("unchecked")
-            Queue<ByteBuffer> queue = (Queue<ByteBuffer>) queueField.get(channel);
-            return queue.size();
-        } catch (Exception e) {
-            throw new IllegalStateException("Unable to inspect TURN queue " + fieldName, e);
         }
     }
 

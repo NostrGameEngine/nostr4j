@@ -416,6 +416,11 @@ public class NostrRTCIntegrationTest {
                             aliceReady.countDown();
                         }
                     }
+
+                    @Override
+                    public void onRTCChannel(NostrRTCChannel channel) {
+                       
+                    }
                 }
             );
             bob.socket.addListener(
@@ -435,6 +440,11 @@ public class NostrRTCIntegrationTest {
                         if ("defaults".equals(channel.getName())) {
                             bobReady.countDown();
                         }
+                    }
+
+                    @Override
+                    public void onRTCChannel(NostrRTCChannel channel) {
+                         
                     }
                 }
             );
@@ -931,6 +941,11 @@ public class NostrRTCIntegrationTest {
 
                     @Override
                     public void onRTCChannelReady(NostrRTCChannel channel) {}
+
+                    @Override
+                    public void onRTCChannel(NostrRTCChannel channel) {
+                        
+                    }
                 }
             );
 
@@ -952,6 +967,11 @@ public class NostrRTCIntegrationTest {
 
                     @Override
                     public void onRTCChannelReady(NostrRTCChannel channel) {}
+
+                    @Override
+                    public void onRTCChannel(NostrRTCChannel channel) {
+                         
+                    }
                 }
             );
 

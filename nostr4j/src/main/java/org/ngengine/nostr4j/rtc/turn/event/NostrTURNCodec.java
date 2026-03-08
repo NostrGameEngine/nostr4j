@@ -45,7 +45,7 @@ import org.ngengine.platform.NGEPlatform;
 public final class NostrTURNCodec {
 
     public static final int VERSION = 2;
-    private static final int ENVELOPE_PREFIX_SIZE = 1 + 8 + 2; // version + int64 vsocketId + uint16 header size
+    private static final int ENVELOPE_PREFIX_SIZE = 1 + 8 + 4 + 2; // version + int64 vsocketId + int32 messageId + uint16 header size
 
     public static byte[] encodeHeader(SignedNostrEvent ev) {
         return NGEPlatform.get().toJSON(ev.toMap()).getBytes(StandardCharsets.UTF_8);
@@ -58,6 +58,16 @@ public final class NostrTURNCodec {
             throw new IllegalArgumentException("Unsupported TURN packet version: " + version);
         }
         return frame.getLong();
+    }
+
+    public static int extractMessageId(ByteBuffer frame) {
+        frame = frame.duplicate().order(ByteOrder.BIG_ENDIAN);
+        int version = frame.get() & 0xFF;
+        if (version != VERSION) {
+            throw new IllegalArgumentException("Unsupported TURN packet version: " + version);
+        }
+        frame.getLong(); // vsocketId
+        return frame.getInt();
     }
 
     public static ByteBuffer withVsocketId(ByteBuffer frame, long vsocketId) {
@@ -73,6 +83,20 @@ public final class NostrTURNCodec {
         return copy.asReadOnlyBuffer();
     }
 
+    public static ByteBuffer withVsocketIdAndMessageId(ByteBuffer frame, long vsocketId, int messageId) {
+        ByteBuffer source = frame.duplicate();
+        ByteBuffer copy = ByteBuffer.allocate(source.remaining()).order(ByteOrder.BIG_ENDIAN);
+        copy.put(source);
+        copy.flip();
+        int version = copy.get(0) & 0xFF;
+        if (version != VERSION) {
+            throw new IllegalArgumentException("Unsupported TURN packet version: " + version);
+        }
+        copy.putLong(1, vsocketId);
+        copy.putInt(1 + 8, messageId);
+        return copy.asReadOnlyBuffer();
+    }
+
     public static void decodePayloads(ByteBuffer frame, List<byte[]> payloads) {
         frame = frame.duplicate().order(ByteOrder.BIG_ENDIAN);
         int version = frame.get() & 0xFF;
@@ -80,6 +104,7 @@ public final class NostrTURNCodec {
             throw new IllegalArgumentException("Unsupported TURN packet version: " + version);
         }
         frame.getLong(); // vsocketId
+        frame.getInt(); // messageId
         int headerSize = frame.getShort() & 0xFFFF;
         if (headerSize <= 0) {
             throw new IllegalArgumentException("Invalid TURN header size: " + headerSize);
@@ -96,6 +121,10 @@ public final class NostrTURNCodec {
     }
 
     public static ByteBuffer encodeFrame(byte[] header, long vsocketId, List<byte[]> payloads) {
+        return encodeFrame(header, vsocketId, 0, payloads);
+    }
+
+    public static ByteBuffer encodeFrame(byte[] header, long vsocketId, int messageId, List<byte[]> payloads) {
         int size = ENVELOPE_PREFIX_SIZE + header.length + 2; // + payload count
         if (payloads != null) {
             for (byte[] payload : payloads) {
@@ -106,6 +135,7 @@ public final class NostrTURNCodec {
         ByteBuffer buffer = ByteBuffer.allocate(size).order(ByteOrder.BIG_ENDIAN);
         buffer.put((byte) VERSION);
         buffer.putLong(vsocketId);
+        buffer.putInt(messageId);
         buffer.putShort((short) header.length);
         buffer.put(header);
         if (payloads != null) {
@@ -128,6 +158,7 @@ public final class NostrTURNCodec {
             throw new IllegalArgumentException("Unsupported TURN packet version: " + version);
         }
         frame.getLong(); // vsocketId
+        frame.getInt(); // messageId
         int headerSize = frame.getShort() & 0xFFFF;
         if (headerSize <= 0) {
             throw new IllegalArgumentException("Invalid TURN header size: " + headerSize);
@@ -144,6 +175,7 @@ public final class NostrTURNCodec {
             throw new IllegalArgumentException("Unsupported TURN packet version: " + version);
         }
         long vsocketId = frame.getLong();
+        int messageId = frame.getInt();
         int headerSize = frame.getShort() & 0xFFFF;
         if (headerSize <= 0) {
             throw new IllegalArgumentException("Invalid TURN header size: " + headerSize);
@@ -151,6 +183,7 @@ public final class NostrTURNCodec {
         ByteBuffer headerFrame = ByteBuffer.allocate(ENVELOPE_PREFIX_SIZE + headerSize).order(ByteOrder.BIG_ENDIAN);
         headerFrame.put((byte) version);
         headerFrame.putLong(vsocketId);
+        headerFrame.putInt(messageId);
         headerFrame.putShort((short) headerSize);
         byte[] headerBytes = new byte[headerSize];
         frame.get(headerBytes);
@@ -178,6 +211,7 @@ public final class NostrTURNCodec {
             return false;
         }
         frame.getLong(); // vsocketId
+        frame.getInt(); // messageId
         int headerSize = frame.getShort() & 0xFFFF;
         if (headerSize != headerFrame.length) {
             return false;

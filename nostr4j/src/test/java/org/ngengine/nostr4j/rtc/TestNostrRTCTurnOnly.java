@@ -137,6 +137,11 @@ public class TestNostrRTCTurnOnly {
                     }
                 }
 
+                @Override
+                public void onRTCChannel(NostrRTCChannel channel) {
+                   
+                }
+
             };
             socketA.addListener(listener);
             socketB.addListener(listener);

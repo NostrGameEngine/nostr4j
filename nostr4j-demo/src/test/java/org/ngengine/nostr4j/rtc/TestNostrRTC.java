@@ -92,6 +92,7 @@ public class TestNostrRTC {
         
         room.addMessageListener(
             (NostrRTCPeer peer, NostrRTCSocket sk, NostrRTCChannel channel, ByteBuffer bbf, boolean isTurn) -> {
+             
                 byte[] bb = new byte[bbf.limit()];
                 bbf.get(bb);
                 String msg = new String(bb);
@@ -103,9 +104,9 @@ public class TestNostrRTC {
                 try {
                     Thread.sleep(1000);
                 } catch (InterruptedException e) {}
-
+                System.out.println("incoming message from " + peer.getPubkey() + " on channel " + channel.getName() + " turn:" + isTurn);
+                    System.out.println("   Message content: " +  msg);
                 channel.write(ByteBuffer.wrap(("Hello back from " + name + ":" + n).getBytes()));
-                System.out.println(name + " incoming message: " + new String(bb) + " p2p:" + !isTurn);
             }
         );
 

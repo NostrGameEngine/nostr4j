@@ -85,7 +85,7 @@ public class TestTurnServerCompliance {
         int port = freePort();
         this.roomKeyPair = new NostrKeyPair();
         this.serverSigner = NostrKeyPairSigner.generate();
-        this.server = new TurnServer(port, serverSigner, 8, 10, 32, 3);
+        this.server = new TurnServer(port, serverSigner, 8, 10, 32);
         this.server.start();
         this.wsUri = URI.create("ws://127.0.0.1:" + this.server.getPort() + "/turn");
     }
@@ -117,7 +117,7 @@ public class TestTurnServerCompliance {
             .withTag("d", attacker.getSessionId())
             .withTag("i", attacker.getProtocolId())
             .withTag("y", attacker.getApplicationId())
-            .withTag("p", victimRemote.getPubkey().asHex(), CHANNEL_LABEL)
+            .withTag("p", victimRemote.getPubkey().asHex(), CHANNEL_LABEL, victimRemote.getSessionId())
             .withContent(
                 NGEUtils
                     .getPlatform()
@@ -255,7 +255,7 @@ public class TestTurnServerCompliance {
             64
         );
         long receiverVsocketId = 444L;
-        sendValidConnect(wsReceiver, receiver, senderARemote, roomKeyPair, challengeR, receiverVsocketId);
+        sendValidConnect(wsReceiver, receiver, senderBRemote, roomKeyPair, challengeR, receiverVsocketId);
         assertNotNull(waitForType(wsReceiver, "ack", 2000));
 
         byte[] key = NGEUtils.getPlatform().randomBytes(32);

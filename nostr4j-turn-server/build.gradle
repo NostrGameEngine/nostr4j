@@ -65,6 +65,48 @@ tasks.register('buildNativeExecutable') {
     dependsOn tasks.named('nativeCompile')
 }
 
+def generatedReachabilityMetadataFile = layout.buildDirectory.file(
+    'native/generated/agent/reachability-metadata.json'
+)
+def generatedReachabilityMetadataDir = generatedReachabilityMetadataFile.map { it.asFile.parentFile }
+def targetReachabilityMetadataFile = layout.projectDirectory.file(
+    'src/main/resources/META-INF/native-image/org.ngengine/nostr4j-turn-server/reachability-metadata.json'
+)
+
+tasks.register('traceTurnServerReachability', Test) {
+    group = 'verification'
+    description = 'Runs TURN server compliance tracing with GraalVM native-image agent.'
+    dependsOn tasks.named('testClasses')
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnit()
+    filter {
+        includeTestsMatching 'org.ngengine.nostr4j.turn.ref.TestTurnServerCompliance'
+    }
+    javaLauncher = nativeImageLauncher
+    jvmArgs(
+        '-agentlib:native-image-agent=config-output-dir=' + generatedReachabilityMetadataDir.get().absolutePath
+    )
+    // Always retrace to refresh metadata with current code paths.
+    outputs.upToDateWhen { false }
+}
+
+tasks.register('traceReachabilityMetadata') {
+    group = 'build'
+    description = 'Traces GraalVM reachability metadata and updates module reachability-metadata.json.'
+    dependsOn tasks.named('traceTurnServerReachability')
+    doLast {
+        def generated = generatedReachabilityMetadataFile.get().asFile
+        if (!generated.isFile()) {
+            throw new GradleException("Missing generated metadata file: ${generated}")
+        }
+        def target = targetReachabilityMetadataFile.asFile
+        target.parentFile.mkdirs()
+        target.text = generated.text
+        logger.lifecycle("Updated {}", target)
+    }
+}
+
 
 // workaround for bad graalvm packaging
 import java.nio.file.Files

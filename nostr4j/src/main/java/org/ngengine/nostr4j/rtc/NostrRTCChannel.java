@@ -35,19 +35,14 @@ import java.io.Closeable;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.Objects;
-import java.util.Queue;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.rtc.listeners.NostrRTCChannelListener;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCPeer;
 import org.ngengine.nostr4j.rtc.turn.NostrTURNChannel;
 import org.ngengine.nostr4j.rtc.turn.NostrTURNChannelListener;
 import org.ngengine.nostr4j.rtc.turn.NostrTURNPool;
-import org.ngengine.platform.AsyncExecutor;
 import org.ngengine.platform.AsyncTask;
-import org.ngengine.platform.ExecutionQueue;
 import org.ngengine.platform.NGEPlatform;
 import org.ngengine.platform.transport.RTCDataChannel;
 
@@ -63,21 +58,12 @@ public class NostrRTCChannel implements Closeable {
     private final Duration maxPacketLifeTime;
     private int bufferedAmountThreshold = -1;
     private boolean closed = false;
-    private final Queue<ByteBuffer> messageQueue = NGEPlatform.get().newConcurrentQueue(ByteBuffer.class);
     private final CopyOnWriteArrayList<NostrRTCChannelListener> listeners = new CopyOnWriteArrayList<>();
-    private final ExecutionQueue drainQueue = NGEPlatform.get().newExecutionQueue();
-    private final Object drainLock = new Object();
-    private final AsyncExecutor retryExecutor = NGEPlatform
-        .get()
-        .newAsyncExecutor(NostrRTCChannel.class.getSimpleName() + "-drain");
-    private volatile boolean draining = false;
-    private volatile AsyncTask<Void> retryDrainTask;
 
     private volatile NostrTURNChannel turnReceive;
     private volatile NostrTURNChannel turnSend;
     // private volatile boolean turnBootstrapInProgress = false;
     private volatile boolean resurrecting = false;
-    private final AtomicBoolean readyNotificationEmitted = new AtomicBoolean(false);
 
     NostrRTCChannel(
         String name,
@@ -115,140 +101,67 @@ public class NostrRTCChannel implements Closeable {
         if (closed) {
             return;
         }
-        if(!readyNotificationEmitted.getAndSet(true)) {
-            socket.emitChannelReady(this);
-        }
+        socket.emitChannelReady(this);
     }
 
     void setChannel(RTCDataChannel chan) {
         this.channel = chan;
         this.resurrecting = false;
-        if (chan != null) {
+        if (chan != null&&!socket.isForceTURN()) {
             if (bufferedAmountThreshold > 0) chan.setBufferedAmountLowThreshold(bufferedAmountThreshold);
             emitChannelReady();
             disposeTurn();
         } else if (socket.isTurnFallbackAllowed()) {
             ensureTurn();
         }
-        scheduleDrain();
     }
 
-    private AsyncTask<Void> writeToAvailablePath(ByteBuffer data) {
+    AsyncTask<Boolean> write(ByteBuffer data) {
         RTCDataChannel currentChannel = this.channel;
         if (isConnected() && !socket.isForceTURN()) {
-            AsyncTask<Void> task = currentChannel.write(data);
-            if (task != null) {
-                return task;
-            }
+            return NGEPlatform.get().wrapPromise((res,rej)->{
+                if(!isConnected()){
+                    res.accept(false);
+                    return;
+                }
+                currentChannel.write(data).then(r->{
+                    res.accept(true);
+                    return null;
+                }).catchException(ex->{
+                    res.accept(false);
+                });
+            });
+            
         }
         if (socket.isTurnFallbackAllowed()||socket.isForceTURN()) {
             ensureTurn();
         }
         NostrTURNChannel currentTurnSend = this.turnSend;
-        if (currentTurnSend != null && currentTurnSend.isReady()) {
-            AsyncTask<Void> task = currentTurnSend.write(data);
-            if (task != null) {
-                return task;
-            }
+        if (currentTurnSend != null) {
+            return currentTurnSend.write(data);
         }
-        return null;
+        return AsyncTask.completed(Boolean.FALSE);
     }
 
-    public AsyncTask<Void> write(ByteBuffer data) {
-        AsyncTask<Void> writeTask = writeToAvailablePath(data);
-        if (writeTask != null) {
-            return writeTask;
-        }
-
-        ByteBuffer copy = data.duplicate();
-        ByteBuffer bbf = ByteBuffer.allocateDirect(copy.remaining());
-        bbf.put(copy);
-        bbf.flip();
-        messageQueue.add(bbf.duplicate());
-        scheduleDrain();
-        return AsyncTask.completed(null);
-    }
-
-    private void scheduleDrain() {
-        synchronized (drainLock) {
-            if (draining) {
-                return;
-            }
-            draining = true;
-        }
-        drainQueue.enqueue(this::drainQueuedMessages);
-    }
-
-    private void drainQueuedMessages(java.util.function.Consumer<Void> resolve, java.util.function.Consumer<Throwable> reject) {
-        ByteBuffer msg = messageQueue.poll();
-        if (msg == null) {
-            synchronized (drainLock) {
-                draining = false;
-                if (!messageQueue.isEmpty()) {
-                    draining = true;
-                    drainQueue.enqueue(this::drainQueuedMessages);
-                }
-            }
-            resolve.accept(null);
-            return;
-        }
-
-        AsyncTask<Void> writeTask = writeToAvailablePath(msg);
-        if (writeTask == null) {
-            messageQueue.add(msg);
-            synchronized (drainLock) {
-                draining = false;
-            }
-            scheduleDrainRetry();
-        } else {
-            writeTask
-                .then(v -> {
-                    drainQueuedMessages(resolve, reject);
-                    return null;
-                })
-                .catchException(e -> {
-                    messageQueue.add(msg);
-                    synchronized (drainLock) {
-                        draining = false;
-                    }
-                    scheduleDrainRetry();
-                    reject.accept(e);
-                });
-        }
-    }
-
-    private void scheduleDrainRetry() {
+    boolean isWriteReady() {
         if (closed) {
-            return;
+            return false;
         }
-        if (retryDrainTask != null) {
-            return;
+        if (!socket.isForceTURN() && channel != null) {
+            return true;
         }
-        retryDrainTask =
-            retryExecutor.runLater(
-                () -> {
-                    retryDrainTask = null;
-                    if (!closed) {
-                        scheduleDrain();
-                    }
-                    return null;
-                },
-                100,
-                TimeUnit.MILLISECONDS
-            );
+        if (socket.isTurnFallbackAllowed() || socket.isForceTURN()) {
+            NostrTURNChannel currentTurnSend = this.turnSend;
+            return currentTurnSend != null && currentTurnSend.isReady();
+        }
+        return false;
     }
+
+   
 
     public void close() {
         if (closed) return;
         closed = true;
-        AsyncTask<Void> retry = retryDrainTask;
-        if (retry != null) {
-            retry.cancel();
-        }
-        retryDrainTask = null;
-        try {
-            retryExecutor.close();
-        } catch (Exception ignored) {}
         if (channel != null) {
             channel.close();
         }
@@ -376,10 +289,10 @@ public class NostrRTCChannel implements Closeable {
         if (socket.isTurnFallbackAllowed()) {
             ensureTurn();
         }
-        scheduleDrain();
     }
 
     private void disposeTurn() {
+
         NostrTURNChannel receive = turnReceive;
         NostrTURNChannel send = turnSend;
         turnReceive = null;
@@ -404,26 +317,55 @@ public class NostrRTCChannel implements Closeable {
 
         NostrRTCPeer remote = this.socket.getRemotePeer();
         if (remote == null) {
+ 
             return;
         }
 
         String sendTurn = this.socket.resolveSendTurnUrl();
         String receiveTurn = this.socket.resolveReceiveTurnUrl();
+        boolean sharedTurn = sendTurn != null && !sendTurn.isEmpty() && Objects.equals(sendTurn, receiveTurn);
 
         if (turnSend != null && !Objects.equals(sendTurn, turnSend.getServerUrl())) {
+  
             turnSend.redirectTo(sendTurn);
         }
         if (turnReceive != null && !Objects.equals(receiveTurn, turnReceive.getServerUrl())) {
+  
             turnReceive.redirectTo(receiveTurn);
         }
-
-        boolean sharedTurn = sendTurn != null && !sendTurn.isEmpty() && Objects.equals(sendTurn, receiveTurn);
 
         if (sharedTurn) {
             NostrTURNChannel shared = turnSend != null ? turnSend : turnReceive;
             if (shared == null) {
-                shared = pool.connect(this.socket.getLocalPeer(), remote, sendTurn, this.socket.getRoomKeyPair(), this.name);
-                bindTurnReceive(shared);
+                shared =
+                    pool.connect(
+                        this.socket.getLocalPeer(),
+                        remote,
+                        sendTurn,
+                        this.socket.getRoomKeyPair(),
+                        this.name,
+                        new NostrTURNChannelListener() {
+                            @Override
+                            public void onTurnChannelReady(NostrTURNChannel channel) {
+                                emitChannelReady();
+                            }
+
+                            @Override
+                            public void onTurnChannelClosed(NostrTURNChannel channel, String reason) {
+                                disposeTurn();
+                            }
+
+                            @Override
+                            public void onTurnChannelError(NostrTURNChannel channel, Throwable e) {
+                                onRTCChannelError(e);
+                            }
+
+                            @Override
+                            public void onTurnChannelMessage(NostrTURNChannel channel, ByteBuffer payload) {
+                                onTURNSocketMessage(payload);
+                            }
+                        }
+                    );
             }
             turnSend = shared;
             turnReceive = shared;
@@ -431,23 +373,45 @@ public class NostrRTCChannel implements Closeable {
         }
 
         if (sendTurn != null && !sendTurn.isEmpty() && turnSend == null) {
-            turnSend = pool.connect(this.socket.getLocalPeer(), remote, sendTurn, this.socket.getRoomKeyPair(), this.name);
+            turnSend =
+                pool.connect(
+                    this.socket.getLocalPeer(),
+                    remote,
+                    sendTurn,
+                    this.socket.getRoomKeyPair(),
+                    this.name,
+                    new NostrTURNChannelListener() {
+                        @Override
+                        public void onTurnChannelReady(NostrTURNChannel channel) {
+                            emitChannelReady();
+                        }
+
+                        @Override
+                        public void onTurnChannelClosed(NostrTURNChannel channel, String reason) {}
+
+                        @Override
+                        public void onTurnChannelError(NostrTURNChannel channel, Throwable e) {
+                            onRTCChannelError(e);
+                        }
+
+                        @Override
+                        public void onTurnChannelMessage(NostrTURNChannel channel, ByteBuffer payload) {}
+                    }
+                );
         }
 
         if (receiveTurn != null && !receiveTurn.isEmpty() && turnReceive == null) {
+           
             turnReceive =
-                pool.connect(this.socket.getLocalPeer(), remote, receiveTurn, this.socket.getRoomKeyPair(), this.name);
-            bindTurnReceive(turnReceive);
-        }
-    }
-
-    private void bindTurnReceive(NostrTURNChannel channel) {
-        channel.addListener(
-            new NostrTURNChannelListener() {
+                pool.connect(
+                    this.socket.getLocalPeer(), 
+                    remote, receiveTurn, 
+                    this.socket.getRoomKeyPair(), 
+                    this.name,
+                    new NostrTURNChannelListener() {
                 @Override
                 public void onTurnChannelReady(NostrTURNChannel channel) {
-                    emitChannelReady();
-                    scheduleDrain();                   
+                    // receive path is ready; write readiness is signaled by turnSend
                 }
 
                 @Override
@@ -465,6 +429,7 @@ public class NostrRTCChannel implements Closeable {
                     onTURNSocketMessage(payload);
                 }
             }
-        );
-    }
+                );
+         }
+    } 
 }

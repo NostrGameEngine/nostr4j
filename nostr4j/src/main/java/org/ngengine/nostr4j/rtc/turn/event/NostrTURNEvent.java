@@ -103,6 +103,12 @@ public abstract class NostrTURNEvent {
         ) {
             throw new IllegalArgumentException("Event local pubkey does not match the provided local peer");
         }
+        if (localPeer != null) {
+            String targetSessionId = NGEUtils.safeString(event.getFirstTagThirdValue("p"));
+            if (!targetSessionId.isEmpty() && !localPeer.getSessionId().equals(targetSessionId)) {
+                throw new IllegalArgumentException("Event local session ID does not match the provided local peer session");
+            }
+        }
 
         // remote peer is the source of the remote event
         if (remotePeer != null && !remotePeer.getPubkey().equals(event.getPubkey())) {
@@ -185,7 +191,9 @@ public abstract class NostrTURNEvent {
             if (remotePeer != null) event.withTag("d", sessionId);
             if (remotePeer != null) event.withTag("i", protocolId);
             if (remotePeer != null) event.withTag("y", applicationId);
-            if (remotePeer != null) event.withTag("p", remotePeer.getPubkey().asHex(), channelLabel);
+            if (remotePeer != null) {
+                event.withTag("p", remotePeer.getPubkey().asHex(), channelLabel, remotePeer.getSessionId());
+            }
         }
         return computeEvent(event);
     }
@@ -196,6 +204,10 @@ public abstract class NostrTURNEvent {
 
     protected long getEnvelopeVsocketId() {
         return 0L;
+    }
+
+    protected int getEnvelopeMessageId() {
+        return 0;
     }
 
     protected AsyncTask<SignedNostrEvent> toEvent() {
@@ -236,7 +248,7 @@ public abstract class NostrTURNEvent {
     public AsyncTask<ByteBuffer> encodeToFrame(Collection<ByteBuffer> payloads) {
         return toEncodedHeader()
             .then(header -> {
-                return NostrTURNCodec.encodeFrame(header, getEnvelopeVsocketId(), null);
+                return NostrTURNCodec.encodeFrame(header, getEnvelopeVsocketId(), getEnvelopeMessageId(), null);
             });
     }
 }

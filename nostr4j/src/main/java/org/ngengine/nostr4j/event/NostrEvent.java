@@ -154,6 +154,15 @@ public interface NostrEvent extends Cloneable, Serializable {
         return tagValue.get(1);
     }
 
+    default String getFirstTagThirdValue(String key) {
+        TagValue tagValue = getFirstTag(key);
+        if (tagValue == null || tagValue.size() < 3) {
+            return null;
+        }
+        return tagValue.get(2);
+    }
+
+
     Set<String> listTagKeys();
 
     List<List<String>> getTagRows();
