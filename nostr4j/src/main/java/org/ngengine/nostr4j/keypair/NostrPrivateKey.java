@@ -35,6 +35,8 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Objects;
+
 import org.ngengine.bech32.Bech32;
 import org.ngengine.nostr4j.nip49.Nip49;
 import org.ngengine.nostr4j.nip49.Nip49FailedException;
@@ -83,6 +85,7 @@ public final class NostrPrivateKey implements NostrKey {
      * @return a new NostrPrivateKey instance
      */
     public static NostrPrivateKey fromBytes(byte[] data) {
+        Objects.requireNonNull(data);
         ByteBuffer bbf = ByteBuffer.allocate(data.length);
         bbf.put(data);
         bbf.rewind();
@@ -101,6 +104,7 @@ public final class NostrPrivateKey implements NostrKey {
      * @return a new NostrPrivateKey instance
      */
     public static NostrPrivateKey fromBytes(ByteBuffer bbf) {
+        Objects.requireNonNull(bbf);
         assert bbf.remaining() > 0 : "ByteBuffer should not be empty";
         ByteBuffer copy = ByteBuffer.allocate(bbf.remaining());
         copy.put(bbf.slice());
@@ -116,6 +120,7 @@ public final class NostrPrivateKey implements NostrKey {
      * @return a new NostrPrivateKey instance
      */
     public static NostrPrivateKey fromHex(String hex) {
+        Objects.requireNonNull(hex);
         NostrPrivateKey key = new NostrPrivateKey(NGEUtils.hexToBytes(hex));
         return key;
     }
