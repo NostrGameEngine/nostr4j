@@ -30,6 +30,8 @@
  */
 package org.ngengine.nostr4j.signer;
 
+import java.time.Instant;
+import java.util.logging.Logger;
 import org.ngengine.nostr4j.event.NostrEvent;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.event.UnsignedNostrEvent;
@@ -43,6 +45,7 @@ import org.ngengine.platform.NGEUtils;
 
 public class NostrKeyPairSigner implements NostrSigner {
 
+    private static final Logger logger = Logger.getLogger(NostrKeyPairSigner.class.getName());
     private final NostrKeyPair keyPair;
 
     public NostrKeyPairSigner(NostrKeyPair keyPair) {
@@ -56,6 +59,26 @@ public class NostrKeyPairSigner implements NostrSigner {
     @Override
     public AsyncTask<SignedNostrEvent> sign(UnsignedNostrEvent event) {
         String id = NostrEvent.computeEventId(keyPair.getPublicKey().asHex(), event);
+        if (id == null || id.isBlank()) {
+            Instant createdAt = event.getCreatedAt();
+            String createdAtInfo = createdAt == null ? "null" : String.valueOf(createdAt.getEpochSecond());
+            String err =
+                "Failed to compute event id for signing (kind=" +
+                event.getKind() +
+                ", created_at=" +
+                createdAtInfo +
+                ", tags=" +
+                event.getTagRows().size() +
+                ", content_length=" +
+                event.getContent().length() +
+                ")";
+            logger.warning(err);
+            return NGEUtils
+                .getPlatform()
+                .wrapPromise((res, rej) -> {
+                    rej.accept(new IllegalStateException(err));
+                });
+        }
         return NGEUtils
             .getPlatform()
             .signAsync(id, keyPair.getPrivateKey()._array())

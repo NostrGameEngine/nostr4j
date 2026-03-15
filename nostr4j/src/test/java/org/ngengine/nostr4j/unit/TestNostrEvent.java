@@ -164,4 +164,18 @@ public class TestNostrEvent {
         System.out.println(json);
         assertEquals(json.trim(), expectedJson.trim());
     }
+
+    @Test
+    public void testSigningFailsWhenEventIdCannotBeComputed() {
+        NostrSigner signer = NostrKeyPairSigner.generate();
+        UnsignedNostrEvent event = new UnsignedNostrEvent().withKind(1).withContent("broken").createdAt(null);
+        try {
+            signer.sign(event).await();
+            fail("Expected signing to fail when event id cannot be computed");
+        } catch (Throwable e) {
+            String msg = e.getMessage();
+            assertNotNull(msg);
+            assertTrue(msg.contains("Failed to compute event id for signing"));
+        }
+    }
 }

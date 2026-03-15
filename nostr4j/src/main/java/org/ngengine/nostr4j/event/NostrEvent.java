@@ -40,6 +40,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.utils.ZeroCounter;
@@ -221,6 +222,7 @@ public interface NostrEvent extends Cloneable, Serializable {
             String id = NGEUtils.getPlatform().sha256(json);
             return id;
         } catch (Exception e) {
+            Logger.getLogger(NostrEvent.class.getName()).log(Level.WARNING, "Failed to compute event id", e);
             return null;
         }
     }

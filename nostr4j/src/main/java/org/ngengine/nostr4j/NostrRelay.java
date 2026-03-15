@@ -481,6 +481,18 @@ public final class NostrRelay {
         return sendMessage(message, 0);
     }
 
+    private static String validateOutboundSignedEvent(SignedNostrEvent event) {
+        if (event == null) return "event is null";
+        if (event.getId() == null || event.getId().isBlank()) return "missing event id";
+        if (event.getSignature() == null || event.getSignature().isBlank()) return "missing event signature";
+        try {
+            if (event.getPubkey() == null || event.getPubkey().asHex().isBlank()) return "missing event pubkey";
+        } catch (Throwable e) {
+            return "invalid event pubkey: " + e.getMessage();
+        }
+        return null;
+    }
+
     protected AsyncTask<NostrMessageAck> sendMessage(NostrMessage message, int failures) {
         NGEPlatform platform = NGEUtils.getPlatform();
         return platform.wrapPromise((ores, orej) -> {
@@ -524,6 +536,18 @@ public final class NostrRelay {
                                 ores.accept(rr);
                             }
                         );
+
+                        if (message instanceof SignedNostrEvent) {
+                            SignedNostrEvent event = (SignedNostrEvent) message;
+                            String invalidReason = validateOutboundSignedEvent(event);
+                            if (invalidReason != null) {
+                                logger.warning(
+                                    "Refusing to send malformed signed event to relay " + this.url + ": " + invalidReason
+                                );
+                                result.callFailureCallback("invalid signed event: " + invalidReason);
+                                return;
+                            }
+                        }
 
                         for (NostrRelayComponent listener : this.listeners) {
                             try {
