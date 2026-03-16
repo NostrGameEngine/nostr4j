@@ -243,7 +243,7 @@ public final class NostrRTCSocket {
                 //     logger.fine("RTC Channel closed: " + channel.getName());
                 // }
             } else {
-                logger.warning("RTC Channel closed: " + channel.getName() + ", but no logical channel found");
+                logger.finer("RTC Channel closed: " + channel.getName() + ", but no logical channel found");
             }
             // channels.remove(channel.getName());
             // for (NostrRTCSocketListener listener : listeners) {
