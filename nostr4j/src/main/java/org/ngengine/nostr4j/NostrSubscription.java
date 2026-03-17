@@ -85,13 +85,13 @@ public class NostrSubscription extends NostrMessage {
     private final Collection<NostrSubCloseListener> onCloseListeners = new CopyOnWriteArrayList<>();
     private final Collection<NostrSubOpenListener> onOpenListeners = new CopyOnWriteArrayList<>();
 
-    private AsyncExecutor exc;
+    private volatile AsyncExecutor exc;
     private final Collection<NostrFilter> filters;
     private final Collection<NostrFilter> filtersRO;
 
     private final Function<NostrSubscription, List<AsyncTask<NostrMessageAck>>> onOpen;
     private final BiFunction<NostrSubscription, NostrSubCloseMessage, List<AsyncTask<NostrMessageAck>>> onClose;
-    private final List<String> closeReasons = new ArrayList<>();
+    private final List<String> closeReasons = new CopyOnWriteArrayList<>();
 
     private volatile boolean opened = false;
 
@@ -132,6 +132,10 @@ public class NostrSubscription extends NostrMessage {
         closeReasons.add(reason);
     }
 
+    private List<String> getCloseReasonsSnapshot() {
+        return Collections.unmodifiableList(new ArrayList<>(closeReasons));
+    }
+
     /**
      * Gets the filters associated with this subscription.
      *
@@ -167,15 +171,16 @@ public class NostrSubscription extends NostrMessage {
      *
      * @return An async task representing the open operation
      */
-    public List<AsyncTask<NostrMessageAck>> open() {
+    public synchronized List<AsyncTask<NostrMessageAck>> open() {
         if (opened) {
             throw new IllegalStateException("Subscription already opened");
         }
         NGEPlatform platform = NGEUtils.getPlatform();
-        this.exc = platform.newAsyncExecutor(NostrSubscription.class);
+        AsyncExecutor executor = platform.newAsyncExecutor(NostrSubscription.class);
+        this.exc = executor;
         opened = true;
         List<AsyncTask<NostrMessageAck>> out = this.onOpen.apply(this);
-        callOpenListeners();
+        callOpenListeners(executor);
         return out;
     }
 
@@ -188,13 +193,17 @@ public class NostrSubscription extends NostrMessage {
      *
      * @return An async task representing the close operation
      */
-    public List<AsyncTask<NostrMessageAck>> close() {
+    public synchronized List<AsyncTask<NostrMessageAck>> close() {
         if (!opened) return Collections.emptyList();
         opened = false;
-        this.exc.close();
+        AsyncExecutor executor = this.exc;
+        this.exc = null;
         List<AsyncTask<NostrMessageAck>> out = this.onClose.apply(this, getCloseMessage());
         registerClosure("closed by client");
-        callCloseListeners();
+        if (executor != null) {
+            callCloseListeners(executor, getCloseReasonsSnapshot());
+            executor.close();
+        }
         return out;
     }
 
@@ -316,8 +325,9 @@ public class NostrSubscription extends NostrMessage {
 
     protected void callEoseListeners(NostrRelay relay, boolean everyWhere) {
         if (onEoseListeners.isEmpty()) return;
+        AsyncExecutor executor = this.getExecutor();
         for (NostrSubEoseListener listener : onEoseListeners) {
-            this.getExecutor()
+            executor
                 .run(() -> {
                     try {
                         listener.onSubEose(this, relay, everyWhere);
@@ -331,8 +341,9 @@ public class NostrSubscription extends NostrMessage {
 
     protected void callEventListeners(SignedNostrEvent event, boolean stored) {
         if (onEventListeners.isEmpty()) return;
+        AsyncExecutor executor = this.getExecutor();
         for (NostrSubEventListener listener : onEventListeners) {
-            this.getExecutor()
+            executor
                 .run(() -> {
                     try {
                         listener.onSubEvent(this, event, stored);
@@ -345,12 +356,16 @@ public class NostrSubscription extends NostrMessage {
     }
 
     protected void callCloseListeners() {
+        callCloseListeners(this.getExecutor(), getCloseReasonsSnapshot());
+    }
+
+    private void callCloseListeners(AsyncExecutor executor, List<String> reasons) {
         if (onCloseListeners.isEmpty()) return;
         for (NostrSubCloseListener listener : onCloseListeners) {
-            this.getExecutor()
+            executor
                 .run(() -> {
                     try {
-                        listener.onSubClose(this, closeReasons);
+                        listener.onSubClose(this, reasons);
                     } catch (Throwable ex) {
                         logger.warning("Error calling Close listener: " + listener + " " + ex);
                     }
@@ -360,9 +375,13 @@ public class NostrSubscription extends NostrMessage {
     }
 
     protected void callOpenListeners() {
+        callOpenListeners(this.getExecutor());
+    }
+
+    private void callOpenListeners(AsyncExecutor executor) {
         if (onOpenListeners.isEmpty()) return;
         for (NostrSubOpenListener listener : onOpenListeners) {
-            this.getExecutor()
+            executor
                 .run(() -> {
                     try {
                         listener.onSubOpen(this);

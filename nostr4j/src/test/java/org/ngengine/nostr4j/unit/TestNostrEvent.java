@@ -33,9 +33,12 @@ package org.ngengine.nostr4j.unit;
 import static org.junit.Assert.*;
 
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import org.junit.Test;
 import org.ngengine.bech32.Bech32;
 import org.ngengine.nostr4j.event.NostrEvent;
@@ -43,6 +46,7 @@ import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.event.UnsignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
 import org.ngengine.nostr4j.keypair.NostrPrivateKey;
+import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.proto.NostrMessage;
 import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
 import org.ngengine.nostr4j.signer.NostrSigner;
@@ -177,5 +181,59 @@ public class TestNostrEvent {
             assertNotNull(msg);
             assertTrue(msg.contains("Failed to compute event id for signing"));
         }
+    }
+
+    @Test
+    public void testSignedEventFromMapKeepsTagsImmutable() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("id", "abc");
+        map.put("pubkey", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
+        map.put("kind", 1);
+        map.put("content", "test");
+        map.put("created_at", 1742147457L);
+        map.put(
+            "tags",
+            Arrays.asList(Arrays.asList("p", "alpha", "beta"), Arrays.asList("expiration", "1742147457"))
+        );
+        map.put("sig", "sig");
+
+        SignedNostrEvent event = new SignedNostrEvent(map);
+
+        try {
+            event.getTag("p").clear();
+            fail("Expected parsed tag list to be immutable");
+        } catch (UnsupportedOperationException expected) {}
+
+        assertTrue(event.hasTag("p"));
+        assertEquals("alpha", event.getFirstTag("p").get(0));
+        assertEquals(2, event.getTagRows().size());
+        assertEquals(Arrays.asList("p", "alpha", "beta"), event.getTagRows().get(0));
+        assertEquals(event.getTagRows(), event.toMap().get("tags"));
+    }
+
+    @Test
+    public void testSignedEventConstructorSnapshotsCallerOwnedTags() {
+        List<List<String>> sourceTags = new java.util.ArrayList<>();
+        sourceTags.add(new java.util.ArrayList<>(Arrays.asList("p", "alpha", "beta")));
+        sourceTags.add(new java.util.ArrayList<>(Arrays.asList("expiration", "1742147457")));
+
+        SignedNostrEvent event = new SignedNostrEvent(
+            "abc",
+            NostrPublicKey.fromHex("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"),
+            1,
+            "test",
+            Instant.ofEpochSecond(1742147457L),
+            "sig",
+            sourceTags
+        );
+
+        sourceTags.get(0).set(1, "mutated");
+        sourceTags.add(new java.util.ArrayList<>(Arrays.asList("e", "later")));
+
+        assertEquals(2, event.getTagRows().size());
+        assertEquals(Arrays.asList("p", "alpha", "beta"), event.getTagRows().get(0));
+        assertEquals("alpha", event.getFirstTag("p").get(0));
+        assertFalse(event.hasTag("e"));
+        assertEquals(event.getTagRows(), event.toMap().get("tags"));
     }
 }

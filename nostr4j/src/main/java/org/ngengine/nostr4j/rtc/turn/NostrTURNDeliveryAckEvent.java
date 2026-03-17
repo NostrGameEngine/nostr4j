@@ -24,7 +24,7 @@ public final class NostrTURNDeliveryAckEvent extends NostrTURNEvent {
 
     private final long vsocketId;
     private final int messageId;
-    private AsyncTask<SignedNostrEvent> event;
+    private volatile AsyncTask<SignedNostrEvent> event;
 
     public static NostrTURNDeliveryAckEvent createOutgoing(
         NostrRTCLocalPeer localPeer,
@@ -113,7 +113,12 @@ public final class NostrTURNDeliveryAckEvent extends NostrTURNEvent {
     @Override
     public AsyncTask<SignedNostrEvent> toEvent() {
         if (event == null) {
-            event = super.toEvent();
+            synchronized(this){
+                if(event==null){ // make sure _really_ reuse it even on 
+                                //  racing calls (make behavior more deterministic)
+                    event = super.toEvent();
+                }
+            }
         }
         return event;
     }

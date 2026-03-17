@@ -40,6 +40,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -76,7 +77,7 @@ public class NWCWallet implements Wallet {
 
     protected final NostrPool pool;
     protected final NWCUri uri;
-    protected AsyncTask<List<String>> supportedMethods = null;
+    protected volatile AsyncTask<List<String>> supportedMethods = null;
     protected boolean tempPool = false;
     protected Runnable closer;
 
@@ -135,7 +136,7 @@ public class NWCWallet implements Wallet {
                             return List.of("pay_invoice", "make_invoice", "lookup_invoice", "list_transactions", "get_balance");
                         }
                         SignedNostrEvent ev = evs.get(0);
-                        return Arrays.asList(ev.getContent().split(" "));
+                        return Collections.unmodifiableList(new ArrayList<>(Arrays.asList(ev.getContent().split(" "))));
                     });
         }
         logger.finest("Supported methods: " + supportedMethods);

@@ -50,7 +50,7 @@ public final class NostrTURNDataEvent extends NostrTURNEvent {
 
     private final long vsocketId;
     private final NostrRTCPeer remotePeer;
-    private AsyncTask<SignedNostrEvent> event;
+    private volatile AsyncTask<SignedNostrEvent> event;
     private final AsyncTask<byte[]> encryptionKey;
     private final AtomicInteger messageCounter = new AtomicInteger(1);
 
@@ -161,7 +161,12 @@ public final class NostrTURNDataEvent extends NostrTURNEvent {
     public AsyncTask<SignedNostrEvent> toEvent() {
         // This is a special event, we can reuse the same signed event for multiple payloads, so we cache it after the first generation
         if (event == null) {
-            event = super.toEvent();
+            synchronized(this){
+                if(event==null){ // make sure _really_ reuse it even on 
+                                //  racing calls (make behavior more deterministic)
+                    event = super.toEvent();
+                }
+            }
         }
 
         return event;

@@ -32,14 +32,14 @@ package org.ngengine.nostr4j;
 
 import java.io.Serializable;
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Collections;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
+import org.ngengine.nostr4j.utils.ImmutableSnapshot;
 import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEPlatform;
 import org.ngengine.platform.NGEUtils;
@@ -54,27 +54,26 @@ public class NostrRelayInfo implements Cloneable, Serializable {
     private final Map<String, Object> map;
     private final String relayUrl;
 
-    private transient String name;
-    private transient String description;
-    private transient String banner;
-    private transient String icon;
-    private transient NostrPublicKey pubkey;
-    private transient String contact;
-    private transient List<Integer> supportedNips;
-    private transient String software;
-    private transient String version;
-    private transient String privacyPolicy;
-    private transient String termsOfService;
-    private transient Map<String, Object> mapRO;
-    private transient String toStringCache;
-    private transient Map<String, Object> limitation;
-    private transient List<String> relayCountries;
-    private transient List<String> languageTags;
-    private transient List<String> tags;
-    private transient String postingPolicy;
+    private transient volatile String name;
+    private transient volatile String description;
+    private transient volatile String banner;
+    private transient volatile String icon;
+    private transient volatile NostrPublicKey pubkey;
+    private transient volatile String contact;
+    private transient volatile List<Integer> supportedNips;
+    private transient volatile String software;
+    private transient volatile String version;
+    private transient volatile String privacyPolicy;
+    private transient volatile String termsOfService;
+    private transient volatile String toStringCache;
+    private transient volatile Map<String, Object> limitation;
+    private transient volatile List<String> relayCountries;
+    private transient volatile List<String> languageTags;
+    private transient volatile List<String> tags;
+    private transient volatile String postingPolicy;
 
     public NostrRelayInfo(String url, Map<String, Object> map) {
-        this.map = map;
+        this.map = ImmutableSnapshot.snapshotMap(map);
         this.relayUrl = url;
     }
 
@@ -97,7 +96,6 @@ public class NostrRelayInfo implements Cloneable, Serializable {
     public NostrRelayInfo clone() {
         try {
             NostrRelayInfo clone = (NostrRelayInfo) super.clone();
-            clone.mapRO = null;
             return clone;
         } catch (CloneNotSupportedException e) {
             logger.log(Level.SEVERE, "Failed to clone NostrRelayInfo", e);
@@ -106,10 +104,7 @@ public class NostrRelayInfo implements Cloneable, Serializable {
     }
 
     public Map<String, Object> get() {
-        if (mapRO == null) {
-            mapRO = Collections.unmodifiableMap(map);
-        }
-        return mapRO;
+        return map;
     }
 
     public String getName() {
@@ -161,7 +156,8 @@ public class NostrRelayInfo implements Cloneable, Serializable {
 
     public List<Integer> getSupportedNips() {
         if (supportedNips == null) {
-            supportedNips = Collections.unmodifiableList(NGEUtils.safeIntList(map.getOrDefault("supported_nips", List.of())));
+            Object raw = map.get("supported_nips");
+            supportedNips = raw instanceof Collection<?> ? ImmutableSnapshot.snapshotIntList((Collection<?>) raw) : List.of();
         }
         return supportedNips;
     }
@@ -219,10 +215,8 @@ public class NostrRelayInfo implements Cloneable, Serializable {
 
     private Map<String, Object> getLimitations() {
         if (limitation == null) {
-            limitation = Collections.unmodifiableMap((Map<String, Object>) map.getOrDefault("limitation", Map.of()));
-            if (limitation == null) {
-                limitation = Map.of();
-            }
+            Object raw = map.get("limitation");
+            limitation = raw instanceof Map ? ImmutableSnapshot.snapshotMap((Map<String, Object>) raw) : Map.of();
         }
         return limitation;
     }
@@ -243,24 +237,24 @@ public class NostrRelayInfo implements Cloneable, Serializable {
 
     public List<String> getCountries() {
         if (relayCountries == null) {
-            relayCountries = Collections.unmodifiableList(NGEUtils.safeStringList(map.getOrDefault("countries", List.of())));
+            Object raw = map.get("countries");
+            relayCountries = raw instanceof Collection<?> ? ImmutableSnapshot.snapshotStringList((Collection<?>) raw) : List.of();
         }
         return relayCountries;
     }
 
     public List<String> getLanguageTags() {
         if (languageTags == null) {
-            List<String> tags = NGEUtils.safeStringList(map.getOrDefault("language_tags", List.of()));
-            this.languageTags = Collections.unmodifiableList(tags);
-        } else {
-            this.languageTags = new ArrayList<>();
+            Object raw = map.get("language_tags");
+            this.languageTags = raw instanceof Collection<?> ? ImmutableSnapshot.snapshotStringList((Collection<?>) raw) : List.of();
         }
         return this.languageTags;
     }
 
     public List<String> getTags() {
         if (tags == null) {
-            tags = Collections.unmodifiableList(NGEUtils.safeStringList(map.getOrDefault("tags", List.of())));
+            Object raw = map.get("tags");
+            tags = raw instanceof Collection<?> ? ImmutableSnapshot.snapshotStringList((Collection<?>) raw) : List.of();
         }
         return tags;
     }

@@ -57,10 +57,10 @@ public final class NostrPublicKey implements NostrKey {
     private String bech32;
     private String hex;
 
-    private transient Collection<Byte> readOnlyData;
+    private transient volatile Collection<Byte> readOnlyData;
     private transient ByteBuffer data;
-    private transient byte[] array;
-    private transient Integer hashCode;
+    private transient volatile byte[] array;
+    private transient volatile Integer hashCode;
 
     /**
      * Creates a new NostrPublicKey from the given byte array.
@@ -178,8 +178,9 @@ public final class NostrPublicKey implements NostrKey {
     @Override
     public byte[] _array() {
         if (this.array == null) {
-            this.array = new byte[data.limit()];
-            data.slice().get(this.array);
+            byte array[] = new byte[data.limit()];
+            data.slice().get(array);
+            this.array = array;
         }
         assert data.position() == 0 : "Data position must be 0";
         return this.array;

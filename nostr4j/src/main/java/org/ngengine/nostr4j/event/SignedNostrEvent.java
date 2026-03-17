@@ -48,6 +48,7 @@ import org.ngengine.bech32.Bech32;
 import org.ngengine.bech32.Bech32Exception;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.proto.NostrMessage;
+import org.ngengine.nostr4j.utils.ImmutableSnapshot;
 import org.ngengine.nostr4j.utils.ZeroCounter;
 import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEUtils;
@@ -111,8 +112,10 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
         this.identifier = new Identifier(id, created_at);
 
         Map<String, List<TagValue>> tagsMap = new LinkedHashMap<>();
+        ArrayList<List<String>> tagRows = new ArrayList<>();
 
         for (List<String> tag : tags) {
+            if (tag.isEmpty()) continue;
             ArrayList<String> values = new ArrayList<>();
             for (int i = 1; i < tag.size(); i++) {
                 values.add(tag.get(i));
@@ -120,15 +123,14 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
             TagValue tagValue = new TagValue(values);
             List<TagValue> tagValues = tagsMap.computeIfAbsent(tag.get(0), k -> new ArrayList<>());
             tagValues.add(tagValue);
+            tagRows.add(Collections.unmodifiableList(new ArrayList<>(tag)));
         }
 
-        // seal all tag entries by making the List<TagValue> immutable
         for (Entry<String, List<TagValue>> entry : tagsMap.entrySet()) {
-            entry.setValue(Collections.unmodifiableList(entry.getValue()));
+            entry.setValue(Collections.unmodifiableList(new ArrayList<>(entry.getValue())));
         }
-
         this.tags = Collections.unmodifiableMap(tagsMap);
-        this.tagRows = Collections.unmodifiableList(tags);
+        this.tagRows = Collections.unmodifiableList(tagRows);
     }
 
     public SignedNostrEvent(Map<String, Object> map) {
@@ -157,9 +159,12 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
             TagValue tagValue = new TagValue(values);
             List<TagValue> tagValues = tagsMap.computeIfAbsent(tag[0], k -> new ArrayList<>());
             tagValues.add(tagValue);
-            tagRows.add(Arrays.asList(tag));
+            tagRows.add(Collections.unmodifiableList(new ArrayList<>(Arrays.asList(tag))));
         }
 
+        for (Entry<String, List<TagValue>> entry : tagsMap.entrySet()) {
+            entry.setValue(Collections.unmodifiableList(new ArrayList<>(entry.getValue())));
+        }
         this.tags = Collections.unmodifiableMap(tagsMap);
         this.tagRows = Collections.unmodifiableList(tagRows);
     }
@@ -202,12 +207,12 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
         return this.getPubkey();
     }
 
-    private transient Map<String, Object> cachedFragment;
+    private transient volatile Map<String, Object> cachedFragment;
 
     @Override
     public Map<String, Object> toMap() {
-        if (cachedFragment != null) return cachedFragment;
-        cachedFragment = new HashMap<String, Object>();
+        if (this.cachedFragment != null) return this.cachedFragment;
+        Map<String,Object> cachedFragment = new HashMap<String, Object>();
         cachedFragment.put("id", this.identifier.id);
         cachedFragment.put("pubkey", this.pubkey);
         cachedFragment.put("kind", this.kind);
@@ -215,7 +220,8 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
         cachedFragment.put("created_at", this.identifier.createdAt);
         cachedFragment.put("sig", this.signature);
         cachedFragment.put("tags", this.getTagRows());
-        return cachedFragment;
+        this.cachedFragment = ImmutableSnapshot.snapshotMap(cachedFragment, false);
+        return this.cachedFragment;
     }
 
     @Override

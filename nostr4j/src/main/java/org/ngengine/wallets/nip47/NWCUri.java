@@ -39,6 +39,7 @@ import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
@@ -54,8 +55,8 @@ public class NWCUri {
     private final List<String> relays;
     private final String secret;
     private final String lud16;
-    private transient URI uri;
-    private transient NostrKeyPairSigner signer;
+    private transient volatile URI uri;
+    private transient volatile NostrKeyPairSigner signer;
 
     public NWCUri(
         @Nonnull NostrPublicKey pubkey,
@@ -64,7 +65,7 @@ public class NWCUri {
         @Nullable String lud16
     ) {
         this.pubkey = pubkey;
-        this.relays = relays;
+        this.relays = Collections.unmodifiableList(new ArrayList<>(relays));
         this.secret = secret;
         this.lud16 = lud16;
     }
@@ -83,7 +84,7 @@ public class NWCUri {
 
         URI uri = new URI(uriString);
         this.pubkey = NostrPublicKey.fromHex(uri.getHost());
-        this.relays = new ArrayList<>();
+        List<String> relays = new ArrayList<>();
         String secret = null;
         String lud16 = null;
         String query = uri.getQuery();
@@ -110,6 +111,7 @@ public class NWCUri {
             }
         }
 
+        this.relays = Collections.unmodifiableList(new ArrayList<>(relays));
         this.secret = Objects.requireNonNull(secret, "Secret cannot be null in NWC URI");
         this.lud16 = lud16;
         if (this.relays.size() == 0) {

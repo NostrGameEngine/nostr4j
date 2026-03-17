@@ -34,7 +34,7 @@ public abstract class NostrTURNEvent {
     private final NostrRTCPeer remotePeer;
     private final NostrKeyPair roomKeyPair;
     private final String channelLabel;
-    private AsyncTask<byte[]> encodedHeader;
+    private volatile AsyncTask<byte[]> encodedHeader;
 
     /**
      * Create outgoing event
@@ -236,11 +236,18 @@ public abstract class NostrTURNEvent {
 
     protected AsyncTask<byte[]> toEncodedHeader() {
         if (encodedHeader == null) {
-            encodedHeader =
-                toEvent()
-                    .then(ev -> {
-                        return NostrTURNCodec.encodeHeader(ev);
-                    });
+            synchronized(this){
+                if(encodedHeader==null){ // make sure _really_ reuse it even on 
+                                //  racing calls (make behavior more deterministic)
+                    encodedHeader =
+                        toEvent()
+                            .then(ev -> {
+                                return NostrTURNCodec.encodeHeader(ev);
+                            });
+
+                }
+              
+            }
         }
         return encodedHeader;
     }
