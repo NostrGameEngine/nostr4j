@@ -35,6 +35,7 @@ import static org.ngengine.platform.NGEUtils.dbg;
 import jakarta.annotation.Nullable;
 import java.io.Closeable;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
@@ -305,7 +306,8 @@ public class NostrRTCSignaling implements Closeable {
                 .withKind(25050)
                 .withTag("t", "connect", "disconnect")
                 .withTag("P", this.roomKeyPair.getPublicKey().asHex())
-                .limit(0);
+                .since(Instant.now().minus(1, ChronoUnit.SECONDS)) // only listen for new events
+                .limit(1);
             if (!this.strfryLimitWorkaround) {
                 discoveryFilter = discoveryFilter.withTag("i", this.protocolId).withTag("y", this.appId);
             }
@@ -322,7 +324,8 @@ public class NostrRTCSignaling implements Closeable {
                 .withTag("t", "offer", "answer", "route")
                 .withTag("P", this.roomKeyPair.getPublicKey().asHex())
                 .withTag("p", localpk.asHex())
-                .limit(0);
+                .since(Instant.now().minus(1, ChronoUnit.SECONDS)) // only listen for new events
+                .limit(1);
             if (!this.strfryLimitWorkaround) {
                 signalingFilter = signalingFilter.withTag("i", this.protocolId).withTag("y", this.appId);
             }
