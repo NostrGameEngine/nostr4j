@@ -136,81 +136,87 @@ public final class NostrTURNPool implements AutoCloseable {
 
         // try to reuse existing transports
         AsyncTask<TURNTransport> wsP = transports.compute(
-                turnServerUrl,
-                (url, tr) -> {
-                    if (tr == null || tr.isFailed() || (tr.isDone() && !NGEUtils.awaitNoThrow(tr).isConnected())) {
-                        return NGEPlatform.get().wrapPromise((res2, rej2) -> {
+            turnServerUrl,
+            (url, tr) -> {
+                if (tr == null || tr.isFailed() || (tr.isDone() && !NGEUtils.awaitNoThrow(tr).isConnected())) {
+                    return NGEPlatform
+                        .get()
+                        .wrapPromise((res2, rej2) -> {
                             TURNTransport wss = new TURNTransport(NGEPlatform.get().newTransport());
-                            wss.transport.addListener(new WebsocketTransportListener() {
-                                @Override
-                                public void onConnectionClosedByServer(String reason) {
-                                    for (NostrTURNChannel user : wss.getUsers()) {
-                                        user.setTransport(null);
+                            wss.transport.addListener(
+                                new WebsocketTransportListener() {
+                                    @Override
+                                    public void onConnectionClosedByServer(String reason) {
+                                        for (NostrTURNChannel user : wss.getUsers()) {
+                                            user.setTransport(null);
+                                        }
+                                        rej2.accept(new RuntimeException("Websocket closed by server: " + reason));
                                     }
-                                    rej2.accept(new RuntimeException("Websocket closed by server: " + reason));
-                                }
 
-                                @Override
-                                public void onConnectionOpen() {
-                                    for (NostrTURNChannel user : wss.getUsers()) {
-                                        user.setTransport(wss);
+                                    @Override
+                                    public void onConnectionOpen() {
+                                        for (NostrTURNChannel user : wss.getUsers()) {
+                                            user.setTransport(wss);
+                                        }
+                                        res2.accept(wss);
                                     }
-                                    res2.accept(wss);
-                                }
 
-                                @Override
-                                public void onConnectionMessage(String msg) {
-                                    for (NostrTURNChannel user : wss.getUsers()) {
-                                        user.onConnectionMessage(msg);
+                                    @Override
+                                    public void onConnectionMessage(String msg) {
+                                        for (NostrTURNChannel user : wss.getUsers()) {
+                                            user.onConnectionMessage(msg);
+                                        }
                                     }
-                                }
 
-                                @Override
-                                public void onConnectionBinaryMessage(ByteBuffer msg) {
-                                    ByteBuffer source = msg.asReadOnlyBuffer();
-                                    source.rewind();
-                                    cacheChallengeFrameIfPresent(wss, source);
-                                    for (NostrTURNChannel user : wss.getUsers()) {
-                                        ByteBuffer frame = source.asReadOnlyBuffer();
-                                        frame.rewind();
-                                        try {
-                                            user.onBinaryMessage(frame);
-                                        } catch (IllegalArgumentException ignored) {
-                                            // Frame not meant for this logical channel.
-                                        } catch (Throwable ex) {
-                                            user.onError(ex);
+                                    @Override
+                                    public void onConnectionBinaryMessage(ByteBuffer msg) {
+                                        ByteBuffer source = msg.asReadOnlyBuffer();
+                                        source.rewind();
+                                        cacheChallengeFrameIfPresent(wss, source);
+                                        for (NostrTURNChannel user : wss.getUsers()) {
+                                            ByteBuffer frame = source.asReadOnlyBuffer();
+                                            frame.rewind();
+                                            try {
+                                                user.onBinaryMessage(frame);
+                                            } catch (IllegalArgumentException ignored) {
+                                                // Frame not meant for this logical channel.
+                                            } catch (Throwable ex) {
+                                                user.onError(ex);
+                                            }
+                                        }
+                                    }
+
+                                    @Override
+                                    public void onConnectionClosedByClient(String reason) {
+                                        for (NostrTURNChannel user : wss.getUsers()) {
+                                            user.setTransport(null);
+                                        }
+                                        rej2.accept(new RuntimeException("Websocket closed by client: " + reason));
+                                    }
+
+                                    @Override
+                                    public void onConnectionError(Throwable e) {
+                                        for (NostrTURNChannel user : wss.getUsers()) {
+                                            user.onError(e);
                                         }
                                     }
                                 }
-
-                                @Override
-                                public void onConnectionClosedByClient(String reason) {
-                                    for (NostrTURNChannel user : wss.getUsers()) {
-                                        user.setTransport(null);
-                                    }
-                                    rej2.accept(new RuntimeException("Websocket closed by client: " + reason));
-                                }
-
-                                @Override
-                                public void onConnectionError(Throwable e) {
-                                    for (NostrTURNChannel user : wss.getUsers()) {
-                                        user.onError(e);
-                                    }
-                                }
-                            });
+                            );
 
                             wss.addUser(channel);
-                            wss.transport.connect(url).catchException(e -> {
-                                wss.removeUser(channel);
-                                channel.setTransport(null);
-                                transports.remove(url, wss);
-                                rej2.accept(e);
-                            });
+                            wss.transport
+                                .connect(url)
+                                .catchException(e -> {
+                                    wss.removeUser(channel);
+                                    channel.setTransport(null);
+                                    transports.remove(url, wss);
+                                    rej2.accept(e);
+                                });
                         });
-                    }
-                    return tr;
                 }
-            );
+                return tr;
+            }
+        );
 
         return wsP
             .then(ws -> {
@@ -220,16 +226,22 @@ public final class NostrTURNPool implements AutoCloseable {
                     channel.openConnectionMaybe();
                     return ws;
                 } else {
-                    logger.warning("Websocket transport is not connected for URL: " + turnServerUrl + " - this should not happen, failing channel connection");
+                    logger.warning(
+                        "Websocket transport is not connected for URL: " +
+                        turnServerUrl +
+                        " - this should not happen, failing channel connection"
+                    );
                     channel.setTransport(null);
                     ws.removeUser(channel);
                     throw new RuntimeException("Websocket transport is not connected for URL: " + turnServerUrl);
                 }
             })
             .catchException(e -> {
-                logger.warning("Failed to establish websocket transport for TURN server: " + turnServerUrl + " - " + e.getMessage());
+                logger.warning(
+                    "Failed to establish websocket transport for TURN server: " + turnServerUrl + " - " + e.getMessage()
+                );
                 channel.setTransport(null);
-                   throw new RuntimeException(e);
+                throw new RuntimeException(e);
             });
     }
 
@@ -291,9 +303,11 @@ public final class NostrTURNPool implements AutoCloseable {
                                 if (transport.isConnected() || transport.isConnecting) {
                                     transport.close("TURN pool cleanup: transport not connected or unused");
                                 }
-                                transport.getUsers().forEach(ch -> {
-                                    ch.setTransport(null);
-                                });
+                                transport
+                                    .getUsers()
+                                    .forEach(ch -> {
+                                        ch.setTransport(null);
+                                    });
                                 transport.getUsers().clear();
                                 transportIterator.remove();
                             }

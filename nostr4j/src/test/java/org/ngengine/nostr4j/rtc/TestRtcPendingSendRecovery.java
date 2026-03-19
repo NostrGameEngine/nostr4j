@@ -17,8 +17,8 @@ import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -330,12 +330,18 @@ public class TestRtcPendingSendRecovery {
             putConnection(room, blockedPeer, blockedSocket);
             blockedSocket.createChannel("primary");
 
-            AsyncTask<Void> broadcastTask = room.broadcast("primary", ByteBuffer.wrap("fanout".getBytes(StandardCharsets.UTF_8)));
+            AsyncTask<Void> broadcastTask = room.broadcast(
+                "primary",
+                ByteBuffer.wrap("fanout".getBytes(StandardCharsets.UTF_8))
+            );
             org.ngengine.platform.NGEUtils.awaitNoThrow(broadcastTask);
 
             assertEquals("Ready peer should receive one broadcast write", 1, readyTransport.getWriteCount());
             assertEquals("Only the ready peer should allocate a send queue", 1, pendingQueueCount(room));
-            assertTrue("Blocked peer should not allocate a pending queue entry", !hasPendingQueue(room, blockedSocket.getChannel("primary")));
+            assertTrue(
+                "Blocked peer should not allocate a pending queue entry",
+                !hasPendingQueue(room, blockedSocket.getChannel("primary"))
+            );
         } finally {
             if (room != null) {
                 room.close();
@@ -427,7 +433,6 @@ public class TestRtcPendingSendRecovery {
         }
         throw new AssertionError(error);
     }
-
 
     @FunctionalInterface
     private interface Check {

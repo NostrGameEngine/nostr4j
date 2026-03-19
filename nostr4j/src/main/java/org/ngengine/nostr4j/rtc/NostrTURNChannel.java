@@ -31,8 +31,8 @@
 
 package org.ngengine.nostr4j.rtc;
 
-import java.util.ArrayList;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -264,9 +264,7 @@ public final class NostrTURNChannel {
                             logger.warning(
                                 "TURN delivery_ack timed out; retrying write later " + describePendingWrite(timedOut)
                             );
-                            timedOut.reject.accept(
-                                new DeliveryAckTimeoutException(messageId, packetId)
-                            );
+                            timedOut.reject.accept(new DeliveryAckTimeoutException(messageId, packetId));
                         }
                         return null;
                     },
@@ -447,10 +445,8 @@ public final class NostrTURNChannel {
                     }
                     onPayload(payload);
                 }
-                logger.fine(
-                    () ->
-                        "TURN data delivered to channel listeners " +
-                        describeInboundDelivery(messageId, packetIds, ps.size())
+                logger.fine(() ->
+                    "TURN data delivered to channel listeners " + describeInboundDelivery(messageId, packetIds, ps.size())
                 );
                 sendDeliveryAck(messageId);
                 return null;
@@ -673,7 +669,9 @@ public final class NostrTURNChannel {
             logger.fine(() -> "TURN delivery_ack received " + describePendingWrite(pending));
             pending.resolve.accept(Boolean.TRUE);
         } else {
-            logger.fine(() -> "TURN delivery_ack received for unknown messageId=" + messageId + " " + describeTurnContext(messageId, null));
+            logger.fine(() ->
+                "TURN delivery_ack received for unknown messageId=" + messageId + " " + describeTurnContext(messageId, null)
+            );
         }
     }
 
@@ -710,47 +708,49 @@ public final class NostrTURNChannel {
                 return activeTransport.getTransport().sendBinary(bbf);
             })
             .catchException(ex -> {
-                logger.log(
-                    Level.FINE,
-                    "Failed to send TURN delivery_ack " + describeTurnContext(messageId, null),
-                    ex
-                );
+                logger.log(Level.FINE, "Failed to send TURN delivery_ack " + describeTurnContext(messageId, null), ex);
             });
     }
 
     private String describeInboundDelivery(int messageId, List<Long> packetIds, int payloadCount) {
-        return describeTurnContext(messageId, packetIds.isEmpty() ? null : packetIds.get(0)) +
-        ", payloadCount=" +
-        payloadCount +
-        ", packetIds=" +
-        packetIds;
+        return (
+            describeTurnContext(messageId, packetIds.isEmpty() ? null : packetIds.get(0)) +
+            ", payloadCount=" +
+            payloadCount +
+            ", packetIds=" +
+            packetIds
+        );
     }
 
     private String describePendingWrite(PendingWrite pendingWrite) {
         long ageMs = Math.max(0L, System.currentTimeMillis() - pendingWrite.createdAtMs);
-        return describeTurnContext(pendingWrite.messageId, pendingWrite.packetId) +
-        ", ageMs=" +
-        ageMs +
-        ", pendingAcks=" +
-        pendingWrites.size();
+        return (
+            describeTurnContext(pendingWrite.messageId, pendingWrite.packetId) +
+            ", ageMs=" +
+            ageMs +
+            ", pendingAcks=" +
+            pendingWrites.size()
+        );
     }
 
     private String describeTurnContext(int messageId, Long packetId) {
-        return "channel=" +
-        channelLabel +
-        ", vsocketId=" +
-        vSocketId +
-        ", messageId=" +
-        messageId +
-        (packetId == null ? "" : ", packetId=" + packetId.longValue()) +
-        ", localSession=" +
-        localPeer.getSessionId() +
-        ", remoteSession=" +
-        remotePeer.getSessionId() +
-        ", state=" +
-        state +
-        ", transportConnected=" +
-        (transport != null && transport.isConnected());
+        return (
+            "channel=" +
+            channelLabel +
+            ", vsocketId=" +
+            vSocketId +
+            ", messageId=" +
+            messageId +
+            (packetId == null ? "" : ", packetId=" + packetId.longValue()) +
+            ", localSession=" +
+            localPeer.getSessionId() +
+            ", remoteSession=" +
+            remotePeer.getSessionId() +
+            ", state=" +
+            state +
+            ", transportConnected=" +
+            (transport != null && transport.isConnected())
+        );
     }
 
     static boolean isRetryableWriteFailure(Throwable error) {

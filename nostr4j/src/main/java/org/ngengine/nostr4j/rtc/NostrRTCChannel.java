@@ -36,8 +36,8 @@ import java.time.Duration;
 import java.util.LinkedHashSet;
 import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.rtc.listeners.NostrRTCChannelListener;
@@ -164,7 +164,7 @@ public final class NostrRTCChannel {
         ByteBuffer payload = data.duplicate();
         long packetId = nextPacketId.getAndUpdate(current -> current == Long.MAX_VALUE ? 1L : current + 1L);
         ByteBuffer framed = payload.isDirect()
-            ? NGEPlatform.get().getNativeAllocator().calloc(1,INNER_FRAME_HEADER_SIZE + payload.remaining())
+            ? NGEPlatform.get().getNativeAllocator().calloc(1, INNER_FRAME_HEADER_SIZE + payload.remaining())
             : ByteBuffer.allocate(INNER_FRAME_HEADER_SIZE + payload.remaining());
         framed.put(INNER_FRAME_MAGIC);
         framed.put(INNER_FRAME_VERSION);

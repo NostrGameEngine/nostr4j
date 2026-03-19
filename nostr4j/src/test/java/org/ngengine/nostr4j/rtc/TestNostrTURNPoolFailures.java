@@ -10,7 +10,6 @@ import static org.junit.Assert.assertEquals;
 import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import java.util.Collections;
-import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.After;

@@ -327,15 +327,14 @@ public class NostrSubscription extends NostrMessage {
         if (onEoseListeners.isEmpty()) return;
         AsyncExecutor executor = this.getExecutor();
         for (NostrSubEoseListener listener : onEoseListeners) {
-            executor
-                .run(() -> {
-                    try {
-                        listener.onSubEose(this, relay, everyWhere);
-                    } catch (Throwable ex) {
-                        logger.warning("Error calling EOSE listener: " + listener + " " + ex);
-                    }
-                    return null;
-                });
+            executor.run(() -> {
+                try {
+                    listener.onSubEose(this, relay, everyWhere);
+                } catch (Throwable ex) {
+                    logger.warning("Error calling EOSE listener: " + listener + " " + ex);
+                }
+                return null;
+            });
         }
     }
 
@@ -343,15 +342,14 @@ public class NostrSubscription extends NostrMessage {
         if (onEventListeners.isEmpty()) return;
         AsyncExecutor executor = this.getExecutor();
         for (NostrSubEventListener listener : onEventListeners) {
-            executor
-                .run(() -> {
-                    try {
-                        listener.onSubEvent(this, event, stored);
-                    } catch (Throwable ex) {
-                        logger.warning("Error calling Event listener: " + listener + " " + ex);
-                    }
-                    return null;
-                });
+            executor.run(() -> {
+                try {
+                    listener.onSubEvent(this, event, stored);
+                } catch (Throwable ex) {
+                    logger.warning("Error calling Event listener: " + listener + " " + ex);
+                }
+                return null;
+            });
         }
     }
 
@@ -362,15 +360,14 @@ public class NostrSubscription extends NostrMessage {
     private void callCloseListeners(AsyncExecutor executor, List<String> reasons) {
         if (onCloseListeners.isEmpty()) return;
         for (NostrSubCloseListener listener : onCloseListeners) {
-            executor
-                .run(() -> {
-                    try {
-                        listener.onSubClose(this, reasons);
-                    } catch (Throwable ex) {
-                        logger.warning("Error calling Close listener: " + listener + " " + ex);
-                    }
-                    return null;
-                });
+            executor.run(() -> {
+                try {
+                    listener.onSubClose(this, reasons);
+                } catch (Throwable ex) {
+                    logger.warning("Error calling Close listener: " + listener + " " + ex);
+                }
+                return null;
+            });
         }
     }
 
@@ -381,15 +378,14 @@ public class NostrSubscription extends NostrMessage {
     private void callOpenListeners(AsyncExecutor executor) {
         if (onOpenListeners.isEmpty()) return;
         for (NostrSubOpenListener listener : onOpenListeners) {
-            executor
-                .run(() -> {
-                    try {
-                        listener.onSubOpen(this);
-                    } catch (Throwable ex) {
-                        logger.warning("Error calling Open listener: " + listener + " " + ex);
-                    }
-                    return null;
-                });
+            executor.run(() -> {
+                try {
+                    listener.onSubOpen(this);
+                } catch (Throwable ex) {
+                    logger.warning("Error calling Open listener: " + listener + " " + ex);
+                }
+                return null;
+            });
         }
     }
 

@@ -412,9 +412,11 @@ public final class NostrRTCRoom implements Closeable {
                                 // it could have changed while we were waiting for the lock
                                 if (
                                     socket != null &&
-                                    (socket.hasUsableTransport()
+                                    (
+                                        socket.hasUsableTransport()
                                             ? !socket.shouldAttemptRtcUpgrade()
-                                            : socket.isPendingConnection())
+                                            : socket.isPendingConnection()
+                                    )
                                 ) continue;
                                 if (socket != null && socket.isClosed()) {
                                     logger.fine("Dropping closed socket for peer: " + remotePubkey);

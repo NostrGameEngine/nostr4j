@@ -238,7 +238,8 @@ public class NostrRelayInfo implements Cloneable, Serializable {
     public List<String> getCountries() {
         if (relayCountries == null) {
             Object raw = map.get("countries");
-            relayCountries = raw instanceof Collection<?> ? ImmutableSnapshot.snapshotStringList((Collection<?>) raw) : List.of();
+            relayCountries =
+                raw instanceof Collection<?> ? ImmutableSnapshot.snapshotStringList((Collection<?>) raw) : List.of();
         }
         return relayCountries;
     }
@@ -246,7 +247,8 @@ public class NostrRelayInfo implements Cloneable, Serializable {
     public List<String> getLanguageTags() {
         if (languageTags == null) {
             Object raw = map.get("language_tags");
-            this.languageTags = raw instanceof Collection<?> ? ImmutableSnapshot.snapshotStringList((Collection<?>) raw) : List.of();
+            this.languageTags =
+                raw instanceof Collection<?> ? ImmutableSnapshot.snapshotStringList((Collection<?>) raw) : List.of();
         }
         return this.languageTags;
     }

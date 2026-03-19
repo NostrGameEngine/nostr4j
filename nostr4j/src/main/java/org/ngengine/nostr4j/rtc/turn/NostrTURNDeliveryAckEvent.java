@@ -113,9 +113,9 @@ public final class NostrTURNDeliveryAckEvent extends NostrTURNEvent {
     @Override
     public AsyncTask<SignedNostrEvent> toEvent() {
         if (event == null) {
-            synchronized(this){
-                if(event==null){ // make sure _really_ reuse it even on 
-                                //  racing calls (make behavior more deterministic)
+            synchronized (this) {
+                if (event == null) { // make sure _really_ reuse it even on
+                    //  racing calls (make behavior more deterministic)
                     event = super.toEvent();
                 }
             }

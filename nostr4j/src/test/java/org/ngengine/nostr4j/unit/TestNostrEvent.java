@@ -191,10 +191,7 @@ public class TestNostrEvent {
         map.put("kind", 1);
         map.put("content", "test");
         map.put("created_at", 1742147457L);
-        map.put(
-            "tags",
-            Arrays.asList(Arrays.asList("p", "alpha", "beta"), Arrays.asList("expiration", "1742147457"))
-        );
+        map.put("tags", Arrays.asList(Arrays.asList("p", "alpha", "beta"), Arrays.asList("expiration", "1742147457")));
         map.put("sig", "sig");
 
         SignedNostrEvent event = new SignedNostrEvent(map);

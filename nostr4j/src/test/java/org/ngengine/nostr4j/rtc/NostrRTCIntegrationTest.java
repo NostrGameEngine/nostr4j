@@ -741,26 +741,27 @@ public class NostrRTCIntegrationTest {
 
             CountDownLatch completed = new CountDownLatch(3);
             AtomicBoolean failed = new AtomicBoolean(false);
-            queue = new BlockingPacketQueue<NostrRTCChannel.PreparedPacket>(
-                new BlockingPacketQueue.PacketHandler<NostrRTCChannel.PreparedPacket>() {
-                    @Override
-                    public AsyncTask<Boolean> handle(NostrRTCChannel.PreparedPacket packet) {
-                        return aliceCh.write(packet);
-                    }
+            queue =
+                new BlockingPacketQueue<NostrRTCChannel.PreparedPacket>(
+                    new BlockingPacketQueue.PacketHandler<NostrRTCChannel.PreparedPacket>() {
+                        @Override
+                        public AsyncTask<Boolean> handle(NostrRTCChannel.PreparedPacket packet) {
+                            return aliceCh.write(packet);
+                        }
 
-                    @Override
-                    public boolean isReady() {
-                        return aliceCh.isWriteReady();
-                    }
+                        @Override
+                        public boolean isReady() {
+                            return aliceCh.isWriteReady();
+                        }
 
-                    @Override
-                    public boolean shouldPauseOnError(Throwable error) {
-                        return NostrTURNChannel.isRetryableWriteFailure(error);
-                    }
-                },
-                logger,
-                "Failed to send data to peer"
-            );
+                        @Override
+                        public boolean shouldPauseOnError(Throwable error) {
+                            return NostrTURNChannel.isRetryableWriteFailure(error);
+                        }
+                    },
+                    logger,
+                    "Failed to send data to peer"
+                );
 
             enqueueQueuedWrite(queue, aliceCh, "burst-1", completed, failed);
             enqueueQueuedWrite(queue, aliceCh, "burst-2", completed, failed);
@@ -770,7 +771,12 @@ public class NostrRTCIntegrationTest {
             assertFalse("queued TURN writes should not fail on delayed delivery_ack", failed.get());
             assertTrue("receiver did not observe all queued messages", burstCapture.await(2));
 
-            assertEquals(3, burstCapture.countMessageOnTransport("burst-1", true) + burstCapture.countMessageOnTransport("burst-2", true) + burstCapture.countMessageOnTransport("burst-3", true));
+            assertEquals(
+                3,
+                burstCapture.countMessageOnTransport("burst-1", true) +
+                burstCapture.countMessageOnTransport("burst-2", true) +
+                burstCapture.countMessageOnTransport("burst-3", true)
+            );
             assertEquals(1, burstCapture.countMessageOnTransport("burst-1", true));
             assertEquals(1, burstCapture.countMessageOnTransport("burst-2", true));
             assertEquals(1, burstCapture.countMessageOnTransport("burst-3", true));
@@ -977,7 +983,10 @@ public class NostrRTCIntegrationTest {
             assertEquals("real-turn-only", capture.messages.get(0));
             assertTrue(capture.turnFlags.get(0).booleanValue());
 
-            assertFalse("Expected binary TURN frames on real TURN endpoint", testPlatform.getCapturedBinaryFrames(realTurnUrl).isEmpty());
+            assertFalse(
+                "Expected binary TURN frames on real TURN endpoint",
+                testPlatform.getCapturedBinaryFrames(realTurnUrl).isEmpty()
+            );
         } finally {
             alice.close();
             bob.close();
@@ -1603,8 +1612,11 @@ public class NostrRTCIntegrationTest {
         private final Map<String, TransportProfile> profilesByConnId = new ConcurrentHashMap<String, TransportProfile>();
         private final Map<String, FakeRTCTransport> rtcByConnId = new ConcurrentHashMap<String, FakeRTCTransport>();
         private final Map<String, List<byte[]>> binaryFramesByUrl = new ConcurrentHashMap<String, List<byte[]>>();
-        private final Map<String, DelayedDeliveryAck> delayedDeliveryAcksByUrl = new ConcurrentHashMap<String, DelayedDeliveryAck>();
-        private final AsyncExecutor delayedTurnFrameExecutor = NGEUtils.getPlatform().newAsyncExecutor("integration-delayed-turn-frame");
+        private final Map<String, DelayedDeliveryAck> delayedDeliveryAcksByUrl =
+            new ConcurrentHashMap<String, DelayedDeliveryAck>();
+        private final AsyncExecutor delayedTurnFrameExecutor = NGEUtils
+            .getPlatform()
+            .newAsyncExecutor("integration-delayed-turn-frame");
 
         private void reset() {
             profilesByConnId.clear();

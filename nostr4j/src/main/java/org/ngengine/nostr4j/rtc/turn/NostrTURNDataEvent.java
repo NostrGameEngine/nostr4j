@@ -161,9 +161,9 @@ public final class NostrTURNDataEvent extends NostrTURNEvent {
     public AsyncTask<SignedNostrEvent> toEvent() {
         // This is a special event, we can reuse the same signed event for multiple payloads, so we cache it after the first generation
         if (event == null) {
-            synchronized(this){
-                if(event==null){ // make sure _really_ reuse it even on 
-                                //  racing calls (make behavior more deterministic)
+            synchronized (this) {
+                if (event == null) { // make sure _really_ reuse it even on
+                    //  racing calls (make behavior more deterministic)
                     event = super.toEvent();
                 }
             }
