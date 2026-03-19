@@ -33,6 +33,7 @@ package org.ngengine.nostr4j.turn.ref;
 
 import com.google.gson.JsonObject;
 import java.nio.ByteBuffer;
+import java.nio.channels.ClosedChannelException;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.Map;
@@ -48,6 +49,7 @@ import org.eclipse.jetty.server.ServerConnector;
 import org.eclipse.jetty.websocket.api.Callback;
 import org.eclipse.jetty.websocket.api.Session;
 import org.eclipse.jetty.websocket.api.StatusCode;
+import org.eclipse.jetty.websocket.api.exceptions.WebSocketTimeoutException;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.rtc.turn.NostrTURNCodec;
@@ -198,9 +200,29 @@ public final class TurnServer {
 
         @Override
         public void onWebSocketError(Throwable cause) {
-            TurnServer.logger.log(Level.WARNING, "Reference TURN socket error", cause);
+            Level level = isExpectedSocketClosure(cause) ? Level.FINE : Level.WARNING;
+            String message = level == Level.FINE ? "Reference TURN socket closed" : "Reference TURN socket error";
+            TurnServer.logger.log(level, message, cause);
             this.turnServer.closeConnection(this.wsSession, "socket-error");
         }
+    }
+
+    private static boolean isExpectedSocketClosure(Throwable cause) {
+        Throwable current = cause;
+        while (current != null) {
+            if (current instanceof ClosedChannelException) {
+                return true;
+            }
+            if (current instanceof WebSocketTimeoutException) {
+                return true;
+            }
+            String message = current.getMessage();
+            if (message != null && message.contains("Connection Idle Timeout")) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 
     public TurnServer(int port, NostrKeyPairSigner serverSigner, int difficulty, int challengeTtlSeconds) {

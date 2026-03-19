@@ -5,7 +5,10 @@
  */
 package org.ngengine.nostr4j.rtc;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 import java.nio.ByteBuffer;
 import java.time.Duration;
@@ -172,6 +175,144 @@ public class TestNostrRTCSocketReadyEmission {
             onBinaryMessage.invoke(rtcListener, channel, ByteBuffer.wrap(new byte[] { 1 }));
 
             assertEquals(1, messageCount[0]);
+        } finally {
+            if (socket != null) {
+                socket.close();
+            }
+            executor.close();
+        }
+    }
+
+    @Test
+    public void testRtcInnerFramingDropsDuplicatePacketsAndPreservesPayload() throws Exception {
+        AsyncExecutor executor = NGEUtils.getPlatform().newAsyncExecutor("binary-duplicate-frame-test");
+        NostrRTCSocket socket = null;
+        try {
+            socket = newSocket(executor);
+            NostrRTCChannel channel = socket.createChannel("alpha");
+            final int[] messageCount = new int[] { 0 };
+            final byte[][] lastPayload = new byte[1][];
+            channel.addListener(
+                new NostrRTCChannelListener() {
+                    @Override
+                    public void onRTCSocketMessage(NostrRTCChannel channel, ByteBuffer bbf, boolean isTurn) {
+                        ByteBuffer copy = bbf.duplicate();
+                        byte[] payload = new byte[copy.remaining()];
+                        copy.get(payload);
+                        messageCount[0]++;
+                        lastPayload[0] = payload;
+                    }
+
+                    @Override
+                    public void onRTCChannelError(NostrRTCChannel channel, Throwable e) {}
+
+                    @Override
+                    public void onRTCChannelClosed(NostrRTCChannel channel) {}
+
+                    @Override
+                    public void onRTCBufferedAmountLow(NostrRTCChannel channel) {}
+                }
+            );
+
+            NostrRTCChannel.PreparedPacket packet = channel.prepareOutgoingPacket(ByteBuffer.wrap(new byte[] { 1, 2, 3, 4 }));
+            channel.onRTCSocketMessage(packet.payload());
+            channel.onRTCSocketMessage(packet.payload());
+
+            assertEquals(1, messageCount[0]);
+            assertArrayEquals(new byte[] { 1, 2, 3, 4 }, lastPayload[0]);
+        } finally {
+            if (socket != null) {
+                socket.close();
+            }
+            executor.close();
+        }
+    }
+
+    @Test
+    public void testTurnFallbackClearsStaleRtcChannels() throws Exception {
+        AsyncExecutor executor = NGEUtils.getPlatform().newAsyncExecutor("fallback-clears-stale-channel-test");
+        NostrRTCSocket socket = null;
+        try {
+            socket = newSocket(executor);
+            NostrRTCChannel channel = socket.createChannel("alpha");
+            channel.setChannel(new CapturingRTCDataChannel("alpha", "ready-proto", true, true, 0, null));
+            assertTrue(channel.isConnected());
+
+            java.lang.reflect.Method method = NostrRTCSocket.class.getDeclaredMethod("ensureTurnForDownChannels", String.class);
+            method.setAccessible(true);
+            method.invoke(socket, "test");
+
+            assertFalse("TURN fallback should clear stale RTC channel handles", channel.isConnected());
+        } finally {
+            if (socket != null) {
+                socket.close();
+            }
+            executor.close();
+        }
+    }
+
+    @Test
+    public void testTurnFallbackDoesNotClearHealthyRtcChannels() throws Exception {
+        AsyncExecutor executor = NGEUtils.getPlatform().newAsyncExecutor("fallback-preserves-healthy-channel-test");
+        NostrRTCSocket socket = null;
+        try {
+            socket = newSocket(executor);
+            NostrRTCChannel channel = socket.createChannel("alpha");
+            channel.setChannel(new CapturingRTCDataChannel("alpha", "ready-proto", true, true, 0, null));
+            assertTrue(channel.isConnected());
+
+            java.lang.reflect.Field connectedField = NostrRTCSocket.class.getDeclaredField("connected");
+            connectedField.setAccessible(true);
+            connectedField.setBoolean(socket, true);
+
+            java.lang.reflect.Method method = NostrRTCSocket.class.getDeclaredMethod("ensureTurnForDownChannels", String.class);
+            method.setAccessible(true);
+            method.invoke(socket, "test-healthy");
+
+            assertTrue("Healthy RTC channel handles should be preserved", channel.isConnected());
+        } finally {
+            if (socket != null) {
+                socket.close();
+            }
+            executor.close();
+        }
+    }
+
+    @Test
+    public void testTurnReadyCountsAsUsableTransportAndUpgradeIsRateLimited() throws Exception {
+        AsyncExecutor executor = NGEUtils.getPlatform().newAsyncExecutor("turn-usable-transport-test");
+        NostrRTCSocket socket = null;
+        try {
+            socket = newSocket(executor);
+            NostrRTCChannel channel = socket.createChannel("alpha");
+
+            assertFalse(socket.hasUsableTransport());
+            assertFalse(socket.shouldAttemptRtcUpgrade());
+
+            java.lang.reflect.Field activeTransportField = NostrRTCSocket.class.getDeclaredField("activeTransportPath");
+            activeTransportField.setAccessible(true);
+            activeTransportField.set(socket, NostrRTCSocket.TransportPath.TURN);
+
+            assertTrue(socket.hasUsableTransport());
+            assertTrue(socket.shouldAttemptRtcUpgrade());
+
+            java.lang.reflect.Field lastRtcAttemptField = NostrRTCSocket.class.getDeclaredField("lastRtcAttemptSince");
+            lastRtcAttemptField.setAccessible(true);
+            lastRtcAttemptField.set(socket, java.time.Instant.now());
+
+            assertFalse(socket.shouldAttemptRtcUpgrade());
+
+            lastRtcAttemptField.set(socket, java.time.Instant.now().minusSeconds(61L));
+            assertTrue(socket.shouldAttemptRtcUpgrade());
+
+            java.lang.reflect.Field connectedField = NostrRTCSocket.class.getDeclaredField("connected");
+            connectedField.setAccessible(true);
+            connectedField.setBoolean(socket, true);
+            activeTransportField.set(socket, NostrRTCSocket.TransportPath.RTC);
+
+            channel.setChannel(new CapturingRTCDataChannel("alpha", "ready-proto", true, true, 0, null));
+            assertTrue(socket.hasUsableTransport());
+            assertFalse(socket.shouldAttemptRtcUpgrade());
         } finally {
             if (socket != null) {
                 socket.close();

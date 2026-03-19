@@ -33,7 +33,10 @@ package org.ngengine.nostr4j.rtc;
 
 import java.nio.ByteBuffer;
 import java.time.Duration;
+import java.util.LinkedHashSet;
 import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -47,6 +50,27 @@ import org.ngengine.platform.transport.RTCDataChannel;
 public final class NostrRTCChannel {
 
     private static final Logger logger = Logger.getLogger(NostrRTCChannel.class.getName());
+    private static final byte[] INNER_FRAME_MAGIC = new byte[] {
+        0x6E,
+        0x34,
+        0x6A,
+        0x2D,
+        0x72,
+        0x74,
+        0x63,
+        0x2D,
+        0x69,
+        0x6E,
+        0x6E,
+        0x65,
+        0x72,
+        0x2D,
+        0x76,
+        0x31,
+    };
+    private static final byte INNER_FRAME_VERSION = 1;
+    private static final int INNER_FRAME_HEADER_SIZE = INNER_FRAME_MAGIC.length + 1 + Long.BYTES;
+    private static final int RECEIVE_DEDUP_WINDOW = 4096;
     private RTCDataChannel channel;
     private final NostrRTCSocket socket;
     private final String name;
@@ -62,6 +86,28 @@ public final class NostrRTCChannel {
     private volatile NostrTURNChannel turnSend;
     // private volatile boolean turnBootstrapInProgress = false;
     private volatile boolean resurrecting = false;
+    private final AtomicLong nextPacketId = new AtomicLong(1L);
+    private final Object receivedPacketIdsLock = new Object();
+    private final Set<Long> receivedPacketIds = new LinkedHashSet<Long>();
+
+    static final class PreparedPacket {
+
+        private final long packetId;
+        private final ByteBuffer framedPayload;
+
+        private PreparedPacket(long packetId, ByteBuffer framedPayload) {
+            this.packetId = packetId;
+            this.framedPayload = framedPayload;
+        }
+
+        ByteBuffer payload() {
+            return framedPayload.duplicate();
+        }
+
+        long packetId() {
+            return packetId;
+        }
+    }
 
     NostrRTCChannel(
         String name,
@@ -114,7 +160,45 @@ public final class NostrRTCChannel {
         }
     }
 
+    PreparedPacket prepareOutgoingPacket(ByteBuffer data) {
+        ByteBuffer payload = data.duplicate();
+        long packetId = nextPacketId.getAndUpdate(current -> current == Long.MAX_VALUE ? 1L : current + 1L);
+        ByteBuffer framed = payload.isDirect()
+            ? NGEPlatform.get().getNativeAllocator().calloc(1,INNER_FRAME_HEADER_SIZE + payload.remaining())
+            : ByteBuffer.allocate(INNER_FRAME_HEADER_SIZE + payload.remaining());
+        framed.put(INNER_FRAME_MAGIC);
+        framed.put(INNER_FRAME_VERSION);
+        framed.putLong(packetId);
+        framed.put(payload);
+        framed.flip();
+        return new PreparedPacket(packetId, framed.asReadOnlyBuffer());
+    }
+
+    static Long tryExtractPacketId(ByteBuffer bbf) {
+        ByteBuffer payload = bbf.duplicate();
+        if (payload.remaining() < INNER_FRAME_HEADER_SIZE) {
+            return null;
+        }
+        for (byte b : INNER_FRAME_MAGIC) {
+            if (payload.get() != b) {
+                return null;
+            }
+        }
+        if (payload.get() != INNER_FRAME_VERSION) {
+            return null;
+        }
+        long packetId = payload.getLong();
+        if (packetId <= 0L) {
+            return null;
+        }
+        return Long.valueOf(packetId);
+    }
+
     AsyncTask<Boolean> write(ByteBuffer data) {
+        return write(prepareOutgoingPacket(data));
+    }
+
+    AsyncTask<Boolean> write(PreparedPacket packet) {
         RTCDataChannel currentChannel = this.channel;
         if (isConnected() && !socket.isForceTURN()) {
             return NGEPlatform
@@ -125,7 +209,7 @@ public final class NostrRTCChannel {
                         return;
                     }
                     currentChannel
-                        .write(data)
+                        .write(packet.payload())
                         .then(r -> {
                             res.accept(true);
                             return null;
@@ -140,7 +224,7 @@ public final class NostrRTCChannel {
         }
         NostrTURNChannel currentTurnSend = this.turnSend;
         if (currentTurnSend != null) {
-            return currentTurnSend.write(data);
+            return currentTurnSend.write(packet.payload());
         }
         return AsyncTask.completed(Boolean.FALSE);
     }
@@ -253,6 +337,19 @@ public final class NostrRTCChannel {
         return channel != null;
     }
 
+    boolean hasUsableTransport() {
+        return channel != null || isTurnReady();
+    }
+
+    boolean isTurnReady() {
+        NostrTURNChannel currentTurnSend = this.turnSend;
+        if (currentTurnSend != null && currentTurnSend.isReady()) {
+            return true;
+        }
+        NostrTURNChannel currentTurnReceive = this.turnReceive;
+        return currentTurnReceive != null && currentTurnReceive.isReady();
+    }
+
     public boolean isClosed() {
         return closed;
     }
@@ -268,9 +365,13 @@ public final class NostrRTCChannel {
     }
 
     void onRTCSocketMessage(ByteBuffer bbf) {
+        ByteBuffer payload = unwrapIncomingPayload(bbf);
+        if (payload == null) {
+            return;
+        }
         for (NostrRTCChannelListener l : listeners) {
             try {
-                l.onRTCSocketMessage(this, bbf, false);
+                l.onRTCSocketMessage(this, payload.duplicate(), false);
             } catch (Throwable e) {
                 logger.log(Level.SEVERE, "Exception in listener", e);
             }
@@ -278,12 +379,53 @@ public final class NostrRTCChannel {
     }
 
     void onTURNSocketMessage(ByteBuffer bbf) {
+        ByteBuffer payload = unwrapIncomingPayload(bbf);
+        if (payload == null) {
+            return;
+        }
         for (NostrRTCChannelListener listener : listeners) {
             try {
-                listener.onRTCSocketMessage(this, bbf, true);
+                listener.onRTCSocketMessage(this, payload.duplicate(), true);
             } catch (Throwable e) {
                 logger.log(Level.SEVERE, "Exception in listener", e);
             }
+        }
+    }
+
+    private ByteBuffer unwrapIncomingPayload(ByteBuffer bbf) {
+        ByteBuffer payload = bbf.duplicate();
+        if (payload.remaining() < INNER_FRAME_HEADER_SIZE) {
+            return payload;
+        }
+        for (byte b : INNER_FRAME_MAGIC) {
+            if (payload.get() != b) {
+                return bbf.duplicate();
+            }
+        }
+        if (payload.get() != INNER_FRAME_VERSION) {
+            return bbf.duplicate();
+        }
+        long packetId = payload.getLong();
+        if (packetId <= 0L) {
+            return bbf.duplicate();
+        }
+        if (!recordPacketId(packetId)) {
+            return null;
+        }
+        return payload.slice();
+    }
+
+    private boolean recordPacketId(long packetId) {
+        synchronized (receivedPacketIdsLock) {
+            if (receivedPacketIds.contains(Long.valueOf(packetId))) {
+                return false;
+            }
+            receivedPacketIds.add(Long.valueOf(packetId));
+            while (receivedPacketIds.size() > RECEIVE_DEDUP_WINDOW) {
+                Long oldest = receivedPacketIds.iterator().next();
+                receivedPacketIds.remove(oldest);
+            }
+            return true;
         }
     }
 

@@ -31,6 +31,7 @@
 
 package org.ngengine.nostr4j.rtc;
 
+import java.util.ArrayList;
 import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Map;
@@ -98,13 +99,45 @@ public final class NostrTURNChannel {
     private final Map<Integer, PendingWrite> pendingWrites = new ConcurrentHashMap<Integer, PendingWrite>();
     private final AsyncExecutor ackTimeoutExecutor;
 
+    static final class DeliveryAckTimeoutException extends RuntimeException {
+
+        private static final long serialVersionUID = 1L;
+        private final int messageId;
+        private final Long packetId;
+
+        DeliveryAckTimeoutException(int messageId, Long packetId) {
+            super(
+                "TURN delivery ack timeout for messageId=" +
+                messageId +
+                (packetId == null ? "" : ", packetId=" + packetId.longValue())
+            );
+            this.messageId = messageId;
+            this.packetId = packetId;
+        }
+
+        int getMessageId() {
+            return messageId;
+        }
+
+        Long getPacketId() {
+            return packetId;
+        }
+    }
+
     private static final class PendingWrite {
+
+        private final int messageId;
+        private final Long packetId;
+        private final long createdAtMs;
 
         private final Consumer<Boolean> resolve;
         private final Consumer<Throwable> reject;
         private volatile AsyncTask<Void> timeoutTask;
 
-        private PendingWrite(Consumer<Boolean> resolve, Consumer<Throwable> reject) {
+        private PendingWrite(int messageId, Long packetId, Consumer<Boolean> resolve, Consumer<Throwable> reject) {
+            this.messageId = messageId;
+            this.packetId = packetId;
+            this.createdAtMs = System.currentTimeMillis();
             this.resolve = resolve;
             this.reject = reject;
         }
@@ -214,8 +247,9 @@ public final class NostrTURNChannel {
         }
 
         final int messageId = nextOutgoingMessageId();
+        final Long packetId = NostrRTCChannel.tryExtractPacketId(payload);
         return AsyncTask.create((resolve, reject) -> {
-            PendingWrite pendingWrite = new PendingWrite(resolve, reject);
+            PendingWrite pendingWrite = new PendingWrite(messageId, packetId, resolve, reject);
             PendingWrite existing = pendingWrites.put(Integer.valueOf(messageId), pendingWrite);
             if (existing != null) {
                 reject.accept(new IllegalStateException("Duplicate TURN message id: " + messageId));
@@ -227,8 +261,11 @@ public final class NostrTURNChannel {
                     () -> {
                         PendingWrite timedOut = pendingWrites.remove(Integer.valueOf(messageId));
                         if (timedOut != null) {
+                            logger.warning(
+                                "TURN delivery_ack timed out; retrying write later " + describePendingWrite(timedOut)
+                            );
                             timedOut.reject.accept(
-                                new RuntimeException("TURN delivery ack timeout for messageId=" + messageId)
+                                new DeliveryAckTimeoutException(messageId, packetId)
                             );
                         }
                         return null;
@@ -311,6 +348,58 @@ public final class NostrTURNChannel {
         logger.fine("TURN: Received connection message: " + msg);
     }
 
+    void openConnectionMaybe() {
+        if (closed || state != 0) {
+            return;
+        }
+        TURNTransport currentTransport = this.transport;
+        if (currentTransport == null || !currentTransport.isConnected()) {
+            return;
+        }
+        byte[] challengeFrame = currentTransport.getLastChallengeFrame();
+        if (challengeFrame == null || challengeFrame.length == 0) {
+            return;
+        }
+        try {
+            SignedNostrEvent header = NostrTURNCodec.decodeHeader(ByteBuffer.wrap(challengeFrame).asReadOnlyBuffer());
+            if (header.getKind() != NostrTURNEvent.KIND) {
+                return;
+            }
+            if (!"challenge".equals(header.getFirstTagFirstValue("t"))) {
+                return;
+            }
+            NostrTURNChallengeEvent challengeEvent = NostrTURNChallengeEvent.parseIncoming(header, localPeer, maxDiff);
+            handleChallengeEvent(challengeEvent);
+        } catch (Exception ex) {
+            logger.log(Level.FINE, "TURN: Failed to replay cached challenge", ex);
+        }
+    }
+
+    private void handleChallengeEvent(NostrTURNChallengeEvent challengeEvent) {
+        if (challengeEvent == null || state != 0) {
+            return;
+        }
+        String redirect = challengeEvent.getRedirect();
+        if (redirect != null && !redirect.isEmpty() && !redirect.equals(turnServer)) {
+            logger.fine("TURN: Redirecting to " + redirect);
+            redirectTo(redirect);
+            return;
+        }
+        String challenge = challengeEvent.getChallenge();
+        int requiredDifficulty = challengeEvent.getRequiredDifficulty();
+        NostrTURNConnectEvent connection = NostrTURNConnectEvent.createConnect(
+            localPeer,
+            remotePeer,
+            roomKeyPair,
+            channelLabel,
+            challenge,
+            vSocketId,
+            requiredDifficulty
+        );
+        state = 1;
+        sendControlEvent(connection);
+    }
+
     private void onPayload(ByteBuffer payload) {
         for (NostrTURNChannelListener l : listeners) {
             try {
@@ -350,9 +439,19 @@ public final class NostrTURNChannel {
         incomingDataEvent
             .decodeFramePayloads(msg)
             .then(ps -> {
+                List<Long> packetIds = new ArrayList<Long>();
                 for (ByteBuffer payload : ps) {
+                    Long packetId = NostrRTCChannel.tryExtractPacketId(payload);
+                    if (packetId != null) {
+                        packetIds.add(packetId);
+                    }
                     onPayload(payload);
                 }
+                logger.fine(
+                    () ->
+                        "TURN data delivered to channel listeners " +
+                        describeInboundDelivery(messageId, packetIds, ps.size())
+                );
                 sendDeliveryAck(messageId);
                 return null;
             })
@@ -405,7 +504,9 @@ public final class NostrTURNChannel {
                         return;
                     }
                     if (state != 2) {
-                        logger.warning("TURN: Received data in invalid state " + state);
+                        logger.warning(
+                            "TURN: Received data in invalid state " + state + " " + describeTurnContext(envelopeMessageId, null)
+                        );
                         return;
                     }
                     tryHandleData(msg, header, envelopeMessageId);
@@ -423,7 +524,12 @@ public final class NostrTURNChannel {
                         return;
                     }
                     if (state != 2) {
-                        logger.warning("TURN: Received delivery_ack in invalid state " + state);
+                        logger.warning(
+                            "TURN: Received delivery_ack in invalid state " +
+                            state +
+                            " " +
+                            describeTurnContext(envelopeMessageId, null)
+                        );
                         return;
                     }
                     NostrTURNDeliveryAckEvent.parseIncoming(
@@ -449,25 +555,7 @@ public final class NostrTURNChannel {
                         return;
                     }
                     NostrTURNChallengeEvent challengeEvent = NostrTURNChallengeEvent.parseIncoming(header, localPeer, maxDiff);
-                    String redirect = challengeEvent.getRedirect();
-                    if (redirect != null && !redirect.isEmpty() && !redirect.equals(turnServer)) {
-                        logger.fine("TURN: Redirecting to " + redirect);
-                        redirectTo(redirect);
-                        return;
-                    }
-                    String challenge = challengeEvent.getChallenge();
-                    int requiredDifficulty = challengeEvent.getRequiredDifficulty();
-                    NostrTURNConnectEvent connection = NostrTURNConnectEvent.createConnect(
-                        localPeer,
-                        remotePeer,
-                        roomKeyPair,
-                        channelLabel,
-                        challenge,
-                        vSocketId,
-                        requiredDifficulty
-                    );
-                    state = 1;
-                    sendControlEvent(connection);
+                    handleChallengeEvent(challengeEvent);
                     break;
                 }
             case "ack":
@@ -582,7 +670,10 @@ public final class NostrTURNChannel {
     private void completePendingWrite(int messageId) {
         PendingWrite pending = clearPendingWrite(messageId);
         if (pending != null) {
+            logger.fine(() -> "TURN delivery_ack received " + describePendingWrite(pending));
             pending.resolve.accept(Boolean.TRUE);
+        } else {
+            logger.fine(() -> "TURN delivery_ack received for unknown messageId=" + messageId + " " + describeTurnContext(messageId, null));
         }
     }
 
@@ -619,7 +710,57 @@ public final class NostrTURNChannel {
                 return activeTransport.getTransport().sendBinary(bbf);
             })
             .catchException(ex -> {
-                logger.log(Level.FINE, "Failed to send TURN delivery_ack: {0}", ex);
+                logger.log(
+                    Level.FINE,
+                    "Failed to send TURN delivery_ack " + describeTurnContext(messageId, null),
+                    ex
+                );
             });
+    }
+
+    private String describeInboundDelivery(int messageId, List<Long> packetIds, int payloadCount) {
+        return describeTurnContext(messageId, packetIds.isEmpty() ? null : packetIds.get(0)) +
+        ", payloadCount=" +
+        payloadCount +
+        ", packetIds=" +
+        packetIds;
+    }
+
+    private String describePendingWrite(PendingWrite pendingWrite) {
+        long ageMs = Math.max(0L, System.currentTimeMillis() - pendingWrite.createdAtMs);
+        return describeTurnContext(pendingWrite.messageId, pendingWrite.packetId) +
+        ", ageMs=" +
+        ageMs +
+        ", pendingAcks=" +
+        pendingWrites.size();
+    }
+
+    private String describeTurnContext(int messageId, Long packetId) {
+        return "channel=" +
+        channelLabel +
+        ", vsocketId=" +
+        vSocketId +
+        ", messageId=" +
+        messageId +
+        (packetId == null ? "" : ", packetId=" + packetId.longValue()) +
+        ", localSession=" +
+        localPeer.getSessionId() +
+        ", remoteSession=" +
+        remotePeer.getSessionId() +
+        ", state=" +
+        state +
+        ", transportConnected=" +
+        (transport != null && transport.isConnected());
+    }
+
+    static boolean isRetryableWriteFailure(Throwable error) {
+        Throwable current = error;
+        while (current != null) {
+            if (current instanceof DeliveryAckTimeoutException) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 }

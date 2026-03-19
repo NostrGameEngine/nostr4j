@@ -67,7 +67,7 @@ import org.ngengine.platform.transport.RTCTransportListener;
  * not possible it will fallback to a TURN server.
  *
  * Note:
- *      isConnected() reports RTC transport connectivity only.
+ *      isRTCConnected() reports RTC transport connectivity only.
  *      TURN failover is internal and surfaced through listeners transport switch events.
  *
  *      This is because, to avoid inefficiencies, the keep-alive mechanism is implemented only in the
@@ -79,6 +79,7 @@ public final class NostrRTCSocket {
     public static final String DEFAULT_CHANNEL_NAME = "default";
     private static final Logger logger = Logger.getLogger(NostrRTCSocket.class.getName());
     private static final long RTC_CONNECT_TIMEOUT_MS = 1000;
+    private static final long RTC_UPGRADE_INTERVAL_MS = TimeUnit.MINUTES.toMillis(1);
 
     public static enum TransportPath {
         NONE,
@@ -108,6 +109,7 @@ public final class NostrRTCSocket {
     private volatile TransportPath activeTransportPath = TransportPath.NONE;
     private volatile boolean turnFallbackAllowed = false;
     private volatile boolean forceTURN = false;
+    private volatile Instant lastRtcAttemptSince;
 
     private class NostrRTCListener implements RTCTransportListener {
 
@@ -353,6 +355,7 @@ public final class NostrRTCSocket {
                 () -> {
                     rtcConnectDeadlineTask = null;
                     if (stopped || connected || transport == null) return null;
+                    pendingConnectionSince = null;
                     for (NostrRTCSocketListener listener : listeners) {
                         try {
                             listener.onRTCSocketTransportDegraded(this, activeTransportPath, "rtc-timeout");
@@ -369,12 +372,26 @@ public final class NostrRTCSocket {
     }
 
     private void ensureTurnForDownChannels(String reason) {
+        if (connected && !forceTURN) {
+            logger.fine("Skipping TURN fallback reset because RTC transport is still connected. reason=" + reason);
+            return;
+        }
         turnFallbackAllowed = true;
+        int clearedRtcChannels = 0;
         for (NostrRTCChannel channel : channels.values()) {
-            if (!channel.isClosed() && !channel.isConnected()) {
+            if (!channel.isClosed() && channel.isConnected()) {
+                clearedRtcChannels++;
                 channel.setChannel(null);
             }
         }
+        logger.fine(
+            "Enabled TURN fallback. reason=" +
+            reason +
+            ", clearedRtcChannels=" +
+            clearedRtcChannels +
+            ", totalChannels=" +
+            channels.size()
+        );
     }
 
     @Nullable
@@ -475,6 +492,7 @@ public final class NostrRTCSocket {
         return nativeName;
     }
 
+    @SuppressWarnings("unused")
     private static boolean isDefaultChannelName(String channelName) {
         if (channelName == null) {
             return false;
@@ -484,6 +502,12 @@ public final class NostrRTCSocket {
 
     void emitChannelReady(NostrRTCChannel channel) {
         if (channel == null || channel.isClosed()) return;
+        if (connected) {
+            switchActiveTransport(TransportPath.RTC, "rtc-channel-ready");
+        } else if (channel.isTurnReady()) {
+            pendingConnectionSince = null;
+            switchActiveTransport(TransportPath.TURN, "turn-channel-ready");
+        }
         for (NostrRTCSocketListener listener : listeners) {
             try {
                 listener.onRTCChannelReady(channel);
@@ -525,8 +549,37 @@ public final class NostrRTCSocket {
      * Return true if the connection is established.
      * @return True if the connection is established.
      */
-    boolean isConnected() {
+    boolean isRTCConnected() {
         return connected;
+    }
+
+    boolean hasUsableTransport() {
+        if (connected) {
+            return true;
+        }
+        if (activeTransportPath == TransportPath.TURN) {
+            return true;
+        }
+        for (NostrRTCChannel channel : channels.values()) {
+            if (!channel.isClosed() && channel.hasUsableTransport()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    boolean shouldAttemptRtcUpgrade() {
+        if (stopped || forceTURN || activeTransportPath != TransportPath.TURN) {
+            return false;
+        }
+        if (transport != null || isPendingConnection()) {
+            return false;
+        }
+        Instant lastAttempt = lastRtcAttemptSince;
+        if (lastAttempt == null) {
+            return true;
+        }
+        return lastAttempt.plusMillis(RTC_UPGRADE_INTERVAL_MS).isBefore(Instant.now());
     }
 
     public boolean isClosed() {
@@ -602,6 +655,27 @@ public final class NostrRTCSocket {
         }
     }
 
+    void prepareRtcTransportAttempt() {
+        logger.fine("Preparing RTC transport attempt");
+        connected = false;
+        cancelRtcConnectTimeout();
+        if (this.transport != null) try {
+            this.transport.close();
+        } catch (Exception e) {
+            logger.severe("Error closing transport: " + e.getMessage());
+        }
+        this.transport = null;
+        if (delayedCandidateEmission != null) {
+            delayedCandidateEmission.cancel();
+        }
+        delayedCandidateEmission = null;
+        pendingConnectionSince = null;
+        localIceCandidates.clear();
+        if (activeTransportPath == TransportPath.RTC) {
+            switchActiveTransport(TransportPath.NONE, "rtc-prepare-attempt");
+        }
+    }
+
     void addListener(NostrRTCSocketListener listener) {
         listeners.add(listener);
     }
@@ -649,6 +723,7 @@ public final class NostrRTCSocket {
             if (this.transport != null) throw new IllegalStateException("Already connected");
 
             logger.fine("Listening for RTC connections on connection ID: " + localPeer.getSessionId());
+            this.lastRtcAttemptSince = Instant.now();
             this.pendingConnectionSince = Instant.now();
             scheduleRtcConnectTimeout("listen");
             // useTURN(false);
@@ -697,6 +772,7 @@ public final class NostrRTCSocket {
     AsyncTask<NostrRTCAnswerSignal> connect(NostrRTCSignal offerOrAnswer) {
         Objects.requireNonNull(offerOrAnswer);
         logger.fine("Connecting to RTC socket " + offerOrAnswer);
+        this.lastRtcAttemptSince = Instant.now();
         this.pendingConnectionSince = Instant.now();
         scheduleRtcConnectTimeout("connect");
         // useTURN(false);

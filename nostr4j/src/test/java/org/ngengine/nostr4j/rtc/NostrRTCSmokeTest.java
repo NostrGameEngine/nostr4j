@@ -32,6 +32,7 @@
 package org.ngengine.nostr4j.rtc;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
@@ -41,6 +42,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -167,6 +169,73 @@ public class NostrRTCSmokeTest {
         }
     }
 
+    @Test
+    public void testTurnSessionMismatchProducesRepeatedDeliveryAckTimeouts() throws Exception {
+        NostrKeyPair room = new NostrKeyPair();
+        NostrRTCLocalPeer alice = peer("alice", "alice-s3", room, turnUrlA);
+        NostrRTCLocalPeer bob = peer("bob", "bob-s3", room, turnUrlA);
+        NostrRTCPeer bobRemote = remote(bob, room, turnUrlA);
+        NostrRTCPeer aliceRemoteWithStaleSession = remote(alice, room, turnUrlA, "alice-stale-session");
+
+        NostrTURNPool alicePool = new NostrTURNPool(24);
+        NostrTURNPool bobPool = new NostrTURNPool(24);
+        try {
+            NostrTURNChannel aToB = alicePool.connect(alice, bobRemote, turnUrlA, room, "primary", null);
+            NostrTURNChannel bFromA = bobPool.connect(bob, aliceRemoteWithStaleSession, turnUrlA, room, "primary", null);
+
+            CountDownLatch readyLatch = new CountDownLatch(2);
+            AtomicInteger receivedCount = new AtomicInteger();
+            aToB.addListener(new ReadyListener(readyLatch));
+            bFromA.addListener(
+                new NostrTURNChannelListener() {
+                    @Override
+                    public void onTurnChannelReady(NostrTURNChannel channel) {
+                        readyLatch.countDown();
+                    }
+
+                    @Override
+                    public void onTurnChannelClosed(NostrTURNChannel channel, String reason) {}
+
+                    @Override
+                    public void onTurnChannelError(NostrTURNChannel channel, Throwable e) {}
+
+                    @Override
+                    public void onTurnChannelMessage(NostrTURNChannel channel, ByteBuffer payload) {
+                        receivedCount.incrementAndGet();
+                    }
+                }
+            );
+            if (aToB.isReady()) {
+                readyLatch.countDown();
+            }
+            if (bFromA.isReady()) {
+                readyLatch.countDown();
+            }
+
+            assertTrue("TURN channels not ready", readyLatch.await(8, TimeUnit.SECONDS));
+
+            for (int attempt = 0; attempt < 3; attempt++) {
+                try {
+                    aToB.write(ByteBuffer.wrap("stuck-turn".getBytes(StandardCharsets.UTF_8))).await();
+                } catch (Throwable expected) {
+                    assertTrue(
+                        "Expected delivery_ack timeout but got: " + expected,
+                        containsCause(expected, NostrTURNChannel.DeliveryAckTimeoutException.class)
+                    );
+                    continue;
+                }
+                throw new AssertionError("Expected TURN delivery_ack timeout on attempt " + attempt);
+            }
+
+            Thread.sleep(300);
+            assertEquals("Reciprocal mismatch should prevent payload delivery", 0, receivedCount.get());
+            assertFalse("Sender channel should remain logically ready despite missing reciprocal ack", aToB.isClosed());
+        } finally {
+            alicePool.close();
+            bobPool.close();
+        }
+    }
+
     private static NostrRTCLocalPeer peer(String id, String sessionId, NostrKeyPair room, String turnServer) {
         return new NostrRTCLocalPeer(
             NostrKeyPairSigner.generate(),
@@ -189,7 +258,22 @@ public class NostrRTCSmokeTest {
     }
 
     private static NostrRTCPeer remote(NostrRTCLocalPeer peer, NostrKeyPair room, String turn) {
-        return new NostrRTCPeer(peer.getPubkey(), APP_ID, PROTOCOL_ID, peer.getSessionId(), room.getPublicKey(), turn);
+        return remote(peer, room, turn, peer.getSessionId());
+    }
+
+    private static NostrRTCPeer remote(NostrRTCLocalPeer peer, NostrKeyPair room, String turn, String sessionId) {
+        return new NostrRTCPeer(peer.getPubkey(), APP_ID, PROTOCOL_ID, sessionId, room.getPublicKey(), turn);
+    }
+
+    private static boolean containsCause(Throwable error, Class<? extends Throwable> type) {
+        Throwable current = error;
+        while (current != null) {
+            if (type.isInstance(current)) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 
     private static void sendUntilDelivered(NostrTURNChannel channel, String payload, CountDownLatch latch, int timeoutSeconds)

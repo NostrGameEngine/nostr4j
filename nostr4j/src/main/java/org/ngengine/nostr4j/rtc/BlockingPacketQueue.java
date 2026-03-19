@@ -35,6 +35,7 @@ import java.util.NoSuchElementException;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.logging.Level;
@@ -59,6 +60,10 @@ public final class BlockingPacketQueue<T> implements AutoCloseable {
         default boolean isReady() {
             return true;
         }
+
+        default boolean shouldPauseOnError(Throwable error) {
+            return false;
+        }
     }
 
     private static final class Enqueued<T> {
@@ -66,11 +71,13 @@ public final class BlockingPacketQueue<T> implements AutoCloseable {
         final T packet;
         final Consumer<Void> resolve;
         final Consumer<Throwable> reject;
+        final long enqueuedAtMs;
 
         Enqueued(T packet, Consumer<Void> resolve, Consumer<Throwable> reject) {
             this.packet = packet;
             this.resolve = resolve;
             this.reject = reject;
+            this.enqueuedAtMs = System.currentTimeMillis();
         }
     }
 
@@ -80,15 +87,17 @@ public final class BlockingPacketQueue<T> implements AutoCloseable {
     private final String failureMessage;
     private final long watchdogIntervalMs;
     private final long stuckTimeoutMs;
+    private final long queueItemTimeoutMs;
     private final AsyncExecutor watchdogExecutor;
     private volatile boolean closed = false;
     private volatile ExecutionQueue executionQueue = NGEPlatform.get().newExecutionQueue();
     private volatile long epoch = 0;
     private volatile long inFlightSince = 0;
     private volatile long lastRestartAttempt = System.currentTimeMillis();
+    private volatile boolean pausedForRetry = false;
 
     public BlockingPacketQueue(PacketHandler<T> handler, Logger logger, String failureMessage) {
-        this(handler, logger, failureMessage, 1000L, 6000L);
+        this(handler, logger, failureMessage, 1000L, 6000L, 0L);
     }
 
     public BlockingPacketQueue(
@@ -98,11 +107,23 @@ public final class BlockingPacketQueue<T> implements AutoCloseable {
         long watchdogIntervalMs,
         long stuckTimeoutMs
     ) {
+        this(handler, logger, failureMessage, watchdogIntervalMs, stuckTimeoutMs, 0L);
+    }
+
+    public BlockingPacketQueue(
+        PacketHandler<T> handler,
+        Logger logger,
+        String failureMessage,
+        long watchdogIntervalMs,
+        long stuckTimeoutMs,
+        long queueItemTimeoutMs
+    ) {
         this.handler = handler;
         this.logger = logger;
         this.failureMessage = failureMessage;
         this.watchdogIntervalMs = watchdogIntervalMs;
         this.stuckTimeoutMs = stuckTimeoutMs;
+        this.queueItemTimeoutMs = Math.max(0L, queueItemTimeoutMs);
         this.watchdogExecutor = NGEPlatform.get().newAsyncExecutor(BlockingPacketQueue.class.getSimpleName() + "-watchdog");
         startWatchdog();
     }
@@ -148,12 +169,20 @@ public final class BlockingPacketQueue<T> implements AutoCloseable {
                 reject.accept(new IllegalStateException("A newer queue epoch cancelled this task"));
                 return;
             }
+            if (failHeadIfExpired(System.currentTimeMillis())) {
+                resolve.accept(null);
+                return;
+            }
             inFlightSince = System.currentTimeMillis();
             handler
                 .handle(enqueued.packet)
                 .then(processed -> {
+                    if (this.epoch != scheduledEpoch) {
+                        return null;
+                    }
                     inFlightSince = 0;
                     if (Boolean.TRUE.equals(processed)) {
+                        pausedForRetry = false;
                         popHead();
                         resolve.accept(null);
                         if (enqueued.resolve != null) {
@@ -162,14 +191,23 @@ public final class BlockingPacketQueue<T> implements AutoCloseable {
                     } else {
                         // Packet could not be processed yet: pause queue without rejecting the caller.
                         // The same head packet remains queued and will be retried on restart().
-                        stop();
+                        pauseForRetry();
                         resolve.accept(null);
                     }
                     return null;
                 })
                 .catchException(ex -> {
+                    if (this.epoch != scheduledEpoch) {
+                        return;
+                    }
                     inFlightSince = 0;
-                    stop();
+                    if (handler.shouldPauseOnError(ex)) {
+                        pauseForRetry();
+                        resolve.accept(null);
+                        return;
+                    }
+                    pausedForRetry = false;
+                    stopInternal();
                     IllegalStateException err = new IllegalStateException(failureMessage, ex);
                     reject.accept(err);
                     if (enqueued.reject != null) {
@@ -189,13 +227,18 @@ public final class BlockingPacketQueue<T> implements AutoCloseable {
         if (closed) {
             return;
         }
+        if (failHeadIfExpired(System.currentTimeMillis())) {
+            return;
+        }
         if (queue.isEmpty()) {
             return;
         }
         long now = System.currentTimeMillis();
         if (executionQueue == null) {
-            if (now - lastRestartAttempt > timeoutMs) {
-                if (handler.isReady()) {
+            if (handler.isReady()) {
+                if (pausedForRetry) {
+                    restart();
+                } else if (now - lastRestartAttempt > timeoutMs) {
                     logger.warning("Detected likely stuck queue... recovering");
                     restart();
                 }
@@ -227,6 +270,9 @@ public final class BlockingPacketQueue<T> implements AutoCloseable {
         if (closed) {
             return;
         }
+        if (failHeadIfExpired(System.currentTimeMillis())) {
+            return;
+        }
         if (executionQueue != null) {
             return;
         }
@@ -235,6 +281,7 @@ public final class BlockingPacketQueue<T> implements AutoCloseable {
             if (executionQueue != null) {
                 return;
             }
+            pausedForRetry = false;
             executionQueue = NGEPlatform.get().newExecutionQueue();
             for (Enqueued<T> enqueued : queue) {
                 schedule(enqueued);
@@ -242,7 +289,17 @@ public final class BlockingPacketQueue<T> implements AutoCloseable {
         }
     }
 
+    private void pauseForRetry() {
+        pausedForRetry = true;
+        stopInternal();
+    }
+
     public void stop() {
+        pausedForRetry = false;
+        stopInternal();
+    }
+
+    private void stopInternal() {
         if (closed) {
             return;
         }
@@ -265,6 +322,46 @@ public final class BlockingPacketQueue<T> implements AutoCloseable {
         queue.clear();
     }
 
+    private boolean failHeadIfExpired(long nowMs) {
+        if (queueItemTimeoutMs <= 0L) {
+            return false;
+        }
+        Enqueued<T> head = queue.peek();
+        if (head == null) {
+            return false;
+        }
+        long ageMs = nowMs - head.enqueuedAtMs;
+        if (ageMs < queueItemTimeoutMs) {
+            return false;
+        }
+        pausedForRetry = false;
+        stopInternal();
+        popAndRejectHead(new TimeoutException(failureMessage + " timed out after " + ageMs + " ms"));
+        if (!queue.isEmpty() && handler.isReady()) {
+            restart();
+        }
+        return true;
+    }
+
+    private void popAndRejectHead(Throwable error) {
+        Enqueued<T> head = queue.poll();
+        if (head == null) {
+            return;
+        }
+        if (head.reject != null) {
+            head.reject.accept(error);
+        }
+    }
+
+    private void rejectAll(Throwable error) {
+        Enqueued<T> enqueued;
+        while ((enqueued = queue.poll()) != null) {
+            if (enqueued.reject != null) {
+                enqueued.reject.accept(error);
+            }
+        }
+    }
+
     private void startWatchdog() {
         watchdogExecutor.runLater(
             () -> {
@@ -283,7 +380,8 @@ public final class BlockingPacketQueue<T> implements AutoCloseable {
     @Override
     public void close() {
         closed = true;
-        clear();
+        pausedForRetry = false;
+        rejectAll(new IllegalStateException("Queue is closed"));
         this.epoch++;
         synchronized (this) {
             if (executionQueue != null) {

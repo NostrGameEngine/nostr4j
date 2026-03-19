@@ -56,6 +56,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
 import java.util.logging.Handler;
@@ -612,6 +613,179 @@ public class NostrRTCIntegrationTest {
     }
 
     @Test
+    public void testPeriodicRtcUpgradeAttemptsDoNotDisruptTurnOrderingOrWriteReadiness() throws Exception {
+        String aliceSession = "alice-upgrade-attempt-turn-stability";
+        String bobSession = "bob-upgrade-attempt-turn-stability";
+        testPlatform.reset();
+        testPlatform.setProfile(aliceSession, TransportProfile.rejectRtc());
+        testPlatform.setProfile(bobSession, TransportProfile.rejectRtc());
+
+        NostrKeyPair roomKeyPair = new NostrKeyPair();
+        SocketContext alice = newSocketContext("alice", aliceSession, roomKeyPair, turnUrlA, null);
+        SocketContext bob = newSocketContext("bob", bobSession, roomKeyPair, turnUrlA, null);
+        try {
+            connect(alice, bob);
+            NostrRTCChannel aliceCh = alice.socket.createChannel("primary", true, true, 0, null);
+            NostrRTCChannel bobCh = bob.socket.createChannel("primary", true, true, 0, null);
+
+            MessageCapture capture = new MessageCapture(8);
+            bobCh.addListener(capture);
+
+            for (int i = 0; i < 8; i++) {
+                if ((i % 2) == 0) {
+                    triggerBestEffortRtcUpgradeAttempt(alice, bob);
+                }
+                String message = "upgrade-turn-" + i;
+                sendUntilMessageReceived(aliceCh, capture, message, 10000, Boolean.TRUE);
+                assertTrue("TURN write path became unavailable while upgrade attempts were running", aliceCh.isWriteReady());
+            }
+
+            int previous = -1;
+            for (int i = 0; i < 8; i++) {
+                String expected = "upgrade-turn-" + i;
+                int idx = capture.firstIndexOf(expected);
+                assertTrue("Missing expected message: " + expected, idx >= 0);
+                assertTrue("Message ordering regression detected for: " + expected, idx > previous);
+                assertTrue("Expected TURN transport for message: " + expected, capture.turnFlags.get(idx).booleanValue());
+                previous = idx;
+            }
+        } finally {
+            alice.close();
+            bob.close();
+        }
+    }
+
+    @Test
+    public void testTurnJitterDoesNotBreakFlowAndTurnDedupRemainsEffective() throws Exception {
+        String aliceSession = "alice-turn-jitter-dedup";
+        String bobSession = "bob-turn-jitter-dedup";
+        testPlatform.reset();
+        testPlatform.setProfile(aliceSession, TransportProfile.rejectRtc());
+        testPlatform.setProfile(bobSession, TransportProfile.rejectRtc());
+
+        NostrKeyPair roomKeyPair = new NostrKeyPair();
+        SocketContext alice = newSocketContext("alice", aliceSession, roomKeyPair, turnUrlA, null);
+        SocketContext bob = newSocketContext("bob", bobSession, roomKeyPair, turnUrlA, null);
+        try {
+            connect(alice, bob);
+            NostrRTCChannel aliceCh = alice.socket.createChannel("primary", true, true, 0, null);
+            NostrRTCChannel bobCh = bob.socket.createChannel("primary", true, true, 0, null);
+
+            MessageCapture capture = new MessageCapture(6);
+            bobCh.addListener(capture);
+
+            for (int i = 0; i < 5; i++) {
+                if (i > 0) {
+                    forceCloseTurnTransports(alice.turnPool);
+                    forceCloseTurnTransports(bob.turnPool);
+                }
+                String message = "jitter-turn-" + i;
+                sendUntilMessageReceived(aliceCh, capture, message, 15000, Boolean.TRUE);
+            }
+
+            NostrRTCChannel.PreparedPacket duplicatePacket = aliceCh.prepareOutgoingPacket(bytes("turn-dedup-payload"));
+            bobCh.onTURNSocketMessage(duplicatePacket.payload());
+            bobCh.onTURNSocketMessage(duplicatePacket.payload());
+
+            awaitCondition(
+                () -> capture.containsMessageOnTransport("turn-dedup-payload", true),
+                3000,
+                "TURN dedup payload was not observed"
+            );
+
+            assertEquals(
+                "Duplicate TURN payload should be delivered exactly once",
+                1,
+                capture.countMessageOnTransport("turn-dedup-payload", true)
+            );
+
+            int previous = -1;
+            for (int i = 0; i < 5; i++) {
+                String expected = "jitter-turn-" + i;
+                int idx = capture.firstIndexOf(expected);
+                assertTrue("Missing expected message: " + expected, idx >= 0);
+                assertTrue("Out-of-order TURN delivery detected for: " + expected, idx > previous);
+                previous = idx;
+            }
+        } finally {
+            alice.close();
+            bob.close();
+        }
+    }
+
+    @Test
+    public void testDelayedTurnDeliveryAckRecoversQueuedWritesWithoutDuplicateDelivery() throws Exception {
+        String aliceSession = "alice-turn-delayed-ack";
+        String bobSession = "bob-turn-delayed-ack";
+        testPlatform.reset();
+        testPlatform.setProfile(aliceSession, TransportProfile.rejectRtc());
+        testPlatform.setProfile(bobSession, TransportProfile.rejectRtc());
+
+        NostrKeyPair roomKeyPair = new NostrKeyPair();
+        SocketContext alice = newSocketContext("alice", aliceSession, roomKeyPair, turnUrlA, null);
+        SocketContext bob = newSocketContext("bob", bobSession, roomKeyPair, turnUrlA, null);
+        BlockingPacketQueue<NostrRTCChannel.PreparedPacket> queue = null;
+        try {
+            connect(alice, bob);
+            NostrRTCChannel aliceCh = alice.socket.createChannel("primary", true, true, 0, null);
+            NostrRTCChannel bobCh = bob.socket.createChannel("primary", true, true, 0, null);
+
+            MessageCapture warmupCapture = new MessageCapture(1);
+            bobCh.addListener(warmupCapture);
+            sendUntilMessageReceived(aliceCh, warmupCapture, "warmup-turn", 10000, Boolean.TRUE);
+            awaitCondition(() -> isTurnPathReady(aliceCh) && isTurnPathReady(bobCh), 5000, "TURN path not ready");
+
+            MessageCapture burstCapture = new MessageCapture(3);
+            bobCh.addListener(burstCapture);
+            testPlatform.delayTurnDeliveryAck(turnUrlA, 1, 5500L);
+
+            CountDownLatch completed = new CountDownLatch(3);
+            AtomicBoolean failed = new AtomicBoolean(false);
+            queue = new BlockingPacketQueue<NostrRTCChannel.PreparedPacket>(
+                new BlockingPacketQueue.PacketHandler<NostrRTCChannel.PreparedPacket>() {
+                    @Override
+                    public AsyncTask<Boolean> handle(NostrRTCChannel.PreparedPacket packet) {
+                        return aliceCh.write(packet);
+                    }
+
+                    @Override
+                    public boolean isReady() {
+                        return aliceCh.isWriteReady();
+                    }
+
+                    @Override
+                    public boolean shouldPauseOnError(Throwable error) {
+                        return NostrTURNChannel.isRetryableWriteFailure(error);
+                    }
+                },
+                logger,
+                "Failed to send data to peer"
+            );
+
+            enqueueQueuedWrite(queue, aliceCh, "burst-1", completed, failed);
+            enqueueQueuedWrite(queue, aliceCh, "burst-2", completed, failed);
+            enqueueQueuedWrite(queue, aliceCh, "burst-3", completed, failed);
+
+            assertTrue("queued TURN writes did not recover after delayed delivery_ack", completed.await(20, TimeUnit.SECONDS));
+            assertFalse("queued TURN writes should not fail on delayed delivery_ack", failed.get());
+            assertTrue("receiver did not observe all queued messages", burstCapture.await(2));
+
+            assertEquals(3, burstCapture.countMessageOnTransport("burst-1", true) + burstCapture.countMessageOnTransport("burst-2", true) + burstCapture.countMessageOnTransport("burst-3", true));
+            assertEquals(1, burstCapture.countMessageOnTransport("burst-1", true));
+            assertEquals(1, burstCapture.countMessageOnTransport("burst-2", true));
+            assertEquals(1, burstCapture.countMessageOnTransport("burst-3", true));
+            assertTrue(burstCapture.firstIndexOf("burst-1") < burstCapture.firstIndexOf("burst-2"));
+            assertTrue(burstCapture.firstIndexOf("burst-2") < burstCapture.firstIndexOf("burst-3"));
+        } finally {
+            if (queue != null) {
+                queue.close();
+            }
+            alice.close();
+            bob.close();
+        }
+    }
+
+    @Test
     public void testMultiplePeersNoCrossPoisoningAndTurnPoolSharing() throws Exception {
         String aliceSessionBob = "alice-multi-bob";
         String aliceSessionCarol = "alice-multi-carol";
@@ -770,6 +944,46 @@ public class NostrRTCIntegrationTest {
         }
     }
 
+    @Test
+    public void testRealTurnWithInvalidStunForcesTurnPath() throws Exception {
+        String aliceSession = "alice-real-turn-invalid-stun";
+        String bobSession = "bob-real-turn-invalid-stun";
+        String realTurnUrl = "wss://relay.ngengine.org/turn";
+
+        testPlatform.reset();
+
+        NostrKeyPair roomKeyPair = new NostrKeyPair();
+        SocketContext alice = newSocketContext(
+            "alice",
+            aliceSession,
+            roomKeyPair,
+            realTurnUrl,
+            null,
+            List.of("stun:invalid.stun.ngengine.local:3478")
+        );
+        SocketContext bob = newSocketContext("bob", bobSession, roomKeyPair, realTurnUrl, null, Collections.emptyList());
+
+        try {
+            connect(alice, bob);
+
+            NostrRTCChannel aliceCh = alice.socket.createChannel("primary", true, true, 0, null);
+            NostrRTCChannel bobCh = bob.socket.createChannel("primary", true, true, 0, null);
+
+            MessageCapture capture = new MessageCapture(1);
+            bobCh.addListener(capture);
+
+            sendUntilMessageReceived(aliceCh, capture, "real-turn-only", 20000, Boolean.TRUE);
+            assertTrue(capture.await(2));
+            assertEquals("real-turn-only", capture.messages.get(0));
+            assertTrue(capture.turnFlags.get(0).booleanValue());
+
+            assertFalse("Expected binary TURN frames on real TURN endpoint", testPlatform.getCapturedBinaryFrames(realTurnUrl).isEmpty());
+        } finally {
+            alice.close();
+            bob.close();
+        }
+    }
+
     private static SocketContext newSocketContext(
         String user,
         String sessionId,
@@ -777,15 +991,36 @@ public class NostrRTCIntegrationTest {
         String turnServer,
         NostrTURNPool overridePool
     ) {
+        return newSocketContext(user, sessionId, roomKeyPair, turnServer, overridePool, Collections.emptyList());
+    }
+
+    private static SocketContext newSocketContext(
+        String user,
+        String sessionId,
+        NostrKeyPair roomKeyPair,
+        String turnServer,
+        NostrTURNPool overridePool,
+        Collection<String> stuns
+    ) {
         NostrTURNPool pool = overridePool != null ? overridePool : new NostrTURNPool(TURN_MAX_DIFF);
         AsyncExecutor executor = NGEPlatform.get().newAsyncExecutor("test-" + user + "-" + sessionId);
-        NostrRTCLocalPeer localPeer = newLocalPeer(user, sessionId, roomKeyPair, turnServer);
+        NostrRTCLocalPeer localPeer = newLocalPeer(user, sessionId, roomKeyPair, turnServer, stuns);
         return new SocketContext(null, localPeer, roomKeyPair, executor, pool, overridePool != null);
     }
 
+    @SuppressWarnings("unused")
     private static NostrRTCLocalPeer newLocalPeer(String user, String sessionId, NostrKeyPair roomKeyPair, String turnServer) {
+        return newLocalPeer(user, sessionId, roomKeyPair, turnServer, Collections.emptyList());
+    }
+
+    private static NostrRTCLocalPeer newLocalPeer(
+        String user,
+        String sessionId,
+        NostrKeyPair roomKeyPair,
+        String turnServer,
+        Collection<String> stuns
+    ) {
         NostrKeyPairSigner signer = NostrKeyPairSigner.generate();
-        Collection<String> stuns = Collections.emptyList();
         return new NostrRTCLocalPeer(signer, stuns, APP_ID, PROTOCOL_ID, sessionId, roomKeyPair, turnServer);
     }
 
@@ -983,8 +1218,8 @@ public class NostrRTCIntegrationTest {
                 new BooleanSupplier() {
                     @Override
                     public boolean getAsBoolean() {
-                        boolean aReady = a.socket.isConnected() || routeAReceivedFromB.get();
-                        boolean bReady = b.socket.isConnected() || routeBReceivedFromA.get();
+                        boolean aReady = a.socket.isRTCConnected() || routeAReceivedFromB.get();
+                        boolean bReady = b.socket.isRTCConnected() || routeBReceivedFromA.get();
                         return aReady && bReady;
                     }
                 },
@@ -1040,6 +1275,7 @@ public class NostrRTCIntegrationTest {
         return connected;
     }
 
+    @SuppressWarnings("unused")
     private static void connect(NostrRTCSocket a, NostrRTCSocket b) {
         NostrRTCOfferSignal offer = NGEUtils.awaitNoThrow(a.listen());
         assertNotNull(offer);
@@ -1119,6 +1355,36 @@ public class NostrRTCIntegrationTest {
         );
     }
 
+    private static void triggerBestEffortRtcUpgradeAttempt(SocketContext initiator, SocketContext responder) {
+        try {
+            initiator.socket.prepareRtcTransportAttempt();
+            NostrRTCOfferSignal offer = NGEUtils.awaitNoThrow(initiator.socket.listen());
+            if (offer == null) {
+                return;
+            }
+            NostrRTCAnswerSignal answer = NGEUtils.awaitNoThrow(responder.socket.connect(offer));
+            if (answer != null) {
+                NGEUtils.awaitNoThrow(initiator.socket.connect(answer));
+            }
+        } catch (Throwable ignored) {
+            // Best effort only: test asserts continuity of TURN delivery regardless of upgrade result.
+        }
+    }
+
+    private static void enqueueQueuedWrite(
+        BlockingPacketQueue<NostrRTCChannel.PreparedPacket> queue,
+        NostrRTCChannel channel,
+        String message,
+        CountDownLatch completed,
+        AtomicBoolean failed
+    ) {
+        queue.enqueue(
+            channel.prepareOutgoingPacket(bytes(message)),
+            ignored -> completed.countDown(),
+            error -> failed.set(true)
+        );
+    }
+
     private static boolean isTurnPathReady(NostrRTCChannel channel) {
         try {
             java.lang.reflect.Field turnSendField = NostrRTCChannel.class.getDeclaredField("turnSend");
@@ -1170,7 +1436,15 @@ public class NostrRTCIntegrationTest {
         java.lang.reflect.Field transportsField = NostrTURNPool.class.getDeclaredField("transports");
         transportsField.setAccessible(true);
         Map<?, ?> transports = (Map<?, ?>) transportsField.get(pool);
-        for (Object transportObj : transports.values()) {
+        for (Object entryObj : transports.values()) {
+            Object transportObj = entryObj;
+            // Support both direct transport entries and async wrappers.
+            if (entryObj instanceof org.ngengine.platform.AsyncTask) {
+                transportObj = org.ngengine.platform.NGEUtils.awaitNoThrow((org.ngengine.platform.AsyncTask<?>) entryObj);
+            }
+            if (transportObj == null) {
+                continue;
+            }
             java.lang.reflect.Method closeMethod = transportObj.getClass().getDeclaredMethod("close", String.class);
             closeMethod.setAccessible(true);
             closeMethod.invoke(transportObj, "test-forced-close");
@@ -1268,6 +1542,17 @@ public class NostrRTCIntegrationTest {
             return false;
         }
 
+        private int countMessageOnTransport(String message, boolean turn) {
+            int matches = 0;
+            int size = Math.min(messages.size(), turnFlags.size());
+            for (int i = 0; i < size; i++) {
+                if (message.equals(messages.get(i)) && turnFlags.get(i).booleanValue() == turn) {
+                    matches++;
+                }
+            }
+            return matches;
+        }
+
         @Override
         public void onRTCSocketMessage(NostrRTCChannel channel, ByteBuffer bbf, boolean turn) {
             ByteBuffer copy = bbf.duplicate();
@@ -1318,11 +1603,14 @@ public class NostrRTCIntegrationTest {
         private final Map<String, TransportProfile> profilesByConnId = new ConcurrentHashMap<String, TransportProfile>();
         private final Map<String, FakeRTCTransport> rtcByConnId = new ConcurrentHashMap<String, FakeRTCTransport>();
         private final Map<String, List<byte[]>> binaryFramesByUrl = new ConcurrentHashMap<String, List<byte[]>>();
+        private final Map<String, DelayedDeliveryAck> delayedDeliveryAcksByUrl = new ConcurrentHashMap<String, DelayedDeliveryAck>();
+        private final AsyncExecutor delayedTurnFrameExecutor = NGEUtils.getPlatform().newAsyncExecutor("integration-delayed-turn-frame");
 
         private void reset() {
             profilesByConnId.clear();
             rtcByConnId.clear();
             binaryFramesByUrl.clear();
+            delayedDeliveryAcksByUrl.clear();
         }
 
         private void setProfile(String connId, TransportProfile profile) {
@@ -1336,9 +1624,24 @@ public class NostrRTCIntegrationTest {
 
         @Override
         public RTCTransport newRTCTransport(RTCSettings settings, String connId, Collection<String> stunServers) {
+            if (!profilesByConnId.containsKey(connId) && hasInvalidStun(stunServers)) {
+                setProfile(connId, TransportProfile.rejectRtc());
+            }
             FakeRTCTransport transport = new FakeRTCTransport(this, connId);
             rtcByConnId.put(connId, transport);
             return transport;
+        }
+
+        private static boolean hasInvalidStun(Collection<String> stunServers) {
+            if (stunServers == null || stunServers.isEmpty()) {
+                return false;
+            }
+            for (String stun : stunServers) {
+                if (stun != null && stun.toLowerCase().contains("invalid")) {
+                    return true;
+                }
+            }
+            return false;
         }
 
         @Override
@@ -1361,6 +1664,61 @@ public class NostrRTCIntegrationTest {
             byte[] copy = new byte[data.remaining()];
             data.duplicate().get(copy);
             binaryFramesByUrl.computeIfAbsent(url, key -> new CopyOnWriteArrayList<byte[]>()).add(copy);
+        }
+
+        private void delayTurnDeliveryAck(String url, int count, long delayMs) {
+            delayedDeliveryAcksByUrl.put(url, new DelayedDeliveryAck(count, delayMs));
+        }
+
+        private AsyncTask<Void> maybeDelayTurnDeliveryAck(String url, ByteBuffer payload, WebsocketTransport delegate) {
+            if (url == null) {
+                return null;
+            }
+            DelayedDeliveryAck delay = delayedDeliveryAcksByUrl.get(url);
+            if (delay == null || !delay.tryAcquire()) {
+                return null;
+            }
+            String type = turnFrameType(payload);
+            if (!"delivery_ack".equals(type)) {
+                delay.releaseUnused();
+                return null;
+            }
+
+            ByteBuffer delayedPayload = copyBuffer(payload);
+            return AsyncTask.create((resolve, reject) -> {
+                delayedTurnFrameExecutor.runLater(
+                    () -> {
+                        delegate
+                            .sendBinary(delayedPayload)
+                            .then(v -> {
+                                resolve.accept(null);
+                                return null;
+                            })
+                            .catchException(ex -> {
+                                reject.accept(ex);
+                            });
+                        return null;
+                    },
+                    delay.delayMs,
+                    TimeUnit.MILLISECONDS
+                );
+            });
+        }
+
+        private static String turnFrameType(ByteBuffer payload) {
+            try {
+                SignedNostrEvent header = org.ngengine.nostr4j.rtc.turn.NostrTURNCodec.decodeHeader(payload.asReadOnlyBuffer());
+                return header.getFirstTagFirstValue("t");
+            } catch (Exception ignored) {
+                return null;
+            }
+        }
+
+        private static ByteBuffer copyBuffer(ByteBuffer payload) {
+            ByteBuffer copy = ByteBuffer.allocate(payload.remaining());
+            copy.put(payload.duplicate());
+            copy.flip();
+            return copy.asReadOnlyBuffer();
         }
 
         private void tryLink(FakeRTCTransport left, FakeRTCTransport right) {
@@ -1448,6 +1806,10 @@ public class NostrRTCIntegrationTest {
         @Override
         public AsyncTask<Void> sendBinary(ByteBuffer payload) {
             platform.captureBinary(currentUrl, payload.duplicate());
+            AsyncTask<Void> delayed = platform.maybeDelayTurnDeliveryAck(currentUrl, payload.duplicate(), delegate);
+            if (delayed != null) {
+                return delayed;
+            }
             return delegate.sendBinary(payload);
         }
 
@@ -1464,6 +1826,33 @@ public class NostrRTCIntegrationTest {
         @Override
         public boolean isConnected() {
             return delegate.isConnected();
+        }
+    }
+
+    private static final class DelayedDeliveryAck {
+
+        private final AtomicInteger remaining;
+        private final long delayMs;
+
+        private DelayedDeliveryAck(int remaining, long delayMs) {
+            this.remaining = new AtomicInteger(remaining);
+            this.delayMs = delayMs;
+        }
+
+        private boolean tryAcquire() {
+            while (true) {
+                int current = remaining.get();
+                if (current <= 0) {
+                    return false;
+                }
+                if (remaining.compareAndSet(current, current - 1)) {
+                    return true;
+                }
+            }
+        }
+
+        private void releaseUnused() {
+            remaining.incrementAndGet();
         }
     }
 

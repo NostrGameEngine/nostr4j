@@ -67,9 +67,11 @@ import org.ngengine.platform.transport.RTCTransportIceCandidate;
 public final class NostrRTCRoom implements Closeable {
 
     private static final Logger logger = Logger.getLogger(NostrRTCRoom.class.getName());
+    private static final long DEFAULT_QUEUED_SEND_TIMEOUT_MS = 30_000L;
 
     private final Map<NostrRTCPeer, NostrRTCSocket> connections = new ConcurrentHashMap<>();
-    private final Map<NostrRTCChannel, BlockingPacketQueue<ByteBuffer>> pendingSends = new ConcurrentHashMap<>();
+    private final Map<NostrRTCChannel, BlockingPacketQueue<NostrRTCChannel.PreparedPacket>> pendingSends =
+        new ConcurrentHashMap<>();
     private final Collection<NostrPublicKey> bannedPeers = new CopyOnWriteArrayList<>();
 
     private final List<NostrRTCPeerSocketAvailableListener> onSocketAvailable = new CopyOnWriteArrayList<>();
@@ -87,10 +89,46 @@ public final class NostrRTCRoom implements Closeable {
     private volatile boolean forceTURN = false;
 
     private void drainQueue(NostrRTCChannel channel) {
-        BlockingPacketQueue<ByteBuffer> queue = pendingSends.get(channel);
+        BlockingPacketQueue<NostrRTCChannel.PreparedPacket> queue = pendingSends.get(channel);
         if (queue != null) {
             queue.restart();
         }
+    }
+
+    private long getQueuedSendTimeoutMs() {
+        try {
+            Object value = settings.getClass().getMethod("getQueuedSendTimeout").invoke(settings);
+            if (value instanceof Duration) {
+                return Math.max(0L, ((Duration) value).toMillis());
+            }
+        } catch (ReflectiveOperationException ignored) {}
+        return DEFAULT_QUEUED_SEND_TIMEOUT_MS;
+    }
+
+    private BlockingPacketQueue<NostrRTCChannel.PreparedPacket> newPendingSendQueue(NostrRTCChannel chan) {
+        return new BlockingPacketQueue<NostrRTCChannel.PreparedPacket>(
+            new BlockingPacketQueue.PacketHandler<NostrRTCChannel.PreparedPacket>() {
+                @Override
+                public AsyncTask<Boolean> handle(NostrRTCChannel.PreparedPacket packet) {
+                    return chan.write(packet);
+                }
+
+                @Override
+                public boolean isReady() {
+                    return chan.isWriteReady();
+                }
+
+                @Override
+                public boolean shouldPauseOnError(Throwable error) {
+                    return NostrTURNChannel.isRetryableWriteFailure(error);
+                }
+            },
+            logger,
+            "Failed to send data to peer",
+            1000L,
+            6000L,
+            getQueuedSendTimeoutMs()
+        );
     }
 
     private static interface Listener extends NostrRTCSignaling.Listener, NostrRTCSocketListener, NostrRTCChannelListener {}
@@ -259,7 +297,7 @@ public final class NostrRTCRoom implements Closeable {
                 logger.log(Level.WARNING, "Error closing socket", e);
             }
         }
-        for (BlockingPacketQueue<ByteBuffer> queue : pendingSends.values()) {
+        for (BlockingPacketQueue<NostrRTCChannel.PreparedPacket> queue : pendingSends.values()) {
             try {
                 queue.close();
             } catch (Exception e) {
@@ -365,11 +403,19 @@ public final class NostrRTCRoom implements Closeable {
 
                             NostrRTCSocket socket = connections.get(remotePeer);
 
-                            if (socket != null && (socket.isConnected() || socket.isPendingConnection())) continue;
+                            if (
+                                socket != null &&
+                                (socket.hasUsableTransport() ? !socket.shouldAttemptRtcUpgrade() : socket.isPendingConnection())
+                            ) continue;
                             synchronized (this) {
                                 socket = connections.get(remotePeer); // make sure we have a fresh reference to the socket
                                 // it could have changed while we were waiting for the lock
-                                if (socket != null && socket.isConnected()) continue;
+                                if (
+                                    socket != null &&
+                                    (socket.hasUsableTransport()
+                                            ? !socket.shouldAttemptRtcUpgrade()
+                                            : socket.isPendingConnection())
+                                ) continue;
                                 if (socket != null && socket.isClosed()) {
                                     logger.fine("Dropping closed socket for peer: " + remotePubkey);
                                     connections.remove(remotePeer, socket);
@@ -385,7 +431,7 @@ public final class NostrRTCRoom implements Closeable {
                                     connections.put(remotePeer, socket);
                                     onSocketAvailable(remotePeer, socket);
                                 } else {
-                                    socket.reset();
+                                    socket.prepareRtcTransportAttempt();
                                 }
 
                                 // send offer to remote peer
@@ -614,12 +660,12 @@ public final class NostrRTCRoom implements Closeable {
                 );
                 connections.remove(remotePeer, existing);
                 existing.close();
-            } else if (existing != null && existing.isConnected()) {
+            } else if (existing != null && existing.isRTCConnected()) {
                 logger.fine("Socket already exists for peer: " + remotePeer + ", ignoring offer");
                 return;
             } else if (existing != null && !existing.isClosed()) {
                 socket = existing;
-                socket.reset();
+                socket.prepareRtcTransportAttempt();
             }
 
             logger.fine("Connecting to peer: " + remotePeer);
@@ -665,7 +711,7 @@ public final class NostrRTCRoom implements Closeable {
                     });
             } else {
                 // if there is no pending connection, just ignore it
-                logger.warning("No pending connection for peer: " + remotePeer);
+                logger.fine("No pending connection for peer: " + remotePeer);
             }
         }
     }
@@ -679,7 +725,7 @@ public final class NostrRTCRoom implements Closeable {
         if (socket != null) {
             socket.mergeRemoteRTCIceCandidate(candidate);
         } else {
-            logger.warning("No socket found for peer: " + remotePeer);
+            logger.fine("No socket found for peer: " + remotePeer);
         }
     }
 
@@ -723,29 +769,14 @@ public final class NostrRTCRoom implements Closeable {
                 "No channel named " + channel + " found for peer: " + peer + " use createChannel method to create it first"
             );
         }
-        BlockingPacketQueue<ByteBuffer> q = pendingSends.computeIfAbsent(
+        BlockingPacketQueue<NostrRTCChannel.PreparedPacket> q = pendingSends.computeIfAbsent(
             chan,
-            ignored ->
-                new BlockingPacketQueue<ByteBuffer>(
-                    new BlockingPacketQueue.PacketHandler<ByteBuffer>() {
-                        @Override
-                        public AsyncTask<Boolean> handle(ByteBuffer packet) {
-                            return chan.write(packet);
-                        }
-
-                        @Override
-                        public boolean isReady() {
-                            return chan.isWriteReady();
-                        }
-                    },
-                    logger,
-                    "Failed to send data to peer"
-                )
+            ignored -> newPendingSendQueue(chan)
         );
         return NGEUtils
             .getPlatform()
             .wrapPromise((rs, rj) -> {
-                q.enqueue(bbf.duplicate(), rs, rj);
+                q.enqueue(chan.prepareOutgoingPacket(bbf), rs, rj);
                 drainQueue(chan);
             });
     }
@@ -757,29 +788,14 @@ public final class NostrRTCRoom implements Closeable {
             logger.warning("No socket found for peer: " + peer);
             throw new IllegalStateException("No socket found for peer: " + peer);
         }
-        BlockingPacketQueue<ByteBuffer> q = pendingSends.computeIfAbsent(
+        BlockingPacketQueue<NostrRTCChannel.PreparedPacket> q = pendingSends.computeIfAbsent(
             chan,
-            ignored ->
-                new BlockingPacketQueue<ByteBuffer>(
-                    new BlockingPacketQueue.PacketHandler<ByteBuffer>() {
-                        @Override
-                        public AsyncTask<Boolean> handle(ByteBuffer packet) {
-                            return chan.write(packet);
-                        }
-
-                        @Override
-                        public boolean isReady() {
-                            return chan.isWriteReady();
-                        }
-                    },
-                    logger,
-                    "Failed to send data to peer"
-                )
+            ignored -> newPendingSendQueue(chan)
         );
         return NGEUtils
             .getPlatform()
             .wrapPromise((rs, rj) -> {
-                q.enqueue(bbf.duplicate(), rs, rj);
+                q.enqueue(chan.prepareOutgoingPacket(bbf), rs, rj);
                 drainQueue(chan);
             });
     }
@@ -834,8 +850,21 @@ public final class NostrRTCRoom implements Closeable {
 
     public AsyncTask<Void> broadcast(String channel, ByteBuffer bbf) {
         ArrayList<AsyncTask<Void>> tasks = new ArrayList<>(connections.size());
-        for (NostrRTCPeer peer : connections.keySet()) {
-            tasks.add(send(channel, peer, bbf));
+        for (Map.Entry<NostrRTCPeer, NostrRTCSocket> entry : connections.entrySet()) {
+            NostrRTCSocket socket = entry.getValue();
+            if (socket == null) {
+                continue;
+            }
+            NostrRTCChannel chan = socket.getChannel(channel);
+            if (chan == null) {
+                logger.fine("Skipping broadcast to peer without channel " + channel + ": " + entry.getKey());
+                continue;
+            }
+            if (!chan.isWriteReady()) {
+                logger.fine("Skipping broadcast to peer with unready channel " + channel + ": " + entry.getKey());
+                continue;
+            }
+            tasks.add(send(chan, bbf));
         }
         NGEPlatform platform = NGEUtils.getPlatform();
         return platform
