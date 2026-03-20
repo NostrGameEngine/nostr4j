@@ -31,6 +31,8 @@
 
 package org.ngengine.nostr4j.rtc;
 
+import java.io.IOException;
+import java.util.ArrayList;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
@@ -60,6 +62,7 @@ import org.ngengine.nostr4j.rtc.turn.NostrTURNDisconnectEvent;
 import org.ngengine.nostr4j.rtc.turn.NostrTURNEvent;
 import org.ngengine.platform.AsyncExecutor;
 import org.ngengine.platform.AsyncTask;
+import org.ngengine.platform.ExecutionQueue;
 import org.ngengine.platform.NGEPlatform;
 
 /**
@@ -98,6 +101,8 @@ public final class NostrTURNChannel {
     private final AtomicInteger outgoingMessageCounter = new AtomicInteger(1);
     private final Map<Integer, PendingWrite> pendingWrites = new ConcurrentHashMap<Integer, PendingWrite>();
     private final AsyncExecutor ackTimeoutExecutor;
+    private final AsyncExecutor inboundPayloadExecutor;
+    private final ExecutionQueue inboundPayloadDispatchQueue;
 
     static final class DeliveryAckTimeoutException extends RuntimeException {
 
@@ -165,6 +170,9 @@ public final class NostrTURNChannel {
         this.maxDiff = maxDiff;
         this.vSocketId = nextVsocketId();
         this.ackTimeoutExecutor = NGEPlatform.get().newAsyncExecutor(NostrTURNChannel.class.getSimpleName() + "-ack-timeout");
+        this.inboundPayloadExecutor =
+            NGEPlatform.get().newAsyncExecutor(NostrTURNChannel.class.getSimpleName() + "-inbound-payload");
+        this.inboundPayloadDispatchQueue = NGEPlatform.get().newExecutionQueue();
     }
 
     private static long nextVsocketId() {
@@ -322,7 +330,13 @@ public final class NostrTURNChannel {
                 logger.log(Level.SEVERE, "Exception in listener", e);
             }
         }
+        try {
+            inboundPayloadDispatchQueue.close();
+        } catch (IOException e) {
+            logger.log(Level.FINE, "Failed to close TURN inbound payload dispatch queue", e);
+        }
         ackTimeoutExecutor.close();
+        inboundPayloadExecutor.close();
         disconnect();
     }
 
@@ -429,6 +443,7 @@ public final class NostrTURNChannel {
             logger.warning("TURN: Received data in invalid state " + state);
             return true;
         }
+        sendDeliveryAck(messageId);
 
         long envelopeVsocketId = NostrTURNCodec.extractVsocketId(msg);
         incomingDataEvent =
@@ -443,12 +458,11 @@ public final class NostrTURNChannel {
                     if (packetId != null) {
                         packetIds.add(packetId);
                     }
-                    onPayload(payload);
+                    enqueuePayloadDispatch(payload);
                 }
                 logger.fine(() ->
                     "TURN data delivered to channel listeners " + describeInboundDelivery(messageId, packetIds, ps.size())
                 );
-                sendDeliveryAck(messageId);
                 return null;
             })
             .catchException(ex -> {
@@ -710,6 +724,41 @@ public final class NostrTURNChannel {
             .catchException(ex -> {
                 logger.log(Level.FINE, "Failed to send TURN delivery_ack " + describeTurnContext(messageId, null), ex);
             });
+    }
+
+    private void enqueuePayloadDispatch(ByteBuffer payload) {
+        if (closed) {
+            return;
+        }
+        final ByteBuffer payloadCopy = copyPayload(payload);
+        inboundPayloadDispatchQueue.enqueue((resolve, reject) -> {
+            if (closed) {
+                resolve.accept(null);
+                return;
+            }
+            inboundPayloadExecutor
+                .run(() -> {
+                    if (!closed) {
+                        onPayload(payloadCopy.asReadOnlyBuffer());
+                    }
+                    return null;
+                })
+                .then(ignored -> {
+                    resolve.accept(null);
+                    return null;
+                })
+                .catchException(ex -> {
+                    logger.log(Level.FINE, "TURN payload dispatch queue recovered after listener failure", ex);
+                    resolve.accept(null);
+                });
+        });
+    }
+
+    private static ByteBuffer copyPayload(ByteBuffer payload) {
+        ByteBuffer copy = ByteBuffer.allocate(payload.remaining());
+        copy.put(payload.duplicate());
+        copy.flip();
+        return copy.asReadOnlyBuffer();
     }
 
     private String describeInboundDelivery(int messageId, List<Long> packetIds, int payloadCount) {
