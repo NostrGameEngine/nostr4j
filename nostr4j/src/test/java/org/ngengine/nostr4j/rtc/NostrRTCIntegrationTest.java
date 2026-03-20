@@ -637,7 +637,7 @@ public class NostrRTCIntegrationTest {
                 }
                 String message = "upgrade-turn-" + i;
                 sendUntilMessageReceived(aliceCh, capture, message, 10000, Boolean.TRUE);
-                assertTrue("TURN write path became unavailable while upgrade attempts were running", aliceCh.isWriteReady());
+                assertTrue("TURN write path became unavailable while upgrade attempts were running", aliceCh.isReady());
             }
 
             int previous = -1;
@@ -749,10 +749,10 @@ public class NostrRTCIntegrationTest {
                             return aliceCh.write(packet);
                         }
 
-                        @Override
-                        public boolean isReady() {
-                            return aliceCh.isWriteReady();
-                        }
+                    @Override
+                    public boolean isReady() {
+                        return aliceCh.isReady();
+                    }
 
                         @Override
                         public boolean shouldPauseOnError(Throwable error) {
@@ -786,6 +786,99 @@ public class NostrRTCIntegrationTest {
             if (queue != null) {
                 queue.close();
             }
+            alice.close();
+            bob.close();
+        }
+    }
+
+    @Test
+    public void testSlowTurnListenerDoesNotDelayDeliveryAck() throws Exception {
+        String aliceSession = "alice-turn-slow-listener";
+        String bobSession = "bob-turn-slow-listener";
+        testPlatform.reset();
+        testPlatform.setProfile(aliceSession, TransportProfile.rejectRtc());
+        testPlatform.setProfile(bobSession, TransportProfile.rejectRtc());
+
+        NostrKeyPair roomKeyPair = new NostrKeyPair();
+        SocketContext alice = newSocketContext("alice", aliceSession, roomKeyPair, turnUrlA, null);
+        SocketContext bob = newSocketContext("bob", bobSession, roomKeyPair, turnUrlA, null);
+        CountDownLatch releaseSlowListener = new CountDownLatch(1);
+        try {
+            connect(alice, bob);
+            NostrRTCChannel aliceCh = alice.socket.createChannel("primary", true, true, 0, null);
+            NostrRTCChannel bobCh = bob.socket.createChannel("primary", true, true, 0, null);
+
+            MessageCapture warmupCapture = new MessageCapture(1);
+            bobCh.addListener(warmupCapture);
+            sendUntilMessageReceived(aliceCh, warmupCapture, "warmup-turn", 10000, Boolean.TRUE);
+            awaitCondition(() -> isTurnPathReady(aliceCh) && isTurnPathReady(bobCh), 5000, "TURN path not ready");
+
+            String slowMessage = "slow-listener-turn";
+            CountDownLatch slowListenerEntered = new CountDownLatch(1);
+            CountDownLatch slowListenerFinished = new CountDownLatch(1);
+            bobCh.addListener(
+                new NostrRTCChannelListener() {
+                    @Override
+                    public void onRTCSocketMessage(NostrRTCChannel channel, ByteBuffer bbf, boolean turn) {
+                        ByteBuffer copy = bbf.duplicate();
+                        byte[] bytes = new byte[copy.remaining()];
+                        copy.get(bytes);
+                        if (!turn || !slowMessage.equals(new String(bytes, StandardCharsets.UTF_8))) {
+                            return;
+                        }
+                        slowListenerEntered.countDown();
+                        try {
+                            releaseSlowListener.await(10, TimeUnit.SECONDS);
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                            throw new RuntimeException(e);
+                        } finally {
+                            slowListenerFinished.countDown();
+                        }
+                    }
+
+                    @Override
+                    public void onRTCChannelError(NostrRTCChannel channel, Throwable e) {}
+
+                    @Override
+                    public void onRTCChannelClosed(NostrRTCChannel channel) {}
+
+                    @Override
+                    public void onRTCBufferedAmountLow(NostrRTCChannel channel) {}
+                }
+            );
+
+            MessageCapture capture = new MessageCapture(1);
+            bobCh.addListener(capture);
+
+            AtomicReference<Boolean> writeResult = new AtomicReference<Boolean>();
+            AtomicReference<Throwable> writeError = new AtomicReference<Throwable>();
+            CountDownLatch writeCompleted = new CountDownLatch(1);
+            aliceCh
+                .write(bytes(slowMessage))
+                .then(result -> {
+                    writeResult.set(result);
+                    writeCompleted.countDown();
+                    return null;
+                })
+                .catchException(ex -> {
+                    writeError.set(ex);
+                    writeCompleted.countDown();
+                });
+
+            assertTrue("slow TURN listener was not entered", slowListenerEntered.await(5, TimeUnit.SECONDS));
+            assertTrue("TURN write should complete before the slow listener returns", writeCompleted.await(2, TimeUnit.SECONDS));
+            assertEquals(Boolean.TRUE, writeResult.get());
+            assertEquals(null, writeError.get());
+            assertFalse("message capture should still be blocked behind the slow listener", capture.containsMessage(slowMessage));
+
+            releaseSlowListener.countDown();
+
+            assertTrue("slow TURN listener did not finish", slowListenerFinished.await(5, TimeUnit.SECONDS));
+            assertTrue("receiver did not observe the message after listener release", capture.await(2));
+            assertTrue(capture.containsMessageOnTransport(slowMessage, true));
+        } finally {
+            releaseSlowListener.countDown();
             alice.close();
             bob.close();
         }
@@ -907,6 +1000,61 @@ public class NostrRTCIntegrationTest {
 
             assertFalse(testPlatform.getCapturedBinaryFrames(turnUrlA).isEmpty());
             assertFalse(testPlatform.getCapturedBinaryFrames(turnUrlB).isEmpty());
+        } finally {
+            alice.close();
+            bob.close();
+        }
+    }
+
+    @Test
+    public void testTurnFallbackFailsWhenSendOrReceiveTurnServerMissing() throws Exception {
+        String aliceSession = "alice-missing-turn-counterpart";
+        String bobSession = "bob-missing-turn-counterpart";
+        testPlatform.reset();
+        testPlatform.setProfile(aliceSession, TransportProfile.rejectRtc());
+        testPlatform.setProfile(bobSession, TransportProfile.rejectRtc());
+
+        NostrKeyPair roomKeyPair = new NostrKeyPair();
+        SocketContext alice = newSocketContext("alice", aliceSession, roomKeyPair, turnUrlA, null);
+        SocketContext bob = newSocketContext("bob", bobSession, roomKeyPair, null, null);
+
+        try {
+            connect(alice, bob);
+            alice.socket.setForceTURN(true);
+            bob.socket.setForceTURN(true);
+            NostrRTCChannel aliceCh = alice.socket.createChannel("primary", true, true, 0, null);
+
+            AtomicReference<Throwable> error = new AtomicReference<Throwable>();
+            CountDownLatch errorLatch = new CountDownLatch(1);
+            aliceCh.addListener(
+                new NostrRTCChannelListener() {
+                    @Override
+                    public void onRTCSocketMessage(NostrRTCChannel channel, ByteBuffer bbf, boolean turn) {}
+
+                    @Override
+                    public void onRTCChannelError(NostrRTCChannel channel, Throwable e) {
+                        error.compareAndSet(null, e);
+                        errorLatch.countDown();
+                    }
+
+                    @Override
+                    public void onRTCChannelClosed(NostrRTCChannel channel) {}
+
+                    @Override
+                    public void onRTCBufferedAmountLow(NostrRTCChannel channel) {}
+                }
+            );
+
+            Boolean writeResult = NGEUtils.awaitNoThrow(aliceCh.write(bytes("should-fail")));
+
+            assertFalse(Boolean.TRUE.equals(writeResult));
+            assertTrue("missing TURN counterpart should surface a channel error", errorLatch.await(2, TimeUnit.SECONDS));
+            assertTrue(error.get() instanceof IllegalStateException);
+            assertEquals(
+                "TURN fallback requires both sender and receiver TURN servers to be configured",
+                error.get().getMessage()
+            );
+            assertTrue("ensureTurn should fail before sending any TURN frames", testPlatform.getCapturedBinaryFrames(turnUrlA).isEmpty());
         } finally {
             alice.close();
             bob.close();
