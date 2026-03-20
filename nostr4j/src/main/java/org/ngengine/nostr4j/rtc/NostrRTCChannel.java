@@ -239,7 +239,12 @@ public final class NostrRTCChannel {
         if (socket.isTurnFallbackAllowed() || socket.isForceTURN()) {
             NostrTURNChannel currentTurnSend = this.turnSend;
             NostrTURNChannel currentTurnReceive = this.turnReceive;
-            return currentTurnSend != null && currentTurnSend.isReady() && currentTurnReceive != null && currentTurnReceive.isReady();
+            return (
+                currentTurnSend != null &&
+                currentTurnSend.isReady() &&
+                currentTurnReceive != null &&
+                currentTurnReceive.isReady()
+            );
         }
         return false;
     }
@@ -348,7 +353,9 @@ public final class NostrRTCChannel {
             return true;
         }
         NostrTURNChannel currentTurnReceive = this.turnReceive;
-        return currentTurnReceive != null && currentTurnReceive.isReady() && currentTurnSend !=null && currentTurnSend.isReady();
+        return (
+            currentTurnReceive != null && currentTurnReceive.isReady() && currentTurnSend != null && currentTurnSend.isReady()
+        );
     }
 
     public boolean isClosed() {
@@ -489,9 +496,7 @@ public final class NostrRTCChannel {
         if (!hasSendTurn || !hasReceiveTurn) {
             disposeTurn();
             onRTCChannelError(
-                new IllegalStateException(
-                    "TURN fallback requires both sender and receiver TURN servers to be configured"
-                )
+                new IllegalStateException("TURN fallback requires both sender and receiver TURN servers to be configured")
             );
             return;
         }

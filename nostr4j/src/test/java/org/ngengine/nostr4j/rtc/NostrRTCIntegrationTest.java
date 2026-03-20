@@ -749,10 +749,10 @@ public class NostrRTCIntegrationTest {
                             return aliceCh.write(packet);
                         }
 
-                    @Override
-                    public boolean isReady() {
-                        return aliceCh.isReady();
-                    }
+                        @Override
+                        public boolean isReady() {
+                            return aliceCh.isReady();
+                        }
 
                         @Override
                         public boolean shouldPauseOnError(Throwable error) {
@@ -867,10 +867,16 @@ public class NostrRTCIntegrationTest {
                 });
 
             assertTrue("slow TURN listener was not entered", slowListenerEntered.await(5, TimeUnit.SECONDS));
-            assertTrue("TURN write should complete before the slow listener returns", writeCompleted.await(2, TimeUnit.SECONDS));
+            assertTrue(
+                "TURN write should complete before the slow listener returns",
+                writeCompleted.await(2, TimeUnit.SECONDS)
+            );
             assertEquals(Boolean.TRUE, writeResult.get());
             assertEquals(null, writeError.get());
-            assertFalse("message capture should still be blocked behind the slow listener", capture.containsMessage(slowMessage));
+            assertFalse(
+                "message capture should still be blocked behind the slow listener",
+                capture.containsMessage(slowMessage)
+            );
 
             releaseSlowListener.countDown();
 
@@ -1054,7 +1060,10 @@ public class NostrRTCIntegrationTest {
                 "TURN fallback requires both sender and receiver TURN servers to be configured",
                 error.get().getMessage()
             );
-            assertTrue("ensureTurn should fail before sending any TURN frames", testPlatform.getCapturedBinaryFrames(turnUrlA).isEmpty());
+            assertTrue(
+                "ensureTurn should fail before sending any TURN frames",
+                testPlatform.getCapturedBinaryFrames(turnUrlA).isEmpty()
+            );
         } finally {
             alice.close();
             bob.close();
