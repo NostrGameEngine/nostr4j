@@ -229,7 +229,7 @@ public final class NostrRTCChannel {
         return AsyncTask.completed(Boolean.FALSE);
     }
 
-    boolean isWriteReady() {
+    boolean isReady() {
         if (closed) {
             return false;
         }
@@ -238,7 +238,8 @@ public final class NostrRTCChannel {
         }
         if (socket.isTurnFallbackAllowed() || socket.isForceTURN()) {
             NostrTURNChannel currentTurnSend = this.turnSend;
-            return currentTurnSend != null && currentTurnSend.isReady();
+            NostrTURNChannel currentTurnReceive = this.turnReceive;
+            return currentTurnSend != null && currentTurnSend.isReady() && currentTurnReceive != null && currentTurnReceive.isReady();
         }
         return false;
     }
@@ -347,7 +348,7 @@ public final class NostrRTCChannel {
             return true;
         }
         NostrTURNChannel currentTurnReceive = this.turnReceive;
-        return currentTurnReceive != null && currentTurnReceive.isReady();
+        return currentTurnReceive != null && currentTurnReceive.isReady() && currentTurnSend !=null && currentTurnSend.isReady();
     }
 
     public boolean isClosed() {
@@ -483,6 +484,17 @@ public final class NostrRTCChannel {
 
         String sendTurn = this.socket.resolveSendTurnUrl();
         String receiveTurn = this.socket.resolveReceiveTurnUrl();
+        boolean hasSendTurn = sendTurn != null && !sendTurn.isEmpty();
+        boolean hasReceiveTurn = receiveTurn != null && !receiveTurn.isEmpty();
+        if (!hasSendTurn || !hasReceiveTurn) {
+            disposeTurn();
+            onRTCChannelError(
+                new IllegalStateException(
+                    "TURN fallback requires both sender and receiver TURN servers to be configured"
+                )
+            );
+            return;
+        }
         boolean sharedTurn = sendTurn != null && !sendTurn.isEmpty() && Objects.equals(sendTurn, receiveTurn);
 
         if (turnSend != null && !Objects.equals(sendTurn, turnSend.getServerUrl())) {

@@ -115,7 +115,7 @@ public final class NostrRTCRoom implements Closeable {
 
                 @Override
                 public boolean isReady() {
-                    return chan.isWriteReady();
+                    return chan.isReady();
                 }
 
                 @Override
@@ -862,7 +862,7 @@ public final class NostrRTCRoom implements Closeable {
                 logger.fine("Skipping broadcast to peer without channel " + channel + ": " + entry.getKey());
                 continue;
             }
-            if (!chan.isWriteReady()) {
+            if (!chan.isReady()) {
                 logger.fine("Skipping broadcast to peer with unready channel " + channel + ": " + entry.getKey());
                 continue;
             }

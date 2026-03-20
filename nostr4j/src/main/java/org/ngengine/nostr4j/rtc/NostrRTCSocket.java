@@ -400,9 +400,6 @@ public final class NostrRTCSocket {
         if (localTurnServer != null && !localTurnServer.isEmpty()) {
             return localTurnServer;
         }
-        if (turnServerUrl != null && !turnServerUrl.isEmpty()) {
-            return turnServerUrl;
-        }
         return null;
     }
 
@@ -415,10 +412,16 @@ public final class NostrRTCSocket {
                 return remoteTurnServer;
             }
         }
-        if (turnServerUrl != null && !turnServerUrl.isEmpty()) {
-            return turnServerUrl;
-        }
         return null;
+    }
+
+    boolean hasCompleteTurnConfiguration() {
+        String sendTurn = resolveSendTurnUrl();
+        if (sendTurn == null || sendTurn.isEmpty()) {
+            return false;
+        }
+        String receiveTurn = resolveReceiveTurnUrl();
+        return receiveTurn != null && !receiveTurn.isEmpty();
     }
 
     void setForceTURN(boolean forceTURN) {
@@ -542,7 +545,7 @@ public final class NostrRTCSocket {
     }
 
     boolean isTurnFallbackAllowed() {
-        return turnFallbackAllowed;
+        return turnFallbackAllowed && hasCompleteTurnConfiguration();
     }
 
     /**
