@@ -487,9 +487,8 @@ public class NostrPool {
                         isEOSEEverywhere
                     );
                     sub.callEoseListeners(relay, isEOSEEverywhere);
-                } else {
-                    logger.warning("received invalid eose for subscription " + subId + " from relay " + relay.getUrl());
-                }
+                } 
+                
             } else if (rcv instanceof NostrNoticeMessage) {
                 NostrNoticeMessage msg = (NostrNoticeMessage) rcv;
                 String eventMessage = msg.getMessage();
