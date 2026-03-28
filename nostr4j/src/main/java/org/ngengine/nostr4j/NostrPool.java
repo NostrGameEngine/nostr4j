@@ -487,8 +487,7 @@ public class NostrPool {
                         isEOSEEverywhere
                     );
                     sub.callEoseListeners(relay, isEOSEEverywhere);
-                } 
-                
+                }
             } else if (rcv instanceof NostrNoticeMessage) {
                 NostrNoticeMessage msg = (NostrNoticeMessage) rcv;
                 String eventMessage = msg.getMessage();
