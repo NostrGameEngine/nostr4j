@@ -86,7 +86,7 @@ import org.ngengine.platform.AsyncExecutor;
 import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEPlatform;
 import org.ngengine.platform.NGEUtils;
-import org.ngengine.platform.RTCSettings;
+import org.ngengine.nostr4j.RTCSettings;
 import org.ngengine.platform.jvm.JVMAsyncPlatform;
 import org.ngengine.platform.transport.RTCDataChannel;
 import org.ngengine.platform.transport.RTCTransport;
@@ -1792,7 +1792,7 @@ public class NostrRTCIntegrationTest {
         }
 
         @Override
-        public RTCTransport newRTCTransport(RTCSettings settings, String connId, Collection<String> stunServers) {
+        public RTCTransport newRTCTransport(Duration timeout, String connId, Collection<String> stunServers) {
             if (!profilesByConnId.containsKey(connId) && hasInvalidStun(stunServers)) {
                 setProfile(connId, TransportProfile.rejectRtc());
             }
@@ -2042,7 +2042,7 @@ public class NostrRTCIntegrationTest {
         }
 
         @Override
-        public void start(RTCSettings settings, AsyncExecutor executor, String connId, Collection<String> stunServers) {}
+        public void start(Duration timeout, AsyncExecutor executor, String connId, Collection<String> stunServers) {}
 
         @Override
         public AsyncTask<String> listen() {

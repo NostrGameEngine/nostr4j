@@ -59,7 +59,7 @@ import org.ngengine.platform.AsyncExecutor;
 import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEPlatform;
 import org.ngengine.platform.NGEUtils;
-import org.ngengine.platform.RTCSettings;
+import org.ngengine.nostr4j.RTCSettings;
 import org.ngengine.platform.transport.RTCTransportIceCandidate;
 
 /**
@@ -91,9 +91,7 @@ public class NostrRTCSignaling implements Closeable {
     private final NostrPool pool;
 
     private final NostrRTCLocalPeer localPeer;
-    private final Queue<NostrRTCConnectSignal> seenAnnounces = NGEUtils
-        .getPlatform()
-        .newConcurrentQueue(NostrRTCConnectSignal.class);
+    private final List<NostrRTCConnectSignal> seenAnnounces = new CopyOnWriteArrayList<>();
     private final Collection<NostrRTCConnectSignal> seenAnnouncesRO = Collections.unmodifiableCollection(seenAnnounces);
     private final List<Listener> listeners = new CopyOnWriteArrayList<>();
     private final RTCSettings settings;

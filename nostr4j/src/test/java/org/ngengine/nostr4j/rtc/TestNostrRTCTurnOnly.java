@@ -54,7 +54,7 @@ import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
 import org.ngengine.nostr4j.turn.ref.TurnServer;
 import org.ngengine.platform.AsyncExecutor;
 import org.ngengine.platform.NGEUtils;
-import org.ngengine.platform.RTCSettings;
+import org.ngengine.nostr4j.RTCSettings;
 
 public class TestNostrRTCTurnOnly {
 

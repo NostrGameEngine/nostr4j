@@ -25,7 +25,7 @@ import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
 import org.ngengine.platform.AsyncExecutor;
 import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEUtils;
-import org.ngengine.platform.RTCSettings;
+import org.ngengine.nostr4j.RTCSettings;
 import org.ngengine.platform.transport.RTCDataChannel;
 import org.ngengine.platform.transport.RTCTransportIceCandidate;
 

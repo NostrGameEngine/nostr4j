@@ -34,7 +34,7 @@ import org.ngengine.nostr4j.rtc.signal.NostrRTCLocalPeer;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCPeer;
 import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
 import org.ngengine.platform.AsyncTask;
-import org.ngengine.platform.RTCSettings;
+import org.ngengine.nostr4j.RTCSettings;
 import org.ngengine.platform.transport.RTCDataChannel;
 
 public class TestRtcPendingSendRecovery {

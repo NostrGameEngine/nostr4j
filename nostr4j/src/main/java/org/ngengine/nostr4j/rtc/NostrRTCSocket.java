@@ -55,7 +55,7 @@ import org.ngengine.platform.AsyncExecutor;
 import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEPlatform;
 import org.ngengine.platform.NGEUtils;
-import org.ngengine.platform.RTCSettings;
+import org.ngengine.nostr4j.RTCSettings;
 import org.ngengine.platform.transport.RTCDataChannel;
 import org.ngengine.platform.transport.RTCTransport;
 import org.ngengine.platform.transport.RTCTransportIceCandidate;
@@ -734,7 +734,7 @@ public final class NostrRTCSocket {
             NGEPlatform platform = NGEUtils.getPlatform();
             logger.fine("Creating RTC transport for connection ID: " + localPeer.getSessionId());
 
-            this.transport = platform.newRTCTransport(settings, localPeer.getSessionId(), localPeer.getStunServers());
+            this.transport = platform.newRTCTransport(settings.getP2pAttemptTimeout(), localPeer.getSessionId(), localPeer.getStunServers());
             this.transport.addListener(rtcListener);
 
             logger.fine("Initiating RTC channel for connection ID: " + localPeer.getSessionId());
@@ -785,7 +785,7 @@ public final class NostrRTCSocket {
         String connectString;
         if (offerOrAnswer instanceof NostrRTCOfferSignal) {
             if (this.transport != null) throw new IllegalStateException("Already connected");
-            this.transport = platform.newRTCTransport(settings, localPeer.getSessionId(), localPeer.getStunServers());
+            this.transport = platform.newRTCTransport(settings.getP2pAttemptTimeout(), localPeer.getSessionId(), localPeer.getStunServers());
             this.transport.addListener(rtcListener);
             logger.fine("Use offer to connect");
             this.remotePeer.merge(((NostrRTCOfferSignal) offerOrAnswer).getPeer());
