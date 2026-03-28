@@ -209,7 +209,7 @@ public final class NostrTURNPool implements AutoCloseable {
                                 .catchException(e -> {
                                     wss.removeUser(channel);
                                     channel.setTransport(null);
-                                    transports.remove(url, wss);
+                                    transports.remove(url, tr);
                                     rej2.accept(e);
                                 });
                         });
