@@ -1,3 +1,34 @@
+/**
+ * BSD 3-Clause License
+ *
+ * Copyright (c) 2025, Riccardo Balbo
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the documentation
+ *    and/or other materials provided with the distribution.
+ *
+ * 3. Neither the name of the copyright holder nor the names of its
+ *    contributors may be used to endorse or promote products derived from
+ *    this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
 package org.ngengine.nostr4j;
 
 import java.io.Serializable;
@@ -19,21 +50,23 @@ public final class RTCSettings implements Cloneable, Serializable {
     public static final Duration QUEUED_SEND_TIMEOUT = Duration.ofSeconds(30);
 
     public static final Collection<String> PUBLIC_STUN_SERVERS = Collections.unmodifiableCollection(
-            Arrays.asList(
-                    new String[] {
-                            "stun.cloudflare.com:3478",
-                            "stun.l.google.com:19302",
-                            "stun.l.google.com:5349",
-                            "stun1.l.google.com:3478",
-                            "stun1.l.google.com:5349",
-                            "stun2.l.google.com:19302",
-                            "stun2.l.google.com:5349",
-                            "stun3.l.google.com:3478",
-                            "stun3.l.google.com:5349",
-                            "stun4.l.google.com:19302",
-                            "stun4.l.google.com:5349",
-                            "stunserver2024.stunprotocol.org:3478",
-                    }));
+        Arrays.asList(
+            new String[] {
+                "stun.cloudflare.com:3478",
+                "stun.l.google.com:19302",
+                "stun.l.google.com:5349",
+                "stun1.l.google.com:3478",
+                "stun1.l.google.com:5349",
+                "stun2.l.google.com:19302",
+                "stun2.l.google.com:5349",
+                "stun3.l.google.com:3478",
+                "stun3.l.google.com:5349",
+                "stun4.l.google.com:19302",
+                "stun4.l.google.com:5349",
+                "stunserver2024.stunprotocol.org:3478",
+            }
+        )
+    );
 
     private final Duration signalingLoopInterval;
     private final Duration peerExpiration;
@@ -43,27 +76,30 @@ public final class RTCSettings implements Cloneable, Serializable {
     private final Duration queuedSendTimeout;
 
     public RTCSettings(
-            Duration announceInterval,
-            Duration peerExpiration,
-            Duration delayedCandidatesInterval,
-            Duration roomLoopInterval,
-            Duration p2pAttemptTimeout) {
+        Duration announceInterval,
+        Duration peerExpiration,
+        Duration delayedCandidatesInterval,
+        Duration roomLoopInterval,
+        Duration p2pAttemptTimeout
+    ) {
         this(
-                announceInterval,
-                peerExpiration,
-                delayedCandidatesInterval,
-                roomLoopInterval,
-                p2pAttemptTimeout,
-                QUEUED_SEND_TIMEOUT);
+            announceInterval,
+            peerExpiration,
+            delayedCandidatesInterval,
+            roomLoopInterval,
+            p2pAttemptTimeout,
+            QUEUED_SEND_TIMEOUT
+        );
     }
 
     public RTCSettings(
-            Duration announceInterval,
-            Duration peerExpiration,
-            Duration delayedCandidatesInterval,
-            Duration roomLoopInterval,
-            Duration p2pAttemptTimeout,
-            Duration queuedSendTimeout) {
+        Duration announceInterval,
+        Duration peerExpiration,
+        Duration delayedCandidatesInterval,
+        Duration roomLoopInterval,
+        Duration p2pAttemptTimeout,
+        Duration queuedSendTimeout
+    ) {
         this.signalingLoopInterval = announceInterval;
         this.peerExpiration = peerExpiration;
         this.delayedCandidatesInterval = delayedCandidatesInterval;
@@ -97,12 +133,13 @@ public final class RTCSettings implements Cloneable, Serializable {
     }
 
     public static final RTCSettings DEFAULT = new RTCSettings(
-            SIGNALING_LOOP_INTERVAL,
-            PEER_EXPIRATION,
-            DELAYED_CANDIDATES_INTERVAL,
-            ROOM_LOOP_INTERVAL,
-            P2P_TIMEOUT,
-            QUEUED_SEND_TIMEOUT);
+        SIGNALING_LOOP_INTERVAL,
+        PEER_EXPIRATION,
+        DELAYED_CANDIDATES_INTERVAL,
+        ROOM_LOOP_INTERVAL,
+        P2P_TIMEOUT,
+        QUEUED_SEND_TIMEOUT
+    );
 
     @Override
     public RTCSettings clone() {
@@ -115,45 +152,48 @@ public final class RTCSettings implements Cloneable, Serializable {
 
     @Override
     public boolean equals(Object o) {
-        if (this == o)
-            return true;
-        if (!(o instanceof RTCSettings))
-            return false;
+        if (this == o) return true;
+        if (!(o instanceof RTCSettings)) return false;
         RTCSettings that = (RTCSettings) o;
-        return (signalingLoopInterval == that.signalingLoopInterval &&
-                peerExpiration == that.peerExpiration &&
-                delayedCandidatesInterval == that.delayedCandidatesInterval &&
-                roomLoopInterval == that.roomLoopInterval &&
-                p2pAttemptTimeout == that.p2pAttemptTimeout &&
-                queuedSendTimeout == that.queuedSendTimeout);
+        return (
+            signalingLoopInterval == that.signalingLoopInterval &&
+            peerExpiration == that.peerExpiration &&
+            delayedCandidatesInterval == that.delayedCandidatesInterval &&
+            roomLoopInterval == that.roomLoopInterval &&
+            p2pAttemptTimeout == that.p2pAttemptTimeout &&
+            queuedSendTimeout == that.queuedSendTimeout
+        );
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(
-                signalingLoopInterval,
-                peerExpiration,
-                delayedCandidatesInterval,
-                roomLoopInterval,
-                p2pAttemptTimeout,
-                queuedSendTimeout);
+            signalingLoopInterval,
+            peerExpiration,
+            delayedCandidatesInterval,
+            roomLoopInterval,
+            p2pAttemptTimeout,
+            queuedSendTimeout
+        );
     }
 
     @Override
     public String toString() {
-        return ("RTCSettings{" +
-                "announceInterval=" +
-                signalingLoopInterval +
-                ", peerExpiration=" +
-                peerExpiration +
-                ", delayedCandidatesInterval=" +
-                delayedCandidatesInterval +
-                ", roomLoopInterval=" +
-                roomLoopInterval +
-                ", p2pAttemptTimeout=" +
-                p2pAttemptTimeout +
-                ", queuedSendTimeout=" +
-                queuedSendTimeout +
-                '}');
+        return (
+            "RTCSettings{" +
+            "announceInterval=" +
+            signalingLoopInterval +
+            ", peerExpiration=" +
+            peerExpiration +
+            ", delayedCandidatesInterval=" +
+            delayedCandidatesInterval +
+            ", roomLoopInterval=" +
+            roomLoopInterval +
+            ", p2pAttemptTimeout=" +
+            p2pAttemptTimeout +
+            ", queuedSendTimeout=" +
+            queuedSendTimeout +
+            '}'
+        );
     }
 }

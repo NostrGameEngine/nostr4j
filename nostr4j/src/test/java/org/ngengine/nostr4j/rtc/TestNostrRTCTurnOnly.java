@@ -45,6 +45,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.Test;
 import org.ngengine.nostr4j.NostrPool;
+import org.ngengine.nostr4j.RTCSettings;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
 import org.ngengine.nostr4j.rtc.listeners.NostrRTCChannelListener;
 import org.ngengine.nostr4j.rtc.listeners.NostrRTCSocketListener;
@@ -54,7 +55,6 @@ import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
 import org.ngengine.nostr4j.turn.ref.TurnServer;
 import org.ngengine.platform.AsyncExecutor;
 import org.ngengine.platform.NGEUtils;
-import org.ngengine.nostr4j.RTCSettings;
 
 public class TestNostrRTCTurnOnly {
 

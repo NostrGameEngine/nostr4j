@@ -28,13 +28,13 @@ import java.util.logging.LogRecord;
 import java.util.logging.Logger;
 import org.junit.Test;
 import org.ngengine.nostr4j.NostrPool;
+import org.ngengine.nostr4j.RTCSettings;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
 import org.ngengine.nostr4j.rtc.listeners.NostrRTCSocketListener;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCLocalPeer;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCPeer;
 import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
 import org.ngengine.platform.AsyncTask;
-import org.ngengine.nostr4j.RTCSettings;
 import org.ngengine.platform.transport.RTCDataChannel;
 
 public class TestRtcPendingSendRecovery {

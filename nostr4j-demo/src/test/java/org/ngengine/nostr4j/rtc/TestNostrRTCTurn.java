@@ -36,13 +36,13 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.NostrPool;
 import org.ngengine.nostr4j.NostrRelay;
+import org.ngengine.nostr4j.RTCSettings;
 import org.ngengine.nostr4j.TestLogger;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
 import org.ngengine.nostr4j.keypair.NostrPrivateKey;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCLocalPeer;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCPeer;
 import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
-import org.ngengine.nostr4j.RTCSettings;
 
 public class TestNostrRTCTurn {
 
