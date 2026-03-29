@@ -684,8 +684,9 @@ public class NostrRTCIntegrationTest {
             }
 
             NostrRTCChannel.PreparedPacket duplicatePacket = aliceCh.prepareOutgoingPacket(bytes("turn-dedup-payload"));
-            bobCh.onTURNSocketMessage(duplicatePacket.payload());
-            bobCh.onTURNSocketMessage(duplicatePacket.payload());
+            ByteBuffer framedDuplicatePacket = frameSinglePacket(aliceCh, duplicatePacket);
+            bobCh.onTURNSocketMessage(framedDuplicatePacket.duplicate());
+            bobCh.onTURNSocketMessage(framedDuplicatePacket.duplicate());
 
             awaitCondition(
                 () -> capture.containsMessageOnTransport("turn-dedup-payload", true),
@@ -1021,7 +1022,8 @@ public class NostrRTCIntegrationTest {
         testPlatform.setProfile(bobSession, TransportProfile.rejectRtc());
 
         NostrKeyPair roomKeyPair = new NostrKeyPair();
-        SocketContext alice = newSocketContext("alice", aliceSession, roomKeyPair, turnUrlA, null);
+        String isolatedTurnUrl = "ws://turn-missing-" + System.nanoTime() + ".invalid/turn";
+        SocketContext alice = newSocketContext("alice", aliceSession, roomKeyPair, isolatedTurnUrl, null);
         SocketContext bob = newSocketContext("bob", bobSession, roomKeyPair, null, null);
 
         try {
@@ -1062,7 +1064,7 @@ public class NostrRTCIntegrationTest {
             );
             assertTrue(
                 "ensureTurn should fail before sending any TURN frames",
-                testPlatform.getCapturedBinaryFrames(turnUrlA).isEmpty()
+                testPlatform.getCapturedBinaryFrames(isolatedTurnUrl).isEmpty()
             );
         } finally {
             alice.close();
@@ -1615,6 +1617,19 @@ public class NostrRTCIntegrationTest {
             closeMethod.setAccessible(true);
             closeMethod.invoke(transportObj, "test-forced-close");
         }
+    }
+
+    private static ByteBuffer frameSinglePacket(NostrRTCChannel channel, NostrRTCChannel.PreparedPacket packet)
+        throws Exception {
+        java.lang.reflect.Method encodePacketFragments = NostrRTCChannel.class.getDeclaredMethod(
+            "encodePacketFragments",
+            NostrRTCChannel.PreparedPacket.class,
+            int.class
+        );
+        encodePacketFragments.setAccessible(true);
+        ByteBuffer[] framed = (ByteBuffer[]) encodePacketFragments.invoke(channel, packet, Integer.MAX_VALUE / 4);
+        assertEquals("Expected single fragment in test helper", 1, framed.length);
+        return framed[0].asReadOnlyBuffer();
     }
 
     private static final class SocketContext {

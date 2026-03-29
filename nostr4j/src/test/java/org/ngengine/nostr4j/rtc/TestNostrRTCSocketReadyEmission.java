@@ -163,7 +163,7 @@ public class TestNostrRTCSocketReadyEmission {
             }
             CompositeListener listener = new CompositeListener();
             socket.addListener(listener);
-            socket.createChannel("alpha");
+            NostrRTCChannel logicalChannel = socket.createChannel("alpha");
 
             Object rtcListener = readField(socket, "rtcListener");
             java.lang.reflect.Method onBinaryMessage = rtcListener
@@ -172,7 +172,8 @@ public class TestNostrRTCSocketReadyEmission {
             onBinaryMessage.setAccessible(true);
 
             RTCDataChannel channel = new CapturingRTCDataChannel("alpha", "ready-proto", true, true, 0, null);
-            onBinaryMessage.invoke(rtcListener, channel, ByteBuffer.wrap(new byte[] { 1 }));
+            ByteBuffer framed = frameSinglePacket(logicalChannel, ByteBuffer.wrap(new byte[] { 1 }));
+            onBinaryMessage.invoke(rtcListener, channel, framed);
 
             assertEquals(1, messageCount[0]);
         } finally {
@@ -215,8 +216,9 @@ public class TestNostrRTCSocketReadyEmission {
             );
 
             NostrRTCChannel.PreparedPacket packet = channel.prepareOutgoingPacket(ByteBuffer.wrap(new byte[] { 1, 2, 3, 4 }));
-            channel.onRTCSocketMessage(packet.payload());
-            channel.onRTCSocketMessage(packet.payload());
+            ByteBuffer framed = frameSinglePacket(channel, packet);
+            channel.onRTCSocketMessage(framed.duplicate());
+            channel.onRTCSocketMessage(framed.duplicate());
 
             assertEquals(1, messageCount[0]);
             assertArrayEquals(new byte[] { 1, 2, 3, 4 }, lastPayload[0]);
@@ -350,6 +352,22 @@ public class TestNostrRTCSocketReadyEmission {
         } catch (Exception e) {
             throw new IllegalStateException("Cannot read field " + fieldName, e);
         }
+    }
+
+    private static ByteBuffer frameSinglePacket(NostrRTCChannel channel, ByteBuffer payload) throws Exception {
+        return frameSinglePacket(channel, channel.prepareOutgoingPacket(payload));
+    }
+
+    private static ByteBuffer frameSinglePacket(NostrRTCChannel channel, NostrRTCChannel.PreparedPacket packet) throws Exception {
+        java.lang.reflect.Method encodePacketFragments = NostrRTCChannel.class.getDeclaredMethod(
+            "encodePacketFragments",
+            NostrRTCChannel.PreparedPacket.class,
+            int.class
+        );
+        encodePacketFragments.setAccessible(true);
+        ByteBuffer[] framed = (ByteBuffer[]) encodePacketFragments.invoke(channel, packet, Integer.MAX_VALUE / 4);
+        assertEquals("Expected single fragment in test helper", 1, framed.length);
+        return framed[0].asReadOnlyBuffer();
     }
 
     private static final class CapturingRTCDataChannel extends RTCDataChannel {
