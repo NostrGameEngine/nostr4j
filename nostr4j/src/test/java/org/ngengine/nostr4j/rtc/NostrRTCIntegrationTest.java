@@ -1996,6 +1996,16 @@ public class NostrRTCIntegrationTest {
         public boolean isConnected() {
             return delegate.isConnected();
         }
+
+         @Override
+        public void setMaxMessageSize(int maxMessageSize) {
+            
+        }
+
+        @Override
+        public int getMaxMessageSize() {
+            return 1024*1024*10;
+        }
     }
 
     private static final class DelayedDeliveryAck {

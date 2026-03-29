@@ -129,7 +129,15 @@ public class TestNostrTURNPoolFailures {
         private final CopyOnWriteArrayList<WebsocketTransportListener> listeners =
             new CopyOnWriteArrayList<WebsocketTransportListener>();
         private final AtomicInteger cleanupCloseCount = new AtomicInteger();
+      @Override
+        public void setMaxMessageSize(int maxMessageSize) {
+            
+        }
 
+        @Override
+        public int getMaxMessageSize() {
+            return 1024*1024*10;
+        }
         @Override
         public AsyncTask<Void> close(String reason) {
             if (CLEANUP_REASON.equals(reason)) {

@@ -253,5 +253,15 @@ public class TestRelayLoopScheduling {
         public List<String> getSentMessages() {
             return sentMessages;
         }
+
+        @Override
+        public void setMaxMessageSize(int maxMessageSize) {
+            
+        }
+
+        @Override
+        public int getMaxMessageSize() {
+            return 1024*1024*10;
+        }
     }
 }
