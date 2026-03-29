@@ -252,7 +252,6 @@ public final class NostrTURNChannel {
             outgoingDataEvent =
                 NostrTURNDataEvent.createOutgoing(localPeer, remotePeer, roomKeyPair, channelLabel, vSocketId, encryptionKey);
         }
-
         final int messageId = nextOutgoingMessageId();
         final Long packetId = NostrRTCChannel.tryExtractPacketId(payload);
         return AsyncTask.create((resolve, reject) -> {

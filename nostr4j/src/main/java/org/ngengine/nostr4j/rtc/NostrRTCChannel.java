@@ -33,7 +33,9 @@ package org.ngengine.nostr4j.rtc;
 
 import java.nio.ByteBuffer;
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -50,6 +52,7 @@ import org.ngengine.platform.transport.RTCDataChannel;
 public final class NostrRTCChannel {
 
     private static final Logger logger = Logger.getLogger(NostrRTCChannel.class.getName());
+    public static final int DEFAULT_MAX_FRAGMENT_SIZE = 256 * 1024; // 256KB
     private static final byte[] INNER_FRAME_MAGIC = new byte[] {
         0x6E,
         0x34,
@@ -69,8 +72,9 @@ public final class NostrRTCChannel {
         0x31,
     };
     private static final byte INNER_FRAME_VERSION = 1;
-    private static final int INNER_FRAME_HEADER_SIZE = INNER_FRAME_MAGIC.length + 1 + Long.BYTES;
+    private static final int INNER_FRAME_HEADER_SIZE = INNER_FRAME_MAGIC.length + 1 + Long.BYTES + Short.BYTES + Short.BYTES;
     private static final int RECEIVE_DEDUP_WINDOW = 4096;
+    private static final long FRAGMENT_REASSEMBLY_TIMEOUT_MS = 30_000L;
     private RTCDataChannel channel;
     private final NostrRTCSocket socket;
     private final String name;
@@ -78,6 +82,7 @@ public final class NostrRTCChannel {
     private final boolean reliable;
     private final Number maxRetransmits;
     private final Duration maxPacketLifeTime;
+    private volatile int maxFragmentSize = DEFAULT_MAX_FRAGMENT_SIZE;
     private int bufferedAmountThreshold = -1;
     private boolean closed = false;
     private final CopyOnWriteArrayList<NostrRTCChannelListener> listeners = new CopyOnWriteArrayList<>();
@@ -89,19 +94,71 @@ public final class NostrRTCChannel {
     private final AtomicLong nextPacketId = new AtomicLong(1L);
     private final Object receivedPacketIdsLock = new Object();
     private final Set<Long> receivedPacketIds = new LinkedHashSet<Long>();
+    private final Map<Long, PendingInboundFragments> pendingFragments = new HashMap<Long, PendingInboundFragments>();
+
+    private static final class PendingInboundFragments {
+
+        private final long createdAtMs;
+        private final int fragmentCount;
+        private final ByteBuffer[] fragments;
+        private int receivedFragments;
+        private int totalBytes;
+
+        private PendingInboundFragments(int fragmentCount) {
+            this.createdAtMs = System.currentTimeMillis();
+            this.fragmentCount = fragmentCount;
+            this.fragments = new ByteBuffer[fragmentCount];
+            this.receivedFragments = 0;
+            this.totalBytes = 0;
+        }
+
+        private boolean isExpired(long now) {
+            return now - createdAtMs > FRAGMENT_REASSEMBLY_TIMEOUT_MS;
+        }
+
+        private synchronized ByteBuffer addFragment(int fragmentId, ByteBuffer fragmentPayload) {
+            if (fragmentId < 0 || fragmentId >= fragmentCount) {
+                return null;
+            }
+            if (fragments[fragmentId] != null) {
+                return null;
+            }
+
+            ByteBuffer copy = ByteBuffer.allocate(fragmentPayload.remaining());
+            copy.put(fragmentPayload.duplicate());
+            copy.flip();
+            fragments[fragmentId] = copy.asReadOnlyBuffer();
+            receivedFragments++;
+            totalBytes += copy.remaining();
+            if (receivedFragments != fragmentCount) {
+                return null;
+            }
+
+            ByteBuffer merged = ByteBuffer.allocate(totalBytes);
+            for (int i = 0; i < fragmentCount; i++) {
+                ByteBuffer fragment = fragments[i];
+                if (fragment == null) {
+                    return null;
+                }
+                merged.put(fragment.duplicate());
+            }
+            merged.flip();
+            return merged.asReadOnlyBuffer();
+        }
+    }
 
     static final class PreparedPacket {
 
         private final long packetId;
-        private final ByteBuffer framedPayload;
+        private final ByteBuffer payload;
 
-        private PreparedPacket(long packetId, ByteBuffer framedPayload) {
+        private PreparedPacket(long packetId, ByteBuffer payload) {
             this.packetId = packetId;
-            this.framedPayload = framedPayload;
+            this.payload = payload;
         }
 
         ByteBuffer payload() {
-            return framedPayload.duplicate();
+            return payload.duplicate();
         }
 
         long packetId() {
@@ -161,17 +218,12 @@ public final class NostrRTCChannel {
     }
 
     PreparedPacket prepareOutgoingPacket(ByteBuffer data) {
-        ByteBuffer payload = data.duplicate();
+        ByteBuffer source = data.duplicate();
+        ByteBuffer payload = ByteBuffer.allocate(source.remaining());
+        payload.put(source);
+        payload.flip();
         long packetId = nextPacketId.getAndUpdate(current -> current == Long.MAX_VALUE ? 1L : current + 1L);
-        ByteBuffer framed = payload.isDirect()
-            ? NGEPlatform.get().getNativeAllocator().calloc(1, INNER_FRAME_HEADER_SIZE + payload.remaining())
-            : ByteBuffer.allocate(INNER_FRAME_HEADER_SIZE + payload.remaining());
-        framed.put(INNER_FRAME_MAGIC);
-        framed.put(INNER_FRAME_VERSION);
-        framed.putLong(packetId);
-        framed.put(payload);
-        framed.flip();
-        return new PreparedPacket(packetId, framed.asReadOnlyBuffer());
+        return new PreparedPacket(packetId, payload.asReadOnlyBuffer());
     }
 
     static Long tryExtractPacketId(ByteBuffer bbf) {
@@ -199,6 +251,72 @@ public final class NostrRTCChannel {
     }
 
     AsyncTask<Boolean> write(PreparedPacket packet) {
+        int limit = maxFragmentSize;
+        int payloadChunkSize;
+        if (limit <= 0) {
+            payloadChunkSize = Integer.MAX_VALUE - INNER_FRAME_HEADER_SIZE;
+        } else {
+            payloadChunkSize = Math.max(1, limit - INNER_FRAME_HEADER_SIZE);
+        }
+
+        ByteBuffer[] frames = encodePacketFragments(packet, payloadChunkSize);
+        AsyncTask<Boolean> chain = AsyncTask.completed(Boolean.TRUE);
+        for (ByteBuffer frame : frames) {
+            final ByteBuffer framePayload = frame.asReadOnlyBuffer();
+            chain =
+                chain.compose(ok -> {
+                    if (!Boolean.TRUE.equals(ok)) {
+                        return AsyncTask.completed(Boolean.FALSE);
+                    }
+                    return writeSingleFragment(framePayload);
+                });
+        }
+        return chain;
+    }
+
+    
+
+    public int getMaxFragmentSize() {
+        return maxFragmentSize;
+    }
+
+    public void setMaxFragmentSize(int maxFragmentSize) {
+        if (maxFragmentSize <= 0) {
+            throw new IllegalArgumentException("maxFragmentSize must be > 0");
+        }
+        this.maxFragmentSize = maxFragmentSize;
+    }
+
+    private ByteBuffer[] encodePacketFragments(PreparedPacket packet, int payloadChunkSize) {
+        ByteBuffer payload = packet.payload();
+        int chunkSize = Math.max(1, payloadChunkSize);
+        int totalSize = payload.remaining();
+        int fragmentCount = Math.max(1, (totalSize + chunkSize - 1) / chunkSize);
+        if (fragmentCount > Short.MAX_VALUE) {
+            throw new IllegalArgumentException("fragmentCount exceeds short max: " + fragmentCount);
+        }
+        ByteBuffer[] frames = new ByteBuffer[fragmentCount];
+        for (int fragmentId = 0; fragmentId < fragmentCount; fragmentId++) {
+            int fragmentSize = Math.min(chunkSize, payload.remaining());
+            ByteBuffer framed = ByteBuffer.allocate(INNER_FRAME_HEADER_SIZE + fragmentSize);
+            framed.put(INNER_FRAME_MAGIC);
+            framed.put(INNER_FRAME_VERSION);
+            framed.putLong(packet.packetId());
+            framed.putShort((short) fragmentId);
+            framed.putShort((short) fragmentCount);
+
+            ByteBuffer slice = payload.slice();
+            slice.limit(fragmentSize);
+            framed.put(slice);
+            payload.position(payload.position() + fragmentSize);
+
+            framed.flip();
+            frames[fragmentId] = framed.asReadOnlyBuffer();
+        }
+        return frames;
+    }
+
+    private AsyncTask<Boolean> writeSingleFragment(ByteBuffer payload) {
         RTCDataChannel currentChannel = this.channel;
         if (isConnected() && !socket.isForceTURN()) {
             return NGEPlatform
@@ -209,7 +327,7 @@ public final class NostrRTCChannel {
                         return;
                     }
                     currentChannel
-                        .write(packet.payload())
+                        .write(payload)
                         .then(r -> {
                             res.accept(true);
                             return null;
@@ -224,7 +342,7 @@ public final class NostrRTCChannel {
         }
         NostrTURNChannel currentTurnSend = this.turnSend;
         if (currentTurnSend != null) {
-            return currentTurnSend.write(packet.payload());
+            return currentTurnSend.write(payload);
         }
         return AsyncTask.completed(Boolean.FALSE);
     }
@@ -403,38 +521,72 @@ public final class NostrRTCChannel {
     private ByteBuffer unwrapIncomingPayload(ByteBuffer bbf) {
         ByteBuffer payload = bbf.duplicate();
         if (payload.remaining() < INNER_FRAME_HEADER_SIZE) {
-            return payload;
+            return null;
         }
         for (byte b : INNER_FRAME_MAGIC) {
             if (payload.get() != b) {
-                return bbf.duplicate();
+                return null;
             }
         }
         if (payload.get() != INNER_FRAME_VERSION) {
-            return bbf.duplicate();
-        }
-        long packetId = payload.getLong();
-        if (packetId <= 0L) {
-            return bbf.duplicate();
-        }
-        if (!recordPacketId(packetId)) {
             return null;
         }
-        return payload.slice();
+        long packetId = payload.getLong();
+        int fragmentId = payload.getShort();
+        int fragmentCount = payload.getShort();
+        if (packetId <= 0L) {
+            return null;
+        }
+        if (fragmentCount <= 0 || fragmentId < 0 || fragmentId >= fragmentCount) {
+            return null;
+        }
+
+        synchronized (receivedPacketIdsLock) {
+            pruneExpiredPendingFragmentsLocked();
+            if (receivedPacketIds.contains(Long.valueOf(packetId))) {
+                return null;
+            }
+
+            PendingInboundFragments pending = pendingFragments.get(Long.valueOf(packetId));
+            if (pending == null || pending.fragmentCount != fragmentCount) {
+                pending = new PendingInboundFragments(fragmentCount);
+                pendingFragments.put(Long.valueOf(packetId), pending);
+            }
+
+            ByteBuffer merged = pending.addFragment(fragmentId, payload.slice());
+            if (merged == null) {
+                return null;
+            }
+
+            pendingFragments.remove(Long.valueOf(packetId));
+            if (!recordCompletedPacketIdLocked(packetId)) {
+                return null;
+            }
+            return merged;
+        }
     }
 
-    private boolean recordPacketId(long packetId) {
-        synchronized (receivedPacketIdsLock) {
-            if (receivedPacketIds.contains(Long.valueOf(packetId))) {
-                return false;
-            }
-            receivedPacketIds.add(Long.valueOf(packetId));
-            while (receivedPacketIds.size() > RECEIVE_DEDUP_WINDOW) {
-                Long oldest = receivedPacketIds.iterator().next();
-                receivedPacketIds.remove(oldest);
-            }
-            return true;
+    private boolean recordCompletedPacketIdLocked(long packetId) {
+        if (receivedPacketIds.contains(Long.valueOf(packetId))) {
+            return false;
         }
+        receivedPacketIds.add(Long.valueOf(packetId));
+        while (receivedPacketIds.size() > RECEIVE_DEDUP_WINDOW) {
+            Long oldest = receivedPacketIds.iterator().next();
+            receivedPacketIds.remove(oldest);
+        }
+        return true;
+    }
+
+    private void pruneExpiredPendingFragmentsLocked() {
+        if (pendingFragments.isEmpty()) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        pendingFragments.entrySet().removeIf(entry -> {
+            PendingInboundFragments pending = entry.getValue();
+            return pending == null || pending.isExpired(now);
+        });
     }
 
     void onRTCBufferedAmountLow() {

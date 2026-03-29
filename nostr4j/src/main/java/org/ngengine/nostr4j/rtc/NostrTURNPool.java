@@ -142,7 +142,8 @@ public final class NostrTURNPool implements AutoCloseable {
                     return NGEPlatform
                         .get()
                         .wrapPromise((res2, rej2) -> {
-                            TURNTransport wss = new TURNTransport(NGEPlatform.get().newTransport());
+                            WebsocketTransport transport = NGEPlatform.get().newTransport();
+                            TURNTransport wss = new TURNTransport(transport);
                             wss.transport.addListener(
                                 new WebsocketTransportListener() {
                                     @Override
