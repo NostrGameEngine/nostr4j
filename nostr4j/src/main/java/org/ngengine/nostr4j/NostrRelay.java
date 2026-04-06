@@ -314,7 +314,7 @@ public final class NostrRelay {
                                 }
                                 this.connector.connect(this.url)
                                     .catchException(e -> {
-                                        logger.log(Level.WARNING, "Error connecting to relay: " + this.url, e);
+                                        logger.log(Level.FINER, "Error connecting to relay: " + this.url, e);
                                         runInRelayExecutor(
                                             (a, b) -> {
                                                 try {
