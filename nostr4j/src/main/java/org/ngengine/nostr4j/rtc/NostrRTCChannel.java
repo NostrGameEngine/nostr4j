@@ -52,7 +52,7 @@ import org.ngengine.platform.transport.RTCDataChannel;
 public final class NostrRTCChannel {
 
     private static final Logger logger = Logger.getLogger(NostrRTCChannel.class.getName());
-    public static final int DEFAULT_MAX_FRAGMENT_SIZE = 256 * 1024; // 256KB
+    private static  final int MAX_FRAGMENT_SIZE = 64 * 1024; // 64KB;
     private static final byte[] INNER_FRAME_MAGIC = new byte[] {
         0x6E,
         0x34,
@@ -82,7 +82,6 @@ public final class NostrRTCChannel {
     private final boolean reliable;
     private final Number maxRetransmits;
     private final Duration maxPacketLifeTime;
-    private volatile int maxFragmentSize = DEFAULT_MAX_FRAGMENT_SIZE;
     private int bufferedAmountThreshold = -1;
     private boolean closed = false;
     private final CopyOnWriteArrayList<NostrRTCChannelListener> listeners = new CopyOnWriteArrayList<>();
@@ -251,7 +250,7 @@ public final class NostrRTCChannel {
     }
 
     AsyncTask<Boolean> write(PreparedPacket packet) {
-        int limit = maxFragmentSize;
+        int limit = MAX_FRAGMENT_SIZE;
         int payloadChunkSize;
         if (limit <= 0) {
             payloadChunkSize = Integer.MAX_VALUE - INNER_FRAME_HEADER_SIZE;
@@ -277,14 +276,7 @@ public final class NostrRTCChannel {
     
 
     public int getMaxFragmentSize() {
-        return maxFragmentSize;
-    }
-
-    public void setMaxFragmentSize(int maxFragmentSize) {
-        if (maxFragmentSize <= 0) {
-            throw new IllegalArgumentException("maxFragmentSize must be > 0");
-        }
-        this.maxFragmentSize = maxFragmentSize;
+        return MAX_FRAGMENT_SIZE;
     }
 
     private ByteBuffer[] encodePacketFragments(PreparedPacket packet, int payloadChunkSize) {
