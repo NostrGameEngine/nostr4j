@@ -96,6 +96,7 @@ public final class NostrTURNChannel {
     private volatile String turnServer; // can change due to redirects
     private final NostrKeyPair roomKeyPair;
     private final String channelLabel;
+    private final boolean requiresDeliveryAck;
     private final int maxDiff;
     private final AtomicInteger outgoingMessageCounter = new AtomicInteger(1);
     private final Map<Integer, PendingWrite> pendingWrites = new ConcurrentHashMap<Integer, PendingWrite>();
@@ -158,6 +159,7 @@ public final class NostrTURNChannel {
         String turnServerUrl,
         NostrKeyPair roomKeyPair,
         String channelLabel,
+        boolean reliable,
         int maxDiff
     ) {
         this.turnServer = Objects.requireNonNull(turnServerUrl, "TURN server URL cannot be null");
@@ -166,6 +168,7 @@ public final class NostrTURNChannel {
         this.localPeer = Objects.requireNonNull(localPeer, "Local peer cannot be null");
         this.remotePeer = Objects.requireNonNull(remotePeer, "Remote peer cannot be null");
         this.channelLabel = Objects.requireNonNull(channelLabel, "Channel label cannot be null");
+        this.requiresDeliveryAck = reliable;
         this.maxDiff = maxDiff;
         this.vSocketId = nextVsocketId();
         this.ackTimeoutExecutor = NGEPlatform.get().newAsyncExecutor(NostrTURNChannel.class.getSimpleName() + "-ack-timeout");
@@ -255,52 +258,65 @@ public final class NostrTURNChannel {
         final int messageId = nextOutgoingMessageId();
         final Long packetId = NostrRTCChannel.tryExtractPacketId(payload);
         return AsyncTask.create((resolve, reject) -> {
-            PendingWrite pendingWrite = new PendingWrite(messageId, packetId, resolve, reject);
-            PendingWrite existing = pendingWrites.put(Integer.valueOf(messageId), pendingWrite);
-            if (existing != null) {
-                reject.accept(new IllegalStateException("Duplicate TURN message id: " + messageId));
-                return;
-            }
+            PendingWrite pendingWrite = null;
+            if (requiresDeliveryAck) {
+                pendingWrite = new PendingWrite(messageId, packetId, resolve, reject);
+                PendingWrite existing = pendingWrites.put(Integer.valueOf(messageId), pendingWrite);
+                if (existing != null) {
+                    reject.accept(new IllegalStateException("Duplicate TURN message id: " + messageId));
+                    return;
+                }
 
-            pendingWrite.timeoutTask =
-                ackTimeoutExecutor.runLater(
-                    () -> {
-                        PendingWrite timedOut = pendingWrites.remove(Integer.valueOf(messageId));
-                        if (timedOut != null) {
-                            logger.warning(
-                                "TURN delivery_ack timed out; retrying write later " + describePendingWrite(timedOut)
-                            );
-                            timedOut.reject.accept(new DeliveryAckTimeoutException(messageId, packetId));
-                        }
-                        return null;
-                    },
-                    DELIVERY_ACK_TIMEOUT_MS,
-                    TimeUnit.MILLISECONDS
-                );
+                pendingWrite.timeoutTask =
+                    ackTimeoutExecutor.runLater(
+                        () -> {
+                            PendingWrite timedOut = pendingWrites.remove(Integer.valueOf(messageId));
+                            if (timedOut != null) {
+                                logger.warning(
+                                    "TURN delivery_ack timed out; retrying write later " + describePendingWrite(timedOut)
+                                );
+                                timedOut.reject.accept(new DeliveryAckTimeoutException(messageId, packetId));
+                            }
+                            return null;
+                        },
+                        DELIVERY_ACK_TIMEOUT_MS,
+                        TimeUnit.MILLISECONDS
+                    );
+            }
 
             outgoingDataEvent
                 .encodeToFrame(List.of(payload), messageId)
                 .compose(bbf -> {
                     TURNTransport activeTransport = this.transport;
                     if (activeTransport == null || activeTransport != currentTransport || !activeTransport.isConnected()) {
-                        clearPendingWrite(messageId);
+                        if (requiresDeliveryAck) {
+                            clearPendingWrite(messageId);
+                        }
                         return AsyncTask.completed(Boolean.FALSE);
                     }
                     return activeTransport.getTransport().sendBinary(bbf).then(v -> Boolean.TRUE);
                 })
                 .then(sent -> {
-                    if (!Boolean.TRUE.equals(sent)) {
-                        PendingWrite pending = clearPendingWrite(messageId);
-                        if (pending != null) {
-                            pending.resolve.accept(Boolean.FALSE);
+                    if (requiresDeliveryAck) {
+                        if (!Boolean.TRUE.equals(sent)) {
+                            PendingWrite pending = clearPendingWrite(messageId);
+                            if (pending != null) {
+                                pending.resolve.accept(Boolean.FALSE);
+                            }
                         }
+                    } else {
+                        resolve.accept(Boolean.TRUE.equals(sent));
                     }
                     return null;
                 })
                 .catchException(ex -> {
-                    PendingWrite pending = clearPendingWrite(messageId);
-                    if (pending != null) {
-                        pending.reject.accept(ex);
+                    if (requiresDeliveryAck) {
+                        PendingWrite pending = clearPendingWrite(messageId);
+                        if (pending != null) {
+                            pending.reject.accept(ex);
+                        }
+                    } else {
+                        reject.accept(ex);
                     }
                 });
         });
@@ -441,7 +457,9 @@ public final class NostrTURNChannel {
             logger.warning("TURN: Received data in invalid state " + state);
             return true;
         }
-        sendDeliveryAck(messageId);
+        if (requiresDeliveryAck) {
+            sendDeliveryAck(messageId);
+        }
 
         long envelopeVsocketId = NostrTURNCodec.extractVsocketId(msg);
         incomingDataEvent =
@@ -522,6 +540,9 @@ public final class NostrTURNChannel {
                 }
             case "delivery_ack":
                 {
+                    if (!requiresDeliveryAck) {
+                        break;
+                    }
                     if (envelopeVsocketId == 0L) {
                         throw new IllegalArgumentException("TURN delivery_ack must have non-zero envelope vsocketId");
                     }

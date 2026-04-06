@@ -74,6 +74,7 @@ public final class NostrTURNPool implements AutoCloseable {
         String turnServerUrl,
         NostrKeyPair roomKeyPair,
         String channelLabel,
+        boolean reliable,
         NostrTURNChannelListener listener
     ) {
         NostrTURNChannel channel = new NostrTURNChannel(
@@ -82,6 +83,7 @@ public final class NostrTURNPool implements AutoCloseable {
             turnServerUrl,
             roomKeyPair,
             channelLabel,
+            reliable,
             maxAcceptedDiff
         );
         if (listener != null) channel.addListener(listener);

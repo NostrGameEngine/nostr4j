@@ -80,7 +80,7 @@ public class TestNostrTURNPoolFailures {
                 TURN_URL
             );
 
-            pool.connect(local, remote, TURN_URL, room, "primary", null);
+            pool.connect(local, remote, TURN_URL, room, "primary", true, null);
 
             Thread.sleep(260L);
 

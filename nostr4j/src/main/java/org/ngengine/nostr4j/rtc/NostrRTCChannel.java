@@ -663,6 +663,7 @@ public final class NostrRTCChannel {
                         sendTurn,
                         this.socket.getRoomKeyPair(),
                         this.name,
+                        this.reliable,
                         new NostrTURNChannelListener() {
                             @Override
                             public void onTurnChannelReady(NostrTURNChannel channel) {
@@ -699,6 +700,7 @@ public final class NostrRTCChannel {
                     sendTurn,
                     this.socket.getRoomKeyPair(),
                     this.name,
+                    this.reliable,
                     new NostrTURNChannelListener() {
                         @Override
                         public void onTurnChannelReady(NostrTURNChannel channel) {
@@ -727,6 +729,7 @@ public final class NostrRTCChannel {
                     receiveTurn,
                     this.socket.getRoomKeyPair(),
                     this.name,
+                    this.reliable,
                     new NostrTURNChannelListener() {
                         @Override
                         public void onTurnChannelReady(NostrTURNChannel channel) {
