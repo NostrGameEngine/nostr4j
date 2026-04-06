@@ -325,7 +325,8 @@ public class NostrSubscription extends NostrMessage {
 
     protected void callEoseListeners(NostrRelay relay, boolean everyWhere) {
         if (onEoseListeners.isEmpty()) return;
-        AsyncExecutor executor = this.getExecutor();
+        AsyncExecutor executor = this.exc;
+        if (executor == null) return;
         for (NostrSubEoseListener listener : onEoseListeners) {
             executor.run(() -> {
                 try {
@@ -340,7 +341,8 @@ public class NostrSubscription extends NostrMessage {
 
     protected void callEventListeners(SignedNostrEvent event, boolean stored) {
         if (onEventListeners.isEmpty()) return;
-        AsyncExecutor executor = this.getExecutor();
+        AsyncExecutor executor = this.exc;
+        if (executor == null) return;
         for (NostrSubEventListener listener : onEventListeners) {
             executor.run(() -> {
                 try {
@@ -354,7 +356,9 @@ public class NostrSubscription extends NostrMessage {
     }
 
     protected void callCloseListeners() {
-        callCloseListeners(this.getExecutor(), getCloseReasonsSnapshot());
+        AsyncExecutor executor = this.exc;
+        if (executor == null) return;
+        callCloseListeners(executor, getCloseReasonsSnapshot());
     }
 
     private void callCloseListeners(AsyncExecutor executor, List<String> reasons) {
@@ -372,7 +376,9 @@ public class NostrSubscription extends NostrMessage {
     }
 
     protected void callOpenListeners() {
-        callOpenListeners(this.getExecutor());
+        AsyncExecutor executor = this.exc;
+        if (executor == null) return;
+        callOpenListeners(executor);
     }
 
     private void callOpenListeners(AsyncExecutor executor) {

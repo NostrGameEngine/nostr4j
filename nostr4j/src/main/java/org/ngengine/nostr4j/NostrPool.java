@@ -469,6 +469,10 @@ public class NostrPool {
                 String subId = msg.getSubId();
                 NostrSubscription sub = subscriptions.get(subId);
                 if (sub != null) {
+                    if (!sub.isOpened()) {
+                        logger.finer("ignoring eose for non-open subscription " + subId + " from " + relay.getUrl());
+                        return true;
+                    }
                     // check if it is eosed in every relay
                     boolean isEOSEEverywhere = true;
                     for (NostrRelay r : relays) {
@@ -504,6 +508,10 @@ public class NostrPool {
                 String subId = e.getSubId();
                 NostrSubscription sub = subscriptions.get(subId);
                 if (sub != null) {
+                    if (!sub.isOpened()) {
+                        logger.finer("ignoring event for non-open subscription " + subId + " from " + relay.getUrl());
+                        return true;
+                    }
                     assert dbg(() -> {
                         logger.finer("received event for subscription " + subId);
                     });
