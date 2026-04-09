@@ -1621,11 +1621,8 @@ public class NostrRTCIntegrationTest {
 
     private static ByteBuffer frameSinglePacket(NostrRTCChannel channel, NostrRTCChannel.PreparedPacket packet)
         throws Exception {
-        java.lang.reflect.Method encodePacketFragments = NostrRTCChannel.class.getDeclaredMethod(
-            "encodePacketFragments",
-            NostrRTCChannel.PreparedPacket.class,
-            int.class
-        );
+        java.lang.reflect.Method encodePacketFragments =
+            NostrRTCChannel.class.getDeclaredMethod("encodePacketFragments", NostrRTCChannel.PreparedPacket.class, int.class);
         encodePacketFragments.setAccessible(true);
         ByteBuffer[] framed = (ByteBuffer[]) encodePacketFragments.invoke(channel, packet, Integer.MAX_VALUE / 4);
         assertEquals("Expected single fragment in test helper", 1, framed.length);
@@ -2012,14 +2009,12 @@ public class NostrRTCIntegrationTest {
             return delegate.isConnected();
         }
 
-         @Override
-        public void setMaxMessageSize(int maxMessageSize) {
-            
-        }
+        @Override
+        public void setMaxMessageSize(int maxMessageSize) {}
 
         @Override
         public int getMaxMessageSize() {
-            return 1024*1024*10;
+            return 1024 * 1024 * 10;
         }
     }
 

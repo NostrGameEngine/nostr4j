@@ -37,8 +37,8 @@ import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.event.UnsignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
 import org.ngengine.nostr4j.signer.NostrSigner;
-import org.ngengine.platform.NGEUtils;
 import org.ngengine.platform.AsyncTask;
+import org.ngengine.platform.NGEUtils;
 
 /**
  * Announce the peer can accept connections.

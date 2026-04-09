@@ -388,7 +388,8 @@ public class TestNostrRTCSocketReadyEmission {
         return frameSinglePacket(channel, channel.prepareOutgoingPacket(payload));
     }
 
-    private static ByteBuffer frameSinglePacket(NostrRTCChannel channel, NostrRTCChannel.PreparedPacket packet) throws Exception {
+    private static ByteBuffer frameSinglePacket(NostrRTCChannel channel, NostrRTCChannel.PreparedPacket packet)
+        throws Exception {
         ByteBuffer[] framed = encodePacketFragments(channel, packet, Integer.MAX_VALUE / 4);
         assertEquals("Expected single fragment in test helper", 1, framed.length);
         return framed[0].asReadOnlyBuffer();
@@ -399,11 +400,8 @@ public class TestNostrRTCSocketReadyEmission {
         NostrRTCChannel.PreparedPacket packet,
         int payloadChunkSize
     ) throws Exception {
-        java.lang.reflect.Method encodePacketFragments = NostrRTCChannel.class.getDeclaredMethod(
-            "encodePacketFragments",
-            NostrRTCChannel.PreparedPacket.class,
-            int.class
-        );
+        java.lang.reflect.Method encodePacketFragments =
+            NostrRTCChannel.class.getDeclaredMethod("encodePacketFragments", NostrRTCChannel.PreparedPacket.class, int.class);
         encodePacketFragments.setAccessible(true);
         return (ByteBuffer[]) encodePacketFragments.invoke(channel, packet, payloadChunkSize);
     }

@@ -255,13 +255,11 @@ public class TestRelayLoopScheduling {
         }
 
         @Override
-        public void setMaxMessageSize(int maxMessageSize) {
-            
-        }
+        public void setMaxMessageSize(int maxMessageSize) {}
 
         @Override
         public int getMaxMessageSize() {
-            return 1024*1024*10;
+            return 1024 * 1024 * 10;
         }
     }
 }

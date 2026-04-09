@@ -251,8 +251,6 @@ public final class NostrRTCChannel {
         return chain;
     }
 
-    
-
     public int getMaxFragmentSize() {
         return MAX_FRAGMENT_SIZE;
     }
@@ -543,10 +541,12 @@ public final class NostrRTCChannel {
             return;
         }
         long now = System.currentTimeMillis();
-        pendingFragments.entrySet().removeIf(entry -> {
-            PendingInboundFragments pending = entry.getValue();
-            return pending == null || pending.isExpired(now);
-        });
+        pendingFragments
+            .entrySet()
+            .removeIf(entry -> {
+                PendingInboundFragments pending = entry.getValue();
+                return pending == null || pending.isExpired(now);
+            });
     }
 
     void onRTCBufferedAmountLow() {
