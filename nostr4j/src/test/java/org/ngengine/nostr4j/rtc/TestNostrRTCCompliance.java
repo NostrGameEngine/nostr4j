@@ -218,12 +218,39 @@ public class TestNostrRTCCompliance {
         );
 
         SignedNostrEvent event = NGEUtils.awaitNoThrow(connect.toEvent(null));
+        assertEquals("dc3", event.getFirstTagFirstValue("version"));
 
         try {
             new NostrRTCDisconnectSignal(signer, roomKeyPair, event);
             fail("Expected type mismatch validation to fail");
         } catch (IllegalArgumentException expected) {
             assertTrue(expected.getMessage().contains("Event type"));
+        }
+    }
+
+    @Test
+    public void testRtcConnectParserRejectsMissingVersionTag() {
+        NostrKeyPair roomKeyPair = new NostrKeyPair();
+        NostrKeyPairSigner signer = NostrKeyPairSigner.generate();
+        NostrRTCLocalPeer local = localPeer(signer, roomKeyPair, "session-x", null);
+
+        UnsignedNostrEvent unsigned = new UnsignedNostrEvent()
+            .withKind(25050)
+            .createdAt(Instant.now())
+            .withTag("t", "connect")
+            .withTag("P", roomKeyPair.getPublicKey().asHex())
+            .withTag("d", local.getSessionId())
+            .withTag("i", PROTOCOL_ID)
+            .withTag("y", APP_ID)
+            .withTag("expiration", String.valueOf(Instant.now().plusSeconds(60).getEpochSecond()))
+            .withContent("hello");
+        SignedNostrEvent event = NGEUtils.awaitNoThrow(signer.sign(unsigned));
+
+        try {
+            new NostrRTCConnectSignal(signer, roomKeyPair, event);
+            fail("Expected connect version validation to fail");
+        } catch (IllegalArgumentException expected) {
+            assertTrue(expected.getMessage().contains("Connect signaling version"));
         }
     }
 

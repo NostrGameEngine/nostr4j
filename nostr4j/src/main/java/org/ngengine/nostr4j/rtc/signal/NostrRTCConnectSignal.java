@@ -37,6 +37,7 @@ import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.event.UnsignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
 import org.ngengine.nostr4j.signer.NostrSigner;
+import org.ngengine.platform.NGEUtils;
 import org.ngengine.platform.AsyncTask;
 
 /**
@@ -46,6 +47,7 @@ import org.ngengine.platform.AsyncTask;
 public final class NostrRTCConnectSignal extends NostrRTCSignal {
 
     private static final long serialVersionUID = 2L;
+    public static final String PROTOCOL_VERSION = "dc3";
     private volatile Instant expireAt;
     private final String message;
 
@@ -63,6 +65,12 @@ public final class NostrRTCConnectSignal extends NostrRTCSignal {
 
     public NostrRTCConnectSignal(NostrSigner localSigner, NostrKeyPair roomKeyPair, SignedNostrEvent event) {
         super(localSigner, "connect", roomKeyPair, event);
+        String version = NGEUtils.safeString(event.getFirstTagFirstValue("version"));
+        if (!PROTOCOL_VERSION.equals(version)) {
+            throw new IllegalArgumentException(
+                "Connect signaling version must be " + PROTOCOL_VERSION + " but was: " + version
+            );
+        }
         this.expireAt = event.getExpiration();
         this.message = event.getContent();
     }
@@ -81,6 +89,7 @@ public final class NostrRTCConnectSignal extends NostrRTCSignal {
 
     @Override
     protected final AsyncTask<UnsignedNostrEvent> computeEvent(UnsignedNostrEvent event) {
+        event.withTag("version", PROTOCOL_VERSION);
         event.withTag("expiration", String.valueOf(expireAt.getEpochSecond()));
         if (message != null) {
             event.withContent(message);

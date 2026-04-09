@@ -53,26 +53,7 @@ public final class NostrRTCChannel {
 
     private static final Logger logger = Logger.getLogger(NostrRTCChannel.class.getName());
     private static final int MAX_FRAGMENT_SIZE = 0xFFFF;
-    private static final byte[] INNER_FRAME_MAGIC = new byte[] {
-        0x6E,
-        0x34,
-        0x6A,
-        0x2D,
-        0x72,
-        0x74,
-        0x63,
-        0x2D,
-        0x69,
-        0x6E,
-        0x6E,
-        0x65,
-        0x72,
-        0x2D,
-        0x76,
-        0x31,
-    };
-    private static final byte INNER_FRAME_VERSION = 1;
-    private static final int INNER_FRAME_HEADER_SIZE = INNER_FRAME_MAGIC.length + 1 + Long.BYTES + Short.BYTES + Short.BYTES;
+    private static final int INNER_FRAME_HEADER_SIZE = Long.BYTES + Short.BYTES + Short.BYTES;
     private static final int RECEIVE_DEDUP_WINDOW = 4096;
     private static final long FRAGMENT_REASSEMBLY_TIMEOUT_MS = 30_000L;
     private RTCDataChannel channel;
@@ -230,16 +211,13 @@ public final class NostrRTCChannel {
         if (payload.remaining() < INNER_FRAME_HEADER_SIZE) {
             return null;
         }
-        for (byte b : INNER_FRAME_MAGIC) {
-            if (payload.get() != b) {
-                return null;
-            }
-        }
-        if (payload.get() != INNER_FRAME_VERSION) {
+        long packetId = payload.getLong();
+        int fragmentId = payload.getShort();
+        int fragmentCount = payload.getShort();
+        if (packetId <= 0L) {
             return null;
         }
-        long packetId = payload.getLong();
-        if (packetId <= 0L) {
+        if (fragmentCount <= 0 || fragmentId < 0 || fragmentId >= fragmentCount) {
             return null;
         }
         return Long.valueOf(packetId);
@@ -291,8 +269,6 @@ public final class NostrRTCChannel {
         for (int fragmentId = 0; fragmentId < fragmentCount; fragmentId++) {
             int fragmentSize = Math.min(chunkSize, payload.remaining());
             ByteBuffer framed = ByteBuffer.allocate(INNER_FRAME_HEADER_SIZE + fragmentSize);
-            framed.put(INNER_FRAME_MAGIC);
-            framed.put(INNER_FRAME_VERSION);
             framed.putLong(packet.packetId());
             framed.putShort((short) fragmentId);
             framed.putShort((short) fragmentCount);
@@ -513,14 +489,6 @@ public final class NostrRTCChannel {
     private ByteBuffer unwrapIncomingPayload(ByteBuffer bbf) {
         ByteBuffer payload = bbf.duplicate();
         if (payload.remaining() < INNER_FRAME_HEADER_SIZE) {
-            return null;
-        }
-        for (byte b : INNER_FRAME_MAGIC) {
-            if (payload.get() != b) {
-                return null;
-            }
-        }
-        if (payload.get() != INNER_FRAME_VERSION) {
             return null;
         }
         long packetId = payload.getLong();

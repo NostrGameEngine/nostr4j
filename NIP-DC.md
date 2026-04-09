@@ -1,45 +1,73 @@
 # NIP-DC: Direct Connect between peers
-============================
 
 `draft` `optional` `author:riccardobl`
 
-NIP-DC defines a general-purpose way to coordinate and establish peer-to-peer connections using Nostr for discovery and signaling.
+NIP-DC defines a resilient way for peers to discover each other over Nostr, establish a connection, and exchange binary payloads.
 
 It supports two transports:
 
-1. **WebRTC**: for direct peer-to-peer connectivity when possible
-2. **Websocket-based TURN with signed headers**: for relay-based transport when direct connectivity fails
+1. **WebRTC**, for direct peer-to-peer connectivity when possible.
+2. **WebSocket-based TURN with signed headers**, for relay-based transport when direct connectivity is unavailable or unstable.
 
-Both transports share the same concepts:
+Both transports use the same room, peer, and authorization model, so applications see one logical connection rather than two unrelated transports.
 
-* **Rooms**: shared room keypair
-* **Peers**: per-peer keypair + optional session id
-* **roomproof**: room cosignature that proves the sender has the room key
+The logical connection is transport-resilient:
 
+* implementations **SHOULD** prefer direct WebRTC when possible,
+* **MAY** degrade to one or more TURN relays when direct connectivity fails,
+* **MAY** later switch back to WebRTC when conditions improve,
+* and, if no path is currently usable, **MAY** temporarily pause delivery and transparently resume when connectivity returns.
 
-## Rooms
+In short, NIP-DC is not only a connection setup protocol. It defines a resilient peer connection that can survive transport failure, transport switching, temporary disconnection, and later recovery.
 
-A **room** is identified by a Nostr keypair shared among all parties who are allowed to connect within that room.
+The key words **MUST**, **MUST NOT**, **REQUIRED**, **SHALL**, **SHALL NOT**, **SHOULD**, **SHOULD NOT**, **RECOMMENDED**, **NOT RECOMMENDED**, **MAY**, and **OPTIONAL** in this document are to be interpreted as described in BCP 14, RFC 2119 and RFC 8174, when, and only when, they appear in all capitals.
+
+---
+
+## 1. Core concepts
+
+### 1.1 Rooms
+
+A **room** is identified by a Nostr keypair shared by all parties allowed to participate.
 
 * `roomPubkey` is carried in the `P` tag.
 * Possession of the room private key represents authorization to participate in that room.
 
-When a peer joins a room, other peers in the room should attempt to connect to them (WebRTC directly, or via TURN fallback).
+When a peer joins a room, other peers in that room **SHOULD** attempt to connect to it.
 
-
-## Peer identity
+### 1.2 Peer identity
 
 A peer is represented by:
 
-* a Nostr keypair (ideally random / ephemeral), and
-* a session id `d` (to allow multiple simultaneous connections from the same peer key).
+* a Nostr keypair, ideally random or ephemeral,
+* an optional session id `d`, allowing multiple simultaneous sessions for the same peer key.
+
+In practice, a peer instance is identified by `(pubkey, d)`.
+
+### 1.3 Channels
+
+A channel is a persistent logical communication path between two peers that has its own packet ordering, queuing, and retransmission state.
+
+* For WebRTC, a channel is identified by the RTC data channel used for the payloads, including its label.
+* For TURN, a channel is identified by the virtual socket `channelLabel`.
+
+Peers **MUST** automatically open a single RTC data channel labeled `default`. That channel **MUST** be ordered and reliable.
+
+Applications **MAY** open additional custom channels on demand. Any custom channel **SHOULD** be opened on both sides before it is used.
+
+NIP-DC does not define any further automatic channel creation, other than the `default` channel. Additional channel setup **MAY** be coordinated at the application layer using the `default` channel.
+
+In this document, **channel-local** means scoped to one logical application channel.
 
 
-## Room Proof
 
-`roomproof` proves that the sender had access to the room private key and that other peers can accept the event as authentic and authorized to represent a peer in that room.
+---
 
-It is attached to events that require it, using this tag:
+## 2. Room Proof
+
+`roomproof` proves that the sender had access to the room private key.
+
+It is attached to events that require room authorization using:
 
 ```text
 ["roomproof", "<id>", "<sig>"]
@@ -47,12 +75,12 @@ It is attached to events that require it, using this tag:
 
 Where:
 
-* `<id>` is 32-byte lowercase hex sha256 of the preimage below
-* `<sig>` is a 64-byte lowercase hex Schnorr signature of `<id>` using the room private key
+* `<id>` is a 32-byte lowercase hex SHA-256 digest of the preimage below.
+* `<sig>` is a 64-byte lowercase hex Schnorr signature of `<id>` using the room private key.
 
-### Preimage `<id>`
+### 2.1 Preimage
 
-Both sender and verifier compute:
+Sender and verifier compute:
 
 ```text
 id = sha256( JSON.stringify([
@@ -66,78 +94,140 @@ id = sha256( JSON.stringify([
 ]) )
 ```
 
-* `<room pubkey hex>` is the room public key in lowercase hex (32 bytes)
-* `<created_at>` is the event’s `created_at` (unix seconds)
+Where:
+
+* `<room pubkey hex>` is the room public key in lowercase hex, 32 bytes
+* `<created_at>` is the event `created_at` in unix seconds
 * `<kind>` is the event kind
-* `<event pubkey hex>` is the event’s `pubkey` in lowercase hex (32 bytes)
-* `<challenge>` is a custom challenge that depends on the event type (defined below).
+* `<event pubkey hex>` is the event `pubkey` in lowercase hex, 32 bytes
+* `<challenge>` is event-specific and defined by the message type
 
-Serialization MUST follow NIP-01 canonical JSON rules (UTF-8, no whitespace, proper escaping).
+Serialization **MUST** follow NIP-01 canonical JSON rules:
 
-### CoSignature `<sig>`
+* UTF-8
+* no extra whitespace
+* proper escaping
+
+### 2.2 Signature
 
 ```text
 sig = schnorr_sign(id, roomPrivKey)
 ```
 
-### Verification
+### 2.3 Verification
 
-Verifier recomputes `id` from the received event fields and validates `sig` against `roomPubkey`.
+The verifier **MUST** recompute `id` from the received event and **MUST** verify `sig` against `roomPubkey`.
 
+---
 
-# Inner payload envelope for deduplication and fragmentation
+## 3. Payload Envelope
 
-To support transparent retry/failover, duplicate suppression, and fragmentation for transports with message-size limits, implementations MUST wrap outbound channel payloads in an inner binary envelope before handing them to WebRTC or to the TURN fallback transport.
+Every application payload sent through NIP-DC is wrapped in a small binary envelope used for fragmentation and deduplication.
 
-This envelope is **inside** the direct RTC payload and, when TURN fallback is used, **inside** the TURN `data` payload. It does not replace or modify the TURN outer binary envelope defined later in this document.
+All integers are **big-endian**.
 
-Envelope (big-endian) - v1 (required fields):
-
-```
-MAGIC              uint8[16]   // ASCII "n4j-rtc-inner-v1"
-VERSION            uint8       // currently 1
-PACKET_ID          uint64      // channel-local packet id
-FRAGMENT_ID        int16       // fragment index, 0-based
-FRAGMENT_COUNT     int16       // total fragments for this packet
-PAYLOAD            uint8[*]    // original application bytes (fragment payload)
+```text
+PACKET_ID          uint64
+FRAGMENT_ID        int16
+FRAGMENT_COUNT     int16
+PAYLOAD            uint8[*]
 ```
 
-Notes and rules:
+* `PACKET_ID` is a sender-generated **channel-local** unique packet id. A simple incrementing counter per channel is sufficient.
 
-- Header size: 16 + 1 + 8 + 2 + 2 = 29 bytes.
-- `MAGIC` MUST match exactly before an implementation treats a payload as framed.
-- `VERSION` MUST be checked after `MAGIC`. Unknown versions MUST be treated as unframed legacy payloads.
-- `PACKET_ID` MUST be generated by the sender from a monotonic per-channel counter. The same logical outbound packet SHOULD keep the same `PACKET_ID` if it is retried or if delivery switches between direct RTC and TURN fallback.
-- `FRAGMENT_ID` and `FRAGMENT_COUNT` are 16-bit signed integers. Valid `FRAGMENT_COUNT` values are 1..32767; senders MUST fail if a greater count would be required.
-- A non-fragmented packet is represented as `FRAGMENT_ID=0` and `FRAGMENT_COUNT=1`.
-- Receivers SHOULD maintain a bounded moving window of recently seen `PACKET_ID`s per logical channel and discard duplicates (implementation reference uses 4096 entries).
-- Receivers MUST collect fragments for a `PACKET_ID` into a temporary reassembly buffer indexed by `FRAGMENT_ID`. When all `FRAGMENT_COUNT` fragments are present, the receiver MUST merge them in order and deliver the assembled payload to the application.
-- Implementations MUST discard incomplete reassembly buffers after a timeout (implementation reference uses 30 seconds) to avoid memory leaks.
-- If a fragment arrives for a `PACKET_ID` but with a different `FRAGMENT_COUNT` than an existing in-progress reassembly, implementations MAY reset the in-progress reassembly and start a new one for the new `FRAGMENT_COUNT`.
-- There is no retransmit performed by this layer; if fragments are lost the packet will fail to reassemble and be discarded after the timeout. Applications requiring stronger delivery guarantees SHOULD use reliable/ordered channels or add higher-level retransmit logic.
+### 3.1 Fragmentation
 
-Backward compatibility:
+Maximum payload size is **65523 bytes**.
 
-- If `MAGIC` does not match, the payload MUST be treated as a legacy raw payload and delivered unchanged. This allows framed and unframed peers to interoperate during rollout, though duplicate suppression and fragmentation are only available when both sides implement the inner envelope.
+If a payload is larger, the sender **MUST** fragment it and the receiver **MUST** reassemble it using `FRAGMENT_ID` and `FRAGMENT_COUNT`.
 
-Large application payloads MAY be split into multiple inner-envelope fragments so they can be transmitted over transports with message-size limits.
+Rules:
 
-# Data Channel over WebRTC with Nostr Signaling (happy path)
+* `FRAGMENT_ID` **MUST** start at `0`
+* `FRAGMENT_ID` **MUST** increment by `1`
+* the last fragment id **MUST** be `FRAGMENT_COUNT - 1`
+* all fragments of the same logical payload **MUST** use the same `PACKET_ID`
 
-Using Nostr relays for discovery and signaling, direct data channels can be established between peers. This is the preferred mode, and should reasonably work for most peers. The underlying protocol is WebRTC Data Channels; this NIP defines how signaling and discovery happens over Nostr. WebRTC connection and data channel management is up to the application.
+### 3.2 Deduplication
 
-## Encryption
+Receivers **SHOULD** keep a reasonable window of recently fully assembled `PACKET_ID` values **per logical channel** in order to suppress duplicates.
 
-In the `offer`, `answer` and `route` signaling events, `content` MUST be encrypted using NIP-44 with a conversation key derived from:
+*A receiver **MUST NOT** assume that `PACKET_ID` values are unique across different logical channels.*
 
-* sender private key, and
-* receiver public key.
+This matters because the same logical packet may be retried after reconnection, resent through a different TURN relay, or delivered again after switching back from TURN to WebRTC.
 
-Broadcast events `connect` and `disconnect` have plaintext `content`.
+### 3.3 Timeout
 
-## Presence event (`t=connect`)
+Receivers **MAY** discard incomplete payload state after a reasonable timeout from the first fragment received.
 
-Peers periodically broadcast presence to allow discovery.
+### 3.4 Retransmission
+
+NIP-DC allows retransmission of the same logical packet when delivery is uncertain or known to have failed.
+
+Examples include:
+
+* a direct WebRTC send operation fails,
+* a TURN `delivery_ack` is not received before a sender-defined timeout,
+* a transport becomes unavailable while delivery is in progress,
+* a peer switches from WebRTC to TURN, from one TURN relay to another, or back to WebRTC.
+
+Retransmission policy is implementation-specific.
+
+* A sender **MAY** retry a packet zero or more times.
+* A sender **MAY** retry over the same transport or over a different currently available transport.
+* A sender **MAY** stop retrying after any implementation-defined limit, timeout, or failure policy.
+
+To remain the same logical packet, a retransmission **SHOULD** preserve:
+
+* the same `PACKET_ID`,
+* the same `FRAGMENT_COUNT`,
+* and, for each fragment, the same `FRAGMENT_ID`.
+
+A retransmission using a different `PACKET_ID` is a different logical packet and is therefore not deduplicated as a retry of the earlier one.
+
+Receivers are expected to tolerate different retransmission strategies automatically through the deduplication rules in Section 3.2.
+
+* If multiple copies of the same logical packet arrive within the receiver deduplication window for that channel, the receiver **SHOULD** suppress duplicates using `PACKET_ID` after full reassembly.
+* Retries **MAY** arrive over different transports or after a transport switch.
+* Different implementations **MAY** use different retry timing, retry counts, or transport-selection logic, and receivers **SHOULD NOT** depend on any specific retransmission strategy beyond the packet identity rules above.
+
+If a retransmission arrives after the receiver’s deduplication window for that channel has expired, the receiver **MAY** treat it as a new packet, because the earlier packet identity is no longer guaranteed to be remembered.
+
+---
+
+## 4. Signaling
+
+Signaling is performed through Nostr events of kind `25050`.
+
+Different signaling message types are identified by the `t` tag.
+
+### 4.1 Encryption
+
+For:
+
+* `offer`
+* `answer`
+* `route`
+
+the `content` **MUST** be encrypted using NIP-44 with a conversation key derived from:
+
+* sender private key
+* receiver public key
+
+For broadcast events:
+
+* `connect`
+* `disconnect`
+
+the `content` is plaintext.
+
+---
+
+## 5. Presence
+
+### 5.1 Presence event (`t=connect`)
+
+Peers periodically broadcast presence so other peers can discover them.
 
 ```yaml
 {
@@ -148,15 +238,20 @@ Peers periodically broadcast presence to allow discovery.
     ["P", "<room hex pubkey>"],
     ["d", "<session id>"],
     ["i", "<protocol identifier>"],
+    ["version", "dc3"],
     ["y", "<application id>"],
     ["expiration", "<unix timestamp seconds>"]
   ]
 }
 ```
 
-A peer SHOULD refresh presence before `expiration`. If presence expires, other peers may consider the peer offline and may close connections.
+`version` **MUST** be `dc3`.
 
-## Disconnection event (`t=disconnect`)
+A peer **SHOULD** refresh presence before `expiration`.
+
+After expiration, other peers **MAY** consider that peer offline and **MAY** close connections.
+
+### 5.2 Disconnection event (`t=disconnect`)
 
 When a peer leaves the room, it broadcasts:
 
@@ -174,9 +269,15 @@ When a peer leaves the room, it broadcasts:
 }
 ```
 
-## Offer event (`t=offer`)
+---
 
-As soon as a peer is discovered, other peers MAY attempt to connect by sending an offer. The offer contains the WebRTC SDP offer and connection metadata in encrypted form.
+## 6. WebRTC signaling
+
+### 6.1 Offer (`t=offer`)
+
+When a peer discovers another peer, it **MAY** attempt to connect by sending an offer.
+
+The offer contains the WebRTC SDP offer and related connection metadata in encrypted form.
 
 ```yaml
 {
@@ -194,13 +295,15 @@ As soon as a peer is discovered, other peers MAY attempt to connect by sending a
 }
 ```
 
-**roomproof challenge** for this event is the JSON stringified array:
+`roomproof` for this event **MUST** use this challenge:
 
-`[<receiver pubkey>, <nip44 encrypted offer>]`
+```text
+JSON.stringify([<receiver pubkey>, <nip44 encrypted offer>])
+```
 
-## Answer event (`t=answer`)
+### 6.2 Answer (`t=answer`)
 
-Responds to an offer with the WebRTC SDP answer to establish the connection.
+An `answer` responds to an offer with the WebRTC SDP answer.
 
 ```yaml
 {
@@ -218,13 +321,17 @@ Responds to an offer with the WebRTC SDP answer to establish the connection.
 }
 ```
 
-**roomproof challenge** for this event is the JSON stringified array:
+`roomproof` for this event **MUST** use this challenge:
 
-`[<receiver pubkey>, <nip44 encrypted answer>]`
+```text
+JSON.stringify([<receiver pubkey>, <nip44 encrypted answer>])
+```
 
-## Route event (`t=route`)
+### 6.3 Route (`t=route`)
 
-Peers MAY exchange routes/candidates before and after an offer/answer exchange (trickle ICE).
+Peers **MAY** exchange ICE candidates before and after the offer/answer exchange.
+
+This supports trickle ICE and **MAY** also carry a TURN URL.
 
 ```yaml
 {
@@ -233,9 +340,8 @@ Peers MAY exchange routes/candidates before and after an offer/answer exchange (
     {
       "candidates": [
         { "candidate": "<ice candidate>", "sdpMid": "<sdpMid>" }
-        // ... more candidates if applicable
       ],
-      "turn": "<optional NIP-DC TURN server URL more on that below>"
+      "turn": "<optional NIP-DC TURN server URL>"
     }
   )),
   "tags": [
@@ -250,55 +356,139 @@ Peers MAY exchange routes/candidates before and after an offer/answer exchange (
 }
 ```
 
-**roomproof challenge** for this event is the JSON stringified array:
+`roomproof` for this event **MUST** use this challenge:
 
-`[<receiver pubkey>, <nip44 encrypted route>]`
+```text
+JSON.stringify([<receiver pubkey>, <nip44 encrypted route>])
+```
 
 ---
 
-# Data Channels over TURN server with Nostr Signatures (fallback)
+## 7. Transport behavior
 
-This section specifies a protocol to relay **encrypted binary payloads** over a secure WebSocket connection to a TURN relay server. Payloads remain end-to-end encrypted and opaque to the server.
+The signaling above allows peers to discover each other and exchange everything needed to establish a connection.
 
-This is generally the fallback path, as WebRTC direct connections should be preferred when possible. Some apps may choose to prefer this as the primary transport; in that case the connection can be established only if both peers advertise a TURN server URL in their `route` events. Both peers do not need to use the same TURN server, so a bidirectional connection may have one server as receiver and another as sender.
+Implementations **SHOULD** behave as follows:
 
-## Transport and multiplexing
+1. discover peers through `connect` presence
+2. exchange `offer`, `answer`, and `route`
+3. prefer WebRTC if it succeeds
+4. if WebRTC fails or becomes unstable, continue through one or more TURN relays if available
+5. if direct connectivity becomes available again, switch back to WebRTC
+6. if no transport is currently usable, delivery **MAY** pause and **MAY** later resume transparently when connectivity is restored
 
-All communications happen over a secure WebSocket connection between client and server. A client may multiplex multiple virtual sockets on one WebSocket.
+In all cases, the application continues to use the same logical channel and the same Payload Envelope.
+
+The same logical channel is identified across transports by its channel label: the RTC data channel label when using WebRTC, and the virtual socket `channelLabel` when using TURN.
+
+---
+
+## 8. WebRTC
+
+Once a WebRTC Data Channel is established, peers exchange binary payloads directly over that channel.
+
+Those bytes **MUST** carry the same Payload Envelope described in Section 3.
+
+The RTC data channel label identifies the logical channel used by those payloads. When the same logical channel is carried over TURN, the TURN `channelLabel` **MUST** match the RTC data channel label for that channel.
+
+When WebRTC is used as the transport, transport-level encryption is handled automatically by the WebRTC stack. NIP-DC therefore does **not** define any additional transport encryption layer for payloads sent over WebRTC.
+
+Packet ordering over WebRTC depends on the properties of the underlying RTC data channel.
+
+* If the selected RTC data channel is ordered, packets **MUST** be delivered in channel order.
+* If the selected RTC data channel is unordered, packets **MAY** arrive out of order.
+* If the selected RTC data channel is unreliable or partially reliable, packet loss **MAY** occur and send failure or missing delivery **MAY** trigger retransmission according to Section 3.4.
+
+If a WebRTC send fails, the sender **MAY** retransmit the same logical packet according to Section 3.4, including over a different transport if available.
+
+---
+
+## 9. TURN (optional)
+
+When direct WebRTC connectivity fails, becomes unstable, or is temporarily unavailable, peers **MAY** relay binary payloads through one or more TURN servers.
+
+TURN is not only a one-way fallback. A connection **MAY**:
+
+* move from WebRTC to TURN,
+* move across different TURN relays if needed,
+* later return to WebRTC when conditions improve,
+* or pause and transparently resume when no route is temporarily usable.
+
+The TURN URL **MAY** be learned from `route` events.
+
+If the `turn` field is missing or empty, no TURN attempt is possible for that route and the connection attempt **MUST** fail unless another usable route is available.
+
+TURN is end-to-end encrypted:
+
+* the relay sees routing metadata in signed headers
+* the relay sees opaque encrypted payloads
+* the relay does not understand the application protocol
+
+TURN support is **OPTIONAL**. Libraries **MAY** implement only the WebRTC portion, but full resilience requires transport switching and recovery support.
+
+---
+
+## 10. TURN transport and multiplexing
+
+TURN runs over a secure WebSocket between client and server.
+
+One WebSocket **MAY** carry multiple virtual sockets.
+
+A virtual socket represents one logical channel. Its `channelLabel` names that channel and, when the same logical channel also exists over WebRTC, the TURN `channelLabel` **MUST** match the RTC data channel label used for that channel.
 
 A virtual socket is uniquely identified by:
 
-`(roomPubkey, channelLabel, clientSessionId, targetSessionId, protocolId, applicationId, clientPubkey, targetPubkey)`
+```text
+(roomPubkey, channelLabel, clientSessionId, targetSessionId, protocolId, applicationId, clientPubkey, targetPubkey)
+```
 
-After receiving the initial `challenge`, the client MAY create additional virtual sockets by sending additional `connect` events with different parameters, without needing to resolve a new `challenge` for each socket.
+After receiving the initial `challenge`, the client **MAY** create additional virtual sockets by sending additional `connect` messages with different parameters, without solving a new challenge for each socket.
 
-## Binary envelope
+---
 
-Every message is framed in a binary envelope with the following shape:
+## 11. TURN envelope
+
+Every TURN message is framed in this binary envelope.
+
+All integers are **big-endian**.
 
 ```text
-VERSION            uint8                    // always 2
-VSOCKET_ID         int64                    // big-endian
-                                            // MUST be 0 for challenge
-                                            // MUST be != 0 for all other events
-MESSAGE_ID         int32                    // big-endian
-                                            // per-vsocket packet id
-                                            // MUST be 0 for challenge/connect/ack/disconnect
-                                            // MUST be != 0 for data/delivery_ack
-HEADER_SIZE        uint16                   // MUST be > 0
-HEADER_BYTES       uint8[HEADER_SIZE]       // signed nostr event JSON (UTF-8)
+VERSION            uint8
+VSOCKET_ID         int64
+MESSAGE_ID         int32
+HEADER_SIZE        uint16
+HEADER_BYTES       uint8[HEADER_SIZE]
 NUM_PAYLOADS       uint16
 for (i=0; i<NUM_PAYLOADS; i++):
   PAYLOAD_SIZE_i   uint32
-  PAYLOAD_i        uint8[PAYLOAD_SIZE_i]    // encrypted bytes
+  PAYLOAD_i        uint8[PAYLOAD_SIZE_i]
 ```
 
-All integers are big-endian.
+This envelope is for TURN routing and is distinct from the end-to-end Payload Envelope.
 
-`vsocketId=0` is reserved and means no virtual socket exists yet. It is used only by `challenge`.
-All `connect`, `ack`, `data`, `delivery_ack`, and `disconnect` frames MUST carry `vsocketId != 0`.
+* the TURN envelope is visible to the relay
+* the Payload Envelope is end-to-end and meaningful only to the peers
 
-## Header shape (kind 25051)
+Field meaning:
+
+* `VERSION` is always `2`
+* `VSOCKET_ID` is a client-generated unique identifier for the virtual socket, scoped to the WebSocket connection
+* `0` is reserved and used only for the initial `challenge`
+* `MESSAGE_ID` is a client-generated identifier used for deduplication and acknowledgements
+* `HEADER_SIZE` is the UTF-8 byte size of the header event
+* `HEADER_BYTES` is the UTF-8 JSON stringified header event
+* `NUM_PAYLOADS` is the number of encrypted payload blobs in the frame
+
+Rules for `MESSAGE_ID`:
+
+* for `challenge`, `connect`, `ack`, and `disconnect`, `MESSAGE_ID` **MUST** be `0`
+* for `data` and `delivery_ack`, `MESSAGE_ID` **MUST** be non-zero and unique per `(sender socket, direction)`
+
+---
+
+## 12. TURN header shape (kind 25051)
+
+The TURN header **MUST** be a valid Nostr event of kind `25051`.
 
 ```yaml
 {
@@ -319,18 +509,32 @@ All `connect`, `ack`, `data`, `delivery_ack`, and `disconnect` frames MUST carry
   ]
 }
 ```
-Not every tag is required in every message type; required tags depend on the message type (see below).
 
+Not every tag is required for every message type.
 
+---
 
-## Challenge (`t=challenge`)
+## 13. TURN message types
+
+### 13.1 Challenge (`t=challenge`)
 
 `server -> client`
 
-Sent immediately after the WebSocket connection opens. It communicates the PoW difficulty and provides a random challenge token.
+Sent immediately after the WebSocket opens.
 
-Envelope rule: `VSOCKET_ID` MUST be `0`.
-`MESSAGE_ID` MUST be `0`.
+It communicates:
+
+* the PoW difficulty
+* a random challenge token
+* optionally a redirect URL
+* the challenge expiration time
+
+#### TURN envelope
+
+* `VSOCKET_ID` **MUST** be `0`
+* `MESSAGE_ID` **MUST** be `0`
+
+#### Header
 
 ```yaml
 {
@@ -346,27 +550,46 @@ Envelope rule: `VSOCKET_ID` MUST be `0`.
   })
 }
 ```
-if `r` is present and different from the current server URL, the client SHOULD disconnect and reconnect to the provided URL, restarting the handshake.
+
+Meaning:
+
+* `content.difficulty` is the required PoW difficulty in leading zero bits
+* `content.challenge` is the token the client must copy into the next `connect`
+* `r`, if present, is an optional redirect URL for another TURN server
+* `expiration` is when the challenge expires
+
+Behavior:
+
+* if the client supports redirects and `r` is present, it **SHOULD** switch to the provided URL
+* otherwise it **MUST** continue on the current connection
+* the client **MUST** solve and answer before `expiration`
+
+#### Payload
 
 No payloads.
 
-## Connect (`t=connect`)
+---
+
+### 13.2 Connect (`t=connect`)
 
 `client -> server`
 
-Requests creation of a virtual socket. The `connect` MUST include:
+Requests creation of a virtual socket.
 
-* PoW meeting the server’s difficulty,
-* the `roomproof`,
-* the copied challenge token in `content`,
-* a client-generated `vsocketId` in `content` and in the envelope,
-* routing identifiers for both source and destination sessions (`d` and `p[2]`).
+It **MUST** include:
 
-Envelope rule: `VSOCKET_ID` MUST be `!= 0`.
-`MESSAGE_ID` MUST be `0`.
-`content.vsocketId` MUST exactly match the envelope `VSOCKET_ID`.
-The server MUST reject `connect` if `VSOCKET_ID == 0`, if `content.vsocketId` mismatches the envelope value, or if `VSOCKET_ID` collides with an already active socket on that websocket connection.
-The server MUST also reject `connect` if `d` is missing/blank, or if `p` does not include a non-empty destination session id as its third value (after pubkey and channel label).
+* PoW satisfying the announced difficulty
+* valid `roomproof`
+* the copied challenge token in `content`
+* a client-generated `vsocketId` both in `content` and in the envelope
+* routing identifiers for source and destination sessions
+
+#### TURN envelope
+
+* `VSOCKET_ID` **MUST** be non-zero
+* `MESSAGE_ID` **MUST** be `0`
+
+#### Header
 
 ```yaml
 {
@@ -388,18 +611,39 @@ The server MUST also reject `connect` if `d` is missing/blank, or if `p` does no
 }
 ```
 
+Rules:
+
+* `content.vsocketId` **MUST** exactly match envelope `VSOCKET_ID`
+* `roomproof` challenge for this event **MUST** be the raw `challenge` string copied into `content`
+
+The server **MUST** reject `connect` if:
+
+* `VSOCKET_ID == 0`
+* `content.vsocketId` does not match the envelope
+* `VSOCKET_ID` collides with an already active socket on that WebSocket
+* `d` is missing or blank
+* `p` does not include a non-empty destination session id as its third value
+
+#### Payload
+
 No payloads.
 
-The `roomproof` challenge for this event is the `challenge` string copied into `content`.
+---
 
-## Ack (`t=ack`)
+### 13.3 Ack (`t=ack`)
 
 `server -> client`
 
-Confirms the `connect` was accepted. This ACK is for virtual-socket establishment only (not data delivery).
+Confirms that the virtual socket was accepted.
 
-Envelope rule: `VSOCKET_ID` MUST be the same non-zero value accepted from `connect`.
-`MESSAGE_ID` MUST be `0`.
+This is only for virtual-socket establishment, not data delivery.
+
+#### TURN envelope
+
+* `VSOCKET_ID` **MUST** be the accepted non-zero value from `connect`
+* `MESSAGE_ID` **MUST** be `0`
+
+#### Header
 
 ```yaml
 {
@@ -411,17 +655,30 @@ Envelope rule: `VSOCKET_ID` MUST be the same non-zero value accepted from `conne
 }
 ```
 
+#### Payload
+
 No payloads.
 
-## Disconnect (`t=disconnect`)
+---
+
+### 13.4 Disconnect (`t=disconnect`)
 
 `server <-> client`
 
 Terminates a virtual socket.
 
-Envelope rule: `VSOCKET_ID` MUST be `!= 0`.
-`MESSAGE_ID` MUST be `0`.
-The server MUST ignore `disconnect` messages carrying `VSOCKET_ID == 0`, unknown `VSOCKET_ID`, or stale `VSOCKET_ID`.
+#### TURN envelope
+
+* `VSOCKET_ID` **MUST** be non-zero
+* `MESSAGE_ID` **MUST** be `0`
+
+The server **MUST** ignore `disconnect` messages carrying:
+
+* `VSOCKET_ID == 0`
+* unknown `VSOCKET_ID`
+* stale `VSOCKET_ID`
+
+#### Header
 
 ```yaml
 {
@@ -436,39 +693,54 @@ The server MUST ignore `disconnect` messages carrying `VSOCKET_ID == 0`, unknown
 }
 ```
 
-If the server closes due to offline queue limits/timeouts, it MUST use:
+* `reason` is a human-readable explanation such as `"peer unreachable"`, `"protocol error"`, or `"normal closure"`
+* `error` indicates whether the disconnection is due to an error or normal shutdown
+
+If the server closes because offline queue limits or timeouts were hit before the other side connected, it **MUST** use:
 
 ```json
 {"reason":"peer unreachable","error":true}
 ```
 
-## Data (`t=data`)
+#### Payload
+
+No payloads.
+
+---
+
+### 13.5 Data (`t=data`)
 
 `client1 <-> server <-> client2`
 
-Carries encrypted payload bytes. The server routes by envelope `VSOCKET_ID` and must not interpret payloads.
+Carries encrypted payload bytes.
 
-Envelope rule: `VSOCKET_ID` MUST be `!= 0`.
-The server MUST ignore `data` messages carrying `VSOCKET_ID == 0`, unknown `VSOCKET_ID`, or stale `VSOCKET_ID`.
-`MESSAGE_ID` MUST be `!= 0` and unique per `(sender socket, direction)` at least within the sender retransmission/timeout window.
+The relay routes by reciprocal socket matching and **MUST NOT** interpret the payload.
 
-The payload is encrypted using a nip-44 like scheme, where:
-- a 32-byte symmetric secret is used as conversation key
-- the raw byte input is encrypted
-- the output is not encoded in base 64
+#### TURN envelope
 
-The 32-byte secret is randomly generated by the client (can be reused or generated per message). 
-The secret is then converted to an hex string, encrypted with the regular NIP-44 and then included in the header with the `enc` tag:
+* `VSOCKET_ID` **MUST** be non-zero
+* the server **MUST** ignore `data` messages carrying `VSOCKET_ID == 0`, unknown `VSOCKET_ID`, or stale `VSOCKET_ID`
+* `MESSAGE_ID` **MUST** be non-zero and unique per `(sender socket, direction)` at least within the retransmission or timeout window
 
+#### Payload encryption
+
+The payload is encrypted using a NIP-44-like scheme:
+
+* generate a random 32-byte symmetric secret
+* use it as the conversation key to encrypt the raw binary payload
+* do not base64-encode the output
+
+That secret is then hex-encoded, encrypted with regular NIP-44 using the sender/receiver conversation key, and included in the `enc` tag.
+
+Example:
 
 ```javascript
 let secret = bytesToHex(randomBytes(32));
 const conversationKey = deriveConversationKey(senderPrivKey, receiverPubKey);
-const enc = ["enc", "nip44-v2", nip44Encrypt(secret, conversationKey)]; // < add this to header tag
+const enc = ["enc", "nip44-v2", nip44Encrypt(secret, conversationKey)];
 ```
 
-
-
+#### Header
 
 ```yaml
 {
@@ -481,30 +753,51 @@ const enc = ["enc", "nip44-v2", nip44Encrypt(secret, conversationKey)]; // < add
 }
 ```
 
-Payload: one or more encrypted binary blobs.
+#### Payload
 
-Acceptance and offline queueing:
+One or more encrypted binary blobs.
 
-* The server processes `data` only for sockets that were previously accepted (sender received `ack`).
-* A receiver socket is reciprocal only if room/protocol/application/channel match and `(clientPubkey, sourceSessionId)` and `(targetPubkey, targetSessionId)` are inverted between sender and receiver.
-* When relaying to a reciprocal receiver socket, the server MUST rewrite the envelope `VSOCKET_ID` to the receiver socket id before forwarding the frame.
-* When relaying to a reciprocal receiver socket, the server MUST preserve `MESSAGE_ID` unchanged.
-* If the target peer is offline, the server queues payloads.
-* Queued payloads are delivered only after the target peer connects and completes a matching accepted `connect`.
-* If the queue grows too large or the target does not connect within a server-defined timeframe, the server may `disconnect` with `reason="peer unreachable", error=true`.
+#### Acceptance, ordering, and offline queueing
 
-Because payloads are opaque, replay protection must be implemented inside the encrypted payload by the application protocol (if needed).
+* the server **MUST** process `data` only for sockets previously accepted with `ack`
+* a receiver socket is reciprocal only if room, protocol, application, and channel match, and the identities are inverted:
 
-The header may be cached by the sender for efficiency, as long as the sender reuses the same signed header event for subsequent `data` messages.
+  * `(clientPubkey, sourceSessionId)` on one side matches `(targetPubkey, targetSessionId)` on the other side
+  * and vice versa
+* when forwarding to the reciprocal socket, the server **MUST** rewrite only envelope `VSOCKET_ID` to the receiver socket id
+* the server **MUST** preserve `MESSAGE_ID`
+* TURN delivery **MUST** preserve packet order within each virtual socket, and therefore within each logical channel carried by that virtual socket
+* packets forwarded over TURN on the same virtual socket **MUST NOT** be delivered out of order
+* if the target peer is offline, the server **MAY** queue payloads
+* queued payloads **MUST** be delivered only after the target peer connects and completes a matching accepted `connect`
+* if the queue grows too large or the target does not connect in time, the server **MAY** `disconnect` with `reason="peer unreachable", error=true`
+* if delivery is not confirmed or the selected transport fails, the sender **MAY** retransmit the same logical packet according to Section 3.4
 
-## Delivery Ack (`t=delivery_ack`)
+Because payloads are opaque, replay protection, if needed, **MUST** be handled by the application protocol inside the encrypted payload.
+
+#### Header reuse
+
+The sender **MAY** reuse the same header for multiple `data` messages as long as the required fields remain valid.
+
+A relay **MAY** optimize for this by caching and byte-comparing the header before doing full parse and validation.
+
+Header reuse is allowed only for `data` and `delivery_ack`. All other TURN message types **MUST** use a unique header per message.
+
+---
+
+### 13.6 Delivery Ack (`t=delivery_ack`)
 
 `client2 -> server -> client1`
 
-Confirms delivery of a specific `data` packet identified by `MESSAGE_ID`.
+Acknowledges delivery of a specific `data` message identified by `MESSAGE_ID`.
 
-Envelope rule: `VSOCKET_ID` MUST be `!= 0`.
-`MESSAGE_ID` MUST be `!= 0` and MUST match a previously received `data` message on the reciprocal socket.
+#### TURN envelope
+
+* `VSOCKET_ID` **MUST** be non-zero
+* `MESSAGE_ID` **MUST** be non-zero
+* `MESSAGE_ID` **MUST** match a previously received `data` message on the reciprocal socket
+
+#### Header
 
 ```yaml
 {
@@ -516,22 +809,36 @@ Envelope rule: `VSOCKET_ID` MUST be `!= 0`.
 }
 ```
 
+#### Payload
+
 No payloads.
 
-Delivery semantics:
+#### Delivery semantics
 
-* The receiver MUST emit `delivery_ack` only after the corresponding `data` payload has been fully delivered to the receiver-side application/channel API.
-* The sender MAY treat receipt of `delivery_ack` as write completion for that `MESSAGE_ID`.
-* If `delivery_ack` is not received before a sender-defined timeout, the sender SHOULD fail the pending write for that `MESSAGE_ID`.
-* The server MUST route `delivery_ack` using reciprocal socket matching, rewriting only `VSOCKET_ID` for the opposite direction and preserving `MESSAGE_ID`.
-* The `delivery_ack` header MAY be cached and reused for subsequent acknowledgements on the same virtual socket; each frame MUST carry the acknowledged packet `MESSAGE_ID` in the envelope.
+* the receiver **MUST** emit `delivery_ack` only after the corresponding `data` payload has been fully delivered to the receiver-side application or channel API
+* the sender **MAY** treat receipt of `delivery_ack` as write completion for that `MESSAGE_ID`
+* if `delivery_ack` is not received before a sender-defined timeout, the sender **SHOULD** fail the pending write for that `MESSAGE_ID`
+* the server **MUST** route `delivery_ack` using reciprocal socket matching
+* the server **MUST** rewrite only `VSOCKET_ID`
+* the server **MUST** preserve `MESSAGE_ID`
 
+#### Header reuse
+
+The sender **MAY** reuse the same header for multiple `delivery_ack` messages as long as the required fields remain valid.
+
+Header reuse is allowed only for `data` and `delivery_ack`. All other TURN message types **MUST** use a unique header per message.
 
 ---
 
-## Recommended connection strategy
+## 14. Minimal implementation order
 
-A typical client behavior:
+A straightforward implementation order is:
 
-1. Use **WebRTC** (via relay signaling events) as the primary direct transport.
-2. If direct connectivity fails or is interrupted at some point, transparently fall back to the TURN server using the TURN URL learned from routes.
+1. implement room identity, peer identity, and `roomproof`
+2. implement presence via `connect` and `disconnect`
+3. implement encrypted `offer`, `answer`, and `route`
+4. establish WebRTC and send the Payload Envelope over the data channel
+5. add fragmentation, deduplication, timeout, and retransmission handling
+6. optionally add TURN fallback
+7. add offline queueing and `delivery_ack`
+8. finally add transport migration and resume behavior so the logical connection can move between WebRTC and TURN transparently
