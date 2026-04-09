@@ -18,7 +18,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -182,7 +181,7 @@ public class TestRtcPendingSendRecovery {
             waitUntil(() -> failure.get() != null, 2000, "queue should reject after queued timeout");
             assertFalse("timed out queue item should not complete successfully", completed.get());
             assertTrue("queue should remove timed out item", queue.size() == 0);
-            assertTrue("expected TimeoutException but got: " + failure.get(), failure.get() instanceof  Exception);
+            assertTrue("expected TimeoutException but got: " + failure.get(), failure.get() instanceof Exception);
         } finally {
             queue.close();
         }
