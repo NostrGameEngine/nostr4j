@@ -52,7 +52,7 @@ import org.ngengine.platform.transport.RTCDataChannel;
 public final class NostrRTCChannel {
 
     private static final Logger logger = Logger.getLogger(NostrRTCChannel.class.getName());
-    private static  final int MAX_FRAGMENT_SIZE = 64 * 1024; // 64KB;
+    private static final int MAX_FRAGMENT_SIZE = 0xFFFF;
     private static final byte[] INNER_FRAME_MAGIC = new byte[] {
         0x6E,
         0x34,

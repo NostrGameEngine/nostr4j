@@ -323,6 +323,36 @@ public class TestNostrRTCSocketReadyEmission {
         }
     }
 
+    @Test
+    public void testRtcFragmentationRespectsNip44PlaintextLimit() throws Exception {
+        AsyncExecutor executor = NGEUtils.getPlatform().newAsyncExecutor("fragment-limit-test");
+        NostrRTCSocket socket = null;
+        try {
+            socket = newSocket(executor);
+            NostrRTCChannel channel = socket.createChannel("alpha");
+            assertEquals(0xFFFF, channel.getMaxFragmentSize());
+
+            int innerFrameHeaderSize = getInnerFrameHeaderSize();
+            int payloadChunkSize = channel.getMaxFragmentSize() - innerFrameHeaderSize;
+            byte[] payload = new byte[channel.getMaxFragmentSize() * 2 + 123];
+            NostrRTCChannel.PreparedPacket packet = channel.prepareOutgoingPacket(ByteBuffer.wrap(payload));
+
+            ByteBuffer[] framed = encodePacketFragments(channel, packet, payloadChunkSize);
+            assertTrue("Expected packet to be split into multiple fragments", framed.length > 1);
+            for (ByteBuffer fragment : framed) {
+                assertTrue(
+                    "Fragment plaintext exceeds NIP-44 max plaintext size",
+                    fragment.remaining() <= channel.getMaxFragmentSize()
+                );
+            }
+        } finally {
+            if (socket != null) {
+                socket.close();
+            }
+            executor.close();
+        }
+    }
+
     private static NostrRTCSocket newSocket(AsyncExecutor executor) throws Exception {
         NostrKeyPair roomKeyPair = new NostrKeyPair();
         NostrRTCLocalPeer localPeer = new NostrRTCLocalPeer(
@@ -359,15 +389,33 @@ public class TestNostrRTCSocketReadyEmission {
     }
 
     private static ByteBuffer frameSinglePacket(NostrRTCChannel channel, NostrRTCChannel.PreparedPacket packet) throws Exception {
+        ByteBuffer[] framed = encodePacketFragments(channel, packet, Integer.MAX_VALUE / 4);
+        assertEquals("Expected single fragment in test helper", 1, framed.length);
+        return framed[0].asReadOnlyBuffer();
+    }
+
+    private static ByteBuffer[] encodePacketFragments(
+        NostrRTCChannel channel,
+        NostrRTCChannel.PreparedPacket packet,
+        int payloadChunkSize
+    ) throws Exception {
         java.lang.reflect.Method encodePacketFragments = NostrRTCChannel.class.getDeclaredMethod(
             "encodePacketFragments",
             NostrRTCChannel.PreparedPacket.class,
             int.class
         );
         encodePacketFragments.setAccessible(true);
-        ByteBuffer[] framed = (ByteBuffer[]) encodePacketFragments.invoke(channel, packet, Integer.MAX_VALUE / 4);
-        assertEquals("Expected single fragment in test helper", 1, framed.length);
-        return framed[0].asReadOnlyBuffer();
+        return (ByteBuffer[]) encodePacketFragments.invoke(channel, packet, payloadChunkSize);
+    }
+
+    private static int getInnerFrameHeaderSize() {
+        try {
+            java.lang.reflect.Field field = NostrRTCChannel.class.getDeclaredField("INNER_FRAME_HEADER_SIZE");
+            field.setAccessible(true);
+            return field.getInt(null);
+        } catch (Exception e) {
+            throw new IllegalStateException("Cannot read INNER_FRAME_HEADER_SIZE", e);
+        }
     }
 
     private static final class CapturingRTCDataChannel extends RTCDataChannel {

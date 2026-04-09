@@ -95,12 +95,28 @@ public class Nip44 {
     }
 
     private static byte[] pad(byte[] unpadded) {
+        if (unpadded == null) {
+            throw new IllegalArgumentException("NIP44 plaintext must be between 1 and 65535 bytes");
+        }
         int unpaddedLen = unpadded.length;
+        if (unpaddedLen > MAX_PLAINTEXT_SIZE) {
+            throw new IllegalArgumentException(
+                "NIP44 plaintext too large: " + unpaddedLen + " bytes, maximum supported is 65535"
+            );
+        }
         int paddedLen = calcPaddedLength(unpaddedLen);
         return concatBytes((unpaddedLen >> 8) & 0xFF, unpaddedLen & 0xFF, unpadded, null, null, paddedLen + 2);
     }
 
     public static byte[] encryptSyncBinary(byte[] data, byte[] conversationKey, byte[] nonce) {
+        if (data == null || data.length < MIN_PLAINTEXT_SIZE) {
+            throw new IllegalArgumentException("NIP44 plaintext must be between 1 and 65535 bytes");
+        }
+        if (data.length > MAX_PLAINTEXT_SIZE) {
+            throw new IllegalArgumentException(
+                "NIP44 plaintext too large: " + data.length + " bytes, maximum supported is 65535"
+            );
+        }
         if (conversationKey == null || conversationKey.length != CONVERSATION_KEY_SIZE) throw new IllegalArgumentException(
             "Conversation key must be 32 bytes"
         );

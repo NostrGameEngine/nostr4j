@@ -212,6 +212,35 @@ public class TestNip44 {
         }
     }
 
+    @Test
+    public void testEncryptDecryptBinaryMaxPlaintextSize() {
+        byte[] conversationKey = new byte[32];
+        byte[] nonce = new byte[32];
+        byte[] plaintext = new byte[0xFFFF];
+        for (int i = 0; i < plaintext.length; i++) {
+            plaintext[i] = (byte) (i & 0xFF);
+        }
+
+        byte[] encrypted = Nip44.encryptSyncBinary(plaintext, conversationKey, nonce);
+        byte[] decrypted = Nip44.decryptSyncBinary(encrypted, conversationKey);
+
+        assertArrayEquals(plaintext, decrypted);
+    }
+
+    @Test
+    public void testEncryptBinaryRejectsOversizedPlaintextImmediately() {
+        byte[] conversationKey = new byte[32];
+        byte[] nonce = new byte[32];
+        byte[] oversized = new byte[0x10000];
+
+        try {
+            Nip44.encryptSyncBinary(oversized, conversationKey, nonce);
+            fail("Expected encryptSyncBinary to reject plaintext larger than 65535 bytes");
+        } catch (IllegalArgumentException e) {
+            assertEquals("NIP44 plaintext too large: 65536 bytes, maximum supported is 65535", e.getMessage());
+        }
+    }
+
     private static byte[] hexToBytes(String hex) {
         if (hex.startsWith("0x")) {
             hex = hex.substring(2);
