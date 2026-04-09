@@ -33,9 +33,7 @@ package org.ngengine.nostr4j.rtc;
 import java.io.IOException;
 import java.util.NoSuchElementException;
 import java.util.Queue;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.logging.Level;
@@ -81,7 +79,7 @@ public final class BlockingPacketQueue<T> implements AutoCloseable {
         }
     }
 
-    private final Queue<Enqueued<T>> queue = new ConcurrentLinkedQueue<Enqueued<T>>();
+    private final Queue<Enqueued<T>> queue;
     private final PacketHandler<T> handler;
     private final Logger logger;
     private final String failureMessage;
@@ -118,6 +116,9 @@ public final class BlockingPacketQueue<T> implements AutoCloseable {
         long stuckTimeoutMs,
         long queueItemTimeoutMs
     ) {
+        @SuppressWarnings("unchecked")
+        Queue<Enqueued<T>> createdQueue = (Queue<Enqueued<T>>) (Queue<?>) NGEPlatform.get().newConcurrentQueue(Enqueued.class);
+        this.queue = createdQueue;
         this.handler = handler;
         this.logger = logger;
         this.failureMessage = failureMessage;
@@ -336,7 +337,7 @@ public final class BlockingPacketQueue<T> implements AutoCloseable {
         }
         pausedForRetry = false;
         stopInternal();
-        popAndRejectHead(new TimeoutException(failureMessage + " timed out after " + ageMs + " ms"));
+        popAndRejectHead(new Exception(failureMessage + " timed out after " + ageMs + " ms"));
         if (!queue.isEmpty() && handler.isReady()) {
             restart();
         }
