@@ -32,6 +32,7 @@ package org.ngengine.nostr4j.unit;
 
 import static org.junit.Assert.*;
 
+import java.lang.reflect.Field;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collection;
@@ -232,5 +233,29 @@ public class TestNostrEvent {
         assertEquals("alpha", event.getFirstTag("p").get(0));
         assertFalse(event.hasTag("e"));
         assertEquals(event.getTagRows(), event.toMap().get("tags"));
+    }
+
+    @Test
+    public void testSignedEventVerifyUsesCachedValueWhenPresent() throws Exception {
+        Map<String, Object> map = new HashMap<>();
+        map.put("id", "abc");
+        map.put("pubkey", "not-a-valid-pubkey");
+        map.put("kind", 1);
+        map.put("content", "test");
+        map.put("created_at", 1742147457L);
+        map.put("tags", Arrays.asList(Arrays.asList("p", "alpha")));
+        map.put("sig", "sig");
+
+        SignedNostrEvent event = new SignedNostrEvent(map);
+        Field verifiedField = SignedNostrEvent.class.getDeclaredField("verified");
+        verifiedField.setAccessible(true);
+
+        verifiedField.set(event, Boolean.TRUE);
+        assertTrue(event.verify());
+        assertTrue(event.verifyAsync().await());
+
+        verifiedField.set(event, Boolean.FALSE);
+        assertFalse(event.verify());
+        assertFalse(event.verifyAsync().await());
     }
 }

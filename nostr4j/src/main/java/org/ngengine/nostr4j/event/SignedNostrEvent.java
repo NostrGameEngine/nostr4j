@@ -95,6 +95,7 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
     private transient String bech32Id;
     private transient NostrPublicKey parsedPublicKey;
     private transient Instant expiresAt;
+    private transient volatile Boolean verified;
 
     public SignedNostrEvent(
         String id,
@@ -248,11 +249,27 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
     }
 
     public boolean verify() throws Exception {
-        return NGEUtils.getPlatform().verify(this.identifier.id, this.signature, this.getPubkey()._array());
+        Boolean cached = this.verified;
+        if (cached != null) {
+            return cached.booleanValue();
+        }
+        boolean result = NGEUtils.getPlatform().verify(this.identifier.id, this.signature, this.getPubkey()._array());
+        this.verified = Boolean.valueOf(result);
+        return result;
     }
 
     public AsyncTask<Boolean> verifyAsync() {
-        return NGEUtils.getPlatform().verifyAsync(this.identifier.id, this.signature, this.getPubkey()._array());
+        Boolean cached = this.verified;
+        if (cached != null) {
+            return AsyncTask.completed(cached);
+        }
+        return NGEUtils
+            .getPlatform()
+            .verifyAsync(this.identifier.id, this.signature, this.getPubkey()._array())
+            .then(result -> {
+                this.verified = result;
+                return result;
+            });
     }
 
     public String getIdBech32() {
