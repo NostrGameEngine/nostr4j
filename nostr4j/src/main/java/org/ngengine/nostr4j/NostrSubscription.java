@@ -201,7 +201,7 @@ public class NostrSubscription extends NostrMessage {
         List<AsyncTask<NostrMessageAck>> out = this.onClose.apply(this, getCloseMessage());
         registerClosure("closed by client");
         if (executor != null) {
-            callCloseListeners(executor, getCloseReasonsSnapshot());
+            callCloseListenersSync(getCloseReasonsSnapshot());
             executor.close();
         }
         return out;
@@ -372,6 +372,17 @@ public class NostrSubscription extends NostrMessage {
                 }
                 return null;
             });
+        }
+    }
+
+    private void callCloseListenersSync(List<String> reasons) {
+        if (onCloseListeners.isEmpty()) return;
+        for (NostrSubCloseListener listener : onCloseListeners) {
+            try {
+                listener.onSubClose(this, reasons);
+            } catch (Throwable ex) {
+                logger.warning("Error calling Close listener: " + listener + " " + ex);
+            }
         }
     }
 

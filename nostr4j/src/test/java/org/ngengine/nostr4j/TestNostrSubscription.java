@@ -102,4 +102,17 @@ public class TestNostrSubscription {
             fail("Expected executor to be unavailable after close");
         } catch (IllegalStateException expected) {}
     }
+
+    @Test
+    public void testCloseNotifiesCloseListenersSynchronously() {
+        NostrSubscription sub = newSubscription();
+        AtomicBoolean called = new AtomicBoolean(false);
+
+        sub.addCloseListener((ignored, reasons) -> called.set(true));
+
+        sub.open();
+        sub.close();
+
+        assertTrue("close listener should be called before close() returns", called.get());
+    }
 }
