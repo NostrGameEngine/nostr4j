@@ -6,7 +6,8 @@ dependencies {
     def ngePlatformVersion = project.version.endsWith('-SNAPSHOT') ? libs.versions.ngePlatformSnapshot.get() : libs.versions.ngePlatform.get()
     def bech32Version = project.version.endsWith('-SNAPSHOT') ? libs.versions.bech32Snapshot.get() : libs.versions.bech32.get()
     def lnurlVersion = project.version.endsWith('-SNAPSHOT') ? libs.versions.lnurlSnapshot.get() : libs.versions.lnurl.get()
-
+    def bolt11Version = project.version.endsWith('-SNAPSHOT') ? libs.versions.bolt11Snapshot.get() : libs.versions.bolt11.get()
+    
     testImplementation libs.junit4
     testImplementation project(':nostr4j-turn-server')
     implementation "org.ngengine:nge-platform-common:${ngePlatformVersion}"
@@ -17,6 +18,7 @@ dependencies {
 
     api "org.ngengine:bech32:${bech32Version}"
     api "org.ngengine:lnurl4j:${lnurlVersion}"
+    api "org.ngengine:bolt11:${bolt11Version}"
 }
  
 

@@ -18,9 +18,11 @@ jetty = "12.0.14"
 ngePlatform = "0.2.2"
 ngePlatformSnapshot = "0.3.0-SNAPSHOT"
 lnurl = "0.0.3"
-lnurlSnapshot = "0.0.3"
+lnurlSnapshot = "0.3.0-SNAPSHOT"
 bech32 = "1.0.3"
-bech32Snapshot = "1.0.3"
+bech32Snapshot = "1.0.0-SNAPSHOT"
+bolt11 = "0.0.0-SNAPSHOT"
+bolt11Snapshot = "0.0.0-SNAPSHOT"
 
 [libraries]
 asm = { module = "org.ow2.asm:asm", version.ref = "asm" }
