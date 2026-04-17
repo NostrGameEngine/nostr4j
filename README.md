@@ -6,7 +6,7 @@ The library is designed to be flexible and extensible. It provides some key abst
 
 The library has built-in support for:
 
-- nips: 01, 04, 05, 07, 09, 24, 39, 40, 44, 46, 47, 49, 50
+- nips: 01, 04, 05, 07, 09, 24, 39, 40, 44, 46, 47, 49, 50, 57
 - managed nwc wallets
 - wallet abstraction
 - signer abstraction
