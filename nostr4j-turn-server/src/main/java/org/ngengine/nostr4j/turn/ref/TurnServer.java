@@ -132,10 +132,7 @@ public final class TurnServer {
             try {
                 // 1) Attach websocket-scoped client state.
                 this.wsSession = session;
-                TurnClientConnection connection = new TurnClientConnection(
-                    session,
-                    this.turnServer.difficulty
-                );
+                TurnClientConnection connection = new TurnClientConnection(session, this.turnServer.difficulty);
                 this.turnServer.clients.put(session, connection);
                 // 2) Send challenge immediately as required by protocol.
                 this.turnServer.sendChallenge(connection);

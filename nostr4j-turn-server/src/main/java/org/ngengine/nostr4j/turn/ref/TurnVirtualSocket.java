@@ -310,7 +310,9 @@ final class TurnVirtualSocket implements AutoCloseable {
             }
         }
 
-        BlockingPacketQueue<QueuedOutgoingFrame> queue = priority ? this.queuedPriorityOutgoingFrames : this.queuedOutgoingFrames;
+        BlockingPacketQueue<QueuedOutgoingFrame> queue = priority
+            ? this.queuedPriorityOutgoingFrames
+            : this.queuedOutgoingFrames;
         queue.enqueue(new QueuedOutgoingFrame(frameBytes));
         return true;
     }

@@ -174,10 +174,19 @@ public class TestTurnServerInternalRegression {
             int maxQueued = 3;
             assertTrue(sender.out(encodedFrame("data", sender.getVsocketId(), 201), maxQueued, false));
             assertTrue(sender.out(encodedFrame("data", sender.getVsocketId(), 202), maxQueued, false));
-            assertFalse("normal queue should remain bounded and reserve one priority slot", sender.out(encodedFrame("data", sender.getVsocketId(), 203), maxQueued, false));
+            assertFalse(
+                "normal queue should remain bounded and reserve one priority slot",
+                sender.out(encodedFrame("data", sender.getVsocketId(), 203), maxQueued, false)
+            );
 
-            assertTrue("delivery_ack should still queue with reserved priority capacity", sender.out(encodedFrame("delivery_ack", sender.getVsocketId(), 204), maxQueued, true));
-            assertFalse("priority queue must remain bounded (no unbounded growth)", sender.out(encodedFrame("delivery_ack", sender.getVsocketId(), 205), maxQueued, true));
+            assertTrue(
+                "delivery_ack should still queue with reserved priority capacity",
+                sender.out(encodedFrame("delivery_ack", sender.getVsocketId(), 204), maxQueued, true)
+            );
+            assertFalse(
+                "priority queue must remain bounded (no unbounded growth)",
+                sender.out(encodedFrame("delivery_ack", sender.getVsocketId(), 205), maxQueued, true)
+            );
         } finally {
             sender.close();
         }
@@ -212,11 +221,12 @@ public class TestTurnServerInternalRegression {
         TurnVirtualSocket sender,
         TurnVirtualSocket.QueuedOutgoingFrame queued
     ) throws Exception {
-        Method method = TurnServer.class.getDeclaredMethod(
-            "processQueuedFrame",
-            TurnVirtualSocket.class,
-            TurnVirtualSocket.QueuedOutgoingFrame.class
-        );
+        Method method =
+            TurnServer.class.getDeclaredMethod(
+                    "processQueuedFrame",
+                    TurnVirtualSocket.class,
+                    TurnVirtualSocket.QueuedOutgoingFrame.class
+                );
         method.setAccessible(true);
         return (AsyncTask<Boolean>) method.invoke(server, sender, queued);
     }
@@ -225,9 +235,8 @@ public class TestTurnServerInternalRegression {
         ByteBuffer encoded = encodedFrame("data", vsocketId, messageId);
         byte[] bytes = new byte[encoded.remaining()];
         encoded.get(bytes);
-        Constructor<TurnVirtualSocket.QueuedOutgoingFrame> ctor = TurnVirtualSocket.QueuedOutgoingFrame.class.getDeclaredConstructor(
-            byte[].class
-        );
+        Constructor<TurnVirtualSocket.QueuedOutgoingFrame> ctor =
+            TurnVirtualSocket.QueuedOutgoingFrame.class.getDeclaredConstructor(byte[].class);
         ctor.setAccessible(true);
         return ctor.newInstance((Object) bytes);
     }
@@ -237,7 +246,11 @@ public class TestTurnServerInternalRegression {
     }
 
     private static SignedNostrEvent signedHeader(String type) {
-        UnsignedNostrEvent unsigned = new UnsignedNostrEvent().withKind(25051).createdAt(Instant.now()).withTag("t", type).withContent("");
+        UnsignedNostrEvent unsigned = new UnsignedNostrEvent()
+            .withKind(25051)
+            .createdAt(Instant.now())
+            .withTag("t", type)
+            .withContent("");
         return NGEUtils.awaitNoThrow(NostrKeyPairSigner.generate().sign(unsigned));
     }
 

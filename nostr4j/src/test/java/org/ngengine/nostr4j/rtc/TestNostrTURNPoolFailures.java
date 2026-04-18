@@ -17,8 +17,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -31,10 +31,10 @@ import org.ngengine.nostr4j.event.UnsignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCLocalPeer;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCPeer;
-import org.ngengine.nostr4j.rtc.turn.NostrTURNDataEvent;
-import org.ngengine.nostr4j.rtc.turn.NostrTURNDisconnectEvent;
 import org.ngengine.nostr4j.rtc.turn.NostrTURNChallengeEvent;
 import org.ngengine.nostr4j.rtc.turn.NostrTURNCodec;
+import org.ngengine.nostr4j.rtc.turn.NostrTURNDataEvent;
+import org.ngengine.nostr4j.rtc.turn.NostrTURNDisconnectEvent;
 import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
 import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEPlatform;
@@ -112,7 +112,15 @@ public class TestNostrTURNPoolFailures {
     public void testFailedConnectDoesNotLeaveStaleTransportEntry() throws Exception {
         NostrTURNPool pool = new NostrTURNPool(24);
         try {
-            NostrTURNChannel channel = pool.connect(localPeer("stale-local"), remotePeer("stale-remote"), TURN_URL, room(), "primary", true, null);
+            NostrTURNChannel channel = pool.connect(
+                localPeer("stale-local"),
+                remotePeer("stale-remote"),
+                TURN_URL,
+                room(),
+                "primary",
+                true,
+                null
+            );
             assertFalse(channel.isReady());
             waitUntil(() -> !channel.isResurrecting(), 2000, "failed connect should unblock channel resurrection state");
             channel.close("stop-resurrection");
@@ -145,9 +153,21 @@ public class TestNostrTURNPoolFailures {
         NostrTURNPool pool = new NostrTURNPool(24);
         try {
             NostrKeyPair room = room();
-            NostrTURNChannel channel = pool.connect(localPeer("timeout-local", room), remotePeer("timeout-remote", room), TURN_URL, room, "primary", true, null);
+            NostrTURNChannel channel = pool.connect(
+                localPeer("timeout-local", room),
+                remotePeer("timeout-remote", room),
+                TURN_URL,
+                room,
+                "primary",
+                true,
+                null
+            );
             waitUntil(() -> hanging.getCloseCount() > 0, 9000, "timed-out websocket connect should be closed");
-            waitUntil(() -> hanging.getTransportCount() >= 2, 12000, "connect timeout should unblock a fresh resurrection attempt");
+            waitUntil(
+                () -> hanging.getTransportCount() >= 2,
+                12000,
+                "connect timeout should unblock a fresh resurrection attempt"
+            );
             channel.close("stop-resurrection");
             waitUntil(() -> transportCount(pool) == 0, 4000, "failed timed-out connect should be removed from transports");
             assertFalse("channel should not remain stuck in resurrection", channel.isResurrecting());
@@ -297,8 +317,24 @@ public class TestNostrTURNPoolFailures {
         NostrTURNPool pool = new NostrTURNPool(24);
         try {
             NostrKeyPair room = room();
-            NostrTURNChannel channelA = new NostrTURNChannel(localPeer("mux-a", room), remotePeer("mux-a-r", room), TURN_URL, room, "primary", true, 24);
-            NostrTURNChannel channelB = new NostrTURNChannel(localPeer("mux-b", room), remotePeer("mux-b-r", room), TURN_URL, room, "primary", true, 24);
+            NostrTURNChannel channelA = new NostrTURNChannel(
+                localPeer("mux-a", room),
+                remotePeer("mux-a-r", room),
+                TURN_URL,
+                room,
+                "primary",
+                true,
+                24
+            );
+            NostrTURNChannel channelB = new NostrTURNChannel(
+                localPeer("mux-b", room),
+                remotePeer("mux-b-r", room),
+                TURN_URL,
+                room,
+                "primary",
+                true,
+                24
+            );
             RecordingWebsocketTransport raw = new RecordingWebsocketTransport(true);
             NostrTURNPool.TURNTransport shared = new NostrTURNPool.TURNTransport(raw);
             channelA.setTransport(shared);
@@ -399,7 +435,21 @@ public class TestNostrTURNPoolFailures {
         byte[] key = NGEUtils.getPlatform().randomBytes(32);
         ByteBuffer validFrame = NGEUtils.awaitNoThrow(
             NostrTURNDataEvent
-                .createOutgoing(remoteLocal, new NostrRTCPeer(local.getPubkey(), APP_ID, PROTOCOL_ID, local.getSessionId(), room.getPublicKey(), TURN_URL), room, "primary", vsocket, key)
+                .createOutgoing(
+                    remoteLocal,
+                    new NostrRTCPeer(
+                        local.getPubkey(),
+                        APP_ID,
+                        PROTOCOL_ID,
+                        local.getSessionId(),
+                        room.getPublicKey(),
+                        TURN_URL
+                    ),
+                    room,
+                    "primary",
+                    vsocket,
+                    key
+                )
                 .encodeToFrame(Collections.singletonList(ByteBuffer.wrap("decode-failure".getBytes())), 77)
         );
         ByteBuffer corrupted = corruptFirstPayloadByte(validFrame);
@@ -529,7 +579,9 @@ public class TestNostrTURNPoolFailures {
                 .generate()
                 .sign(new UnsignedNostrEvent().withKind(25051).createdAt(Instant.now()).withTag("t", "data").withContent(""))
         );
-        return NostrTURNCodec.encodeFrame(NostrTURNCodec.encodeHeader(header), vsocketId, messageId, Collections.emptyList()).asReadOnlyBuffer();
+        return NostrTURNCodec
+            .encodeFrame(NostrTURNCodec.encodeHeader(header), vsocketId, messageId, Collections.emptyList())
+            .asReadOnlyBuffer();
     }
 
     private static ByteBuffer corruptFirstPayloadByte(ByteBuffer frame) {
@@ -610,7 +662,8 @@ public class TestNostrTURNPoolFailures {
 
     private static final class HangingConnectPlatform extends JVMAsyncPlatform {
 
-        private final CopyOnWriteArrayList<TestWebsocketTransport> transports = new CopyOnWriteArrayList<TestWebsocketTransport>();
+        private final CopyOnWriteArrayList<TestWebsocketTransport> transports =
+            new CopyOnWriteArrayList<TestWebsocketTransport>();
 
         @Override
         public WebsocketTransport newTransport() {
@@ -655,11 +708,7 @@ public class TestNostrTURNPoolFailures {
 
                 @Override
                 protected ByteBuffer challengeFrame() {
-                    NostrTURNChallengeEvent challenge = NostrTURNChallengeEvent.createChallenge(
-                        challengeSignerPeer,
-                        8,
-                        ""
-                    );
+                    NostrTURNChallengeEvent challenge = NostrTURNChallengeEvent.createChallenge(challengeSignerPeer, 8, "");
                     return NGEUtils.awaitNoThrow(challenge.encodeToFrame(Collections.emptyList())).asReadOnlyBuffer();
                 }
             };

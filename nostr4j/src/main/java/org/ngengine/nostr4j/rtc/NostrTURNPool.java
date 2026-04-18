@@ -277,20 +277,19 @@ public final class NostrTURNPool implements AutoCloseable {
                     }
                 );
 
-                AsyncTask<Void> timeoutTask =
-                    executor.runLater(
-                        () -> {
-                            failOnce.accept(
-                                new RuntimeException(
-                                    "Websocket connect timed out after " + WEBSOCKET_CONNECT_TIMEOUT_MS + " ms for: " + url
-                                )
-                            );
-                            wss.close("turn-websocket-connect-timeout");
-                            return null;
-                        },
-                        WEBSOCKET_CONNECT_TIMEOUT_MS,
-                        TimeUnit.MILLISECONDS
-                    );
+                AsyncTask<Void> timeoutTask = executor.runLater(
+                    () -> {
+                        failOnce.accept(
+                            new RuntimeException(
+                                "Websocket connect timed out after " + WEBSOCKET_CONNECT_TIMEOUT_MS + " ms for: " + url
+                            )
+                        );
+                        wss.close("turn-websocket-connect-timeout");
+                        return null;
+                    },
+                    WEBSOCKET_CONNECT_TIMEOUT_MS,
+                    TimeUnit.MILLISECONDS
+                );
                 wss.setConnectTimeoutTask(timeoutTask);
 
                 wss.transport

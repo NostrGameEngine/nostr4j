@@ -5,7 +5,6 @@
 package org.ngengine.nostr4j.rtc.turn;
 
 import jakarta.annotation.Nullable;
-import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
@@ -26,15 +25,11 @@ public final class NostrTURNChallengeEvent extends NostrTURNEvent {
     private final int requiredDifficulty;
     private final String redirect;
 
-    public static NostrTURNChallengeEvent createChallenge(
-        NostrRTCLocalPeer localPeer,
-        int difficulty,
-        String redirectUrl
-    ) {
+    public static NostrTURNChallengeEvent createChallenge(NostrRTCLocalPeer localPeer, int difficulty, String redirectUrl) {
         return new NostrTURNChallengeEvent(localPeer, difficulty, redirectUrl);
     }
 
-    private NostrTURNChallengeEvent(NostrRTCLocalPeer localPeer, int difficulty,String redirectUrl) {
+    private NostrTURNChallengeEvent(NostrRTCLocalPeer localPeer, int difficulty, String redirectUrl) {
         // we don't know all the channel info yet, so we just set them to null for this event
         super("challenge", localPeer, null, null, null);
         this.challenge = NostrPrivateKey.generate().asHex();

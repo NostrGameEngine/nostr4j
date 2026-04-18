@@ -802,7 +802,9 @@ public class NostrRTCIntegrationTest {
             MessageCapture delayedCapture = new MessageCapture(1);
             bobCh.addListener(delayedCapture);
 
-            boolean delivered = NGEUtils.awaitNoThrow(aliceCh.write(ByteBuffer.wrap("delayed-ack-window".getBytes(StandardCharsets.UTF_8))));
+            boolean delivered = NGEUtils.awaitNoThrow(
+                aliceCh.write(ByteBuffer.wrap("delayed-ack-window".getBytes(StandardCharsets.UTF_8)))
+            );
             assertTrue("TURN write should survive ack delay beyond legacy 5s timeout", delivered);
             assertTrue("receiver did not observe delayed-ack payload", delayedCapture.await(2));
             assertEquals(1, delayedCapture.countMessageOnTransport("delayed-ack-window", true));
@@ -966,7 +968,10 @@ public class NostrRTCIntegrationTest {
                 });
 
             assertTrue("slow TURN listener was not entered", slowListenerEntered.await(5, TimeUnit.SECONDS));
-            assertFalse("TURN write should stay pending until listener delivery completes", writeCompleted.await(2, TimeUnit.SECONDS));
+            assertFalse(
+                "TURN write should stay pending until listener delivery completes",
+                writeCompleted.await(2, TimeUnit.SECONDS)
+            );
             assertFalse(
                 "message capture should still be blocked behind the slow listener",
                 capture.containsMessage(slowMessage)

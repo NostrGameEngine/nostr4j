@@ -199,7 +199,14 @@ public class TestTurnServerCompliance {
         byte[] payload = "still-alive-after-forged-disconnect".getBytes();
         ByteBuffer dataFrame = NGEUtils.awaitNoThrow(
             NostrTURNDataEvent
-                .createOutgoing(alice, bobRemoteForAlice, roomKeyPair, CHANNEL_LABEL, aliceVsocketId, NGEUtils.getPlatform().randomBytes(32))
+                .createOutgoing(
+                    alice,
+                    bobRemoteForAlice,
+                    roomKeyPair,
+                    CHANNEL_LABEL,
+                    aliceVsocketId,
+                    NGEUtils.getPlatform().randomBytes(32)
+                )
                 .encodeToFrame(Collections.singletonList(ByteBuffer.wrap(payload)))
         );
         aliceWs.send(dataFrame);
@@ -292,7 +299,11 @@ public class TestTurnServerCompliance {
         NostrRTCPeer receiverRemote = remotePeer(receiverSigner, roomKeyPair, "sess-retry-receiver");
 
         WsClient senderWs = WsClient.connect(wsUri);
-        NostrTURNChallengeEvent challenge = NostrTURNChallengeEvent.parseIncoming(waitForType(senderWs, "challenge", 2000), sender, 64);
+        NostrTURNChallengeEvent challenge = NostrTURNChallengeEvent.parseIncoming(
+            waitForType(senderWs, "challenge", 2000),
+            sender,
+            64
+        );
         long vsocketId = 841L;
 
         sendValidConnect(senderWs, sender, receiverRemote, roomKeyPair, challenge, vsocketId);
@@ -300,7 +311,10 @@ public class TestTurnServerCompliance {
 
         // Same websocket + same vsocket + same logical identity must be treated as idempotent retry.
         sendValidConnect(senderWs, sender, receiverRemote, roomKeyPair, challenge, vsocketId);
-        assertNotNull("duplicate retry connect should receive ack instead of websocket close", waitForType(senderWs, "ack", 2000));
+        assertNotNull(
+            "duplicate retry connect should receive ack instead of websocket close",
+            waitForType(senderWs, "ack", 2000)
+        );
         assertFalse("idempotent retry must not close websocket", senderWs.awaitClose(400));
 
         senderWs.closeNow();
@@ -316,7 +330,11 @@ public class TestTurnServerCompliance {
         NostrRTCPeer receiverB = remotePeer(receiverSignerB, roomKeyPair, "sess-collide-recv-b");
 
         WsClient senderWs = WsClient.connect(wsUri);
-        NostrTURNChallengeEvent challenge = NostrTURNChallengeEvent.parseIncoming(waitForType(senderWs, "challenge", 2000), sender, 64);
+        NostrTURNChallengeEvent challenge = NostrTURNChallengeEvent.parseIncoming(
+            waitForType(senderWs, "challenge", 2000),
+            sender,
+            64
+        );
         long vsocketId = 851L;
 
         sendValidConnect(senderWs, sender, receiverA, roomKeyPair, challenge, vsocketId);
@@ -349,7 +367,11 @@ public class TestTurnServerCompliance {
         assertNotNull(waitForType(aliceWs, "ack", 2000));
 
         WsClient bobWs = WsClient.connect(wsUri);
-        NostrTURNChallengeEvent challengeBob = NostrTURNChallengeEvent.parseIncoming(waitForType(bobWs, "challenge", 2000), bob, 64);
+        NostrTURNChallengeEvent challengeBob = NostrTURNChallengeEvent.parseIncoming(
+            waitForType(bobWs, "challenge", 2000),
+            bob,
+            64
+        );
         long bobVsocketId = 922L;
         sendValidConnect(bobWs, bob, aliceRemoteForBob, roomKeyPair, challengeBob, bobVsocketId);
         assertNotNull(waitForType(bobWs, "ack", 2000));
@@ -368,7 +390,14 @@ public class TestTurnServerCompliance {
 
         ByteBuffer bobData = NGEUtils.awaitNoThrow(
             NostrTURNDataEvent
-                .createOutgoing(bob, aliceRemoteForBob, roomKeyPair, CHANNEL_LABEL, bobVsocketId, NGEUtils.getPlatform().randomBytes(32))
+                .createOutgoing(
+                    bob,
+                    aliceRemoteForBob,
+                    roomKeyPair,
+                    CHANNEL_LABEL,
+                    bobVsocketId,
+                    NGEUtils.getPlatform().randomBytes(32)
+                )
                 .encodeToFrame(Collections.singletonList(ByteBuffer.wrap("should-not-route".getBytes())))
         );
         bobWs.send(bobData);

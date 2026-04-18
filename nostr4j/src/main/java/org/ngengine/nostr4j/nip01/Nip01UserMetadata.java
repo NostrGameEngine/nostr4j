@@ -333,7 +333,7 @@ public class Nip01UserMetadata implements Serializable {
         if (paymentAddress == null) {
             metadata.remove("lud06");
             metadata.remove("lud16");
-        }  else if (paymentAddress instanceof LnAddress) {
+        } else if (paymentAddress instanceof LnAddress) {
             setLnAddress((LnAddress) paymentAddress);
         } else if (paymentAddress instanceof LnUrl) {
             setLnUrl((LnUrl) paymentAddress);

@@ -576,7 +576,8 @@ public final class NostrTURNChannel {
                             sendDeliveryAck(messageId);
                         }
                         logger.fine(() ->
-                            "TURN data delivered to channel listeners " + describeInboundDelivery(messageId, packetIds, ps.size())
+                            "TURN data delivered to channel listeners " +
+                            describeInboundDelivery(messageId, packetIds, ps.size())
                         );
                         return null;
                     });
@@ -589,10 +590,7 @@ public final class NostrTURNChannel {
     }
 
     private void handleTargetedInboundDecodeFailure(int messageId, Throwable ex) {
-        RuntimeException error = new RuntimeException(
-            "TURN payload decode failed " + describeTurnContext(messageId, null),
-            ex
-        );
+        RuntimeException error = new RuntimeException("TURN payload decode failed " + describeTurnContext(messageId, null), ex);
         onError(error);
         close("turn-payload-decode-failed");
     }
@@ -890,7 +888,7 @@ public final class NostrTURNChannel {
                         resolve.accept(null);
                         resolveOuter.accept(null);
                     });
-                });
+            });
         });
     }
 
