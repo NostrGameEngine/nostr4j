@@ -34,8 +34,9 @@ package org.ngengine.nostr4j.turn.ref;
 import com.google.gson.JsonObject;
 import java.nio.ByteBuffer;
 import java.nio.channels.ClosedChannelException;
-import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
@@ -84,18 +85,34 @@ public final class TurnServer {
     static final Logger logger = Logger.getLogger(TurnServer.class.getName());
     private static final int DEFAULT_MAX_QUEUED_FRAMES = 2048;
     private static final String PEER_UNREACHABLE_REASON = "peer unreachable";
+    private static final String UNAUTHENTICATED_TIMEOUT_REASON = "unauthenticated-timeout";
     private static final long SOCKET_LOOP_MS = 250L;
 
     // Active websocket clients keyed by session object.
     final Map<Session, TurnClientConnection> clients = new ConcurrentHashMap<Session, TurnClientConnection>();
+    final Map<TurnVirtualSocket.LogicalIdentity, SocketRef> logicalSockets =
+        new ConcurrentHashMap<TurnVirtualSocket.LogicalIdentity, SocketRef>();
+    final Map<TurnVirtualSocket, Session> socketOwners = new ConcurrentHashMap<TurnVirtualSocket, Session>();
     private final Server jettyServer;
     private final TurnEventFactory eventFactory;
     final int difficulty;
+    // Timeout for unauthenticated websocket sessions that never complete CONNECT.
     final int challengeTtlSeconds;
     final String host;
     private final int maxQueuedFrames;
     private final AsyncExecutor loopExecutor;
     private volatile boolean running = false;
+
+    private static final class SocketRef {
+
+        private final Session session;
+        private final TurnVirtualSocket socket;
+
+        private SocketRef(Session session, TurnVirtualSocket socket) {
+            this.session = session;
+            this.socket = socket;
+        }
+    }
 
     public final class TurnHandler implements Session.Listener.AutoDemanding {
 
@@ -117,12 +134,13 @@ public final class TurnServer {
                 this.wsSession = session;
                 TurnClientConnection connection = new TurnClientConnection(
                     session,
-                    this.turnServer.difficulty,
-                    this.turnServer.challengeTtlSeconds
+                    this.turnServer.difficulty
                 );
                 this.turnServer.clients.put(session, connection);
                 // 2) Send challenge immediately as required by protocol.
                 this.turnServer.sendChallenge(connection);
+                // Protect server resources from idle unauthenticated websocket connections.
+                this.turnServer.scheduleUnauthenticatedCloseTimeout(connection);
             } catch (Exception ex) {
                 TurnServer.logger.log(Level.WARNING, "Error during TURN handshake", ex);
                 this.turnServer.closeConnection(session, "handshake-error");
@@ -344,9 +362,9 @@ public final class TurnServer {
      * Handshake step 2: validate connect and issue ack + vsocketId.
      */
     void handleConnect(TurnClientConnection connection, SignedNostrEvent header, long envelopeVsocketId) {
-        // Challenge must still be valid for this websocket client.
-        if (connection.getChallenge() == null || Instant.now().isAfter(connection.getChallengeExpiresAt())) {
-            closeConnection(connection.getWsSession(), "challenge-expired");
+        // Challenge remains valid for the lifetime of this websocket connection.
+        if (connection.getChallenge() == null) {
+            closeConnection(connection.getWsSession(), "challenge-mismatch");
             return;
         }
         if (envelopeVsocketId == 0L) {
@@ -415,9 +433,26 @@ public final class TurnServer {
             return;
         }
 
-        // VSOCKET_ID uniqueness is websocket-local (per TurnClientConnection).
+        TurnVirtualSocket.LogicalIdentity incomingLogicalIdentity = TurnVirtualSocket.logicalIdentity(
+            roomPubkey,
+            senderPubkey,
+            senderSessionId,
+            targetPubkey,
+            targetSessionId,
+            protocolId,
+            applicationId,
+            channelLabel
+        );
+
+        // VSOCKET_ID is websocket-local. Duplicate CONNECT on the same websocket/vsocket is
+        // idempotent only when the logical identity matches exactly (lost-ack retry case).
         long vsocketId = envelopeVsocketId;
-        if (connection.getSockets().containsKey(Long.valueOf(vsocketId))) {
+        TurnVirtualSocket existingSocket = connection.getSockets().get(Long.valueOf(vsocketId));
+        if (existingSocket != null) {
+            if (incomingLogicalIdentity.equals(existingSocket.getLogicalIdentity())) {
+                sendAckForSocket(connection, existingSocket);
+                return;
+            }
             closeConnection(connection.getWsSession(), "vsocket-collision");
             return;
         }
@@ -436,27 +471,18 @@ public final class TurnServer {
             this::hasReachableRecipient
         );
 
-        // Store accepted socket then ack it.
-        connection.getSockets().put(Long.valueOf(vsocketId), senderSocket);
-        sendFrame(
-            connection.getWsSession(),
-            eventFactory.createAck(senderSocket),
-            null,
-            vsocketId,
-            0,
-            new Callback() {
-                @Override
-                public void succeed() {
-                    senderSocket.markAckSent();
-                }
-
-                @Override
-                public void fail(Throwable x) {
-                    logger.log(Level.FINE, "Failed to send TURN ack", x);
-                    closeConnection(connection.getWsSession(), "ack-send-failed");
-                }
-            }
-        );
+        // Register accepted socket by websocket-local id and logical identity.
+        SocketRef replaced = registerSocket(connection, senderSocket);
+        if (replaced != null && replaced.socket != senderSocket) {
+            sendFrame(
+                replaced.session,
+                eventFactory.createDisconnect(replaced.socket, "replaced by newer connect", false),
+                null,
+                replaced.socket.getVsocketId()
+            );
+            retireSocket(replaced.session, replaced.socket);
+        }
+        sendAckForSocket(connection, senderSocket);
     }
 
     /**
@@ -479,10 +505,37 @@ public final class TurnServer {
         if (!senderSocket.getClientPubkey().equals(header.getPubkey())) {
             return;
         }
-        // Always enqueue to preserve ordering even when recipient is currently online.
-        if (!senderSocket.out(fullFrame, maxQueuedFrames)) {
+        // delivery_ack frames use a priority queue so they are not starved by bulk data backlog.
+        boolean prioritize = "delivery_ack".equals(TurnJson.safeString(header.getFirstTagFirstValue("t")));
+        // Always enqueue to preserve per-socket ordering semantics within each class of traffic.
+        if (!senderSocket.out(fullFrame, maxQueuedFrames, prioritize)) {
             disconnectSenderSocket(connection.getWsSession(), senderSocket.getVsocketId(), PEER_UNREACHABLE_REASON, true);
         }
+    }
+
+    private void sendAckForSocket(TurnClientConnection connection, TurnVirtualSocket socket) {
+        if (connection == null || socket == null) {
+            return;
+        }
+        sendFrame(
+            connection.getWsSession(),
+            eventFactory.createAck(socket),
+            null,
+            socket.getVsocketId(),
+            0,
+            new Callback() {
+                @Override
+                public void succeed() {
+                    socket.markAckSent();
+                }
+
+                @Override
+                public void fail(Throwable x) {
+                    logger.log(Level.FINE, "Failed to send TURN ack", x);
+                    closeConnection(connection.getWsSession(), "ack-send-failed");
+                }
+            }
+        );
     }
 
     void handleDisconnect(TurnClientConnection connection, SignedNostrEvent header, long envelopeVsocketId) {
@@ -496,32 +549,15 @@ public final class TurnServer {
             return;
         }
 
-        TurnVirtualSocket senderSocket = connection.getSockets().remove(Long.valueOf(envelopeVsocketId));
+        TurnVirtualSocket senderSocket = connection.getSockets().get(Long.valueOf(envelopeVsocketId));
         if (senderSocket == null) {
             return;
         }
-
-        // Remove any queued outbound frames still associated with this sender socket.
-        senderSocket.close();
-        // Relay disconnect to reciprocal side(s).
-        relayDisconnectToReciprocal(senderSocket, reason, error);
-    }
-
-    private void relayDisconnectToReciprocal(TurnVirtualSocket senderSocket, String reason, boolean error) {
-        // Fan-out to all reciprocal sockets currently active.
-        for (TurnClientConnection recipientConnection : clients.values()) {
-            for (TurnVirtualSocket recipientSocket : recipientConnection.getSockets().values()) {
-                if (!senderSocket.isReciprocal(recipientSocket)) {
-                    continue;
-                }
-                sendFrame(
-                    recipientConnection.getWsSession(),
-                    eventFactory.createDisconnect(recipientSocket, reason, error),
-                    null,
-                    recipientSocket.getVsocketId()
-                );
-            }
+        if (!senderSocket.getClientPubkey().equals(header.getPubkey())) {
+            return;
         }
+
+        teardownSocket(senderSocket, reason, error, true, true);
     }
 
     private boolean verifyRoomProof(SignedNostrEvent header, NostrPublicKey roomPubkey, String challenge) {
@@ -589,12 +625,12 @@ public final class TurnServer {
         }
         logger.fine("TURN connection closing: reason=" + reason);
 
-        // Evict client and relay synthetic peer-unreachable disconnect for its sockets.
+        // Evict client and tear down its sockets symmetrically.
         TurnClientConnection removed = clients.remove(session);
         if (removed != null) {
-            for (TurnVirtualSocket virtualSocket : removed.getSockets().values()) {
-                relayDisconnectToReciprocal(virtualSocket, "peer unreachable", true);
-                virtualSocket.close();
+            List<TurnVirtualSocket> stale = new ArrayList<TurnVirtualSocket>(removed.getSockets().values());
+            for (TurnVirtualSocket virtualSocket : stale) {
+                teardownSocket(virtualSocket, PEER_UNREACHABLE_REASON, true, true, true);
             }
             removed.getSockets().clear();
         }
@@ -614,13 +650,164 @@ public final class TurnServer {
         if (senderClient == null) {
             return;
         }
-        TurnVirtualSocket senderSocket = senderClient.getSockets().remove(Long.valueOf(senderVsocketId));
+        TurnVirtualSocket senderSocket = senderClient.getSockets().get(Long.valueOf(senderVsocketId));
         if (senderSocket == null) {
             return;
         }
-        // Clear residual queued payloads from this sender socket and emit disconnect.
-        senderSocket.close();
+        // Notify sender and retire both sides from logical socket registries.
         sendFrame(senderSession, eventFactory.createDisconnect(senderSocket, reason, error), null, senderVsocketId);
+        teardownSocket(senderSocket, reason, error, true, true);
+    }
+
+    private SocketRef registerSocket(TurnClientConnection connection, TurnVirtualSocket socket) {
+        Session ownerSession = connection.getWsSession();
+        connection.getSockets().put(Long.valueOf(socket.getVsocketId()), socket);
+        socketOwners.put(socket, ownerSession);
+        return logicalSockets.put(socket.getLogicalIdentity(), new SocketRef(ownerSession, socket));
+    }
+
+    private void unregisterSocket(TurnVirtualSocket socket) {
+        if (socket == null) {
+            return;
+        }
+        Session ownerSession = socketOwners.remove(socket);
+        if (ownerSession != null) {
+            TurnClientConnection owner = clients.get(ownerSession);
+            if (owner != null) {
+                owner.getSockets().remove(Long.valueOf(socket.getVsocketId()), socket);
+            }
+        }
+        logicalSockets.computeIfPresent(
+            socket.getLogicalIdentity(),
+            (k, existing) -> {
+                if (existing != null && existing.socket == socket) {
+                    return null;
+                }
+                return existing;
+            }
+        );
+    }
+
+    private void retireSocket(Session ownerSession, TurnVirtualSocket socket) {
+        if (socket == null) {
+            return;
+        }
+        unregisterSocket(socket);
+        socket.close();
+        if (ownerSession != null) {
+            TurnClientConnection owner = clients.get(ownerSession);
+            if (owner != null) {
+                owner.getSockets().remove(Long.valueOf(socket.getVsocketId()), socket);
+            }
+        }
+    }
+
+    private List<SocketRef> findReciprocalSockets(TurnVirtualSocket senderSocket) {
+        List<SocketRef> reciprocals = new ArrayList<SocketRef>();
+        for (TurnClientConnection recipientConnection : clients.values()) {
+            if (recipientConnection == null) {
+                continue;
+            }
+            Session recipientSession = recipientConnection.getWsSession();
+            if (recipientSession == null) {
+                continue;
+            }
+            for (TurnVirtualSocket recipientSocket : recipientConnection.getSockets().values()) {
+                if (recipientSocket == null || recipientSocket == senderSocket) {
+                    continue;
+                }
+                if (senderSocket.isReciprocal(recipientSocket)) {
+                    reciprocals.add(new SocketRef(recipientSession, recipientSocket));
+                }
+            }
+        }
+        return reciprocals;
+    }
+
+    private void teardownSocket(
+        TurnVirtualSocket senderSocket,
+        String reason,
+        boolean error,
+        boolean notifyReciprocal,
+        boolean retireReciprocal
+    ) {
+        if (senderSocket == null) {
+            return;
+        }
+        List<SocketRef> reciprocals = findReciprocalSockets(senderSocket);
+        if (notifyReciprocal) {
+            for (SocketRef reciprocal : reciprocals) {
+                sendFrame(
+                    reciprocal.session,
+                    eventFactory.createDisconnect(reciprocal.socket, reason, error),
+                    null,
+                    reciprocal.socket.getVsocketId()
+                );
+            }
+        }
+        Session ownerSession = socketOwners.get(senderSocket);
+        retireSocket(ownerSession, senderSocket);
+        if (!retireReciprocal) {
+            return;
+        }
+        for (SocketRef reciprocal : reciprocals) {
+            retireSocket(reciprocal.session, reciprocal.socket);
+        }
+    }
+
+    private AsyncTask<Boolean> sendBinaryWithAccounting(Session session, ByteBuffer payload) {
+        if (session == null || payload == null || !session.isOpen()) {
+            return AsyncTask.completed(Boolean.FALSE);
+        }
+        return NGEUtils
+            .getPlatform()
+            .wrapPromise((resolve, reject) -> {
+                try {
+                    session.sendBinary(
+                        payload.asReadOnlyBuffer(),
+                        new Callback() {
+                            @Override
+                            public void succeed() {
+                                resolve.accept(Boolean.TRUE);
+                            }
+
+                            @Override
+                            public void fail(Throwable x) {
+                                logger.log(Level.FINE, "TURN queued frame send failed", x);
+                                resolve.accept(Boolean.FALSE);
+                            }
+                        }
+                    );
+                } catch (Throwable t) {
+                    logger.log(Level.FINE, "TURN queued frame send threw", t);
+                    resolve.accept(Boolean.FALSE);
+                }
+            });
+    }
+
+    private void scheduleUnauthenticatedCloseTimeout(TurnClientConnection connection) {
+        if (connection == null || challengeTtlSeconds <= 0) {
+            return;
+        }
+        loopExecutor.runLater(
+            () -> {
+                Session session = connection.getWsSession();
+                if (session == null) {
+                    return null;
+                }
+                TurnClientConnection current = clients.get(session);
+                if (current == null) {
+                    return null;
+                }
+                if (!current.getSockets().isEmpty()) {
+                    return null;
+                }
+                closeConnection(session, UNAUTHENTICATED_TIMEOUT_REASON);
+                return null;
+            },
+            challengeTtlSeconds,
+            TimeUnit.SECONDS
+        );
     }
 
     private AsyncTask<Boolean> processQueuedFrame(
@@ -630,7 +817,7 @@ public final class TurnServer {
         if (senderSocket == null || queued == null) {
             return AsyncTask.completed(Boolean.TRUE);
         }
-        boolean delivered = false;
+        List<AsyncTask<Boolean>> deliveryAttempts = new ArrayList<AsyncTask<Boolean>>();
         for (TurnClientConnection recipientConnection : clients.values()) {
             if (recipientConnection == null) {
                 continue;
@@ -650,11 +837,22 @@ public final class TurnServer {
                 if (rewritten == null) {
                     continue;
                 }
-                recipientSession.sendBinary(rewritten, Callback.NOOP);
-                delivered = true;
+                deliveryAttempts.add(sendBinaryWithAccounting(recipientSession, rewritten));
             }
         }
-        return AsyncTask.completed(Boolean.valueOf(delivered));
+        if (deliveryAttempts.isEmpty()) {
+            return AsyncTask.completed(Boolean.FALSE);
+        }
+        return AsyncTask
+            .all(deliveryAttempts)
+            .then(results -> {
+                for (Boolean delivered : results) {
+                    if (Boolean.TRUE.equals(delivered)) {
+                        return Boolean.TRUE;
+                    }
+                }
+                return Boolean.FALSE;
+            });
     }
 
     private boolean hasReachableRecipient(TurnVirtualSocket senderSocket) {

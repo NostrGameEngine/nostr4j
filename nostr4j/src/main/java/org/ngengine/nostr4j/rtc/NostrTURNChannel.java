@@ -40,6 +40,7 @@ import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
@@ -76,7 +77,9 @@ public final class NostrTURNChannel {
 
     private static final Logger logger = Logger.getLogger(NostrTURNChannel.class.getName());
     private static final AtomicLong VSOCKET_COUNTER = new AtomicLong(1L);
-    private static final long DELIVERY_ACK_TIMEOUT_MS = 5000L;
+
+    private static final long DELIVERY_ACK_TIMEOUT_MS = 12000L;
+    private static final long CONNECT_ACK_TIMEOUT_MS = 5000L;
 
     private final List<NostrTURNChannelListener> listeners = new CopyOnWriteArrayList<>();
 
@@ -103,6 +106,8 @@ public final class NostrTURNChannel {
     private final AsyncExecutor ackTimeoutExecutor;
     private final AsyncExecutor inboundPayloadExecutor;
     private final ExecutionQueue inboundPayloadDispatchQueue;
+    private volatile AsyncTask<Void> connectAckDeadlineTask;
+    private final AtomicBoolean localResourcesClosed = new AtomicBoolean(false);
 
     static final class DeliveryAckTimeoutException extends RuntimeException {
 
@@ -126,6 +131,15 @@ public final class NostrTURNChannel {
 
         Long getPacketId() {
             return packetId;
+        }
+    }
+
+    static final class TransportReplacedException extends RuntimeException {
+
+        private static final long serialVersionUID = 1L;
+
+        TransportReplacedException() {
+            super("TURN transport changed");
         }
     }
 
@@ -206,10 +220,7 @@ public final class NostrTURNChannel {
     }
 
     private void disconnect() {
-        TURNTransport current = this.transport;
-        if (current != null) {
-            current.removeUser(this);
-        }
+        cancelConnectAckTimeout();
         this.outgoingDataEvent = null;
         this.incomingDataEvent = null;
         this.outgoingDeliveryAckEvent = null;
@@ -227,12 +238,22 @@ public final class NostrTURNChannel {
     void setTransport(TURNTransport transport) {
         this.resurrecting = false;
         TURNTransport previous = this.transport;
+        if (previous == transport) {
+            return;
+        }
+        if (previous != null) {
+            previous.removeUser(this);
+        }
         this.transport = transport;
-        if (transport == null || previous != transport) {
+        if (transport != null) {
+            transport.addUser(this);
+        }
+        if (transport == null || previous != null) {
             this.outgoingDataEvent = null;
             this.incomingDataEvent = null;
             this.outgoingDeliveryAckEvent = null;
-            failPendingWrites(new IllegalStateException("TURN transport changed"));
+            cancelConnectAckTimeout();
+            failPendingWrites(new TransportReplacedException());
             this.state = 0;
         }
     }
@@ -242,7 +263,42 @@ public final class NostrTURNChannel {
     }
 
     boolean isConnected() {
-        return state > 0 && this.transport != null && this.transport.isConnected();
+        return state == 2 && this.transport != null && this.transport.isConnected();
+    }
+
+    private void cancelConnectAckTimeout() {
+        AsyncTask<Void> task = connectAckDeadlineTask;
+        if (task != null) {
+            task.cancel();
+            connectAckDeadlineTask = null;
+        }
+    }
+
+    private void scheduleConnectAckTimeout() {
+        cancelConnectAckTimeout();
+        if (closed || state != 1) {
+            return;
+        }
+        TURNTransport expectedTransport = this.transport;
+        connectAckDeadlineTask =
+            ackTimeoutExecutor.runLater(
+                () -> {
+                    connectAckDeadlineTask = null;
+                    if (closed || state != 1) {
+                        return null;
+                    }
+                    if (transport != expectedTransport) {
+                        state = 0;
+                        return null;
+                    }
+                    logger.fine("TURN connect ack timed out; resetting half-open state");
+                    state = 0;
+                    openConnectionMaybe();
+                    return null;
+                },
+                CONNECT_ACK_TIMEOUT_MS,
+                TimeUnit.MILLISECONDS
+            );
     }
 
     AsyncTask<Boolean> write(ByteBuffer payload) {
@@ -323,7 +379,10 @@ public final class NostrTURNChannel {
     }
 
     void close(String reason) {
-        if (isConnected()) {
+        if (closed) {
+            return;
+        }
+        if (shouldSendDisconnectOnLocalClose()) {
             NostrTURNDisconnectEvent disconnectEvent = NostrTURNDisconnectEvent.createDisconnect(
                 localPeer,
                 remotePeer,
@@ -336,6 +395,7 @@ public final class NostrTURNChannel {
             sendControlEvent(disconnectEvent);
         }
         closed = true;
+        cancelConnectAckTimeout();
         failPendingWrites(new IllegalStateException("TURN channel closed: " + reason));
         for (NostrTURNChannelListener l : listeners) {
             try {
@@ -344,6 +404,41 @@ public final class NostrTURNChannel {
                 logger.log(Level.SEVERE, "Exception in listener", e);
             }
         }
+        closeLocalResources();
+        disconnect();
+    }
+
+    private boolean shouldSendDisconnectOnLocalClose() {
+        TURNTransport currentTransport = this.transport;
+        if (currentTransport == null || !currentTransport.isConnected()) {
+            return false;
+        }
+        // state=2: fully connected channel. state=1: half-open CONNECT may already be accepted server-side.
+        return state == 2 || state == 1;
+    }
+
+    private void closeFromPeer(String reason) {
+        if (closed) {
+            return;
+        }
+        closed = true;
+        cancelConnectAckTimeout();
+        failPendingWrites(new IllegalStateException("TURN channel closed by peer: " + reason));
+        disconnect();
+        for (NostrTURNChannelListener l : listeners) {
+            try {
+                l.onTurnChannelClosed(this, reason);
+            } catch (Throwable e) {
+                logger.log(Level.SEVERE, "Exception in listener", e);
+            }
+        }
+        closeLocalResources();
+    }
+
+    private void closeLocalResources() {
+        if (!localResourcesClosed.compareAndSet(false, true)) {
+            return;
+        }
         try {
             inboundPayloadDispatchQueue.close();
         } catch (IOException e) {
@@ -351,7 +446,6 @@ public final class NostrTURNChannel {
         }
         ackTimeoutExecutor.close();
         inboundPayloadExecutor.close();
-        disconnect();
     }
 
     boolean isClosed() {
@@ -423,6 +517,7 @@ public final class NostrTURNChannel {
             requiredDifficulty
         );
         state = 1;
+        scheduleConnectAckTimeout();
         sendControlEvent(connection);
     }
 
@@ -457,9 +552,6 @@ public final class NostrTURNChannel {
             logger.warning("TURN: Received data in invalid state " + state);
             return true;
         }
-        if (requiresDeliveryAck) {
-            sendDeliveryAck(messageId);
-        }
 
         long envelopeVsocketId = NostrTURNCodec.extractVsocketId(msg);
         incomingDataEvent =
@@ -467,25 +559,42 @@ public final class NostrTURNChannel {
 
         incomingDataEvent
             .decodeFramePayloads(msg)
-            .then(ps -> {
+            .compose(ps -> {
                 List<Long> packetIds = new ArrayList<Long>();
+                List<AsyncTask<Void>> dispatches = new ArrayList<AsyncTask<Void>>();
                 for (ByteBuffer payload : ps) {
                     Long packetId = NostrRTCChannel.tryExtractPacketId(payload);
                     if (packetId != null) {
                         packetIds.add(packetId);
                     }
-                    enqueuePayloadDispatch(payload);
+                    dispatches.add(enqueuePayloadDispatch(payload));
                 }
-                logger.fine(() ->
-                    "TURN data delivered to channel listeners " + describeInboundDelivery(messageId, packetIds, ps.size())
-                );
-                return null;
+                return AsyncTask
+                    .all(dispatches)
+                    .then(ignored -> {
+                        if (requiresDeliveryAck) {
+                            sendDeliveryAck(messageId);
+                        }
+                        logger.fine(() ->
+                            "TURN data delivered to channel listeners " + describeInboundDelivery(messageId, packetIds, ps.size())
+                        );
+                        return null;
+                    });
             })
             .catchException(ex -> {
-                logger.log(Level.WARNING, "Failed to decode TURN data event", ex);
+                handleTargetedInboundDecodeFailure(messageId, ex);
             });
 
         return true;
+    }
+
+    private void handleTargetedInboundDecodeFailure(int messageId, Throwable ex) {
+        RuntimeException error = new RuntimeException(
+            "TURN payload decode failed " + describeTurnContext(messageId, null),
+            ex
+        );
+        onError(error);
+        close("turn-payload-decode-failed");
     }
 
     void onBinaryMessage(ByteBuffer msg) {
@@ -603,6 +712,7 @@ public final class NostrTURNChannel {
                         return;
                     }
                     NostrTURNAckEvent.parseIncoming(header, envelopeVsocketId);
+                    cancelConnectAckTimeout();
                     state = 2;
 
                     // notify listeners
@@ -648,7 +758,7 @@ public final class NostrTURNChannel {
                         }
                     }
 
-                    disconnect();
+                    closeFromPeer(reason);
                     break;
                 }
             default:
@@ -657,11 +767,16 @@ public final class NostrTURNChannel {
         }
     }
 
+    long getRoutingVsocketId() {
+        return vSocketId;
+    }
+
     private void sendControlEvent(NostrTURNEvent event) {
         TURNTransport currentTransport = this.transport;
         if (currentTransport == null || !currentTransport.isConnected()) {
             logger.fine("TURN channel has no active transport, cannot send control event");
             if (event instanceof NostrTURNConnectEvent) {
+                cancelConnectAckTimeout();
                 state = 0;
             }
             return;
@@ -674,6 +789,7 @@ public final class NostrTURNChannel {
             .catchException(ex -> {
                 logger.log(Level.FINE, "Failed to send TURN event: {0}", ex);
                 if (event instanceof NostrTURNConnectEvent) {
+                    cancelConnectAckTimeout();
                     state = 0;
                     setTransport(null);
                 }
@@ -745,30 +861,35 @@ public final class NostrTURNChannel {
             });
     }
 
-    private void enqueuePayloadDispatch(ByteBuffer payload) {
+    private AsyncTask<Void> enqueuePayloadDispatch(ByteBuffer payload) {
         if (closed) {
-            return;
+            return AsyncTask.completed(null);
         }
         final ByteBuffer payloadCopy = copyPayload(payload);
-        inboundPayloadDispatchQueue.enqueue((resolve, reject) -> {
-            if (closed) {
-                resolve.accept(null);
-                return;
-            }
-            inboundPayloadExecutor
-                .run(() -> {
-                    if (!closed) {
-                        onPayload(payloadCopy.asReadOnlyBuffer());
-                    }
-                    return null;
-                })
-                .then(ignored -> {
+        return AsyncTask.create((resolveOuter, rejectOuter) -> {
+            inboundPayloadDispatchQueue.enqueue((resolve, reject) -> {
+                if (closed) {
                     resolve.accept(null);
-                    return null;
-                })
-                .catchException(ex -> {
-                    logger.log(Level.FINE, "TURN payload dispatch queue recovered after listener failure", ex);
-                    resolve.accept(null);
+                    resolveOuter.accept(null);
+                    return;
+                }
+                inboundPayloadExecutor
+                    .run(() -> {
+                        if (!closed) {
+                            onPayload(payloadCopy.asReadOnlyBuffer());
+                        }
+                        return null;
+                    })
+                    .then(ignored -> {
+                        resolve.accept(null);
+                        resolveOuter.accept(null);
+                        return null;
+                    })
+                    .catchException(ex -> {
+                        logger.log(Level.FINE, "TURN payload dispatch queue recovered after listener failure", ex);
+                        resolve.accept(null);
+                        resolveOuter.accept(null);
+                    });
                 });
         });
     }
@@ -825,6 +946,9 @@ public final class NostrTURNChannel {
         Throwable current = error;
         while (current != null) {
             if (current instanceof DeliveryAckTimeoutException) {
+                return true;
+            }
+            if (current instanceof TransportReplacedException) {
                 return true;
             }
             current = current.getCause();

@@ -216,20 +216,65 @@ public class NostrRTCSmokeTest {
 
             for (int attempt = 0; attempt < 3; attempt++) {
                 try {
-                    aToB.write(ByteBuffer.wrap("stuck-turn".getBytes(StandardCharsets.UTF_8))).await();
+                    Boolean delivered = aToB.write(ByteBuffer.wrap("stuck-turn".getBytes(StandardCharsets.UTF_8))).await();
+                    if (Boolean.TRUE.equals(delivered)) {
+                        throw new AssertionError("Expected write to fail or stay undelivered on attempt " + attempt);
+                    }
+                    continue;
                 } catch (Throwable expected) {
                     assertTrue(
-                        "Expected delivery_ack timeout but got: " + expected,
-                        containsCause(expected, NostrTURNChannel.DeliveryAckTimeoutException.class)
+                        "Expected retryable TURN write failure but got: " + expected,
+                        containsCause(expected, NostrTURNChannel.DeliveryAckTimeoutException.class) ||
+                        containsCause(expected, NostrTURNChannel.TransportReplacedException.class)
                     );
-                    continue;
                 }
-                throw new AssertionError("Expected TURN delivery_ack timeout on attempt " + attempt);
             }
 
             Thread.sleep(300);
             assertEquals("Reciprocal mismatch should prevent payload delivery", 0, receivedCount.get());
             assertFalse("Sender channel should remain logically ready despite missing reciprocal ack", aToB.isClosed());
+        } finally {
+            alicePool.close();
+            bobPool.close();
+        }
+    }
+
+    @Test
+    public void testRemoteDisconnectClosesChannelWithoutResurrection() throws Exception {
+        NostrKeyPair room = new NostrKeyPair();
+        NostrRTCLocalPeer alice = peer("alice", "alice-s4", room, turnUrlA);
+        NostrRTCLocalPeer bob = peer("bob", "bob-s4", room, turnUrlA);
+        NostrRTCPeer bobRemote = remote(bob, room, turnUrlA);
+        NostrRTCPeer aliceRemote = remote(alice, room, turnUrlA);
+
+        NostrTURNPool alicePool = new NostrTURNPool(24);
+        NostrTURNPool bobPool = new NostrTURNPool(24);
+        try {
+            NostrTURNChannel aToB = alicePool.connect(alice, bobRemote, turnUrlA, room, "primary", true, null);
+            NostrTURNChannel bFromA = bobPool.connect(bob, aliceRemote, turnUrlA, room, "primary", true, null);
+
+            CountDownLatch readyLatch = new CountDownLatch(2);
+            aToB.addListener(new ReadyListener(readyLatch));
+            bFromA.addListener(new ReadyListener(readyLatch));
+            if (aToB.isReady()) {
+                readyLatch.countDown();
+            }
+            if (bFromA.isReady()) {
+                readyLatch.countDown();
+            }
+            assertTrue("TURN channels not ready", readyLatch.await(8, TimeUnit.SECONDS));
+
+            bFromA.close("normal-remote-disconnect");
+
+            long deadline = System.currentTimeMillis() + 8000L;
+            while (System.currentTimeMillis() < deadline && !aToB.isClosed()) {
+                Thread.sleep(25L);
+            }
+            assertTrue("remote disconnect should close sender-side logical TURN channel", aToB.isClosed());
+
+            Thread.sleep(1200L);
+            assertTrue("channel should remain closed after pool loop cycles", aToB.isClosed());
+            assertFalse("closed channel must not appear ready", aToB.isReady());
         } finally {
             alicePool.close();
             bobPool.close();

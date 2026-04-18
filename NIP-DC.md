@@ -527,7 +527,6 @@ It communicates:
 * the PoW difficulty
 * a random challenge token
 * optionally a redirect URL
-* the challenge expiration time
 
 #### TURN envelope
 
@@ -540,9 +539,8 @@ It communicates:
 {
   "kind": 25051,
   "tags": [
-    ["t", "challenge"],
-    # ["r", "<optional redirect URL>"],
-    ["expiration", "<unix timestamp seconds>"]
+    ["t", "challenge"]
+    # ["r", "<optional redirect URL>"]
   ],
   "content": JSON.stringify({
     "difficulty": 13,
@@ -556,13 +554,14 @@ Meaning:
 * `content.difficulty` is the required PoW difficulty in leading zero bits
 * `content.challenge` is the token the client must copy into the next `connect`
 * `r`, if present, is an optional redirect URL for another TURN server
-* `expiration` is when the challenge expires
 
 Behavior:
 
 * if the client supports redirects and `r` is present, it **SHOULD** switch to the provided URL
 * otherwise it **MUST** continue on the current connection
-* the client **MUST** solve and answer before `expiration`
+* challenge validity is scoped to the lifetime of the WebSocket that received it
+* once that WebSocket closes, the challenge is no longer valid
+* servers **SHOULD** enforce a timeout for idle unauthenticated WebSockets that never send a valid `connect`
 
 #### Payload
 

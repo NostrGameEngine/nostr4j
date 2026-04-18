@@ -38,6 +38,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.net.ServerSocket;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -715,6 +716,103 @@ public class NostrRTCIntegrationTest {
     }
 
     @Test
+    public void testLocalCloseDuringHalfOpenTurnConnectCleansServerSocketState() throws Exception {
+        String localSession = "half-open-close-local";
+        testPlatform.reset();
+        testPlatform.setProfile(localSession, TransportProfile.rejectRtc());
+        testPlatform.dropIncomingTurnFrameType(turnUrlA, "ack", 1);
+
+        NostrKeyPair roomKeyPair = new NostrKeyPair();
+        NostrRTCLocalPeer local = new NostrRTCLocalPeer(
+            NostrKeyPairSigner.generate(),
+            Collections.emptyList(),
+            APP_ID,
+            PROTOCOL_ID,
+            localSession,
+            roomKeyPair,
+            turnUrlA
+        );
+        NostrRTCLocalPeer remoteLocal = new NostrRTCLocalPeer(
+            NostrKeyPairSigner.generate(),
+            Collections.emptyList(),
+            APP_ID,
+            PROTOCOL_ID,
+            "half-open-close-remote",
+            roomKeyPair,
+            turnUrlA
+        );
+        NostrRTCPeer remote = new NostrRTCPeer(
+            remoteLocal.getPubkey(),
+            APP_ID,
+            PROTOCOL_ID,
+            remoteLocal.getSessionId(),
+            roomKeyPair.getPublicKey(),
+            turnUrlA
+        );
+
+        NostrTURNPool pool = new NostrTURNPool(TURN_MAX_DIFF);
+        NostrTURNChannel channel = null;
+        int baseline = turnLogicalSocketCount(turnServerA);
+        try {
+            channel = pool.connect(local, remote, turnUrlA, roomKeyPair, "primary", true, null);
+            awaitCondition(
+                () -> turnLogicalSocketCount(turnServerA) > baseline,
+                5000,
+                "server did not accept half-open TURN connect"
+            );
+            assertFalse("connect-ack is intentionally dropped; channel must remain half-open/not-ready", channel.isReady());
+
+            channel.close("half-open-local-close");
+            awaitCondition(
+                () -> turnLogicalSocketCount(turnServerA) == baseline,
+                5000,
+                "local close during half-open connect should clean server logical socket"
+            );
+            assertTrue(channel.isClosed());
+        } finally {
+            if (channel != null && !channel.isClosed()) {
+                channel.close("test-cleanup");
+            }
+            pool.close();
+        }
+    }
+
+    @Test
+    public void testTurnWriteSurvivesAckDelayBeyondLegacyTimeout() throws Exception {
+        String aliceSession = "alice-turn-ack-timeout-window";
+        String bobSession = "bob-turn-ack-timeout-window";
+        testPlatform.reset();
+        testPlatform.setProfile(aliceSession, TransportProfile.rejectRtc());
+        testPlatform.setProfile(bobSession, TransportProfile.rejectRtc());
+
+        NostrKeyPair roomKeyPair = new NostrKeyPair();
+        SocketContext alice = newSocketContext("alice", aliceSession, roomKeyPair, turnUrlA, null);
+        SocketContext bob = newSocketContext("bob", bobSession, roomKeyPair, turnUrlA, null);
+        try {
+            connect(alice, bob);
+            NostrRTCChannel aliceCh = alice.socket.createChannel("primary", true, true, 0, null);
+            NostrRTCChannel bobCh = bob.socket.createChannel("primary", true, true, 0, null);
+
+            MessageCapture warmupCapture = new MessageCapture(1);
+            bobCh.addListener(warmupCapture);
+            sendUntilMessageReceived(aliceCh, warmupCapture, "warmup-turn", 10000, Boolean.TRUE);
+            awaitCondition(() -> isTurnPathReady(aliceCh) && isTurnPathReady(bobCh), 5000, "TURN path not ready");
+
+            testPlatform.delayTurnDeliveryAck(turnUrlA, 1, 6500L);
+            MessageCapture delayedCapture = new MessageCapture(1);
+            bobCh.addListener(delayedCapture);
+
+            boolean delivered = NGEUtils.awaitNoThrow(aliceCh.write(ByteBuffer.wrap("delayed-ack-window".getBytes(StandardCharsets.UTF_8))));
+            assertTrue("TURN write should survive ack delay beyond legacy 5s timeout", delivered);
+            assertTrue("receiver did not observe delayed-ack payload", delayedCapture.await(2));
+            assertEquals(1, delayedCapture.countMessageOnTransport("delayed-ack-window", true));
+        } finally {
+            alice.close();
+            bob.close();
+        }
+    }
+
+    @Test
     public void testDelayedTurnDeliveryAckRecoversQueuedWritesWithoutDuplicateDelivery() throws Exception {
         String aliceSession = "alice-turn-delayed-ack";
         String bobSession = "bob-turn-delayed-ack";
@@ -793,7 +891,7 @@ public class NostrRTCIntegrationTest {
     }
 
     @Test
-    public void testSlowTurnListenerDoesNotDelayDeliveryAck() throws Exception {
+    public void testTurnDeliveryAckWaitsForSlowListenerCompletion() throws Exception {
         String aliceSession = "alice-turn-slow-listener";
         String bobSession = "bob-turn-slow-listener";
         testPlatform.reset();
@@ -868,12 +966,7 @@ public class NostrRTCIntegrationTest {
                 });
 
             assertTrue("slow TURN listener was not entered", slowListenerEntered.await(5, TimeUnit.SECONDS));
-            assertTrue(
-                "TURN write should complete before the slow listener returns",
-                writeCompleted.await(2, TimeUnit.SECONDS)
-            );
-            assertEquals(Boolean.TRUE, writeResult.get());
-            assertEquals(null, writeError.get());
+            assertFalse("TURN write should stay pending until listener delivery completes", writeCompleted.await(2, TimeUnit.SECONDS));
             assertFalse(
                 "message capture should still be blocked behind the slow listener",
                 capture.containsMessage(slowMessage)
@@ -882,6 +975,9 @@ public class NostrRTCIntegrationTest {
             releaseSlowListener.countDown();
 
             assertTrue("slow TURN listener did not finish", slowListenerFinished.await(5, TimeUnit.SECONDS));
+            assertTrue("TURN write should complete after listener delivery", writeCompleted.await(5, TimeUnit.SECONDS));
+            assertEquals(Boolean.TRUE, writeResult.get());
+            assertEquals(null, writeError.get());
             assertTrue("receiver did not observe the message after listener release", capture.await(2));
             assertTrue(capture.containsMessageOnTransport(slowMessage, true));
         } finally {
@@ -1783,6 +1879,8 @@ public class NostrRTCIntegrationTest {
         private final Map<String, List<byte[]>> binaryFramesByUrl = new ConcurrentHashMap<String, List<byte[]>>();
         private final Map<String, DelayedDeliveryAck> delayedDeliveryAcksByUrl =
             new ConcurrentHashMap<String, DelayedDeliveryAck>();
+        private final Map<String, Map<String, AtomicInteger>> droppedIncomingTurnTypesByUrl =
+            new ConcurrentHashMap<String, Map<String, AtomicInteger>>();
         private final AsyncExecutor delayedTurnFrameExecutor = NGEUtils
             .getPlatform()
             .newAsyncExecutor("integration-delayed-turn-frame");
@@ -1792,6 +1890,7 @@ public class NostrRTCIntegrationTest {
             rtcByConnId.clear();
             binaryFramesByUrl.clear();
             delayedDeliveryAcksByUrl.clear();
+            droppedIncomingTurnTypesByUrl.clear();
         }
 
         private void setProfile(String connId, TransportProfile profile) {
@@ -1851,6 +1950,15 @@ public class NostrRTCIntegrationTest {
             delayedDeliveryAcksByUrl.put(url, new DelayedDeliveryAck(count, delayMs));
         }
 
+        private void dropIncomingTurnFrameType(String url, String type, int count) {
+            if (url == null || type == null || type.isEmpty() || count <= 0) {
+                return;
+            }
+            droppedIncomingTurnTypesByUrl
+                .computeIfAbsent(url, key -> new ConcurrentHashMap<String, AtomicInteger>())
+                .put(type, new AtomicInteger(count));
+        }
+
         private AsyncTask<Void> maybeDelayTurnDeliveryAck(String url, ByteBuffer payload, WebsocketTransport delegate) {
             if (url == null) {
                 return null;
@@ -1884,6 +1992,33 @@ public class NostrRTCIntegrationTest {
                     TimeUnit.MILLISECONDS
                 );
             });
+        }
+
+        private boolean shouldDropIncomingTurnFrame(String url, ByteBuffer payload) {
+            if (url == null) {
+                return false;
+            }
+            String type = turnFrameType(payload);
+            if (type == null || type.isEmpty()) {
+                return false;
+            }
+            Map<String, AtomicInteger> byType = droppedIncomingTurnTypesByUrl.get(url);
+            if (byType == null) {
+                return false;
+            }
+            AtomicInteger remaining = byType.get(type);
+            if (remaining == null) {
+                return false;
+            }
+            while (true) {
+                int current = remaining.get();
+                if (current <= 0) {
+                    return false;
+                }
+                if (remaining.compareAndSet(current, current - 1)) {
+                    return true;
+                }
+            }
         }
 
         private static String turnFrameType(ByteBuffer payload) {
@@ -1961,6 +2096,8 @@ public class NostrRTCIntegrationTest {
 
         private final WebsocketTransport delegate;
         private final TestPlatform platform;
+        private final Map<WebsocketTransportListener, WebsocketTransportListener> wrappedListeners =
+            new ConcurrentHashMap<WebsocketTransportListener, WebsocketTransportListener>();
         private volatile String currentUrl;
 
         private CapturingWebsocketTransport(WebsocketTransport delegate, TestPlatform platform) {
@@ -1996,12 +2133,48 @@ public class NostrRTCIntegrationTest {
 
         @Override
         public void addListener(WebsocketTransportListener listener) {
-            delegate.addListener(listener);
+            WebsocketTransportListener wrapped = new WebsocketTransportListener() {
+                @Override
+                public void onConnectionClosedByServer(String reason) {
+                    listener.onConnectionClosedByServer(reason);
+                }
+
+                @Override
+                public void onConnectionOpen() {
+                    listener.onConnectionOpen();
+                }
+
+                @Override
+                public void onConnectionMessage(String msg) {
+                    listener.onConnectionMessage(msg);
+                }
+
+                @Override
+                public void onConnectionBinaryMessage(ByteBuffer msg) {
+                    if (platform.shouldDropIncomingTurnFrame(currentUrl, msg.asReadOnlyBuffer())) {
+                        return;
+                    }
+                    listener.onConnectionBinaryMessage(msg);
+                }
+
+                @Override
+                public void onConnectionClosedByClient(String reason) {
+                    listener.onConnectionClosedByClient(reason);
+                }
+
+                @Override
+                public void onConnectionError(Throwable e) {
+                    listener.onConnectionError(e);
+                }
+            };
+            wrappedListeners.put(listener, wrapped);
+            delegate.addListener(wrapped);
         }
 
         @Override
         public void removeListener(WebsocketTransportListener listener) {
-            delegate.removeListener(listener);
+            WebsocketTransportListener wrapped = wrappedListeners.remove(listener);
+            delegate.removeListener(wrapped == null ? listener : wrapped);
         }
 
         @Override
@@ -2015,6 +2188,20 @@ public class NostrRTCIntegrationTest {
         @Override
         public int getMaxMessageSize() {
             return 1024 * 1024 * 10;
+        }
+    }
+
+    private static int turnLogicalSocketCount(TurnServer server) {
+        if (server == null) {
+            return 0;
+        }
+        try {
+            Field field = TurnServer.class.getDeclaredField("logicalSockets");
+            field.setAccessible(true);
+            Map<?, ?> map = (Map<?, ?>) field.get(server);
+            return map == null ? 0 : map.size();
+        } catch (Exception e) {
+            throw new RuntimeException("Unable to inspect TURN logical socket registry", e);
         }
     }
 

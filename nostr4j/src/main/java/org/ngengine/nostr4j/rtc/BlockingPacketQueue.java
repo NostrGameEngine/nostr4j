@@ -210,10 +210,8 @@ public final class BlockingPacketQueue<T> implements AutoCloseable {
                     pausedForRetry = false;
                     stopInternal();
                     IllegalStateException err = new IllegalStateException(failureMessage, ex);
+                    rejectEnqueuedOnce(enqueued, err);
                     reject.accept(err);
-                    if (enqueued.reject != null) {
-                        enqueued.reject.accept(err);
-                    }
                 });
         });
     }
@@ -222,6 +220,20 @@ public final class BlockingPacketQueue<T> implements AutoCloseable {
         try {
             queue.remove();
         } catch (NoSuchElementException ignored) {}
+    }
+
+    private void rejectEnqueuedOnce(Enqueued<T> enqueued, Throwable error) {
+        if (enqueued == null) {
+            popAndRejectHead(error);
+            return;
+        }
+        if (queue.remove(enqueued)) {
+            if (enqueued.reject != null) {
+                enqueued.reject.accept(error);
+            }
+            return;
+        }
+        popAndRejectHead(error);
     }
 
     public void restartIfStuck(long timeoutMs) {

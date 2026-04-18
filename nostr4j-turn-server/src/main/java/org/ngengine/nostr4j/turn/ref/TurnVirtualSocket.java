@@ -32,6 +32,7 @@
 package org.ngengine.nostr4j.turn.ref;
 
 import java.nio.ByteBuffer;
+import java.util.Objects;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.logging.Logger;
@@ -59,6 +60,96 @@ import org.ngengine.platform.AsyncTask;
 final class TurnVirtualSocket implements AutoCloseable {
 
     private static final Logger logger = Logger.getLogger(TurnVirtualSocket.class.getName());
+    private static final int PRIORITY_RESERVED_SLOTS = 1;
+
+    static final class LogicalIdentity {
+
+        private final String room;
+        private final String localPubkey;
+        private final String localSessionId;
+        private final String remotePubkey;
+        private final String remoteSessionId;
+        private final String protocolId;
+        private final String applicationId;
+        private final String channelLabel;
+
+        private LogicalIdentity(
+            NostrPublicKey roomPubkey,
+            NostrPublicKey localPubkey,
+            String localSessionId,
+            NostrPublicKey remotePubkey,
+            String remoteSessionId,
+            String protocolId,
+            String applicationId,
+            String channelLabel
+        ) {
+            this.room = roomPubkey.asHex();
+            this.localPubkey = localPubkey.asHex();
+            this.localSessionId = localSessionId;
+            this.remotePubkey = remotePubkey.asHex();
+            this.remoteSessionId = remoteSessionId;
+            this.protocolId = protocolId;
+            this.applicationId = applicationId;
+            this.channelLabel = channelLabel;
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(
+                room,
+                localPubkey,
+                localSessionId,
+                remotePubkey,
+                remoteSessionId,
+                protocolId,
+                applicationId,
+                channelLabel
+            );
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) {
+                return true;
+            }
+            if (!(obj instanceof LogicalIdentity)) {
+                return false;
+            }
+            LogicalIdentity other = (LogicalIdentity) obj;
+            return (
+                Objects.equals(room, other.room) &&
+                Objects.equals(localPubkey, other.localPubkey) &&
+                Objects.equals(localSessionId, other.localSessionId) &&
+                Objects.equals(remotePubkey, other.remotePubkey) &&
+                Objects.equals(remoteSessionId, other.remoteSessionId) &&
+                Objects.equals(protocolId, other.protocolId) &&
+                Objects.equals(applicationId, other.applicationId) &&
+                Objects.equals(channelLabel, other.channelLabel)
+            );
+        }
+    }
+
+    static LogicalIdentity logicalIdentity(
+        NostrPublicKey roomPubkey,
+        NostrPublicKey localPubkey,
+        String localSessionId,
+        NostrPublicKey remotePubkey,
+        String remoteSessionId,
+        String protocolId,
+        String applicationId,
+        String channelLabel
+    ) {
+        return new LogicalIdentity(
+            roomPubkey,
+            localPubkey,
+            localSessionId,
+            remotePubkey,
+            remoteSessionId,
+            protocolId,
+            applicationId,
+            channelLabel
+        );
+    }
 
     // Client-generated and server-accepted virtual socket id for this websocket session.
     private final long vsocketId;
@@ -77,6 +168,8 @@ final class TurnVirtualSocket implements AutoCloseable {
     private final String applicationId;
     // Channel label (`p` tag second value) for per-channel multiplexing.
     private final String channelLabel;
+    private final LogicalIdentity logicalIdentity;
+    private final BlockingPacketQueue<QueuedOutgoingFrame> queuedPriorityOutgoingFrames;
     private final BlockingPacketQueue<QueuedOutgoingFrame> queuedOutgoingFrames;
     private volatile boolean ackSent = false;
 
@@ -115,6 +208,33 @@ final class TurnVirtualSocket implements AutoCloseable {
         this.protocolId = protocolId;
         this.applicationId = applicationId;
         this.channelLabel = channelLabel;
+        this.logicalIdentity =
+            logicalIdentity(
+                roomPubkey,
+                clientPubkey,
+                sourceSessionId,
+                targetPubkey,
+                targetSessionId,
+                protocolId,
+                applicationId,
+                channelLabel
+            );
+        this.queuedPriorityOutgoingFrames =
+            new BlockingPacketQueue<QueuedOutgoingFrame>(
+                new BlockingPacketQueue.PacketHandler<TurnVirtualSocket.QueuedOutgoingFrame>() {
+                    @Override
+                    public AsyncTask<Boolean> handle(TurnVirtualSocket.QueuedOutgoingFrame frame) {
+                        return processQueuedFrame.apply(TurnVirtualSocket.this, frame);
+                    }
+
+                    @Override
+                    public boolean isReady() {
+                        return ackSent && hasReachableRecipient.apply(TurnVirtualSocket.this);
+                    }
+                },
+                logger,
+                "TURN priority outgoing queue blocked"
+            );
         this.queuedOutgoingFrames =
             new BlockingPacketQueue<QueuedOutgoingFrame>(
                 new BlockingPacketQueue.PacketHandler<TurnVirtualSocket.QueuedOutgoingFrame>() {
@@ -132,6 +252,7 @@ final class TurnVirtualSocket implements AutoCloseable {
                 "TURN outgoing queue blocked"
             );
         // Do not drain any queued sender data before the connect ACK has been sent.
+        this.queuedPriorityOutgoingFrames.stop();
         this.queuedOutgoingFrames.stop();
     }
 
@@ -167,22 +288,44 @@ final class TurnVirtualSocket implements AutoCloseable {
         return channelLabel;
     }
 
-    boolean enqueueOutgoing(byte[] frameBytes, int maxQueuedFrames) {
-        BlockingPacketQueue<QueuedOutgoingFrame> queue = this.queuedOutgoingFrames;
-        if (queue.size() >= maxQueuedFrames) {
-            return false;
+    LogicalIdentity getLogicalIdentity() {
+        return logicalIdentity;
+    }
+
+    boolean enqueueOutgoing(byte[] frameBytes, int maxQueuedFrames, boolean priority) {
+        int priorityQueued = this.queuedPriorityOutgoingFrames.size();
+        int normalQueued = this.queuedOutgoingFrames.size();
+        int totalQueued = priorityQueued + normalQueued;
+
+        int reservedForPriority = maxQueuedFrames > 1 ? PRIORITY_RESERVED_SLOTS : 0;
+        int normalCapacity = Math.max(0, maxQueuedFrames - reservedForPriority);
+
+        if (priority) {
+            if (totalQueued >= maxQueuedFrames) {
+                return false;
+            }
+        } else {
+            if (normalQueued >= normalCapacity || totalQueued >= maxQueuedFrames) {
+                return false;
+            }
         }
+
+        BlockingPacketQueue<QueuedOutgoingFrame> queue = priority ? this.queuedPriorityOutgoingFrames : this.queuedOutgoingFrames;
         queue.enqueue(new QueuedOutgoingFrame(frameBytes));
         return true;
     }
 
     boolean out(ByteBuffer frame, int maxQueuedFrames) {
+        return out(frame, maxQueuedFrames, false);
+    }
+
+    boolean out(ByteBuffer frame, int maxQueuedFrames, boolean priority) {
         if (frame == null) {
             return false;
         }
         byte[] frameBytes = new byte[frame.remaining()];
         frame.asReadOnlyBuffer().get(frameBytes);
-        return enqueueOutgoing(frameBytes, maxQueuedFrames);
+        return enqueueOutgoing(frameBytes, maxQueuedFrames, priority);
     }
 
     ByteBuffer in(QueuedOutgoingFrame queued, long recipientVsocketId) {
@@ -194,11 +337,13 @@ final class TurnVirtualSocket implements AutoCloseable {
     }
 
     void loop() {
+        this.queuedPriorityOutgoingFrames.loop();
         this.queuedOutgoingFrames.loop();
     }
 
     void markAckSent() {
         this.ackSent = true;
+        this.queuedPriorityOutgoingFrames.restart();
         this.queuedOutgoingFrames.restart();
     }
 
@@ -208,6 +353,7 @@ final class TurnVirtualSocket implements AutoCloseable {
 
     @Override
     public void close() {
+        this.queuedPriorityOutgoingFrames.close();
         this.queuedOutgoingFrames.close();
     }
 

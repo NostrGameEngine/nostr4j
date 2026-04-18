@@ -32,7 +32,6 @@
 package org.ngengine.nostr4j.turn.ref;
 
 import com.google.gson.JsonObject;
-import java.time.Instant;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.event.UnsignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
@@ -70,12 +69,10 @@ final class TurnEventFactory {
         content.addProperty("challenge", connection.getChallenge());
         content.addProperty("difficulty", connection.getDifficulty());
 
-        // Expiration is encoded as NIP-40 expiration tag.
         UnsignedNostrEvent event = new UnsignedNostrEvent()
             .withKind(TURN_KIND)
-            .createdAt(Instant.now())
+            .createdAt(java.time.Instant.now())
             .withTag("t", "challenge")
-            .withExpiration(connection.getChallengeExpiresAt())
             .withContent(TurnJson.toJson(content));
 
         return sign(event);
@@ -85,7 +82,7 @@ final class TurnEventFactory {
         // Ack contains only "t=ack" and empty content by protocol definition.
         UnsignedNostrEvent event = new UnsignedNostrEvent()
             .withKind(TURN_KIND)
-            .createdAt(Instant.now())
+            .createdAt(java.time.Instant.now())
             .withTag("t", "ack")
             .withContent("");
 
@@ -100,7 +97,7 @@ final class TurnEventFactory {
 
         UnsignedNostrEvent event = new UnsignedNostrEvent()
             .withKind(TURN_KIND)
-            .createdAt(Instant.now())
+            .createdAt(java.time.Instant.now())
             .withTag("t", "disconnect")
             .withContent(TurnJson.toJson(content));
 

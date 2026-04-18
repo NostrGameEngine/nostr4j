@@ -188,6 +188,92 @@ public class TestRtcPendingSendRecovery {
     }
 
     @Test
+    public void testTransportChangeFailureIsRetryableAndQueueRecovers() throws Exception {
+        Logger logger = Logger.getLogger("org.ngengine.nostr4j.rtc.TestRtcPendingSendRecovery.transport-change");
+        logger.setUseParentHandlers(false);
+        logger.setLevel(Level.ALL);
+
+        AtomicInteger attempts = new AtomicInteger(0);
+        BlockingPacketQueue<String> queue = new BlockingPacketQueue<String>(
+            new BlockingPacketQueue.PacketHandler<String>() {
+                @Override
+                public AsyncTask<Boolean> handle(String packet) {
+                    if (attempts.getAndIncrement() == 0) {
+                        return AsyncTask.failed(new NostrTURNChannel.TransportReplacedException());
+                    }
+                    return AsyncTask.completed(Boolean.TRUE);
+                }
+
+                @Override
+                public boolean shouldPauseOnError(Throwable error) {
+                    return NostrTURNChannel.isRetryableWriteFailure(error);
+                }
+            },
+            logger,
+            "Failed to send data to peer",
+            1000L,
+            6000L
+        );
+
+        AtomicBoolean completed = new AtomicBoolean(false);
+        AtomicBoolean failed = new AtomicBoolean(false);
+        try {
+            queue.enqueue("payload", ignored -> completed.set(true), error -> failed.set(true));
+            waitUntil(() -> queueExecutionQueue(queue) == null, 2000, "queue should pause after transport replacement");
+            assertEquals(1, queue.size());
+            assertFalse("caller should remain pending while queue is paused", completed.get() || failed.get());
+
+            queue.restartIfStuck(0L);
+
+            waitUntil(() -> completed.get(), 2000, "queue should complete after transport recovery");
+            assertFalse("retryable transport replacement should not fail caller", failed.get());
+            assertEquals(2, attempts.get());
+            assertEquals(0, queue.size());
+            assertTrue(
+                "transport replacement must be considered retryable",
+                NostrTURNChannel.isRetryableWriteFailure(new NostrTURNChannel.TransportReplacedException())
+            );
+        } finally {
+            queue.close();
+        }
+    }
+
+    @Test
+    public void testHardFailureRemovesHeadAndDoesNotRetryAfterRestart() throws Exception {
+        Logger logger = Logger.getLogger("org.ngengine.nostr4j.rtc.TestRtcPendingSendRecovery.hard-failure");
+        logger.setUseParentHandlers(false);
+        logger.setLevel(Level.ALL);
+
+        AtomicInteger attempts = new AtomicInteger(0);
+        BlockingPacketQueue<String> queue = new BlockingPacketQueue<String>(
+            packet -> {
+                attempts.incrementAndGet();
+                return AsyncTask.failed(new RuntimeException("hard-failure"));
+            },
+            logger,
+            "Failed to send data to peer",
+            1000L,
+            6000L
+        );
+
+        AtomicReference<Throwable> failure = new AtomicReference<Throwable>();
+        AtomicBoolean completed = new AtomicBoolean(false);
+        try {
+            queue.enqueue("payload", ignored -> completed.set(true), failure::set);
+            waitUntil(() -> failure.get() != null, 2000, "hard failure should reject enqueued payload");
+            assertFalse("hard failure should not resolve", completed.get());
+            assertEquals("failed head packet must be removed exactly once", 0, queue.size());
+            assertEquals(1, attempts.get());
+
+            queue.restart();
+            Thread.sleep(120L);
+            assertEquals("hard-failed packet must not be retried after restart", 1, attempts.get());
+        } finally {
+            queue.close();
+        }
+    }
+
+    @Test
     public void testQueueCloseRejectsPendingWaiters() throws Exception {
         Logger logger = Logger.getLogger("org.ngengine.nostr4j.rtc.TestRtcPendingSendRecovery.close");
         logger.setUseParentHandlers(false);

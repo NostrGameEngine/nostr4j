@@ -35,6 +35,7 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import java.net.ServerSocket;
@@ -139,6 +140,242 @@ public class TestTurnServerCompliance {
         assertTrue("Expected websocket to close for missing roomproof", closed);
         assertFalse("Server must not ack unauthorized connect", ws.hasFrameType("ack"));
         ws.closeNow();
+    }
+
+    @Test
+    public void testChallengeParsesWithoutExpirationTag() throws Exception {
+        NostrRTCLocalPeer local = localPeer(NostrKeyPairSigner.generate(), roomKeyPair, "sess-challenge-no-exp");
+        WsClient ws = WsClient.connect(wsUri);
+        SignedNostrEvent challengeHeader = waitForType(ws, "challenge", 2000);
+        assertNotNull(challengeHeader);
+        String expiration = challengeHeader.getFirstTagFirstValue("expiration");
+        assertTrue("TURN challenge should not require expiration tag", expiration == null || expiration.isEmpty());
+        NostrTURNChallengeEvent challenge = NostrTURNChallengeEvent.parseIncoming(challengeHeader, local, 64);
+        assertNotNull(challenge);
+        ws.closeNow();
+    }
+
+    @Test
+    public void testDisconnectWithWrongPubkeyIsIgnored() throws Exception {
+        NostrKeyPairSigner aliceSigner = NostrKeyPairSigner.generate();
+        NostrKeyPairSigner bobSigner = NostrKeyPairSigner.generate();
+        NostrRTCLocalPeer alice = localPeer(aliceSigner, roomKeyPair, "sess-disc-alice");
+        NostrRTCLocalPeer bob = localPeer(bobSigner, roomKeyPair, "sess-disc-bob");
+        NostrRTCPeer bobRemoteForAlice = remotePeer(bobSigner, roomKeyPair, bob.getSessionId());
+        NostrRTCPeer aliceRemoteForBob = remotePeer(aliceSigner, roomKeyPair, alice.getSessionId());
+
+        WsClient aliceWs = WsClient.connect(wsUri);
+        NostrTURNChallengeEvent challengeAlice = NostrTURNChallengeEvent.parseIncoming(
+            waitForType(aliceWs, "challenge", 2000),
+            alice,
+            64
+        );
+        long aliceVsocketId = 711L;
+        sendValidConnect(aliceWs, alice, bobRemoteForAlice, roomKeyPair, challengeAlice, aliceVsocketId);
+        assertNotNull(waitForType(aliceWs, "ack", 2000));
+
+        WsClient bobWs = WsClient.connect(wsUri);
+        NostrTURNChallengeEvent challengeBob = NostrTURNChallengeEvent.parseIncoming(
+            waitForType(bobWs, "challenge", 2000),
+            bob,
+            64
+        );
+        long bobVsocketId = 722L;
+        sendValidConnect(bobWs, bob, aliceRemoteForBob, roomKeyPair, challengeBob, bobVsocketId);
+        assertNotNull(waitForType(bobWs, "ack", 2000));
+
+        NostrRTCLocalPeer attacker = localPeer(NostrKeyPairSigner.generate(), roomKeyPair, "sess-disc-attacker");
+        NostrTURNDisconnectEvent forgedDisconnect = NostrTURNDisconnectEvent.createDisconnect(
+            attacker,
+            bobRemoteForAlice,
+            roomKeyPair,
+            CHANNEL_LABEL,
+            aliceVsocketId,
+            "forged-disconnect",
+            false
+        );
+        aliceWs.send(NGEUtils.awaitNoThrow(forgedDisconnect.encodeToFrame(Collections.emptyList())));
+
+        byte[] payload = "still-alive-after-forged-disconnect".getBytes();
+        ByteBuffer dataFrame = NGEUtils.awaitNoThrow(
+            NostrTURNDataEvent
+                .createOutgoing(alice, bobRemoteForAlice, roomKeyPair, CHANNEL_LABEL, aliceVsocketId, NGEUtils.getPlatform().randomBytes(32))
+                .encodeToFrame(Collections.singletonList(ByteBuffer.wrap(payload)))
+        );
+        aliceWs.send(dataFrame);
+        SignedNostrEvent bobData = waitForType(bobWs, "data", 3000);
+        assertNotNull("forged disconnect must not tear down valid sender socket", bobData);
+
+        aliceWs.closeNow();
+        bobWs.closeNow();
+    }
+
+    @Test
+    public void testDuplicateLogicalIdentityLastConnectWins() throws Exception {
+        NostrKeyPairSigner senderSigner = NostrKeyPairSigner.generate();
+        NostrKeyPairSigner receiverSigner = NostrKeyPairSigner.generate();
+        NostrRTCLocalPeer sender = localPeer(senderSigner, roomKeyPair, "sess-dup-sender");
+        NostrRTCLocalPeer receiver = localPeer(receiverSigner, roomKeyPair, "sess-dup-receiver");
+        NostrRTCPeer receiverRemote = remotePeer(receiverSigner, roomKeyPair, receiver.getSessionId());
+        NostrRTCPeer senderRemote = remotePeer(senderSigner, roomKeyPair, sender.getSessionId());
+
+        WsClient senderOldWs = WsClient.connect(wsUri);
+        NostrTURNChallengeEvent senderOldChallenge = NostrTURNChallengeEvent.parseIncoming(
+            waitForType(senderOldWs, "challenge", 2000),
+            sender,
+            64
+        );
+        long senderOldVsocket = 811L;
+        sendValidConnect(senderOldWs, sender, receiverRemote, roomKeyPair, senderOldChallenge, senderOldVsocket);
+        assertNotNull(waitForType(senderOldWs, "ack", 2000));
+
+        WsClient receiverWs = WsClient.connect(wsUri);
+        NostrTURNChallengeEvent receiverChallenge = NostrTURNChallengeEvent.parseIncoming(
+            waitForType(receiverWs, "challenge", 2000),
+            receiver,
+            64
+        );
+        long receiverVsocket = 822L;
+        sendValidConnect(receiverWs, receiver, senderRemote, roomKeyPair, receiverChallenge, receiverVsocket);
+        assertNotNull(waitForType(receiverWs, "ack", 2000));
+
+        byte[] key = NGEUtils.getPlatform().randomBytes(32);
+        senderOldWs.send(
+            NGEUtils.awaitNoThrow(
+                NostrTURNDataEvent
+                    .createOutgoing(sender, receiverRemote, roomKeyPair, CHANNEL_LABEL, senderOldVsocket, key)
+                    .encodeToFrame(Collections.singletonList(ByteBuffer.wrap("old-before-replace".getBytes())))
+            )
+        );
+        assertNotNull(waitForType(receiverWs, "data", 3000));
+
+        WsClient senderNewWs = WsClient.connect(wsUri);
+        NostrTURNChallengeEvent senderNewChallenge = NostrTURNChallengeEvent.parseIncoming(
+            waitForType(senderNewWs, "challenge", 2000),
+            sender,
+            64
+        );
+        long senderNewVsocket = 833L;
+        sendValidConnect(senderNewWs, sender, receiverRemote, roomKeyPair, senderNewChallenge, senderNewVsocket);
+        assertNotNull(waitForType(senderNewWs, "ack", 2000));
+
+        senderOldWs.send(
+            NGEUtils.awaitNoThrow(
+                NostrTURNDataEvent
+                    .createOutgoing(sender, receiverRemote, roomKeyPair, CHANNEL_LABEL, senderOldVsocket, key)
+                    .encodeToFrame(Collections.singletonList(ByteBuffer.wrap("old-after-replace".getBytes())))
+            )
+        );
+        SignedNostrEvent staleData = waitForType(receiverWs, "data", 700);
+        assertNull("old logical socket must be retired after replacement", staleData);
+
+        senderNewWs.send(
+            NGEUtils.awaitNoThrow(
+                NostrTURNDataEvent
+                    .createOutgoing(sender, receiverRemote, roomKeyPair, CHANNEL_LABEL, senderNewVsocket, key)
+                    .encodeToFrame(Collections.singletonList(ByteBuffer.wrap("new-after-replace".getBytes())))
+            )
+        );
+        SignedNostrEvent freshData = waitForType(receiverWs, "data", 3000);
+        assertNotNull("new logical socket must win after replacement", freshData);
+
+        senderOldWs.closeNow();
+        senderNewWs.closeNow();
+        receiverWs.closeNow();
+    }
+
+    @Test
+    public void testDuplicateConnectRetryOnSameWebsocketIsIdempotent() throws Exception {
+        NostrKeyPairSigner senderSigner = NostrKeyPairSigner.generate();
+        NostrKeyPairSigner receiverSigner = NostrKeyPairSigner.generate();
+        NostrRTCLocalPeer sender = localPeer(senderSigner, roomKeyPair, "sess-retry-sender");
+        NostrRTCPeer receiverRemote = remotePeer(receiverSigner, roomKeyPair, "sess-retry-receiver");
+
+        WsClient senderWs = WsClient.connect(wsUri);
+        NostrTURNChallengeEvent challenge = NostrTURNChallengeEvent.parseIncoming(waitForType(senderWs, "challenge", 2000), sender, 64);
+        long vsocketId = 841L;
+
+        sendValidConnect(senderWs, sender, receiverRemote, roomKeyPair, challenge, vsocketId);
+        assertNotNull(waitForType(senderWs, "ack", 2000));
+
+        // Same websocket + same vsocket + same logical identity must be treated as idempotent retry.
+        sendValidConnect(senderWs, sender, receiverRemote, roomKeyPair, challenge, vsocketId);
+        assertNotNull("duplicate retry connect should receive ack instead of websocket close", waitForType(senderWs, "ack", 2000));
+        assertFalse("idempotent retry must not close websocket", senderWs.awaitClose(400));
+
+        senderWs.closeNow();
+    }
+
+    @Test
+    public void testSameVsocketCollisionWithDifferentLogicalIdentityIsRejected() throws Exception {
+        NostrKeyPairSigner senderSigner = NostrKeyPairSigner.generate();
+        NostrKeyPairSigner receiverSignerA = NostrKeyPairSigner.generate();
+        NostrKeyPairSigner receiverSignerB = NostrKeyPairSigner.generate();
+        NostrRTCLocalPeer sender = localPeer(senderSigner, roomKeyPair, "sess-collide-sender");
+        NostrRTCPeer receiverA = remotePeer(receiverSignerA, roomKeyPair, "sess-collide-recv-a");
+        NostrRTCPeer receiverB = remotePeer(receiverSignerB, roomKeyPair, "sess-collide-recv-b");
+
+        WsClient senderWs = WsClient.connect(wsUri);
+        NostrTURNChallengeEvent challenge = NostrTURNChallengeEvent.parseIncoming(waitForType(senderWs, "challenge", 2000), sender, 64);
+        long vsocketId = 851L;
+
+        sendValidConnect(senderWs, sender, receiverA, roomKeyPair, challenge, vsocketId);
+        assertNotNull(waitForType(senderWs, "ack", 2000));
+
+        // Same websocket + same vsocket + different logical tuple must remain fatal.
+        sendValidConnect(senderWs, sender, receiverB, roomKeyPair, challenge, vsocketId);
+        assertTrue("true same-vsocket collision must close websocket", senderWs.awaitClose(3000));
+
+        senderWs.closeNow();
+    }
+
+    @Test
+    public void testDisconnectTeardownRetiresReciprocalSockets() throws Exception {
+        NostrKeyPairSigner aliceSigner = NostrKeyPairSigner.generate();
+        NostrKeyPairSigner bobSigner = NostrKeyPairSigner.generate();
+        NostrRTCLocalPeer alice = localPeer(aliceSigner, roomKeyPair, "sess-symm-alice");
+        NostrRTCLocalPeer bob = localPeer(bobSigner, roomKeyPair, "sess-symm-bob");
+        NostrRTCPeer bobRemoteForAlice = remotePeer(bobSigner, roomKeyPair, bob.getSessionId());
+        NostrRTCPeer aliceRemoteForBob = remotePeer(aliceSigner, roomKeyPair, alice.getSessionId());
+
+        WsClient aliceWs = WsClient.connect(wsUri);
+        NostrTURNChallengeEvent challengeAlice = NostrTURNChallengeEvent.parseIncoming(
+            waitForType(aliceWs, "challenge", 2000),
+            alice,
+            64
+        );
+        long aliceVsocketId = 911L;
+        sendValidConnect(aliceWs, alice, bobRemoteForAlice, roomKeyPair, challengeAlice, aliceVsocketId);
+        assertNotNull(waitForType(aliceWs, "ack", 2000));
+
+        WsClient bobWs = WsClient.connect(wsUri);
+        NostrTURNChallengeEvent challengeBob = NostrTURNChallengeEvent.parseIncoming(waitForType(bobWs, "challenge", 2000), bob, 64);
+        long bobVsocketId = 922L;
+        sendValidConnect(bobWs, bob, aliceRemoteForBob, roomKeyPair, challengeBob, bobVsocketId);
+        assertNotNull(waitForType(bobWs, "ack", 2000));
+
+        NostrTURNDisconnectEvent disconnect = NostrTURNDisconnectEvent.createDisconnect(
+            alice,
+            bobRemoteForAlice,
+            roomKeyPair,
+            CHANNEL_LABEL,
+            aliceVsocketId,
+            "normal-close",
+            false
+        );
+        aliceWs.send(NGEUtils.awaitNoThrow(disconnect.encodeToFrame(Collections.emptyList())));
+        assertNotNull("reciprocal must be notified about teardown", waitForType(bobWs, "disconnect", 3000));
+
+        ByteBuffer bobData = NGEUtils.awaitNoThrow(
+            NostrTURNDataEvent
+                .createOutgoing(bob, aliceRemoteForBob, roomKeyPair, CHANNEL_LABEL, bobVsocketId, NGEUtils.getPlatform().randomBytes(32))
+                .encodeToFrame(Collections.singletonList(ByteBuffer.wrap("should-not-route".getBytes())))
+        );
+        bobWs.send(bobData);
+        assertNull("reciprocal socket must be retired server-side", waitForType(aliceWs, "data", 1200));
+
+        aliceWs.closeNow();
+        bobWs.closeNow();
     }
 
     @Test
