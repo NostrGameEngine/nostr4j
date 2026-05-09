@@ -327,17 +327,18 @@ public final class TurnServer {
         this.maxQueuedBytes = maxQueuedBytes;
         this.maxVirtualSockets = maxVirtualSockets;
         this.queueItemTtlMs = queueItemTtlMs;
-        this.queueBudget = new TurnVirtualSocket.QueueBudget() {
-            @Override
-            public boolean tryAcquire(int bytes) {
-                return reserveQueuedBytes(bytes);
-            }
+        this.queueBudget =
+            new TurnVirtualSocket.QueueBudget() {
+                @Override
+                public boolean tryAcquire(int bytes) {
+                    return reserveQueuedBytes(bytes);
+                }
 
-            @Override
-            public void release(int bytes) {
-                releaseQueuedBytes(bytes);
-            }
-        };
+                @Override
+                public void release(int bytes) {
+                    releaseQueuedBytes(bytes);
+                }
+            };
         this.loopExecutor = NGEUtils.getPlatform().newAsyncExecutor(TurnServer.class.getSimpleName() + "-loop");
 
         // Jetty bootstrap.
