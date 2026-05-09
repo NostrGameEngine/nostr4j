@@ -15,6 +15,7 @@ import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import org.eclipse.jetty.websocket.api.Callback;
 import org.eclipse.jetty.websocket.api.Session;
 import org.junit.Test;
@@ -155,6 +156,73 @@ public class TestTurnServerInternalRegression {
     }
 
     @Test
+    public void testQueueBudgetBoundsQueuedBytesAndReleasesOnClose() throws Exception {
+        ByteBuffer frame = encodedFrame("data", 501L, 301);
+        long frameBytes = frame.remaining();
+        AtomicLong queuedBytes = new AtomicLong(0L);
+        TurnVirtualSocket.QueueBudget budget = boundedBudget(queuedBytes, frameBytes);
+        TurnVirtualSocket sender = new TurnVirtualSocket(
+            501L,
+            new NostrKeyPair().getPublicKey(),
+            new NostrKeyPair().getPublicKey(),
+            new NostrKeyPair().getPublicKey(),
+            "sess-budget-a",
+            "sess-budget-b",
+            "proto",
+            "app",
+            "default",
+            (socket, queuedFrame) -> AsyncTask.completed(Boolean.FALSE),
+            socket -> Boolean.FALSE,
+            budget,
+            0L
+        );
+        try {
+            assertTrue(sender.out(encodedFrame("data", sender.getVsocketId(), 302), 16, false));
+            assertFalse(
+                "server-wide queued byte budget should reject additional retained frames",
+                sender.out(encodedFrame("data", sender.getVsocketId(), 303), 16, false)
+            );
+            assertTrue("queued bytes should be accounted while frame is retained", queuedBytes.get() > 0L);
+        } finally {
+            sender.close();
+        }
+        assertTrue("closing the socket should release queued byte accounting", queuedBytes.get() == 0L);
+    }
+
+    @Test
+    public void testQueueBudgetReleasesAfterSuccessfulDelivery() throws Exception {
+        ByteBuffer frame = encodedFrame("data", 551L, 351);
+        AtomicLong queuedBytes = new AtomicLong(0L);
+        TurnVirtualSocket.QueueBudget budget = boundedBudget(queuedBytes, frame.remaining());
+        AtomicInteger delivered = new AtomicInteger();
+        TurnVirtualSocket sender = new TurnVirtualSocket(
+            551L,
+            new NostrKeyPair().getPublicKey(),
+            new NostrKeyPair().getPublicKey(),
+            new NostrKeyPair().getPublicKey(),
+            "sess-deliver-a",
+            "sess-deliver-b",
+            "proto",
+            "app",
+            "default",
+            (socket, queuedFrame) -> {
+                delivered.incrementAndGet();
+                return AsyncTask.completed(Boolean.TRUE);
+            },
+            socket -> Boolean.TRUE,
+            budget,
+            0L
+        );
+        sender.markAckSent();
+        try {
+            assertTrue(sender.out(encodedFrame("data", sender.getVsocketId(), 352), 16, false));
+            waitUntil(() -> delivered.get() > 0 && queuedBytes.get() == 0L, 1000, "budget should release after delivery");
+        } finally {
+            sender.close();
+        }
+    }
+
+    @Test
     public void testPriorityQueueReservesCapacityWhenNormalBacklogIsFull() throws Exception {
         TurnVirtualSocket sender = new TurnVirtualSocket(
             451L,
@@ -229,6 +297,29 @@ public class TestTurnServerInternalRegression {
                 );
         method.setAccessible(true);
         return (AsyncTask<Boolean>) method.invoke(server, sender, queued);
+    }
+
+    private static TurnVirtualSocket.QueueBudget boundedBudget(AtomicLong queuedBytes, long maxBytes) {
+        return new TurnVirtualSocket.QueueBudget() {
+            @Override
+            public boolean tryAcquire(int bytes) {
+                while (true) {
+                    long current = queuedBytes.get();
+                    long next = current + (long) bytes;
+                    if (next > maxBytes) {
+                        return false;
+                    }
+                    if (queuedBytes.compareAndSet(current, next)) {
+                        return true;
+                    }
+                }
+            }
+
+            @Override
+            public void release(int bytes) {
+                queuedBytes.addAndGet(-bytes);
+            }
+        };
     }
 
     private static TurnVirtualSocket.QueuedOutgoingFrame queuedFrame(long vsocketId, int messageId) throws Exception {
