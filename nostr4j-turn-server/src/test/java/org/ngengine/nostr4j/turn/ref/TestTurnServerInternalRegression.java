@@ -111,7 +111,6 @@ public class TestTurnServerInternalRegression {
         assertTrue(NGEUtils.awaitNoThrow(invokeProcessQueuedFrame(server, sender, queued)).booleanValue());
     }
 
-
     @Test
     public void testQueuedFrameBytesAreGloballyBounded() throws Exception {
         NostrKeyPair room = new NostrKeyPair();
@@ -120,15 +119,7 @@ public class TestTurnServerInternalRegression {
         SignedNostrEvent header = signedHeader("data", senderKeys);
         ByteBuffer frame = encodedFrame(header, 501L, 301, new byte[64]);
         long maxQueuedBytes = frame.remaining();
-        TurnServer server = new TurnServer(
-            "127.0.0.1",
-            12347,
-            NostrKeyPairSigner.generate(),
-            8,
-            5,
-            32,
-            maxQueuedBytes
-        );
+        TurnServer server = new TurnServer("127.0.0.1", 12347, NostrKeyPairSigner.generate(), 8, 5, 32, maxQueuedBytes);
 
         TurnVirtualSocket sender = buildSocket(
             501L,
@@ -319,12 +310,7 @@ public class TestTurnServerInternalRegression {
     }
 
     private static ByteBuffer encodedFrame(SignedNostrEvent header, long vsocketId, int messageId) {
-        return NostrTURNCodec.encodeFrame(
-            NostrTURNCodec.encodeHeader(header),
-            vsocketId,
-            messageId,
-            Collections.emptyList()
-        );
+        return NostrTURNCodec.encodeFrame(NostrTURNCodec.encodeHeader(header), vsocketId, messageId, Collections.emptyList());
     }
 
     private static String frameType(TurnVirtualSocket.QueuedOutgoingFrame frame) {

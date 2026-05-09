@@ -536,7 +536,6 @@ public final class TurnServer {
         }
     }
 
-
     private boolean reserveQueuedBytes(long byteCount) {
         if (byteCount <= 0L) {
             return true;
