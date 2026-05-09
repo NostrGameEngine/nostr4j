@@ -41,6 +41,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.eclipse.jetty.ee10.servlet.ServletContextHandler;
@@ -84,6 +85,7 @@ public final class TurnServer {
 
     static final Logger logger = Logger.getLogger(TurnServer.class.getName());
     private static final int DEFAULT_MAX_QUEUED_FRAMES = 2048;
+    private static final long DEFAULT_MAX_QUEUED_BYTES = 16L * 1024L * 1024L;
     private static final String PEER_UNREACHABLE_REASON = "peer unreachable";
     private static final String UNAUTHENTICATED_TIMEOUT_REASON = "unauthenticated-timeout";
     private static final long SOCKET_LOOP_MS = 250L;
@@ -100,6 +102,8 @@ public final class TurnServer {
     final int challengeTtlSeconds;
     final String host;
     private final int maxQueuedFrames;
+    private final long maxQueuedBytes;
+    private final AtomicLong queuedBytes = new AtomicLong(0L);
     private final AsyncExecutor loopExecutor;
     private volatile boolean running = false;
 
@@ -260,6 +264,18 @@ public final class TurnServer {
         int challengeTtlSeconds,
         int maxQueuedFrames
     ) {
+        this(host, port, serverSigner, difficulty, challengeTtlSeconds, maxQueuedFrames, DEFAULT_MAX_QUEUED_BYTES);
+    }
+
+    public TurnServer(
+        String host,
+        int port,
+        NostrKeyPairSigner serverSigner,
+        int difficulty,
+        int challengeTtlSeconds,
+        int maxQueuedFrames,
+        long maxQueuedBytes
+    ) {
         // Validate constructor parameters early; these values shape server behavior.
         if (host == null || host.trim().isEmpty()) {
             throw new IllegalArgumentException("host must not be blank");
@@ -276,12 +292,16 @@ public final class TurnServer {
         if (maxQueuedFrames <= 0) {
             throw new IllegalArgumentException("maxQueuedFrames must be > 0");
         }
+        if (maxQueuedBytes <= 0L) {
+            throw new IllegalArgumentException("maxQueuedBytes must be > 0");
+        }
         // Initialize signer/event factory and queue policy configuration.
         this.eventFactory = new TurnEventFactory(Objects.requireNonNull(serverSigner, "serverSigner cannot be null"));
         this.host = host.trim();
         this.difficulty = difficulty;
         this.challengeTtlSeconds = challengeTtlSeconds;
         this.maxQueuedFrames = maxQueuedFrames;
+        this.maxQueuedBytes = maxQueuedBytes;
         this.loopExecutor = NGEUtils.getPlatform().newAsyncExecutor(TurnServer.class.getSimpleName() + "-loop");
 
         // Jetty bootstrap.
@@ -505,9 +525,38 @@ public final class TurnServer {
         // delivery_ack frames use a priority queue so they are not starved by bulk data backlog.
         boolean prioritize = "delivery_ack".equals(TurnJson.safeString(header.getFirstTagFirstValue("t")));
         // Always enqueue to preserve per-socket ordering semantics within each class of traffic.
-        if (!senderSocket.out(fullFrame, maxQueuedFrames, prioritize)) {
+        int frameBytes = fullFrame.remaining();
+        if (!reserveQueuedBytes(frameBytes)) {
+            disconnectSenderSocket(connection.getWsSession(), senderSocket.getVsocketId(), PEER_UNREACHABLE_REASON, true);
+            return;
+        }
+        if (!senderSocket.out(fullFrame, maxQueuedFrames, prioritize, () -> releaseQueuedBytes(frameBytes))) {
+            releaseQueuedBytes(frameBytes);
             disconnectSenderSocket(connection.getWsSession(), senderSocket.getVsocketId(), PEER_UNREACHABLE_REASON, true);
         }
+    }
+
+    private boolean reserveQueuedBytes(long byteCount) {
+        if (byteCount <= 0L) {
+            return true;
+        }
+        while (true) {
+            long current = queuedBytes.get();
+            long updated = current + byteCount;
+            if (updated < current || updated > maxQueuedBytes) {
+                return false;
+            }
+            if (queuedBytes.compareAndSet(current, updated)) {
+                return true;
+            }
+        }
+    }
+
+    private void releaseQueuedBytes(long byteCount) {
+        if (byteCount <= 0L) {
+            return;
+        }
+        queuedBytes.updateAndGet(current -> Math.max(0L, current - byteCount));
     }
 
     private void sendAckForSocket(TurnClientConnection connection, TurnVirtualSocket socket) {
