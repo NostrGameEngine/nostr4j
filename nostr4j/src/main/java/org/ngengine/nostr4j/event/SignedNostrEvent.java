@@ -253,7 +253,10 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
         if (cached != null) {
             return cached.booleanValue();
         }
-        boolean result = NGEUtils.getPlatform().verify(this.identifier.id, this.signature, this.getPubkey()._array());
+        String computedId = NostrEvent.computeEventId(this.pubkey, this);
+        boolean result =
+            this.identifier.id.equals(computedId) &&
+            NGEUtils.getPlatform().verify(computedId, this.signature, this.getPubkey()._array());
         this.verified = Boolean.valueOf(result);
         return result;
     }
