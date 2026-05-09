@@ -171,6 +171,34 @@ public class TestNostrEvent {
     }
 
     @Test
+    public void testVerifyRejectsForgedEventWithMismatchedCanonicalId() throws Exception {
+        JVMAsyncPlatform._NO_AUX_RANDOM = true;
+        NostrSigner signer = new NostrKeyPairSigner(
+            new NostrKeyPair(NostrPrivateKey.fromBech32("nsec1ksrsh0gvc7ug848ec5u0qj604ga47qhafl9de5rvdx292mkq9p0ss7w60k"))
+        );
+        UnsignedNostrEvent original = new UnsignedNostrEvent()
+            .withContent("authentic content")
+            .withKind(1)
+            .withTag("p", "victim")
+            .createdAt(Instant.ofEpochSecond(1742147457));
+        SignedNostrEvent signedEvent = signer.sign(original).await();
+        assertTrue(signedEvent.verify());
+
+        Map<String, Object> forgedMap = new HashMap<>(signedEvent.toMap());
+        forgedMap.put("content", "forged content");
+        forgedMap.put("kind", 6);
+        forgedMap.put("created_at", 1742147458L);
+        forgedMap.put("tags", Arrays.asList(Arrays.asList("p", "attacker")));
+
+        SignedNostrEvent forgedEvent = new SignedNostrEvent(forgedMap);
+
+        assertEquals(signedEvent.getId(), forgedEvent.getId());
+        assertEquals(signedEvent.getSignature(), forgedEvent.getSignature());
+        assertFalse(forgedEvent.verify());
+        assertFalse(forgedEvent.verifyAsync().await());
+    }
+
+    @Test
     public void testSigningFailsWhenEventIdCannotBeComputed() {
         NostrSigner signer = NostrKeyPairSigner.generate();
         UnsignedNostrEvent event = new UnsignedNostrEvent().withKind(1).withContent("broken").createdAt(null);
