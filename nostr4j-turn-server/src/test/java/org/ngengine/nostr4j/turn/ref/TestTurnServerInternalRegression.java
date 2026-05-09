@@ -111,6 +111,53 @@ public class TestTurnServerInternalRegression {
         assertTrue(NGEUtils.awaitNoThrow(invokeProcessQueuedFrame(server, sender, queued)).booleanValue());
     }
 
+
+    @Test
+    public void testQueuedFrameBytesAreGloballyBounded() throws Exception {
+        NostrKeyPair room = new NostrKeyPair();
+        NostrKeyPair senderKeys = new NostrKeyPair();
+        NostrKeyPair receiverKeys = new NostrKeyPair();
+        SignedNostrEvent header = signedHeader("data", senderKeys);
+        ByteBuffer frame = encodedFrame(header, 501L, 301, new byte[64]);
+        long maxQueuedBytes = frame.remaining();
+        TurnServer server = new TurnServer(
+            "127.0.0.1",
+            12347,
+            NostrKeyPairSigner.generate(),
+            8,
+            5,
+            32,
+            maxQueuedBytes
+        );
+
+        TurnVirtualSocket sender = buildSocket(
+            501L,
+            room.getPublicKey(),
+            senderKeys.getPublicKey(),
+            receiverKeys.getPublicKey(),
+            "sess-byte-a",
+            "sess-byte-b"
+        );
+        Session senderSession = sessionProxy(SendBehavior.SUCCEED);
+        TurnClientConnection senderConnection = new TurnClientConnection(senderSession, 8);
+        senderConnection.getSockets().put(Long.valueOf(sender.getVsocketId()), sender);
+        server.clients.put(senderSession, senderConnection);
+        server.socketOwners.put(sender, senderSession);
+
+        try {
+            server.handleData(senderConnection, header, frame.asReadOnlyBuffer(), sender.getVsocketId());
+            assertTrue(senderConnection.getSockets().containsKey(Long.valueOf(sender.getVsocketId())));
+
+            server.handleData(senderConnection, header, frame.asReadOnlyBuffer(), sender.getVsocketId());
+            assertFalse(
+                "second queued frame should exceed the byte budget and disconnect sender socket",
+                senderConnection.getSockets().containsKey(Long.valueOf(sender.getVsocketId()))
+            );
+        } finally {
+            server.closeConnection(senderSession, "test-complete");
+        }
+    }
+
     @Test
     public void testPriorityDeliveryAckNotStarvedByBlockedDataQueue() throws Exception {
         AtomicInteger dataStarted = new AtomicInteger();
@@ -246,17 +293,34 @@ public class TestTurnServerInternalRegression {
     }
 
     private static SignedNostrEvent signedHeader(String type) {
+        return signedHeader(type, new NostrKeyPair());
+    }
+
+    private static SignedNostrEvent signedHeader(String type, NostrKeyPair keyPair) {
         UnsignedNostrEvent unsigned = new UnsignedNostrEvent()
             .withKind(25051)
             .createdAt(Instant.now())
             .withTag("t", type)
             .withContent("");
-        return NGEUtils.awaitNoThrow(NostrKeyPairSigner.generate().sign(unsigned));
+        return NGEUtils.awaitNoThrow(new NostrKeyPairSigner(keyPair).sign(unsigned));
     }
 
     private static ByteBuffer encodedFrame(String type, long vsocketId, int messageId) {
+        return encodedFrame(signedHeader(type), vsocketId, messageId);
+    }
+
+    private static ByteBuffer encodedFrame(SignedNostrEvent header, long vsocketId, int messageId, byte[] payload) {
         return NostrTURNCodec.encodeFrame(
-            NostrTURNCodec.encodeHeader(signedHeader(type)),
+            NostrTURNCodec.encodeHeader(header),
+            vsocketId,
+            messageId,
+            Collections.singletonList(payload)
+        );
+    }
+
+    private static ByteBuffer encodedFrame(SignedNostrEvent header, long vsocketId, int messageId) {
+        return NostrTURNCodec.encodeFrame(
+            NostrTURNCodec.encodeHeader(header),
             vsocketId,
             messageId,
             Collections.emptyList()

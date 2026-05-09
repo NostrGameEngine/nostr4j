@@ -33,6 +33,7 @@ package org.ngengine.nostr4j.turn.ref;
 
 import java.nio.ByteBuffer;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.logging.Logger;
@@ -176,13 +177,26 @@ final class TurnVirtualSocket implements AutoCloseable {
     static final class QueuedOutgoingFrame {
 
         private final byte[] frameBytes;
+        private final Runnable releaseCallback;
+        private final AtomicBoolean released = new AtomicBoolean(false);
 
         private QueuedOutgoingFrame(byte[] frameBytes) {
+            this(frameBytes, null);
+        }
+
+        private QueuedOutgoingFrame(byte[] frameBytes, Runnable releaseCallback) {
             this.frameBytes = frameBytes;
+            this.releaseCallback = releaseCallback;
         }
 
         byte[] getFrameBytes() {
             return frameBytes;
+        }
+
+        void release() {
+            if (releaseCallback != null && released.compareAndSet(false, true)) {
+                releaseCallback.run();
+            }
         }
     }
 
@@ -313,7 +327,34 @@ final class TurnVirtualSocket implements AutoCloseable {
         BlockingPacketQueue<QueuedOutgoingFrame> queue = priority
             ? this.queuedPriorityOutgoingFrames
             : this.queuedOutgoingFrames;
-        queue.enqueue(new QueuedOutgoingFrame(frameBytes));
+        QueuedOutgoingFrame queued = new QueuedOutgoingFrame(frameBytes, null);
+        queue.enqueue(queued);
+        return true;
+    }
+
+    boolean enqueueOutgoing(byte[] frameBytes, int maxQueuedFrames, boolean priority, Runnable releaseCallback) {
+        int priorityQueued = this.queuedPriorityOutgoingFrames.size();
+        int normalQueued = this.queuedOutgoingFrames.size();
+        int totalQueued = priorityQueued + normalQueued;
+
+        int reservedForPriority = maxQueuedFrames > 1 ? PRIORITY_RESERVED_SLOTS : 0;
+        int normalCapacity = Math.max(0, maxQueuedFrames - reservedForPriority);
+
+        if (priority) {
+            if (totalQueued >= maxQueuedFrames) {
+                return false;
+            }
+        } else {
+            if (normalQueued >= normalCapacity || totalQueued >= maxQueuedFrames) {
+                return false;
+            }
+        }
+
+        BlockingPacketQueue<QueuedOutgoingFrame> queue = priority
+            ? this.queuedPriorityOutgoingFrames
+            : this.queuedOutgoingFrames;
+        QueuedOutgoingFrame queued = new QueuedOutgoingFrame(frameBytes, releaseCallback);
+        queue.enqueue(queued, ignored -> queued.release(), error -> queued.release());
         return true;
     }
 
@@ -322,12 +363,16 @@ final class TurnVirtualSocket implements AutoCloseable {
     }
 
     boolean out(ByteBuffer frame, int maxQueuedFrames, boolean priority) {
+        return out(frame, maxQueuedFrames, priority, null);
+    }
+
+    boolean out(ByteBuffer frame, int maxQueuedFrames, boolean priority, Runnable releaseCallback) {
         if (frame == null) {
             return false;
         }
         byte[] frameBytes = new byte[frame.remaining()];
         frame.asReadOnlyBuffer().get(frameBytes);
-        return enqueueOutgoing(frameBytes, maxQueuedFrames, priority);
+        return enqueueOutgoing(frameBytes, maxQueuedFrames, priority, releaseCallback);
     }
 
     ByteBuffer in(QueuedOutgoingFrame queued, long recipientVsocketId) {
