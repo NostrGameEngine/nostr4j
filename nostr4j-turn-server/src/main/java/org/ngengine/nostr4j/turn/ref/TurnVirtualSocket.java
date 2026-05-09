@@ -63,6 +63,22 @@ final class TurnVirtualSocket implements AutoCloseable {
     private static final Logger logger = Logger.getLogger(TurnVirtualSocket.class.getName());
     private static final int PRIORITY_RESERVED_SLOTS = 1;
 
+    interface QueueBudget {
+        boolean tryAcquire(int bytes);
+
+        void release(int bytes);
+    }
+
+    private static final QueueBudget NOOP_QUEUE_BUDGET = new QueueBudget() {
+        @Override
+        public boolean tryAcquire(int bytes) {
+            return true;
+        }
+
+        @Override
+        public void release(int bytes) {}
+    };
+
     static final class LogicalIdentity {
 
         private final String room;
@@ -172,30 +188,31 @@ final class TurnVirtualSocket implements AutoCloseable {
     private final LogicalIdentity logicalIdentity;
     private final BlockingPacketQueue<QueuedOutgoingFrame> queuedPriorityOutgoingFrames;
     private final BlockingPacketQueue<QueuedOutgoingFrame> queuedOutgoingFrames;
+    private final QueueBudget queueBudget;
     private volatile boolean ackSent = false;
 
     static final class QueuedOutgoingFrame {
 
         private final byte[] frameBytes;
-        private final Runnable releaseCallback;
+        private final QueueBudget queueBudget;
         private final AtomicBoolean released = new AtomicBoolean(false);
 
         private QueuedOutgoingFrame(byte[] frameBytes) {
-            this(frameBytes, null);
+            this(frameBytes, NOOP_QUEUE_BUDGET);
         }
 
-        private QueuedOutgoingFrame(byte[] frameBytes, Runnable releaseCallback) {
+        private QueuedOutgoingFrame(byte[] frameBytes, QueueBudget queueBudget) {
             this.frameBytes = frameBytes;
-            this.releaseCallback = releaseCallback;
+            this.queueBudget = queueBudget == null ? NOOP_QUEUE_BUDGET : queueBudget;
         }
 
         byte[] getFrameBytes() {
             return frameBytes;
         }
 
-        void release() {
-            if (releaseCallback != null && released.compareAndSet(false, true)) {
-                releaseCallback.run();
+        void releaseBudget() {
+            if (released.compareAndSet(false, true)) {
+                queueBudget.release(frameBytes == null ? 0 : frameBytes.length);
             }
         }
     }
@@ -213,6 +230,38 @@ final class TurnVirtualSocket implements AutoCloseable {
         BiFunction<TurnVirtualSocket, QueuedOutgoingFrame, AsyncTask<Boolean>> processQueuedFrame,
         Function<TurnVirtualSocket, Boolean> hasReachableRecipient
     ) {
+        this(
+            vsocketId,
+            roomPubkey,
+            clientPubkey,
+            targetPubkey,
+            sourceSessionId,
+            targetSessionId,
+            protocolId,
+            applicationId,
+            channelLabel,
+            processQueuedFrame,
+            hasReachableRecipient,
+            NOOP_QUEUE_BUDGET,
+            0L
+        );
+    }
+
+    TurnVirtualSocket(
+        long vsocketId,
+        NostrPublicKey roomPubkey,
+        NostrPublicKey clientPubkey,
+        NostrPublicKey targetPubkey,
+        String sourceSessionId,
+        String targetSessionId,
+        String protocolId,
+        String applicationId,
+        String channelLabel,
+        BiFunction<TurnVirtualSocket, QueuedOutgoingFrame, AsyncTask<Boolean>> processQueuedFrame,
+        Function<TurnVirtualSocket, Boolean> hasReachableRecipient,
+        QueueBudget queueBudget,
+        long queueItemTimeoutMs
+    ) {
         this.vsocketId = vsocketId;
         this.roomPubkey = roomPubkey;
         this.clientPubkey = clientPubkey;
@@ -222,6 +271,7 @@ final class TurnVirtualSocket implements AutoCloseable {
         this.protocolId = protocolId;
         this.applicationId = applicationId;
         this.channelLabel = channelLabel;
+        this.queueBudget = queueBudget == null ? NOOP_QUEUE_BUDGET : queueBudget;
         this.logicalIdentity =
             logicalIdentity(
                 roomPubkey,
@@ -238,7 +288,14 @@ final class TurnVirtualSocket implements AutoCloseable {
                 new BlockingPacketQueue.PacketHandler<TurnVirtualSocket.QueuedOutgoingFrame>() {
                     @Override
                     public AsyncTask<Boolean> handle(TurnVirtualSocket.QueuedOutgoingFrame frame) {
-                        return processQueuedFrame.apply(TurnVirtualSocket.this, frame);
+                        return processQueuedFrame
+                            .apply(TurnVirtualSocket.this, frame)
+                            .then(processed -> {
+                                if (Boolean.TRUE.equals(processed)) {
+                                    frame.releaseBudget();
+                                }
+                                return processed;
+                            });
                     }
 
                     @Override
@@ -247,14 +304,24 @@ final class TurnVirtualSocket implements AutoCloseable {
                     }
                 },
                 logger,
-                "TURN priority outgoing queue blocked"
+                "TURN priority outgoing queue blocked",
+                1000L,
+                6000L,
+                queueItemTimeoutMs
             );
         this.queuedOutgoingFrames =
             new BlockingPacketQueue<QueuedOutgoingFrame>(
                 new BlockingPacketQueue.PacketHandler<TurnVirtualSocket.QueuedOutgoingFrame>() {
                     @Override
                     public AsyncTask<Boolean> handle(TurnVirtualSocket.QueuedOutgoingFrame frame) {
-                        return processQueuedFrame.apply(TurnVirtualSocket.this, frame);
+                        return processQueuedFrame
+                            .apply(TurnVirtualSocket.this, frame)
+                            .then(processed -> {
+                                if (Boolean.TRUE.equals(processed)) {
+                                    frame.releaseBudget();
+                                }
+                                return processed;
+                            });
                     }
 
                     @Override
@@ -263,7 +330,10 @@ final class TurnVirtualSocket implements AutoCloseable {
                     }
                 },
                 logger,
-                "TURN outgoing queue blocked"
+                "TURN outgoing queue blocked",
+                1000L,
+                6000L,
+                queueItemTimeoutMs
             );
         // Do not drain any queued sender data before the connect ACK has been sent.
         this.queuedPriorityOutgoingFrames.stop();
@@ -307,32 +377,10 @@ final class TurnVirtualSocket implements AutoCloseable {
     }
 
     boolean enqueueOutgoing(byte[] frameBytes, int maxQueuedFrames, boolean priority) {
-        int priorityQueued = this.queuedPriorityOutgoingFrames.size();
-        int normalQueued = this.queuedOutgoingFrames.size();
-        int totalQueued = priorityQueued + normalQueued;
-
-        int reservedForPriority = maxQueuedFrames > 1 ? PRIORITY_RESERVED_SLOTS : 0;
-        int normalCapacity = Math.max(0, maxQueuedFrames - reservedForPriority);
-
-        if (priority) {
-            if (totalQueued >= maxQueuedFrames) {
-                return false;
-            }
-        } else {
-            if (normalQueued >= normalCapacity || totalQueued >= maxQueuedFrames) {
-                return false;
-            }
-        }
-
-        BlockingPacketQueue<QueuedOutgoingFrame> queue = priority
-            ? this.queuedPriorityOutgoingFrames
-            : this.queuedOutgoingFrames;
-        QueuedOutgoingFrame queued = new QueuedOutgoingFrame(frameBytes, null);
-        queue.enqueue(queued);
-        return true;
+        return enqueueOutgoing(frameBytes, maxQueuedFrames, priority, false);
     }
 
-    boolean enqueueOutgoing(byte[] frameBytes, int maxQueuedFrames, boolean priority, Runnable releaseCallback) {
+    private boolean enqueueOutgoing(byte[] frameBytes, int maxQueuedFrames, boolean priority, boolean budgetReserved) {
         int priorityQueued = this.queuedPriorityOutgoingFrames.size();
         int normalQueued = this.queuedOutgoingFrames.size();
         int totalQueued = priorityQueued + normalQueued;
@@ -353,8 +401,10 @@ final class TurnVirtualSocket implements AutoCloseable {
         BlockingPacketQueue<QueuedOutgoingFrame> queue = priority
             ? this.queuedPriorityOutgoingFrames
             : this.queuedOutgoingFrames;
-        QueuedOutgoingFrame queued = new QueuedOutgoingFrame(frameBytes, releaseCallback);
-        queue.enqueue(queued, ignored -> queued.release(), error -> queued.release());
+        QueuedOutgoingFrame queuedFrame = budgetReserved
+            ? new QueuedOutgoingFrame(frameBytes, this.queueBudget)
+            : new QueuedOutgoingFrame(frameBytes);
+        queue.enqueue(queuedFrame, null, error -> queuedFrame.releaseBudget());
         return true;
     }
 
@@ -363,16 +413,26 @@ final class TurnVirtualSocket implements AutoCloseable {
     }
 
     boolean out(ByteBuffer frame, int maxQueuedFrames, boolean priority) {
-        return out(frame, maxQueuedFrames, priority, null);
-    }
-
-    boolean out(ByteBuffer frame, int maxQueuedFrames, boolean priority, Runnable releaseCallback) {
         if (frame == null) {
             return false;
         }
-        byte[] frameBytes = new byte[frame.remaining()];
-        frame.asReadOnlyBuffer().get(frameBytes);
-        return enqueueOutgoing(frameBytes, maxQueuedFrames, priority, releaseCallback);
+        int frameLength = frame.remaining();
+        if (!this.queueBudget.tryAcquire(frameLength)) {
+            return false;
+        }
+        byte[] frameBytes;
+        try {
+            frameBytes = new byte[frameLength];
+            frame.asReadOnlyBuffer().get(frameBytes);
+        } catch (RuntimeException | Error e) {
+            this.queueBudget.release(frameLength);
+            throw e;
+        }
+        if (!enqueueOutgoing(frameBytes, maxQueuedFrames, priority, true)) {
+            this.queueBudget.release(frameLength);
+            return false;
+        }
+        return true;
     }
 
     ByteBuffer in(QueuedOutgoingFrame queued, long recipientVsocketId) {

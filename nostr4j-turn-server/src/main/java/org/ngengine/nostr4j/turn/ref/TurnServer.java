@@ -85,7 +85,9 @@ public final class TurnServer {
 
     static final Logger logger = Logger.getLogger(TurnServer.class.getName());
     private static final int DEFAULT_MAX_QUEUED_FRAMES = 2048;
-    private static final long DEFAULT_MAX_QUEUED_BYTES = 16L * 1024L * 1024L;
+    private static final long DEFAULT_MAX_QUEUED_BYTES = 64L * 1024L * 1024L;
+    private static final int DEFAULT_MAX_VIRTUAL_SOCKETS = 1024;
+    private static final long DEFAULT_QUEUE_ITEM_TTL_MS = 30_000L;
     private static final String PEER_UNREACHABLE_REASON = "peer unreachable";
     private static final String UNAUTHENTICATED_TIMEOUT_REASON = "unauthenticated-timeout";
     private static final long SOCKET_LOOP_MS = 250L;
@@ -95,6 +97,7 @@ public final class TurnServer {
     final Map<TurnVirtualSocket.LogicalIdentity, SocketRef> logicalSockets =
         new ConcurrentHashMap<TurnVirtualSocket.LogicalIdentity, SocketRef>();
     final Map<TurnVirtualSocket, Session> socketOwners = new ConcurrentHashMap<TurnVirtualSocket, Session>();
+    private final AtomicLong queuedBytes = new AtomicLong(0L);
     private final Server jettyServer;
     private final TurnEventFactory eventFactory;
     final int difficulty;
@@ -103,7 +106,9 @@ public final class TurnServer {
     final String host;
     private final int maxQueuedFrames;
     private final long maxQueuedBytes;
-    private final AtomicLong queuedBytes = new AtomicLong(0L);
+    private final int maxVirtualSockets;
+    private final long queueItemTtlMs;
+    private final TurnVirtualSocket.QueueBudget queueBudget;
     private final AsyncExecutor loopExecutor;
     private volatile boolean running = false;
 
@@ -264,17 +269,29 @@ public final class TurnServer {
         int challengeTtlSeconds,
         int maxQueuedFrames
     ) {
-        this(host, port, serverSigner, difficulty, challengeTtlSeconds, maxQueuedFrames, DEFAULT_MAX_QUEUED_BYTES);
+        this(
+            host,
+            port,
+            serverSigner,
+            difficulty,
+            challengeTtlSeconds,
+            maxQueuedFrames,
+            DEFAULT_MAX_QUEUED_BYTES,
+            DEFAULT_MAX_VIRTUAL_SOCKETS,
+            DEFAULT_QUEUE_ITEM_TTL_MS
+        );
     }
 
-    public TurnServer(
+    TurnServer(
         String host,
         int port,
         NostrKeyPairSigner serverSigner,
         int difficulty,
         int challengeTtlSeconds,
         int maxQueuedFrames,
-        long maxQueuedBytes
+        long maxQueuedBytes,
+        int maxVirtualSockets,
+        long queueItemTtlMs
     ) {
         // Validate constructor parameters early; these values shape server behavior.
         if (host == null || host.trim().isEmpty()) {
@@ -295,6 +312,12 @@ public final class TurnServer {
         if (maxQueuedBytes <= 0L) {
             throw new IllegalArgumentException("maxQueuedBytes must be > 0");
         }
+        if (maxVirtualSockets <= 0) {
+            throw new IllegalArgumentException("maxVirtualSockets must be > 0");
+        }
+        if (queueItemTtlMs < 0L) {
+            throw new IllegalArgumentException("queueItemTtlMs must be >= 0");
+        }
         // Initialize signer/event factory and queue policy configuration.
         this.eventFactory = new TurnEventFactory(Objects.requireNonNull(serverSigner, "serverSigner cannot be null"));
         this.host = host.trim();
@@ -302,6 +325,20 @@ public final class TurnServer {
         this.challengeTtlSeconds = challengeTtlSeconds;
         this.maxQueuedFrames = maxQueuedFrames;
         this.maxQueuedBytes = maxQueuedBytes;
+        this.maxVirtualSockets = maxVirtualSockets;
+        this.queueItemTtlMs = queueItemTtlMs;
+        this.queueBudget =
+            new TurnVirtualSocket.QueueBudget() {
+                @Override
+                public boolean tryAcquire(int bytes) {
+                    return reserveQueuedBytes(bytes);
+                }
+
+                @Override
+                public void release(int bytes) {
+                    releaseQueuedBytes(bytes);
+                }
+            };
         this.loopExecutor = NGEUtils.getPlatform().newAsyncExecutor(TurnServer.class.getSimpleName() + "-loop");
 
         // Jetty bootstrap.
@@ -473,6 +510,11 @@ public final class TurnServer {
             closeConnection(connection.getWsSession(), "vsocket-collision");
             return;
         }
+        if (socketOwners.size() >= maxVirtualSockets && !logicalSockets.containsKey(incomingLogicalIdentity)) {
+            closeConnection(connection.getWsSession(), "too-many-virtual-sockets");
+            return;
+        }
+
         // Build accepted socket identity entry.
         TurnVirtualSocket senderSocket = new TurnVirtualSocket(
             vsocketId,
@@ -485,7 +527,9 @@ public final class TurnServer {
             applicationId,
             channelLabel,
             this::processQueuedFrame,
-            this::hasReachableRecipient
+            this::hasReachableRecipient,
+            queueBudget,
+            queueItemTtlMs
         );
 
         // Register accepted socket by websocket-local id and logical identity.
@@ -525,38 +569,9 @@ public final class TurnServer {
         // delivery_ack frames use a priority queue so they are not starved by bulk data backlog.
         boolean prioritize = "delivery_ack".equals(TurnJson.safeString(header.getFirstTagFirstValue("t")));
         // Always enqueue to preserve per-socket ordering semantics within each class of traffic.
-        int frameBytes = fullFrame.remaining();
-        if (!reserveQueuedBytes(frameBytes)) {
-            disconnectSenderSocket(connection.getWsSession(), senderSocket.getVsocketId(), PEER_UNREACHABLE_REASON, true);
-            return;
-        }
-        if (!senderSocket.out(fullFrame, maxQueuedFrames, prioritize, () -> releaseQueuedBytes(frameBytes))) {
-            releaseQueuedBytes(frameBytes);
+        if (!senderSocket.out(fullFrame, maxQueuedFrames, prioritize)) {
             disconnectSenderSocket(connection.getWsSession(), senderSocket.getVsocketId(), PEER_UNREACHABLE_REASON, true);
         }
-    }
-
-    private boolean reserveQueuedBytes(long byteCount) {
-        if (byteCount <= 0L) {
-            return true;
-        }
-        while (true) {
-            long current = queuedBytes.get();
-            long updated = current + byteCount;
-            if (updated < current || updated > maxQueuedBytes) {
-                return false;
-            }
-            if (queuedBytes.compareAndSet(current, updated)) {
-                return true;
-            }
-        }
-    }
-
-    private void releaseQueuedBytes(long byteCount) {
-        if (byteCount <= 0L) {
-            return;
-        }
-        queuedBytes.updateAndGet(current -> Math.max(0L, current - byteCount));
     }
 
     private void sendAckForSocket(TurnClientConnection connection, TurnVirtualSocket socket) {
@@ -703,6 +718,35 @@ public final class TurnServer {
         // Notify sender and retire both sides from logical socket registries.
         sendFrame(senderSession, eventFactory.createDisconnect(senderSocket, reason, error), null, senderVsocketId);
         teardownSocket(senderSocket, reason, error, true, true);
+    }
+
+    private boolean reserveQueuedBytes(int bytes) {
+        if (bytes < 0) {
+            return false;
+        }
+        while (true) {
+            long current = queuedBytes.get();
+            long next = current + (long) bytes;
+            if (next < current || next > maxQueuedBytes) {
+                return false;
+            }
+            if (queuedBytes.compareAndSet(current, next)) {
+                return true;
+            }
+        }
+    }
+
+    private void releaseQueuedBytes(int bytes) {
+        if (bytes <= 0) {
+            return;
+        }
+        while (true) {
+            long current = queuedBytes.get();
+            long next = Math.max(0L, current - (long) bytes);
+            if (queuedBytes.compareAndSet(current, next)) {
+                return;
+            }
+        }
     }
 
     private SocketRef registerSocket(TurnClientConnection connection, TurnVirtualSocket socket) {
