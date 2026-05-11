@@ -21,7 +21,7 @@ lnurl = "0.0.3"
 lnurlSnapshot = "0.3.0-SNAPSHOT"
 bech32 = "1.2.0"
 bech32Snapshot = "1.2.0"
-bolt11 = "0.0.0-SNAPSHOT"
+bolt11 = "0.0.1"
 bolt11Snapshot = "0.0.0-SNAPSHOT"
 
 [libraries]
