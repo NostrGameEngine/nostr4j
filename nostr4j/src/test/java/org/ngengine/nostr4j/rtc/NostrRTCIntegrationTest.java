@@ -1211,10 +1211,10 @@ public class NostrRTCIntegrationTest {
     }
 
     @Test(timeout = 30000L)
-    public void testRealTurnWithInvalidStunForcesTurnPath() throws Exception {
+    public void testTurnWithInvalidStunForcesTurnPath() throws Exception {
         String aliceSession = "alice-real-turn-invalid-stun";
         String bobSession = "bob-real-turn-invalid-stun";
-        String realTurnUrl = "wss://turn.ngengine.org";
+        String turnUrl = turnUrlA;
 
         testPlatform.reset();
 
@@ -1223,11 +1223,11 @@ public class NostrRTCIntegrationTest {
             "alice",
             aliceSession,
             roomKeyPair,
-            realTurnUrl,
+            turnUrl,
             null,
             List.of("stun:invalid.stun.ngengine.local:3478")
         );
-        SocketContext bob = newSocketContext("bob", bobSession, roomKeyPair, realTurnUrl, null, Collections.emptyList());
+        SocketContext bob = newSocketContext("bob", bobSession, roomKeyPair, turnUrl, null, Collections.emptyList());
 
         try {
             connect(alice, bob);
@@ -1244,8 +1244,8 @@ public class NostrRTCIntegrationTest {
             assertTrue(capture.turnFlags.get(0).booleanValue());
 
             assertFalse(
-                "Expected binary TURN frames on real TURN endpoint",
-                testPlatform.getCapturedBinaryFrames(realTurnUrl).isEmpty()
+                "Expected binary TURN frames on TURN endpoint",
+                testPlatform.getCapturedBinaryFrames(turnUrl).isEmpty()
             );
         } finally {
             alice.close();
