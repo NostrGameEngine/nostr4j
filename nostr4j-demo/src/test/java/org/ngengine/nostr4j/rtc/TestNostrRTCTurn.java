@@ -63,7 +63,7 @@ public class TestNostrRTCTurn {
         // pool.connectRelay(new NostrRelay("wss://relay2.ngengine.org"));
 
         // turn server, used for fallback when direct p2p connection fails.
-        String turn = "wss://turn.ngengine.org";
+        String turn = "wss://turn.ngengine.org/turn";
 
         // stun servers, used to fetch our public IP
         Collection<String> stun = RTCSettings.PUBLIC_STUN_SERVERS;
