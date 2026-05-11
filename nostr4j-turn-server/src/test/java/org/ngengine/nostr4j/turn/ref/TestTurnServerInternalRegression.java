@@ -319,16 +319,7 @@ public class TestTurnServerInternalRegression {
         String sourceSessionId,
         String targetSessionId
     ) {
-        return buildSocket(
-            vsocketId,
-            roomPubkey,
-            senderPubkey,
-            targetPubkey,
-            sourceSessionId,
-            targetSessionId,
-            null,
-            0L
-        );
+        return buildSocket(vsocketId, roomPubkey, senderPubkey, targetPubkey, sourceSessionId, targetSessionId, null, 0L);
     }
 
     private static TurnVirtualSocket buildSocket(
