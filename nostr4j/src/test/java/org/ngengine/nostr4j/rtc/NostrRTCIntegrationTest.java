@@ -1214,7 +1214,7 @@ public class NostrRTCIntegrationTest {
     public void testRealTurnWithInvalidStunForcesTurnPath() throws Exception {
         String aliceSession = "alice-real-turn-invalid-stun";
         String bobSession = "bob-real-turn-invalid-stun";
-        String realTurnUrl = "wss://relay.ngengine.org/turn";
+        String realTurnUrl = "wss://turn.ngengine.org";
 
         testPlatform.reset();
 
