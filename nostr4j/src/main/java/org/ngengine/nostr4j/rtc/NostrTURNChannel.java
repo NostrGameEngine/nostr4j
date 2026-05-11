@@ -93,6 +93,7 @@ public final class NostrTURNChannel {
     private volatile int state = 0;
     private volatile boolean resurrecting = false;
     private volatile boolean closed = false;
+    private volatile long nextResurrectionAttemptAtMs = 0L;
 
     private final NostrRTCLocalPeer localPeer;
     private final NostrRTCPeer remotePeer;
@@ -217,6 +218,18 @@ public final class NostrTURNChannel {
 
     boolean isResurrecting() {
         return resurrecting;
+    }
+
+    boolean canAttemptResurrection(long nowMs) {
+        return nowMs >= nextResurrectionAttemptAtMs;
+    }
+
+    void clearResurrectionBackoff() {
+        nextResurrectionAttemptAtMs = 0L;
+    }
+
+    void backoffResurrection(long nowMs, long backoffMs) {
+        nextResurrectionAttemptAtMs = nowMs + backoffMs;
     }
 
     private void disconnect() {
@@ -382,6 +395,7 @@ public final class NostrTURNChannel {
         if (closed) {
             return;
         }
+        clearResurrectionBackoff();
         if (shouldSendDisconnectOnLocalClose()) {
             NostrTURNDisconnectEvent disconnectEvent = NostrTURNDisconnectEvent.createDisconnect(
                 localPeer,
@@ -421,6 +435,7 @@ public final class NostrTURNChannel {
         if (closed) {
             return;
         }
+        clearResurrectionBackoff();
         closed = true;
         cancelConnectAckTimeout();
         failPendingWrites(new IllegalStateException("TURN channel closed by peer: " + reason));

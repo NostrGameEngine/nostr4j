@@ -44,6 +44,7 @@ public final class NostrTURNPool implements AutoCloseable {
     static final Logger logger = Logger.getLogger(NostrTURNPool.class.getName());
     private static final long loopInterval = 100;
     private static final long WEBSOCKET_CONNECT_TIMEOUT_MS = 5000L;
+    private static final long DEFAULT_FAILED_RESURRECTION_BACKOFF_MS = 1000L;
     private static final String CLEANUP_CLOSE_REASON = "TURN pool cleanup: transport not connected or unused";
 
     private final AsyncExecutor executor = NGEUtils.getPlatform().newAsyncExecutor(NostrTURNPool.class);
@@ -54,6 +55,7 @@ public final class NostrTURNPool implements AutoCloseable {
     private final Map<String, AsyncTask<TURNTransport>> transports = new ConcurrentHashMap<>();
     private final Map<String, TURNTransport> connectingTransports = new ConcurrentHashMap<String, TURNTransport>();
     private final int maxAcceptedDiff;
+    private volatile long failedResurrectionBackoffMs = DEFAULT_FAILED_RESURRECTION_BACKOFF_MS;
 
     public NostrTURNPool() {
         this(32);
@@ -62,6 +64,17 @@ public final class NostrTURNPool implements AutoCloseable {
     public NostrTURNPool(int maxDiff) {
         this.maxAcceptedDiff = maxDiff;
         loop();
+    }
+
+    public void setFailedResurrectionBackoff(long backoff, TimeUnit unit) {
+        if (backoff < 0) {
+            throw new IllegalArgumentException("Failed resurrection backoff cannot be negative");
+        }
+        this.failedResurrectionBackoffMs = unit.toMillis(backoff);
+    }
+
+    public void setFailedResurrectionBackoffMs(long backoffMs) {
+        setFailedResurrectionBackoff(backoffMs, TimeUnit.MILLISECONDS);
     }
 
     /**
@@ -380,13 +393,19 @@ public final class NostrTURNPool implements AutoCloseable {
         if (channel.isClosed() || channel.isConnected() || channel.isResurrecting()) {
             return;
         }
+        long now = System.currentTimeMillis();
+        if (!channel.canAttemptResurrection(now)) {
+            return;
+        }
         channel.setResurrecting(true);
         useWebsocketTransport(channel)
             .then(transport -> {
+                channel.clearResurrectionBackoff();
                 channel.setResurrecting(false);
                 return null;
             })
             .catchException(e -> {
+                channel.backoffResurrection(System.currentTimeMillis(), failedResurrectionBackoffMs);
                 logger.warning("Failed to resurrect TURN channel: " + e.getMessage());
                 channel.setResurrecting(false);
             });

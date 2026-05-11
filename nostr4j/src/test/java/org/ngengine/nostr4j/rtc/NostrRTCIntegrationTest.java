@@ -1210,7 +1210,7 @@ public class NostrRTCIntegrationTest {
         }
     }
 
-    @Test
+    @Test(timeout = 30000L)
     public void testRealTurnWithInvalidStunForcesTurnPath() throws Exception {
         String aliceSession = "alice-real-turn-invalid-stun";
         String bobSession = "bob-real-turn-invalid-stun";
