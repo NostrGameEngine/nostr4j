@@ -9,6 +9,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.nio.ByteBuffer;
@@ -120,7 +121,17 @@ public class TestTurnServerInternalRegression {
         SignedNostrEvent header = signedHeader("data", senderKeys);
         ByteBuffer frame = encodedFrame(header, 501L, 301, new byte[64]);
         long maxQueuedBytes = frame.remaining();
-        TurnServer server = new TurnServer("127.0.0.1", 12347, NostrKeyPairSigner.generate(), 8, 5, 32, maxQueuedBytes);
+        TurnServer server = new TurnServer(
+            "127.0.0.1",
+            12347,
+            NostrKeyPairSigner.generate(),
+            8,
+            5,
+            32,
+            maxQueuedBytes,
+            32,
+            30_000L
+        );
 
         TurnVirtualSocket sender = buildSocket(
             501L,
@@ -128,7 +139,9 @@ public class TestTurnServerInternalRegression {
             senderKeys.getPublicKey(),
             receiverKeys.getPublicKey(),
             "sess-byte-a",
-            "sess-byte-b"
+            "sess-byte-b",
+            serverQueueBudget(server),
+            30_000L
         );
         Session senderSession = sessionProxy(SendBehavior.SUCCEED);
         TurnClientConnection senderConnection = new TurnClientConnection(senderSession, 8);
@@ -306,6 +319,28 @@ public class TestTurnServerInternalRegression {
         String sourceSessionId,
         String targetSessionId
     ) {
+        return buildSocket(
+            vsocketId,
+            roomPubkey,
+            senderPubkey,
+            targetPubkey,
+            sourceSessionId,
+            targetSessionId,
+            null,
+            0L
+        );
+    }
+
+    private static TurnVirtualSocket buildSocket(
+        long vsocketId,
+        NostrPublicKey roomPubkey,
+        NostrPublicKey senderPubkey,
+        NostrPublicKey targetPubkey,
+        String sourceSessionId,
+        String targetSessionId,
+        TurnVirtualSocket.QueueBudget queueBudget,
+        long queueItemTtlMs
+    ) {
         return new TurnVirtualSocket(
             vsocketId,
             roomPubkey,
@@ -317,7 +352,9 @@ public class TestTurnServerInternalRegression {
             "app",
             "default",
             (socket, frame) -> AsyncTask.completed(Boolean.TRUE),
-            socket -> Boolean.TRUE
+            socket -> Boolean.TRUE,
+            queueBudget,
+            queueItemTtlMs
         );
     }
 
@@ -358,6 +395,12 @@ public class TestTurnServerInternalRegression {
                 queuedBytes.addAndGet(-bytes);
             }
         };
+    }
+
+    private static TurnVirtualSocket.QueueBudget serverQueueBudget(TurnServer server) throws Exception {
+        Field field = TurnServer.class.getDeclaredField("queueBudget");
+        field.setAccessible(true);
+        return (TurnVirtualSocket.QueueBudget) field.get(server);
     }
 
     private static TurnVirtualSocket.QueuedOutgoingFrame queuedFrame(long vsocketId, int messageId) throws Exception {

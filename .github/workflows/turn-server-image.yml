@@ -47,7 +47,7 @@ jobs:
       - name: Build TURN server native executable
         run: |
           chmod +x gradlew
-          ./gradlew --no-daemon :nostr4j-turn-server:buildNativeExecutable
+          ./gradlew --no-daemon test :nostr4j-turn-server:buildNativeExecutable
 
       - name: Build and push snapshot image
         if: github.event_name == 'push'
