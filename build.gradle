@@ -358,6 +358,8 @@ subprojects { proj ->
         }
 
         proj.tasks.withType(Test) {
+            timeout = java.time.Duration.ofMinutes(Long.getLong("nostr4j.testTimeoutMinutes", 20L))
+
             boolean retryEnabled = !"false".equalsIgnoreCase(
                 String.valueOf(System.getProperty("org.gradle.test-retry.enabled", "true"))
             )

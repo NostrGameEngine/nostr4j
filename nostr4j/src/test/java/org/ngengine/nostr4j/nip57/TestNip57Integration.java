@@ -33,14 +33,18 @@ package org.ngengine.nostr4j.nip57;
 
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
+import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import org.junit.Test;
 import org.ngengine.lnurl.LnAddress;
 import org.ngengine.nostr4j.NostrPool;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
 import org.ngengine.nostr4j.keypair.NostrPrivateKey;
+import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.nip01.Nip01UserMetadata;
 import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
 import org.ngengine.platform.AsyncTask;
@@ -55,6 +59,9 @@ public class TestNip57Integration {
         "nostr+walletconnect://8e1e934ea0dd99cc2949805ed577abe76bb7d8c34d2d44a9e5f144a308b831f3?relay=wss://nostr.rblb.it&secret=e7ed7f71f3aebba15e125b9e19295951efd17e037f8ec95fe2afb9fd2b79ce57";
 
     private static final String LNADDRESS = "unit@lntest.rblb.it";
+    private static final Duration ZAP_RECEIPT_TIMEOUT = Duration.ofSeconds(
+        Long.getLong("nostr4j.nip57.receiptTimeoutSeconds", 60L)
+    );
 
     @Test
     public void testZapPubkey() throws Exception {
@@ -83,12 +90,7 @@ public class TestNip57Integration {
         String preimage = response.preimage();
         assertTrue(preimage != null);
 
-        List<SignedNostrEvent> zaps = null;
-        while (true) {
-            zaps = Nip57.getZaps(pool, null, p2.getPublicKey(), null, null, null).await();
-            if (zaps.size() > 0) break;
-            Thread.sleep(2000);
-        }
+        List<SignedNostrEvent> zaps = waitForZaps(pool, null, p2.getPublicKey());
 
         ZapReceipt receipt = null;
         for (SignedNostrEvent zap : zaps) {
@@ -129,12 +131,7 @@ public class TestNip57Integration {
         String preimage = response.preimage();
         assertTrue(preimage != null);
 
-        List<SignedNostrEvent> zaps = null;
-        while (true) {
-            zaps = Nip57.getZaps(pool, updateEvent, p2.getPublicKey(), null, null, null).await();
-            if (zaps.size() > 0) break;
-            Thread.sleep(2000);
-        }
+        List<SignedNostrEvent> zaps = waitForZaps(pool, updateEvent, p2.getPublicKey());
 
         ZapReceipt receipt = null;
         for (SignedNostrEvent zap : zaps) {
@@ -146,5 +143,19 @@ public class TestNip57Integration {
             }
         }
         assertNotNull(receipt);
+    }
+
+    private static List<SignedNostrEvent> waitForZaps(NostrPool pool, SignedNostrEvent event, NostrPublicKey pubkey)
+        throws Exception {
+        long deadline = System.nanoTime() + ZAP_RECEIPT_TIMEOUT.toNanos();
+        while (System.nanoTime() < deadline) {
+            List<SignedNostrEvent> zaps = Nip57.getZaps(pool, event, pubkey, null, null, null).await();
+            if (!zaps.isEmpty()) {
+                return zaps;
+            }
+            Thread.sleep(TimeUnit.SECONDS.toMillis(2));
+        }
+        fail("Timed out waiting for zap receipt after " + ZAP_RECEIPT_TIMEOUT.toSeconds() + " seconds");
+        throw new AssertionError("unreachable");
     }
 }
