@@ -108,7 +108,7 @@ public class BlossomPool implements Closeable {
     }
 
     public AsyncTask<ByteBuffer> get(String sha256, @Nullable String filename) {
-        return get(sha256, filename);
+        return get(sha256, filename, null);
     }
 
     public AsyncTask<ByteBuffer> get(String sha256, @Nullable int[] byteRange) {
