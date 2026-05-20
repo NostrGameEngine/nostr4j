@@ -267,7 +267,7 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
             return AsyncTask.completed(cached);
         }
         String computedId = NostrEvent.computeEventId(this.pubkey, this);
-        if(!this.identifier.id.equals(computedId)) {
+        if (!this.identifier.id.equals(computedId)) {
             this.verified = false;
             return AsyncTask.completed(false);
         }

@@ -393,7 +393,7 @@ public class NWCWallet implements Wallet {
                     res.containsKey("settled_at") ? NGEUtils.safeInstantInSeconds(res.get("settled_at")) : null,
                     (Map<String, Object>) res.get("metadata")
                 );
-                
+
                 if (paymentHash != null && !paymentHash.equals(invoiceData.paymentHash())) {
                     throw new IllegalStateException("Mismatched payment_hash");
                 }

@@ -99,17 +99,14 @@ public class BlossomEndpoint {
             .then(response -> {
                 handleError(response);
                 byte body[] = response.body();
-                if(verifyBlobs){
+                if (verifyBlobs) {
                     // Verify that the SHA256 of the body matches the requested SHA256
                     byte hash[] = NGEPlatform.get().sha256(body);
                     String computedSha256 = NGEUtils.bytesToHex(hash);
                     String requestedSha256 = sha256OrPath.split("\\.")[0]; // Remove extension if present
                     if (!computedSha256.equalsIgnoreCase(requestedSha256)) {
                         throw new IOException(
-                            "Blob integrity check failed: expected SHA256 " +
-                            requestedSha256 +
-                            ", but got " +
-                            computedSha256
+                            "Blob integrity check failed: expected SHA256 " + requestedSha256 + ", but got " + computedSha256
                         );
                     }
                 }
