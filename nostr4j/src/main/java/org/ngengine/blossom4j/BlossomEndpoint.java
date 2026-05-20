@@ -54,9 +54,18 @@ public class BlossomEndpoint {
 
     private static final java.util.logging.Logger logger = java.util.logging.Logger.getLogger(BlossomEndpoint.class.getName());
     private final String url;
+    private volatile boolean verifyBlobs = true;
 
     public BlossomEndpoint(String url) {
         this.url = url;
+    }
+
+    public void setVerifyBlobs(boolean verify) {
+        this.verifyBlobs = verify;
+    }
+
+    public boolean isVerifyBlobs() {
+        return this.verifyBlobs;
     }
 
     /**
@@ -89,7 +98,22 @@ public class BlossomEndpoint {
         return httpRequest(endpoint, "GET", headers, null, authEvent)
             .then(response -> {
                 handleError(response);
-                return new BlossomBlobResponse(response.body(), response);
+                byte body[] = response.body();
+                if(verifyBlobs){
+                    // Verify that the SHA256 of the body matches the requested SHA256
+                    byte hash[] = NGEPlatform.get().sha256(body);
+                    String computedSha256 = NGEUtils.bytesToHex(hash);
+                    String requestedSha256 = sha256OrPath.split("\\.")[0]; // Remove extension if present
+                    if (!computedSha256.equalsIgnoreCase(requestedSha256)) {
+                        throw new IOException(
+                            "Blob integrity check failed: expected SHA256 " +
+                            requestedSha256 +
+                            ", but got " +
+                            computedSha256
+                        );
+                    }
+                }
+                return new BlossomBlobResponse(body, response);
             });
     }
 
