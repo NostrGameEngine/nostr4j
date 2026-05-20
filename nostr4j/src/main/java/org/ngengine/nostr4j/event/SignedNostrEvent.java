@@ -256,7 +256,7 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
         String computedId = NostrEvent.computeEventId(this.pubkey, this);
         boolean result =
             this.identifier.id.equals(computedId) &&
-            NGEUtils.getPlatform().verify(computedId, this.signature, this.getPubkey()._array());
+            NGEUtils.getPlatform().schnorrVerify(computedId, this.signature, this.getPubkey()._array());
         this.verified = Boolean.valueOf(result);
         return result;
     }
@@ -266,9 +266,14 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
         if (cached != null) {
             return AsyncTask.completed(cached);
         }
+        String computedId = NostrEvent.computeEventId(this.pubkey, this);
+        if(!this.identifier.id.equals(computedId)) {
+            this.verified = false;
+            return AsyncTask.completed(false);
+        }
         return NGEUtils
             .getPlatform()
-            .verifyAsync(this.identifier.id, this.signature, this.getPubkey()._array())
+            .schnorrVerifyAsync(computedId, this.signature, this.getPubkey()._array())
             .then(result -> {
                 this.verified = result;
                 return result;
