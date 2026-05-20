@@ -94,7 +94,7 @@ public class NostrSubscription extends NostrMessage {
     private final List<String> closeReasons = new CopyOnWriteArrayList<>();
 
     private volatile boolean opened = false;
-    private boolean verifyMatchLocally = true;
+    private volatile boolean verifyMatchLocally = true;
 
     /**
      * Creates a new subscription with the specified parameters.
