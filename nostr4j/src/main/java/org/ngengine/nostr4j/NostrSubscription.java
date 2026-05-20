@@ -94,6 +94,7 @@ public class NostrSubscription extends NostrMessage {
     private final List<String> closeReasons = new CopyOnWriteArrayList<>();
 
     private volatile boolean opened = false;
+    private boolean verifyMatchLocally = true;
 
     /**
      * Creates a new subscription with the specified parameters.
@@ -187,6 +188,17 @@ public class NostrSubscription extends NostrMessage {
     public boolean isOpened() {
         return opened;
     }
+
+    /**
+     * Sets whether to verify event matches locally before calling listeners.
+     * This protects against malicious relays sending events that do not match the subscription filters
+     * (default: true).
+     * @param verifyMatchLocally Whether to verify event matches locally before calling listeners
+     */
+    public void setVerifyMatchLocally(boolean verifyMatchLocally) {
+        this.verifyMatchLocally = verifyMatchLocally;
+    }
+    
 
     /**
      * Closes the subscription, stopping the event flow.
@@ -339,10 +351,23 @@ public class NostrSubscription extends NostrMessage {
         }
     }
 
+    private boolean matchesAnyFilter(SignedNostrEvent event) {
+        for (NostrFilter filter : filters) {
+            if (filter.matches(event)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     protected void callEventListeners(SignedNostrEvent event, boolean stored) {
         if (onEventListeners.isEmpty()) return;
         AsyncExecutor executor = this.exc;
         if (executor == null) return;
+        if(verifyMatchLocally && !matchesAnyFilter(event)) {
+            logger.warning("Received event that does not match any filter: " + event.getId());
+            return;
+        }
         for (NostrSubEventListener listener : onEventListeners) {
             executor.run(() -> {
                 try {
