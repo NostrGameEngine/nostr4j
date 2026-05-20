@@ -36,6 +36,8 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+
 import org.ngengine.nostr4j.event.NostrEvent.TagValue;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
@@ -202,11 +204,43 @@ public class NostrFilter extends NostrMessageFragment implements Cloneable {
         return serial;
     }
 
+    /**
+     * Checks if the given event matches this filter according to NIP-01 specs
+     * @param event the event to check
+     * @return true if the event matches the filter, false otherwise
+     */
     public boolean matches(SignedNostrEvent event) {
-        return matches(event, 0);
+        return matches(event, 0, false);
     }
 
+    /**
+     * Checks if the given event matches this filter
+     * @param event the event to check
+     * @param anyTagValue if true, the filter will match if any of the tag values matches, otherwise it will only match if the first tag value matches (default nostr behavior per nip-01 spec).
+     * @return
+     */
+    public boolean matches(SignedNostrEvent event, boolean anyTagValue) {
+        return matches(event, 0, anyTagValue);
+    }
+
+    /**
+     * Checks if the given event matches this filter according to NIP-01 specs
+     * @param event the event to check
+     * @param count the number of events already matched by this filter (used for limit)
+     * @return true if the event matches the filter, false otherwise
+     */
     public boolean matches(SignedNostrEvent event, int count) {
+        return matches(event, count, false);
+    }
+    
+    /**
+     * Checks if the given event matches this filter
+     * @param event the event to check
+     * @param count the number of events already matched by this filter (used for limit)
+     * @param anyTagValue if true, the filter will match if any of the tag values matches, otherwise it will only match if the first tag value matches (default nostr behavior per nip-01 spec).
+     * @return true if the event matches the filter, false otherwise
+     */
+    public boolean matches(SignedNostrEvent event, int count, boolean anyTagValue) {
         if (limit != null && count >= limit) {
             return false;
         }
@@ -234,8 +268,15 @@ public class NostrFilter extends NostrMessageFragment implements Cloneable {
                     List<TagValue> tags = event.getTag(filterTagKey);
                     for (String expectedValue : filterTagValues) {
                         for (TagValue tagValue : tags) {
-                            for (String value : tagValue.getAll()) {
-                                if (value.equals(expectedValue)) {
+                            if(anyTagValue){
+                                for (String value : tagValue.getAll()) {
+                                    if (Objects.equals(value, expectedValue)) {
+                                        found = true;
+                                        break;
+                                    }
+                                }
+                            } else {
+                                if (Objects.equals(tagValue.get(0), expectedValue)) {
                                     found = true;
                                     break;
                                 }
