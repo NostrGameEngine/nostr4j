@@ -37,7 +37,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-
 import org.ngengine.nostr4j.event.NostrEvent.TagValue;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
@@ -232,7 +231,7 @@ public class NostrFilter extends NostrMessageFragment implements Cloneable {
     public boolean matches(SignedNostrEvent event, int count) {
         return matches(event, count, false);
     }
-    
+
     /**
      * Checks if the given event matches this filter
      * @param event the event to check
@@ -268,7 +267,7 @@ public class NostrFilter extends NostrMessageFragment implements Cloneable {
                     List<TagValue> tags = event.getTag(filterTagKey);
                     for (String expectedValue : filterTagValues) {
                         for (TagValue tagValue : tags) {
-                            if(anyTagValue){
+                            if (anyTagValue) {
                                 for (String value : tagValue.getAll()) {
                                     if (Objects.equals(value, expectedValue)) {
                                         found = true;

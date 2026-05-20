@@ -198,7 +198,6 @@ public class NostrSubscription extends NostrMessage {
     public void setVerifyMatchLocally(boolean verifyMatchLocally) {
         this.verifyMatchLocally = verifyMatchLocally;
     }
-    
 
     /**
      * Closes the subscription, stopping the event flow.
@@ -364,7 +363,7 @@ public class NostrSubscription extends NostrMessage {
         if (onEventListeners.isEmpty()) return;
         AsyncExecutor executor = this.exc;
         if (executor == null) return;
-        if(verifyMatchLocally && !matchesAnyFilter(event)) {
+        if (verifyMatchLocally && !matchesAnyFilter(event)) {
             logger.fine("Received event that does not match any filter: " + event.getId());
             return;
         }
