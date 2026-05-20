@@ -365,7 +365,7 @@ public class NostrSubscription extends NostrMessage {
         AsyncExecutor executor = this.exc;
         if (executor == null) return;
         if(verifyMatchLocally && !matchesAnyFilter(event)) {
-            logger.warning("Received event that does not match any filter: " + event.getId());
+            logger.fine("Received event that does not match any filter: " + event.getId());
             return;
         }
         for (NostrSubEventListener listener : onEventListeners) {
