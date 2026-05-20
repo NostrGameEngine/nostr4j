@@ -166,7 +166,7 @@ public class NWCWallet implements Wallet {
             .compose(response -> {
                 String content = response.getContent();
                 return signer
-                    .decrypt(content, response.getPubkey(), NostrSigner.EncryptAlgo.NIP04)
+                    .decrypt(content, uri.getPubkey(), NostrSigner.EncryptAlgo.NIP04)
                     .then(decryptedContent -> {
                         logger.finest("Receiving response: " + decryptedContent);
                         Map<String, Object> data = NGEPlatform.get().fromJSON(decryptedContent, Map.class);
@@ -379,7 +379,7 @@ public class NWCWallet implements Wallet {
             expireRequestAt
         )
             .then(res -> {
-                return new InvoiceData(
+                InvoiceData invoiceData = new InvoiceData(
                     InvoiceType.valueOf(Objects.requireNonNull(res.get("type")).toString()),
                     res.containsKey("invoice") ? NGEUtils.safeString(res.get("invoice")) : null,
                     res.containsKey("description") ? NGEUtils.safeString(res.get("description")) : null,
@@ -393,6 +393,12 @@ public class NWCWallet implements Wallet {
                     res.containsKey("settled_at") ? NGEUtils.safeInstantInSeconds(res.get("settled_at")) : null,
                     (Map<String, Object>) res.get("metadata")
                 );
+                
+                if (paymentHash != null && !paymentHash.equals(invoiceData.paymentHash())) {
+                    throw new IllegalStateException("Mismatched payment_hash");
+                }
+
+                return invoiceData;
             });
     }
 
