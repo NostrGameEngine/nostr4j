@@ -1,6 +1,9 @@
 name: Build and Publish
 
 on:
+  workflow_dispatch:
+  schedule:
+    - cron: '47 3 * * 0'
   push: 
   pull_request:
   release:
