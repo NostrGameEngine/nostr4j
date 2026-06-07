@@ -393,8 +393,84 @@ tasks.register('refreshCatalog') {
 
     doLast {
         def target = outputFile.asFile
+        def trackedSections = ['versions', 'libraries', 'bundles', 'plugins'] as Set
+        def readCatalogEntries = { String catalogText ->
+            def entries = trackedSections.collectEntries { [(it): new LinkedHashMap<String, String>()] }
+            def currentSection = null
+
+            catalogText.readLines().each { line ->
+                def trimmed = line.trim()
+                def sectionMatcher = trimmed =~ /^\[([A-Za-z0-9_.-]+)\]$/
+                if (sectionMatcher.matches()) {
+                    currentSection = sectionMatcher[0][1]
+                    return
+                }
+
+                if (!trackedSections.contains(currentSection)) {
+                    return
+                }
+
+                def entryMatcher = trimmed =~ /^([A-Za-z0-9_.-]+)\s*=/
+                if (entryMatcher.find()) {
+                    entries[currentSection][entryMatcher.group(1)] = line
+                }
+            }
+
+            entries
+        }
+        def findDirectVersionKeys = {
+            def keys = new LinkedHashSet<String>()
+            rootProject.fileTree(rootProject.projectDir) {
+                include '**/*.gradle'
+                exclude '**/build/**', '**/.gradle/**'
+            }.each { buildFile ->
+                def matcher = buildFile.getText('UTF-8') =~ /(?<![A-Za-z0-9_\/.-])libs\.versions\.([A-Za-z0-9_]+)/
+                matcher.each { match ->
+                    keys.add(match[1])
+                }
+            }
+            keys
+        }
+
+        def currentEntries = target.exists() ? readCatalogEntries(target.getText('UTF-8')) : [:]
+        def remoteEntries = readCatalogEntries(new URI(catalogUrl.get()).toURL().getText('UTF-8'))
+        def keptSections = ['libraries', 'bundles', 'plugins'].collectEntries { section ->
+            def allowedKeys = currentEntries[section]?.keySet() ?: [] as Set
+            [(section): remoteEntries[section].findAll { key, ignored -> allowedKeys.contains(key) }]
+        }
+
+        def referencedVersionKeys = findDirectVersionKeys()
+        keptSections.values().each { sectionEntries ->
+            sectionEntries.values().each { line ->
+                def versionRefMatcher = line =~ /version\.ref\s*=\s*["']([^"']+)["']/
+                versionRefMatcher.each { match ->
+                    referencedVersionKeys.add(match[1])
+                }
+            }
+        }
+        def keptVersions = remoteEntries.versions.findAll { key, ignored -> referencedVersionKeys.contains(key) }
+
+        def filteredCatalog = new StringBuilder()
+        def appendSection = { String name, Map<String, String> entries ->
+            if (entries.isEmpty()) {
+                return
+            }
+            if (filteredCatalog.length() > 0) {
+                filteredCatalog.append(System.lineSeparator()).append(System.lineSeparator())
+            }
+            filteredCatalog.append("[").append(name).append("]").append(System.lineSeparator())
+            entries.values().each { line ->
+                filteredCatalog.append(line).append(System.lineSeparator())
+            }
+        }
+
+        appendSection('versions', keptVersions)
+        appendSection('libraries', keptSections.libraries)
+        appendSection('bundles', keptSections.bundles)
+        appendSection('plugins', keptSections.plugins)
+
         target.parentFile.mkdirs()
-        target.text = new URI(catalogUrl.get()).toURL().getText('UTF-8')
-        println "Refreshed ${target}"
+        target.setText(filteredCatalog.toString(), 'UTF-8')
+        println "Refreshed ${target} with ${keptSections.libraries.size()} catalog libraries"
     }
 }

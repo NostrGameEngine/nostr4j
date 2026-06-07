@@ -46,7 +46,7 @@ dependencies {
     def ngePlatformVersion = project.version.endsWith('-SNAPSHOT') ? libs.versions.ngePlatformSnapshot.get() : libs.versions.ngePlatform.get()
 
     implementation project(':nostr4j')
-    implementation "org.ngengine:nge-platform-common:${ngePlatformVersion}"
+    compileOnly "org.ngengine:nge-platform-common:${ngePlatformVersion}"
     implementation libs.gson
     implementation libs.jetty.server
     implementation libs.jetty.ee10.servlet

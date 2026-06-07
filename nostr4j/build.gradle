@@ -10,7 +10,7 @@ dependencies {
     
     testImplementation libs.junit4
     testImplementation project(':nostr4j-turn-server')
-    implementation "org.ngengine:nge-platform-common:${ngePlatformVersion}"
+    compileOnly "org.ngengine:nge-platform-common:${ngePlatformVersion}"
     testImplementation "org.ngengine:nge-platform-jvm:${ngePlatformVersion}"
     testImplementation libs.gson
     implementation libs.jakarta.annotation.api
