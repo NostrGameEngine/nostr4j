@@ -50,7 +50,21 @@ dependencies {
 }
 ```
 
+> [!IMPORTANT]
+> For security reasons,`nge-platform-jvm` blocks loopback URIs such as `127.0.0.1` and `localhost` by default.
+>
+> If your application intentionally connects to local services, enable loopback before the platform/network layer is initialized:
+>
+> ```bash
+> java -Dnge-platforms.allowLoopbackInURIs=true ...
+> ```
+>
+> or at process startup:
+>
+> ```java
+> System.setProperty("nge-platforms.allowLoopbackInURIs", "true");
+> ```
+
 > [!NOTE]  
 > This library can be included in projects targeting java 11 or higher, but it requires java 21+ if you use `nge-platform-jvm` and to run tests (./gradlew test).
 > This is due to `nge-platform-jvm` using some java 21+ features, such as virtual threads, async http client, etc.. to improve performance.
-
