@@ -51,7 +51,7 @@ dependencies {
 ```
 
 > [!IMPORTANT]
-> For security reasons,`nge-platform-jvm` blocks loopback URIs such as `127.0.0.1` and `localhost` by default.
+> For security reasons,`nge-platform` blocks loopback URIs such as `127.0.0.1` and `localhost` by default.
 >
 > If your application intentionally connects to local services, enable loopback before the platform/network layer is initialized:
 >
