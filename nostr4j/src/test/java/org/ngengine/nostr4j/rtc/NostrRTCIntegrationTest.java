@@ -69,6 +69,7 @@ import org.junit.Test;
 import org.ngengine.nostr4j.NostrPool;
 import org.ngengine.nostr4j.NostrRelay;
 import org.ngengine.nostr4j.RTCSettings;
+import org.ngengine.nostr4j.TestEnvironment;
 import org.ngengine.nostr4j.TestLogger;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
@@ -102,11 +103,7 @@ public class NostrRTCIntegrationTest {
     private static final String APP_ID = "integration-app";
     private static final String PROTOCOL_ID = "integration-proto";
     private static final int TURN_MAX_DIFF = 24;
-    private static final List<String> REAL_RELAYS = List.of(
-        "wss://nostr.rblb.it",
-        "wss://relay.ngengine.org",
-        "wss://relay2.ngengine.org"
-    );
+    private static final List<String> REAL_RELAYS = TestEnvironment.relayUrls();
 
     private static NGEPlatform previousPlatform;
     private static TestPlatform testPlatform;

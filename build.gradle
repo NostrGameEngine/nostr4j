@@ -382,6 +382,43 @@ subprojects { proj ->
     }
 }
 
+def devEnvironmentOwner = "gradle-${UUID.randomUUID()}"
+def devEnvironmentScript = layout.projectDirectory.file('dev-env/dev-env.sh').asFile
+def devEnvironmentProperties = layout.projectDirectory.file('.dev-env-runtime/test-env.properties').asFile
+def devEnvironmentTrustStore = layout.projectDirectory.file('.dev-env-runtime/certs/truststore.p12').asFile
+
+tasks.register('devEnvStart', Exec) {
+    group = 'verification'
+    description = 'Starts and provisions the local relay and LNbits test environment.'
+    commandLine devEnvironmentScript, 'start', '--owner', devEnvironmentOwner
+}
+
+tasks.register('devEnvStop', Exec) {
+    group = 'verification'
+    description = 'Releases this Gradle build ownership of the local test environment.'
+    commandLine devEnvironmentScript, 'stop', '--owner', devEnvironmentOwner
+}
+
+project(':nostr4j') {
+    plugins.withId('java') {
+        tasks.named('test', Test).configure {
+            dependsOn rootProject.tasks.named('devEnvStart')
+            finalizedBy rootProject.tasks.named('devEnvStop')
+            doFirst {
+                if (!devEnvironmentProperties.isFile()) {
+                    throw new GradleException("Local test environment properties are missing: ${devEnvironmentProperties}")
+                }
+                def properties = new Properties()
+                devEnvironmentProperties.withInputStream { properties.load(it) }
+                properties.each { key, value -> systemProperty String.valueOf(key), String.valueOf(value) }
+                systemProperty 'javax.net.ssl.trustStore', devEnvironmentTrustStore.absolutePath
+                systemProperty 'javax.net.ssl.trustStorePassword', 'changeit'
+                systemProperty 'javax.net.ssl.trustStoreType', 'PKCS12'
+            }
+        }
+    }
+}
+
 tasks.register('refreshCatalog') {
     group = 'build setup'
     description = 'Downloads the central NostrGameEngine Gradle version catalog.'

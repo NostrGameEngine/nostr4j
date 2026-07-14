@@ -41,6 +41,7 @@ import java.util.concurrent.TimeUnit;
 import org.junit.Test;
 import org.ngengine.lnurl.LnAddress;
 import org.ngengine.nostr4j.NostrPool;
+import org.ngengine.nostr4j.TestEnvironment;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
 import org.ngengine.nostr4j.keypair.NostrPrivateKey;
@@ -54,11 +55,9 @@ import org.ngengine.wallets.nip47.NWCWallet;
 
 public class TestNip57Integration {
 
-    private static final String RELAY = "wss://nostr.rblb.it";
-    private static final String WALLET =
-        "nostr+walletconnect://8e1e934ea0dd99cc2949805ed577abe76bb7d8c34d2d44a9e5f144a308b831f3?relay=wss://nostr.rblb.it&secret=e7ed7f71f3aebba15e125b9e19295951efd17e037f8ec95fe2afb9fd2b79ce57";
-
-    private static final String LNADDRESS = "unit@lntest.rblb.it";
+    private static final String RELAY = TestEnvironment.relayUrl();
+    private static final String WALLET = TestEnvironment.nwcWallet1();
+    private static final String LNADDRESS = TestEnvironment.lnAddress();
     private static final Duration ZAP_RECEIPT_TIMEOUT = Duration.ofSeconds(
         Long.getLong("nostr4j.nip57.receiptTimeoutSeconds", 60L)
     );

@@ -11,6 +11,7 @@ node_modules
 package.json
 package-lock.json
 reports
+.dev-env-runtime
 .settings
 .project
 .classpath

@@ -1,0 +1,77 @@
+name: nostr4j-dev
+
+services:
+  traefik:
+    image: docker.io/library/traefik@sha256:aaf0f6185419a50c74651448c1a5bf4606bd2d2ddb7b8749eed505d55bf8b8ea
+    command:
+      - --entrypoints.websecure.address=:8443
+      - --providers.file.directory=/etc/traefik/dynamic
+      - --providers.file.watch=true
+      - --ping=true
+    ports:
+      - "127.0.0.1:${NOSTR4J_DEV_HTTPS_PORT:-8443}:8443"
+    volumes:
+      - ../.dev-env-runtime/certs:/certs:ro
+      - ./traefik:/etc/traefik/dynamic:ro
+    networks:
+      dev:
+        aliases:
+          - relay1.localhost
+          - relay2.localhost
+          - relay3.localhost
+          - lnbits.localhost
+
+  relay1:
+    image: ghcr.io/hoytech/strfry@sha256:14aff3fa46a8cc8f6d640e736678b187cb26ffad71be3dca06c43976eb07a9aa
+    command: relay
+    volumes:
+      - ./strfry.conf:/etc/strfry.conf:ro
+      - relay1-data:/app/strfry-db
+    networks: [dev]
+
+  relay2:
+    image: ghcr.io/hoytech/strfry@sha256:14aff3fa46a8cc8f6d640e736678b187cb26ffad71be3dca06c43976eb07a9aa
+    command: relay
+    volumes:
+      - ./strfry.conf:/etc/strfry.conf:ro
+      - relay2-data:/app/strfry-db
+    networks: [dev]
+
+  relay3:
+    image: ghcr.io/hoytech/strfry@sha256:14aff3fa46a8cc8f6d640e736678b187cb26ffad71be3dca06c43976eb07a9aa
+    command: relay
+    volumes:
+      - ./strfry.conf:/etc/strfry.conf:ro
+      - relay3-data:/app/strfry-db
+    networks: [dev]
+
+  lnbits:
+    build:
+      context: ./lnbits
+    environment:
+      LNBITS_HOST: 0.0.0.0
+      LNBITS_PORT: 5000
+      LNBITS_DATA_FOLDER: /data
+      LNBITS_ADMIN_UI: "true"
+      FIRST_INSTALL_TOKEN: nostr4j-dev-install
+      LNBITS_BACKEND_WALLET_CLASS: FakeWallet
+      LNBITS_SITE_TITLE: Sandbox
+      AUTH_HTTPS_ONLY: "false"
+      FAKE_WALLET_SECRET: ToTheMoon1
+      LNBITS_DENOMINATION: sats
+      SSL_CERT_FILE: /certs/ca.crt
+      NOSTR4J_NWC_PROVIDER_SECRET: "4444444444444444444444444444444444444444444444444444444444444444"
+      NOSTR4J_NWC_RELAY_ALIAS: "wss://relay1.localhost:${NOSTR4J_DEV_HTTPS_PORT:-8443}"
+    volumes:
+      - ../.dev-env-runtime/certs/ca.crt:/certs/ca.crt:ro
+    tmpfs:
+      - /data:size=128m,mode=1777
+    networks: [dev]
+
+networks:
+  dev: {}
+
+volumes:
+  relay1-data: {}
+  relay2-data: {}
+  relay3-data: {}

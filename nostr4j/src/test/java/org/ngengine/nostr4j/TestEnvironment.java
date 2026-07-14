@@ -28,25 +28,46 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package org.ngengine.nostr4j.unit;
+package org.ngengine.nostr4j;
 
-import static org.junit.Assert.assertTrue;
+import java.util.Arrays;
+import java.util.List;
 
-import java.io.IOException;
-import org.junit.Test;
-import org.ngengine.nostr4j.NostrRelay;
-import org.ngengine.nostr4j.NostrRelayInfo;
-import org.ngengine.nostr4j.TestEnvironment;
+public final class TestEnvironment {
 
-public class TestNip11 {
+    private TestEnvironment() {}
 
-    @Test
-    public void testNip11() throws IOException {
-        String relayUrl = TestEnvironment.relayUrl();
-        NostrRelay relay = new NostrRelay(relayUrl);
-        NostrRelayInfo info = relay.getInfo();
-        System.out.println("Relay URL: " + relayUrl);
-        System.out.println("Relay info " + info);
-        assertTrue(info.toString().contains("nostr4j local relay"));
+    public static String relayUrl() {
+        return required("nostr4j.test.relayUrl");
+    }
+
+    public static List<String> relayUrls() {
+        return Arrays.asList(required("nostr4j.test.relayUrls").split(","));
+    }
+
+    public static String nwcWallet1() {
+        return required("nostr4j.test.nwcWallet1");
+    }
+
+    public static String nwcWallet2() {
+        return required("nostr4j.test.nwcWallet2");
+    }
+
+    public static String nwcNoBudget() {
+        return required("nostr4j.test.nwcNoBudget");
+    }
+
+    public static String lnAddress() {
+        return required("nostr4j.test.lnAddress");
+    }
+
+    private static String required(String key) {
+        String value = System.getProperty(key);
+        if (value == null || value.trim().isEmpty()) {
+            throw new IllegalStateException(
+                "Missing local test environment property '" + key + "'. Run tests through Gradle or start dev-env/dev-env.sh."
+            );
+        }
+        return value;
     }
 }

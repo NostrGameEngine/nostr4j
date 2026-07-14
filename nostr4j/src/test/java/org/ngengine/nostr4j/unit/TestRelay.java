@@ -43,12 +43,13 @@ import org.junit.Before;
 import org.junit.Test;
 import org.ngengine.nostr4j.NostrRelay;
 import org.ngengine.nostr4j.NostrRelayLifecycleManager;
+import org.ngengine.nostr4j.TestEnvironment;
 import org.ngengine.nostr4j.listeners.NostrRelayComponent;
 import org.ngengine.nostr4j.proto.NostrMessage;
 
 public class TestRelay {
 
-    private static final String TEST_RELAY_URL = "wss://nostr.rblb.it";
+    private static final String TEST_RELAY_URL = TestEnvironment.relayUrl();
 
     private NostrRelay relay;
 

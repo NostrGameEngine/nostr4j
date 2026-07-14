@@ -1,0 +1,45 @@
+tls:
+  certificates:
+    - certFile: /certs/server.crt
+      keyFile: /certs/server.key
+
+http:
+  routers:
+    relay1:
+      rule: Host(`relay1.localhost`)
+      entryPoints: [websecure]
+      service: relay1
+      tls: {}
+    relay2:
+      rule: Host(`relay2.localhost`)
+      entryPoints: [websecure]
+      service: relay2
+      tls: {}
+    relay3:
+      rule: Host(`relay3.localhost`)
+      entryPoints: [websecure]
+      service: relay3
+      tls: {}
+    lnbits:
+      rule: Host(`lnbits.localhost`)
+      entryPoints: [websecure]
+      service: lnbits
+      tls: {}
+
+  services:
+    relay1:
+      loadBalancer:
+        servers:
+          - url: http://relay1:8080
+    relay2:
+      loadBalancer:
+        servers:
+          - url: http://relay2:8080
+    relay3:
+      loadBalancer:
+        servers:
+          - url: http://relay3:8080
+    lnbits:
+      loadBalancer:
+        servers:
+          - url: http://lnbits:5000
