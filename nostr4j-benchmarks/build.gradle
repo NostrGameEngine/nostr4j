@@ -1,0 +1,155 @@
+plugins {
+    id 'java'
+    id 'com.diffplug.spotless'
+}
+
+description = 'Non-published performance and scalability benchmarks for nostr4j'
+
+def benchmarkJavaVersion = providers.gradleProperty('benchmarkJavaVersion').getOrElse('25') as int
+def jts = extensions.getByType(org.gradle.jvm.toolchain.JavaToolchainService)
+def ngePlatformVersion = project.version.toString().endsWith('-SNAPSHOT')
+    ? libs.versions.ngePlatformSnapshot.get()
+    : libs.versions.ngePlatform.get()
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(benchmarkJavaVersion)
+        vendor = JvmVendorSpec.ADOPTIUM
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = 11
+}
+
+sourceSets {
+    jmh {
+        java.srcDir 'src/jmh/java'
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += output + compileClasspath
+    }
+    scalabilityTest {
+        java.srcDir 'src/scalabilityTest/java'
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += output + compileClasspath
+    }
+}
+
+configurations {
+    jmhImplementation.extendsFrom implementation
+    jmhRuntimeOnly.extendsFrom runtimeOnly
+    scalabilityTestImplementation.extendsFrom implementation
+    scalabilityTestRuntimeOnly.extendsFrom runtimeOnly
+}
+
+[
+    configurations.jmhCompileClasspath,
+    configurations.jmhRuntimeClasspath,
+    configurations.scalabilityTestCompileClasspath,
+    configurations.scalabilityTestRuntimeClasspath,
+].each { configuration ->
+    configuration.attributes.attribute(
+        org.gradle.api.attributes.java.TargetJvmVersion.TARGET_JVM_VERSION_ATTRIBUTE,
+        benchmarkJavaVersion
+    )
+}
+
+dependencies {
+    implementation project(':nostr4j')
+
+    jmhImplementation 'org.openjdk.jmh:jmh-core:1.37'
+    jmhAnnotationProcessor 'org.openjdk.jmh:jmh-generator-annprocess:1.37'
+    jmhRuntimeOnly "org.ngengine:nge-platform-jvm:${ngePlatformVersion}"
+
+    scalabilityTestImplementation libs.junit4
+    scalabilityTestRuntimeOnly "org.ngengine:nge-platform-jvm:${ngePlatformVersion}"
+}
+
+def reportDirectory = layout.buildDirectory.dir('reports/jmh')
+
+tasks.register('jmh', JavaExec) {
+    group = 'benchmark'
+    description = 'Runs the publication-quality JMH suite and writes JSON results.'
+    dependsOn tasks.named('jmhClasses')
+    javaLauncher = jts.launcherFor {
+        languageVersion = JavaLanguageVersion.of(benchmarkJavaVersion)
+        vendor = JvmVendorSpec.ADOPTIUM
+    }
+    classpath = sourceSets.jmh.runtimeClasspath
+    mainClass = 'org.openjdk.jmh.Main'
+
+    doFirst {
+        reportDirectory.get().asFile.mkdirs()
+        if (project.hasProperty('jmhArgs')) {
+            setArgs(project.property('jmhArgs').toString().trim().split(/\s+/) as List)
+        } else {
+            setArgs([
+                '-wi', '5',
+                '-i', '5',
+                '-f', '2',
+                '-w', '500ms',
+                '-r', '500ms',
+                '-foe', 'true',
+                '-prof', 'gc',
+                '-rf', 'json',
+                '-rff', reportDirectory.get().file('results.json').asFile.absolutePath,
+            ])
+        }
+    }
+}
+
+tasks.register('jmhQuick', JavaExec) {
+    group = 'benchmark'
+    description = 'Runs a short JMH smoke test; its numbers must not be published.'
+    dependsOn tasks.named('jmhClasses')
+    javaLauncher = jts.launcherFor {
+        languageVersion = JavaLanguageVersion.of(benchmarkJavaVersion)
+        vendor = JvmVendorSpec.ADOPTIUM
+    }
+    classpath = sourceSets.jmh.runtimeClasspath
+    mainClass = 'org.openjdk.jmh.Main'
+
+    doFirst {
+        reportDirectory.get().asFile.mkdirs()
+        setArgs([
+            '-wi', '1',
+            '-i', '1',
+            '-f', '1',
+            '-w', '100ms',
+            '-r', '100ms',
+            '-foe', 'true',
+            '-rf', 'json',
+            '-rff', reportDirectory.get().file('quick-results.json').asFile.absolutePath,
+        ])
+    }
+}
+
+tasks.register('scalabilityTest', Test) {
+    group = 'verification'
+    description = 'Checks bounded retained state under million-event workloads.'
+    dependsOn tasks.named('scalabilityTestClasses')
+    javaLauncher = jts.launcherFor {
+        languageVersion = JavaLanguageVersion.of(benchmarkJavaVersion)
+        vendor = JvmVendorSpec.ADOPTIUM
+    }
+    testClassesDirs = sourceSets.scalabilityTest.output.classesDirs
+    classpath = sourceSets.scalabilityTest.runtimeClasspath
+    useJUnit()
+    // Match production JVM defaults; internal `assert` statements are diagnostic full-window scans.
+    enableAssertions = false
+    maxHeapSize = '512m'
+    retry {
+        maxRetries = 0
+        failOnPassedAfterRetry = true
+        maxFailures = 1
+    }
+    testLogging {
+        events 'passed', 'failed', 'skipped'
+        exceptionFormat 'full'
+    }
+}
+
+// This module intentionally has no Maven publication and runs benchmarks only through explicit tasks.
+tasks.named('test') {
+    enabled = false
+}

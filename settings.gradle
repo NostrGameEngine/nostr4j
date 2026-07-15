@@ -7,3 +7,4 @@ rootProject.name = 'nostr4j'
 include("nostr4j")
 include("nostr4j-turn-server")
 include("nostr4j-demo")
+include("nostr4j-benchmarks")

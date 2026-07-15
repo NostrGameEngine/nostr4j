@@ -262,7 +262,9 @@ subprojects { proj ->
   
     proj.plugins.withId('java') {
         proj.apply plugin: "org.gradle.test-retry"
-        applyConf(proj);     
+        if (proj.name != 'nostr4j-benchmarks') {
+            applyConf(proj)
+        }
     }
 
     proj.plugins.withId("com.github.spotbugs") {
