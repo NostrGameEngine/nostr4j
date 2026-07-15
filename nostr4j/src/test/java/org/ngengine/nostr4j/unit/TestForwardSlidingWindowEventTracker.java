@@ -89,6 +89,14 @@ public class TestForwardSlidingWindowEventTracker {
             return super.count();
         }
 
+        public boolean indexMatchesWindow() {
+            return super.checkIndex();
+        }
+
+        public boolean isIndexed(String eventId) {
+            return seenEventIds.contains(eventId);
+        }
+
         @Override
         protected long currentTimeSeconds() {
             return mockTime / 1000;
@@ -194,6 +202,9 @@ public class TestForwardSlidingWindowEventTracker {
         }
 
         assertEquals("Should trim to maximum event limit", MAX_EVENTS, tracker.count());
+        assertTrue("Hash index should match the retained window", tracker.indexMatchesWindow());
+        assertFalse("Evicted ID should be removed from the hash index", tracker.isIndexed("event0"));
+        assertTrue("Retained ID should remain in the hash index", tracker.isIndexed("event59"));
 
         // Verify the oldest events were removed
         SignedNostrEvent oldestEvent = createEvent(currentTimeSeconds, "event0");
@@ -254,6 +265,8 @@ public class TestForwardSlidingWindowEventTracker {
                 id.createdAt >= cutOffTimeStampSeconds
             );
         }
+
+        assertTrue("Hash index should match the retained time window", tracker.indexMatchesWindow());
 
         assertTrue("invalid cutoff", cutOffTimeStampSeconds == ((newTime / 1000) - (WINDOW_SECONDS - WINDOW_MARGIN_SECONDS)));
     }

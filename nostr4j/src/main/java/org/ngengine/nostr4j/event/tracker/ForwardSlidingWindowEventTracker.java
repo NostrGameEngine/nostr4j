@@ -32,8 +32,10 @@ package org.ngengine.nostr4j.event.tracker;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.ListIterator;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import org.ngengine.nostr4j.NostrFilter;
 import org.ngengine.nostr4j.NostrSubscription;
@@ -42,6 +44,7 @@ import org.ngengine.nostr4j.event.SignedNostrEvent;
 public class ForwardSlidingWindowEventTracker implements EventTracker {
 
     protected final LinkedList<SignedNostrEvent.Identifier> seenEvents = new LinkedList<SignedNostrEvent.Identifier>();
+    protected final Set<String> seenEventIds = new HashSet<String>();
 
     protected int maxTrackedEvents;
     protected final int minTrackedEvents;
@@ -74,28 +77,33 @@ public class ForwardSlidingWindowEventTracker implements EventTracker {
                 return true;
             }
             SignedNostrEvent.Identifier newEventId = event.getIdentifier();
+            if (seenEventIds.contains(newEventId.id)) {
+                return true;
+            }
             ListIterator<SignedNostrEvent.Identifier> it = seenEvents.listIterator();
 
-            // Check if the event is already seen
-            // if it is not, add it to the list (ordered from most recent to oldest)
+            // Add the event to the list, ordered from most recent to oldest. Duplicate
+            // lookup is handled by seenEventIds so it remains constant-time even for
+            // identifiers at the oldest edge of a large window.
             while (it.hasNext()) {
                 SignedNostrEvent.Identifier seenEventId = it.next();
-                if (seenEventId.id.equals(newEventId.id)) {
-                    return true;
-                }
                 if (seenEventId.createdAt < newEventId.createdAt) {
                     it.previous();
                     it.add(newEventId);
+                    seenEventIds.add(newEventId.id);
                     update();
                     assert checkOrder() : "Events are not in order";
+                    assert checkIndex() : "Event index is inconsistent";
                     return false;
                 }
             }
             // if we reach here, the event is older than all seen events
             // add it to the end of the list
             it.add(newEventId);
+            seenEventIds.add(newEventId.id);
             update();
             assert checkOrder() : "Events are not in order (2)";
+            assert checkIndex() : "Event index is inconsistent (2)";
             return false;
         }
     }
@@ -144,13 +152,11 @@ public class ForwardSlidingWindowEventTracker implements EventTracker {
             int removed = 0;
             while (it.hasPrevious()) {
                 SignedNostrEvent.Identifier seenEventId = it.previous();
-                if (cutOffUpdate && seenEventId.createdAt < cutOffS) {
+                boolean expired = cutOffUpdate && seenEventId.createdAt < cutOffS;
+                if (expired || removed < toRemove) {
                     it.remove();
-                    removed++;
-                    continue;
-                }
-                if (removed < toRemove) {
-                    it.remove();
+                    boolean removedFromIndex = seenEventIds.remove(seenEventId.id);
+                    assert removedFromIndex : "Removed event was missing from the index: " + seenEventId.id;
                     removed++;
                     continue;
                 }
@@ -167,7 +173,20 @@ public class ForwardSlidingWindowEventTracker implements EventTracker {
 
             assert seenEvents.size() <= maxTrackedEvents : "Too many events";
             assert checkOrder() : "Events are not in order";
+            assert checkIndex() : "Event index is inconsistent after update";
         }
+    }
+
+    protected boolean checkIndex() {
+        if (seenEventIds.size() != seenEvents.size()) {
+            return false;
+        }
+        for (SignedNostrEvent.Identifier identifier : seenEvents) {
+            if (!seenEventIds.contains(identifier.id)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     protected boolean checkOrder() {
