@@ -75,7 +75,6 @@ public final class RTCSettings implements Cloneable, Serializable {
     private final Duration p2pAttemptTimeout;
     private final Duration queuedSendTimeout;
     private final Duration p2pGiveupTimeout;
-    
 
     public RTCSettings(
         Duration announceInterval,
