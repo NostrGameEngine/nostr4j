@@ -74,6 +74,8 @@ public final class RTCSettings implements Cloneable, Serializable {
     private final Duration roomLoopInterval;
     private final Duration p2pAttemptTimeout;
     private final Duration queuedSendTimeout;
+    private final Duration p2pGiveupTimeout;
+    
 
     public RTCSettings(
         Duration announceInterval,
@@ -106,6 +108,11 @@ public final class RTCSettings implements Cloneable, Serializable {
         this.roomLoopInterval = roomLoopInterval;
         this.p2pAttemptTimeout = p2pAttemptTimeout;
         this.queuedSendTimeout = queuedSendTimeout;
+        this.p2pGiveupTimeout = p2pAttemptTimeout.multipliedBy(4);
+    }
+
+    public Duration getP2pGiveupTimeout() {
+        return p2pGiveupTimeout;
     }
 
     public Duration getSignalingLoopInterval() {

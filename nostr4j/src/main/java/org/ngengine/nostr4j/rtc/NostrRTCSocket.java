@@ -78,7 +78,6 @@ public final class NostrRTCSocket {
 
     public static final String DEFAULT_CHANNEL_NAME = "default";
     private static final Logger logger = Logger.getLogger(NostrRTCSocket.class.getName());
-    private static final long RTC_CONNECT_TIMEOUT_MS = 1000;
     private static final long RTC_UPGRADE_INTERVAL_MS = TimeUnit.MINUTES.toMillis(1);
 
     public static enum TransportPath {
@@ -366,7 +365,7 @@ public final class NostrRTCSocket {
                     ensureTurnForDownChannels("rtc-timeout:" + reason);
                     return null;
                 },
-                RTC_CONNECT_TIMEOUT_MS,
+                settings.getP2pGiveupTimeout().toMillis(),
                 TimeUnit.MILLISECONDS
             );
     }
