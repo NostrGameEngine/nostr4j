@@ -46,7 +46,7 @@ public final class RTCSettings implements Cloneable, Serializable {
     public static final Duration PEER_EXPIRATION = Duration.ofMinutes(5);
     public static final Duration DELAYED_CANDIDATES_INTERVAL = Duration.ofMillis(100);
     public static final Duration ROOM_LOOP_INTERVAL = Duration.ofSeconds(1);
-    public static final Duration P2P_TIMEOUT = Duration.ofSeconds(4);
+    public static final Duration P2P_TIMEOUT = Duration.ofSeconds(30);
     public static final Duration QUEUED_SEND_TIMEOUT = Duration.ofSeconds(30);
 
     public static final Collection<String> PUBLIC_STUN_SERVERS = Collections.unmodifiableCollection(
