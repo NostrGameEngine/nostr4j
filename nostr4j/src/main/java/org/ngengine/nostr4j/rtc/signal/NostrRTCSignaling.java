@@ -102,10 +102,12 @@ public class NostrRTCSignaling implements Closeable {
     private final boolean strfryLimitWorkaround = true;
 
     private volatile boolean closed = false;
+    private volatile boolean closeResourcesClosed = false;
     private volatile boolean loopStarted = false;
     private volatile NostrSubscription discoverySub;
     private volatile NostrSubscription signalingSub;
     private volatile String advMessage = "";
+    private volatile AsyncTask<List<AsyncTask<NostrMessageAck>>> disconnectPublishTask;
 
     private final NostrSubEventListener listener = new NostrSubEventListener() {
         @Override
@@ -467,21 +469,47 @@ public class NostrRTCSignaling implements Closeable {
     }
 
     /**
-     * Close the signaling
+     * Close the signaling.
+     *
+     * <p>The disconnect event must be signed and handed to the relay pool before
+     * subscriptions and the signaling executor are closed. In particular, signing
+     * may be asynchronous on browser and remote-signer platforms. Relay
+     * acknowledgements are deliberately not awaited.</p>
      */
     public void close(String message) {
-        if (this.closed) throw new IllegalStateException("Already closed");
-        logger.fine("Closing signaling");
-        this.closed = true;
+        AsyncTask<List<AsyncTask<NostrMessageAck>>> publishTask;
+        synchronized (this) {
+            if (disconnectPublishTask == null) {
+                logger.fine("Closing signaling");
+                this.closed = true;
+                NostrRTCDisconnectSignal signal = new NostrRTCDisconnectSignal(
+                    localPeer.getSigner(),
+                    roomKeyPair,
+                    localPeer,
+                    message
+                );
+                disconnectPublishTask = signal.toEvent(null).then(pool::publish);
+            }
+            publishTask = disconnectPublishTask;
+        }
 
-        NostrRTCDisconnectSignal signal = new NostrRTCDisconnectSignal(localPeer.getSigner(), roomKeyPair, localPeer, message);
+        try {
+            publishTask.await();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            logger.log(Level.WARNING, "Interrupted while publishing RTC disconnect signal", e);
+        } catch (Exception e) {
+            logger.log(Level.WARNING, "Could not publish RTC disconnect signal", e);
+        } finally {
+            closeResources();
+        }
+    }
 
-        signal
-            .toEvent(null)
-            .then(ev -> {
-                return pool.publish(ev);
-            });
-
+    private synchronized void closeResources() {
+        if (closeResourcesClosed) {
+            return;
+        }
+        closeResourcesClosed = true;
         if (isDiscoveryStarted()) this.discoverySub.close();
         if (isSignalingStarted()) this.signalingSub.close();
         this.executor.close();
