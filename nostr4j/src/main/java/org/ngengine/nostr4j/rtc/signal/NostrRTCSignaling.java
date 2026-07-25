@@ -38,7 +38,6 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -218,12 +217,10 @@ public class NostrRTCSignaling implements Closeable {
                             );
 
                             // remove peer from the announce list
-                            Iterator<NostrRTCConnectSignal> it = seenAnnounces.iterator();
-                            while (it.hasNext()) {
-                                NostrRTCConnectSignal announce = it.next();
+                            for (NostrRTCConnectSignal announce : seenAnnounces) {
                                 if (!announce.getPeer().equals(receivedSignal.getPeer())) continue;
 
-                                it.remove();
+                                seenAnnounces.remove(announce);
                                 logger.finest("Remove announce: " + announce);
 
                                 for (Listener listener : listeners) {
@@ -361,11 +358,9 @@ public class NostrRTCSignaling implements Closeable {
 
                     // remove all expired announce
                     Instant now = Instant.now();
-                    Iterator<NostrRTCConnectSignal> it = seenAnnounces.iterator();
-                    while (it.hasNext()) {
-                        NostrRTCConnectSignal announce = it.next();
+                    for (NostrRTCConnectSignal announce : seenAnnounces) {
                         if (announce.getExpireAt().isBefore(now)) {
-                            it.remove();
+                            seenAnnounces.remove(announce);
                             for (Listener listener : listeners) {
                                 try {
                                     listener.onRemoveAnnounce(announce, Listener.RemoveReason.EXPIRED);
@@ -390,7 +385,7 @@ public class NostrRTCSignaling implements Closeable {
             localPeer.getSigner(),
             roomKeyPair,
             localPeer,
-            Instant.now().plusSeconds(60),
+            Instant.now().plus(settings.getSignalingAnnounceExpiration()),
             message
         );
         return signal

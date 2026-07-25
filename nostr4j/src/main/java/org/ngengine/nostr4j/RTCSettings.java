@@ -43,6 +43,7 @@ public final class RTCSettings implements Cloneable, Serializable {
     private static final long serialVersionUID = 1L;
 
     public static final Duration SIGNALING_LOOP_INTERVAL = Duration.ofSeconds(5);
+    public static final Duration SIGNALING_ANNOUNCE_EXPIRATION = Duration.ofSeconds(60);
     public static final Duration PEER_EXPIRATION = Duration.ofMinutes(5);
     public static final Duration DELAYED_CANDIDATES_INTERVAL = Duration.ofMillis(100);
     public static final Duration ROOM_LOOP_INTERVAL = Duration.ofSeconds(1);
@@ -69,6 +70,7 @@ public final class RTCSettings implements Cloneable, Serializable {
     );
 
     private final Duration signalingLoopInterval;
+    private final Duration signalingAnnounceExpiration;
     private final Duration peerExpiration;
     private final Duration delayedCandidatesInterval;
     private final Duration roomLoopInterval;
@@ -89,7 +91,8 @@ public final class RTCSettings implements Cloneable, Serializable {
             delayedCandidatesInterval,
             roomLoopInterval,
             p2pAttemptTimeout,
-            QUEUED_SEND_TIMEOUT
+            QUEUED_SEND_TIMEOUT,
+            SIGNALING_ANNOUNCE_EXPIRATION
         );
     }
 
@@ -101,13 +104,38 @@ public final class RTCSettings implements Cloneable, Serializable {
         Duration p2pAttemptTimeout,
         Duration queuedSendTimeout
     ) {
+        this(
+            announceInterval,
+            peerExpiration,
+            delayedCandidatesInterval,
+            roomLoopInterval,
+            p2pAttemptTimeout,
+            queuedSendTimeout,
+            SIGNALING_ANNOUNCE_EXPIRATION
+        );
+    }
+
+    public RTCSettings(
+        Duration announceInterval,
+        Duration peerExpiration,
+        Duration delayedCandidatesInterval,
+        Duration roomLoopInterval,
+        Duration p2pAttemptTimeout,
+        Duration queuedSendTimeout,
+        Duration signalingAnnounceExpiration
+    ) {
         this.signalingLoopInterval = announceInterval;
+        this.signalingAnnounceExpiration = signalingAnnounceExpiration;
         this.peerExpiration = peerExpiration;
         this.delayedCandidatesInterval = delayedCandidatesInterval;
         this.roomLoopInterval = roomLoopInterval;
         this.p2pAttemptTimeout = p2pAttemptTimeout;
         this.queuedSendTimeout = queuedSendTimeout;
         this.p2pGiveupTimeout = p2pAttemptTimeout.multipliedBy(4);
+    }
+
+    public Duration getSignalingAnnounceExpiration() {
+        return signalingAnnounceExpiration;
     }
 
     public Duration getP2pGiveupTimeout() {
@@ -144,7 +172,8 @@ public final class RTCSettings implements Cloneable, Serializable {
         DELAYED_CANDIDATES_INTERVAL,
         ROOM_LOOP_INTERVAL,
         P2P_TIMEOUT,
-        QUEUED_SEND_TIMEOUT
+        QUEUED_SEND_TIMEOUT,
+        SIGNALING_ANNOUNCE_EXPIRATION
     );
 
     @Override
@@ -163,6 +192,7 @@ public final class RTCSettings implements Cloneable, Serializable {
         RTCSettings that = (RTCSettings) o;
         return (
             signalingLoopInterval == that.signalingLoopInterval &&
+            signalingAnnounceExpiration == that.signalingAnnounceExpiration &&
             peerExpiration == that.peerExpiration &&
             delayedCandidatesInterval == that.delayedCandidatesInterval &&
             roomLoopInterval == that.roomLoopInterval &&
@@ -175,6 +205,7 @@ public final class RTCSettings implements Cloneable, Serializable {
     public int hashCode() {
         return Objects.hash(
             signalingLoopInterval,
+            signalingAnnounceExpiration,
             peerExpiration,
             delayedCandidatesInterval,
             roomLoopInterval,
@@ -189,6 +220,8 @@ public final class RTCSettings implements Cloneable, Serializable {
             "RTCSettings{" +
             "announceInterval=" +
             signalingLoopInterval +
+            ", announceExpiration=" +
+            signalingAnnounceExpiration +
             ", peerExpiration=" +
             peerExpiration +
             ", delayedCandidatesInterval=" +

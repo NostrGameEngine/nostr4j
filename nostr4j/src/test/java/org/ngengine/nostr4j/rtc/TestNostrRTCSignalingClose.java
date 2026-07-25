@@ -37,6 +37,8 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -55,6 +57,52 @@ import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
 import org.ngengine.platform.AsyncTask;
 
 public class TestNostrRTCSignalingClose {
+
+    @Test
+    public void announceUsesConfiguredSignalingExpiration() throws Exception {
+        NostrKeyPair roomKeyPair = new NostrKeyPair();
+        NostrRTCLocalPeer localPeer = new NostrRTCLocalPeer(
+            new NostrKeyPairSigner(new NostrKeyPair()),
+            Collections.emptyList(),
+            "expiration-test-app",
+            "expiration-test-protocol",
+            "expiration-test-session",
+            roomKeyPair,
+            null
+        );
+        CapturingPool pool = new CapturingPool();
+        RTCSettings settings = new RTCSettings(
+            RTCSettings.SIGNALING_LOOP_INTERVAL,
+            RTCSettings.PEER_EXPIRATION,
+            RTCSettings.DELAYED_CANDIDATES_INTERVAL,
+            RTCSettings.ROOM_LOOP_INTERVAL,
+            RTCSettings.P2P_TIMEOUT,
+            RTCSettings.QUEUED_SEND_TIMEOUT,
+            Duration.ofSeconds(25)
+        );
+        NostrRTCSignaling signaling = new NostrRTCSignaling(
+            settings,
+            "expiration-test-app",
+            "expiration-test-protocol",
+            localPeer,
+            roomKeyPair,
+            pool
+        );
+
+        try {
+            signaling.start(true).await();
+            signaling.sendAnnounce("test").await();
+
+            SignedNostrEvent published = pool.published.get();
+            assertNotNull(published);
+            assertEquals("connect", published.getFirstTagFirstValue("t"));
+            long remainingSeconds = Duration.between(Instant.now(), published.getExpiration()).toSeconds();
+            assertTrue("Announcement expires too early: " + remainingSeconds, remainingSeconds >= 23);
+            assertTrue("Announcement expires too late: " + remainingSeconds, remainingSeconds <= 25);
+        } finally {
+            signaling.close();
+        }
+    }
 
     @Test
     public void closeWaitsUntilDisconnectIsPublished() throws Exception {
