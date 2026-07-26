@@ -27,12 +27,13 @@ jobs:
           REPO_LC="$(echo "${GITHUB_REPOSITORY#*/}" | tr '[:upper:]' '[:lower:]')"
           echo "IMAGE_NAME=ghcr.io/${OWNER_LC}/${REPO_LC}-turn-server" >> "$GITHUB_ENV"
 
-      - name: Set up JDK 25 for Gradle
-        uses: actions/setup-java@v4
+      - name: Set up GraalVM Community 25
+        uses: graalvm/setup-graalvm@v1
         with:
-          distribution: temurin
           java-version: '25'
-          cache: gradle
+          distribution: 'graalvm-community'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          cache: 'gradle'
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
