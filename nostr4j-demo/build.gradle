@@ -36,6 +36,33 @@ tasks.named('test') {
     }
 }
 
+def configureOnionTopologyDemo = { JavaExec demoTask ->
+    demoTask.group = 'application'
+    demoTask.mainClass = 'org.ngengine.nostr4j.rtc.OnionTopologyDemo'
+    demoTask.classpath = sourceSets.main.runtimeClasspath
+    demoTask.dependsOn tasks.named('classes')
+    demoTask.systemProperty 'nostr4j.demo.peers', providers.gradleProperty('peerCount').getOrElse('10')
+    demoTask.systemProperty 'nostr4j.demo.maxDirectPeers', providers.gradleProperty('maxDirectPeers').getOrElse('2')
+    demoTask.systemProperty(
+        'nostr4j.demo.output',
+        providers.gradleProperty('output').getOrElse(
+            layout.buildDirectory.file('demo/onion-topology.png').get().asFile.absolutePath
+        )
+    )
+}
+
+tasks.register('runOnionTopologyDemo', JavaExec) {
+    description = 'Renders the bounded onion peer graph to PNG and prints its adjacency list'
+    configureOnionTopologyDemo(delegate)
+    systemProperty 'java.awt.headless', 'true'
+}
+
+tasks.register('runOnionTopologyDemoWindow', JavaExec) {
+    description = 'Opens the interactive AWT onion routing and broadcast simulator'
+    configureOnionTopologyDemo(delegate)
+    systemProperty 'nostr4j.demo.window', 'true'
+}
+
  
 
 task runBenchmarks(type: JavaExec) {    

@@ -1017,6 +1017,16 @@ public class NostrRTCIntegrationTest {
             connect(aliceToBob, bob);
             connect(aliceToCarol, carol);
 
+            awaitCondition(
+                () ->
+                    aliceToBob.socket.isTurnFallbackAllowed() &&
+                    bob.socket.isTurnFallbackAllowed() &&
+                    aliceToCarol.socket.isTurnFallbackAllowed() &&
+                    carol.socket.isTurnFallbackAllowed(),
+                20000,
+                "Sockets did not finish the RTC-to-TURN fallback transition"
+            );
+
             NostrRTCChannel ab = aliceToBob.socket.createChannel("mesh", true, true, 0, null);
             NostrRTCChannel abAux = aliceToBob.socket.createChannel("aux", true, true, 0, null);
             NostrRTCChannel bMesh = bob.socket.createChannel("mesh", true, true, 0, null);
