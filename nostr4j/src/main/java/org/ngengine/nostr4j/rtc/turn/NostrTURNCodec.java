@@ -72,7 +72,7 @@ public final class NostrTURNCodec {
 
     public static ByteBuffer withVsocketId(ByteBuffer frame, long vsocketId) {
         ByteBuffer source = frame.duplicate();
-        ByteBuffer copy = ByteBuffer.allocate(source.remaining()).order(ByteOrder.BIG_ENDIAN);
+        ByteBuffer copy = NGEPlatform.get().getNativeAllocator().malloc(source.remaining()).order(ByteOrder.BIG_ENDIAN);
         copy.put(source);
         copy.flip();
         int version = copy.get(0) & 0xFF;
@@ -85,7 +85,7 @@ public final class NostrTURNCodec {
 
     public static ByteBuffer withVsocketIdAndMessageId(ByteBuffer frame, long vsocketId, int messageId) {
         ByteBuffer source = frame.duplicate();
-        ByteBuffer copy = ByteBuffer.allocate(source.remaining()).order(ByteOrder.BIG_ENDIAN);
+        ByteBuffer copy = NGEPlatform.get().getNativeAllocator().malloc(source.remaining()).order(ByteOrder.BIG_ENDIAN);
         copy.put(source);
         copy.flip();
         int version = copy.get(0) & 0xFF;
@@ -120,6 +120,33 @@ public final class NostrTURNCodec {
         }
     }
 
+    public static void decodePayloadBuffers(ByteBuffer frame, List<ByteBuffer> payloads) {
+        frame = frame.duplicate().order(ByteOrder.BIG_ENDIAN);
+        int version = frame.get() & 0xFF;
+        if (version != VERSION) {
+            throw new IllegalArgumentException("Unsupported TURN packet version: " + version);
+        }
+        frame.getLong(); // vsocketId
+        frame.getInt(); // messageId
+        int headerSize = frame.getShort() & 0xFFFF;
+        if (headerSize <= 0) {
+            throw new IllegalArgumentException("Invalid TURN header size: " + headerSize);
+        }
+        frame.position(frame.position() + headerSize);
+        int payloadCount = frame.getShort() & 0xFFFF;
+        for (int i = 0; i < payloadCount; i++) {
+            long payloadSize = frame.getInt() & 0xFFFFFFFFL;
+            if (payloadSize > Integer.MAX_VALUE) throw new IllegalArgumentException("Payload too large: " + payloadSize);
+            if (payloadSize > frame.remaining()) {
+                throw new IllegalArgumentException("Truncated TURN payload: expected " + payloadSize + " bytes");
+            }
+            ByteBuffer payload = frame.slice();
+            payload.limit((int) payloadSize);
+            payloads.add(payload.asReadOnlyBuffer());
+            frame.position(frame.position() + (int) payloadSize);
+        }
+    }
+
     public static ByteBuffer encodeFrame(byte[] header, long vsocketId, List<byte[]> payloads) {
         return encodeFrame(header, vsocketId, 0, payloads);
     }
@@ -132,7 +159,7 @@ public final class NostrTURNCodec {
                 size += payload.length; // payload
             }
         }
-        ByteBuffer buffer = ByteBuffer.allocate(size).order(ByteOrder.BIG_ENDIAN);
+        ByteBuffer buffer = NGEPlatform.get().getNativeAllocator().malloc(size).order(ByteOrder.BIG_ENDIAN);
         buffer.put((byte) VERSION);
         buffer.putLong(vsocketId);
         buffer.putInt(messageId);
@@ -143,6 +170,33 @@ public final class NostrTURNCodec {
             for (byte[] payload : payloads) {
                 buffer.putInt(payload.length);
                 buffer.put(payload);
+            }
+        } else {
+            buffer.putShort((short) 0);
+        }
+        buffer.flip();
+        return buffer.asReadOnlyBuffer();
+    }
+
+    public static ByteBuffer encodeFrameBuffers(byte[] header, long vsocketId, int messageId, List<ByteBuffer> payloads) {
+        int size = ENVELOPE_PREFIX_SIZE + header.length + 2; // + payload count
+        if (payloads != null) {
+            for (ByteBuffer payload : payloads) {
+                size = Math.addExact(size, Math.addExact(4, payload.remaining()));
+            }
+        }
+        ByteBuffer buffer = NGEPlatform.get().getNativeAllocator().malloc(size).order(ByteOrder.BIG_ENDIAN);
+        buffer.put((byte) VERSION);
+        buffer.putLong(vsocketId);
+        buffer.putInt(messageId);
+        buffer.putShort((short) header.length);
+        buffer.put(header);
+        if (payloads != null) {
+            buffer.putShort((short) payloads.size());
+            for (ByteBuffer payload : payloads) {
+                ByteBuffer view = payload.slice();
+                buffer.putInt(view.remaining());
+                buffer.put(view);
             }
         } else {
             buffer.putShort((short) 0);

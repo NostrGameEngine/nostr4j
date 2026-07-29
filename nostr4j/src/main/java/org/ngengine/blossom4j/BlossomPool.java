@@ -176,11 +176,12 @@ public class BlossomPool implements Closeable {
     }
 
     public AsyncTask<BlobDescriptor> upload(ByteBuffer data, @Nullable String fileName, @Nullable String mimeType) {
-        byte bytes[] = new byte[data.remaining()];
-        data.slice().get(bytes);
+        ByteBuffer snapshot = NGEPlatform.get().getNativeAllocator().malloc(data.remaining());
+        snapshot.put(data.slice());
+        snapshot.flip();
         return this.executor.run(() -> {
                 List<AsyncTask<BlossomResponse>> tasks = new ArrayList<>();
-                String hex = NGEUtils.bytesToHex(NGEPlatform.get().sha256(bytes));
+                String hex = NGEUtils.bytesToHex(NGEPlatform.get().sha256(snapshot.asReadOnlyBuffer()));
                 SignedNostrEvent authEvent = getAuthEvent(
                     BlossomVerb.UPLOAD,
                     "Uploading " + (fileName != null ? fileName : "blob"),
@@ -188,7 +189,7 @@ public class BlossomPool implements Closeable {
                 )
                     .await();
                 for (BlossomEndpoint endpoint : endpoints) {
-                    tasks.add(endpoint.upload(bytes, mimeType, authEvent));
+                    tasks.add(endpoint.upload(snapshot.asReadOnlyBuffer(), mimeType, authEvent));
                 }
                 return NGEPlatform
                     .get()

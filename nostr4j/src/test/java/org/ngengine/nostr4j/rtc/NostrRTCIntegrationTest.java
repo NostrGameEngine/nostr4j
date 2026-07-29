@@ -175,7 +175,7 @@ public class NostrRTCIntegrationTest {
         NostrRTCPeer bobRemote = remotePeer(bobLocal, roomKeyPair);
         NostrRTCPeer aliceRemote = remotePeer(aliceLocal, roomKeyPair);
 
-        byte[] encryptionKey = NGEUtils.getPlatform().randomBytes(32);
+        ByteBuffer encryptionKey = NGEUtils.getPlatform().randomBytesBuffer(32);
         long vsocketId = 321L;
 
         NostrTURNDataEvent aliceOutgoing = NostrTURNDataEvent.createOutgoing(
@@ -187,8 +187,12 @@ public class NostrRTCIntegrationTest {
             encryptionKey
         );
 
-        ByteBuffer payload = ByteBuffer.wrap("hello over turn".getBytes());
+        byte[] payloadBytes = "hello over turn".getBytes(StandardCharsets.UTF_8);
+        ByteBuffer payload = ByteBuffer.allocateDirect(payloadBytes.length);
+        payload.put(payloadBytes);
+        payload.flip();
         ByteBuffer frame = NGEUtils.awaitNoThrow(aliceOutgoing.encodeToFrame(List.of(payload)));
+        assertEquals(0, payload.position());
 
         SignedNostrEvent header = org.ngengine.nostr4j.rtc.turn.NostrTURNCodec.decodeHeader(frame);
         NostrTURNDataEvent bobIncoming = NostrTURNDataEvent.parseIncoming(
@@ -206,7 +210,7 @@ public class NostrRTCIntegrationTest {
         ByteBuffer only = decoded.iterator().next();
         byte[] bytes = new byte[only.remaining()];
         only.get(bytes);
-        assertArrayEquals("hello over turn".getBytes(), bytes);
+        assertArrayEquals(payloadBytes, bytes);
     }
 
     @BeforeClass

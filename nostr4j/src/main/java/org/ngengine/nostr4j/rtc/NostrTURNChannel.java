@@ -83,7 +83,7 @@ public final class NostrTURNChannel {
 
     private final List<NostrTURNChannelListener> listeners = new CopyOnWriteArrayList<>();
 
-    private final byte[] encryptionKey;
+    private final ByteBuffer encryptionKey;
 
     private volatile TURNTransport transport;
     private volatile NostrTURNDataEvent incomingDataEvent;
@@ -178,7 +178,7 @@ public final class NostrTURNChannel {
         int maxDiff
     ) {
         this.turnServer = Objects.requireNonNull(turnServerUrl, "TURN server URL cannot be null");
-        this.encryptionKey = NGEPlatform.get().randomBytes(32);
+        this.encryptionKey = NGEPlatform.get().randomBytesBuffer(32).asReadOnlyBuffer();
         this.roomKeyPair = Objects.requireNonNull(roomKeyPair, "Room key pair cannot be null");
         this.localPeer = Objects.requireNonNull(localPeer, "Local peer cannot be null");
         this.remotePeer = Objects.requireNonNull(remotePeer, "Remote peer cannot be null");
@@ -322,7 +322,14 @@ public final class NostrTURNChannel {
 
         if (outgoingDataEvent == null) {
             outgoingDataEvent =
-                NostrTURNDataEvent.createOutgoing(localPeer, remotePeer, roomKeyPair, channelLabel, vSocketId, encryptionKey);
+                NostrTURNDataEvent.createOutgoing(
+                    localPeer,
+                    remotePeer,
+                    roomKeyPair,
+                    channelLabel,
+                    vSocketId,
+                    encryptionKey.asReadOnlyBuffer()
+                );
         }
         final int messageId = nextOutgoingMessageId();
         final Long packetId = NostrRTCChannel.tryExtractPacketId(payload);

@@ -146,6 +146,48 @@ public class TestNostrKeyPair {
         assertEquals(kp.getPublicKey(), kp2.getPublicKey());
     }
 
+    @Test
+    public void testReadOnlyBufferViewsAreIndependent() {
+        NostrPrivateKey privateKey = NostrPrivateKey.fromHex(
+            "c4bce2353ae83bd2f1ea31f75c18317d383ac63072085231d7f370582ed7a651"
+        );
+        NostrPublicKey publicKey = privateKey.getPublicKey();
+
+        ByteBuffer privateView = privateKey.asReadOnlyBuffer();
+        ByteBuffer publicView = publicKey.asReadOnlyBuffer();
+        assertTrue(privateView.isReadOnly());
+        assertTrue(publicView.isReadOnly());
+        assertArrayEquals(privateKey._array(), bytes(privateView));
+        assertArrayEquals(publicKey._array(), bytes(publicView));
+
+        privateView.position(7);
+        publicView.position(11);
+        assertEquals(0, privateKey.asReadOnlyBuffer().position());
+        assertEquals(0, publicKey.asReadOnlyBuffer().position());
+    }
+
+    @Test
+    public void testReadOnlyBufferPreservesDirectStorage() {
+        ByteBuffer direct = ByteBuffer.allocateDirect(32);
+        for (int i = 0; i < direct.capacity(); i++) {
+            direct.put((byte) i);
+        }
+        direct.flip();
+
+        NostrPublicKey publicKey = new NostrPublicKey(direct);
+        ByteBuffer view = publicKey.asReadOnlyBuffer();
+        assertTrue(view.isDirect());
+        assertTrue(view.isReadOnly());
+        assertEquals(32, view.remaining());
+    }
+
+    private byte[] bytes(ByteBuffer source) {
+        ByteBuffer view = source.slice();
+        byte[] result = new byte[view.remaining()];
+        view.get(result);
+        return result;
+    }
+
     private String byteBufferString(ByteBuffer b) {
         String s = "";
         for (int i = 0; i < b.limit(); i++) {

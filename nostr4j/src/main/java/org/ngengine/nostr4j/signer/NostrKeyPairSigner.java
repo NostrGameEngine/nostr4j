@@ -81,7 +81,7 @@ public class NostrKeyPairSigner implements NostrSigner {
         }
         return NGEUtils
             .getPlatform()
-            .signAsync(id, keyPair.getPrivateKey()._array())
+            .schnorrSignAsync(id, keyPair.getPrivateKey().asReadOnlyBuffer())
             .then(sig -> {
                 return new SignedNostrEvent(
                     id,

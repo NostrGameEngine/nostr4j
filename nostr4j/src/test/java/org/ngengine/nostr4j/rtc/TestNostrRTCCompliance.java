@@ -280,6 +280,39 @@ public class TestNostrRTCCompliance {
         assertArrayEquals("world".getBytes(), decoded.get(1));
     }
 
+    @Test
+    public void testCodecBufferPayloadsRoundTripWithoutConsumingInputs() {
+        SignedNostrEvent header = newHeader();
+        ByteBuffer first = ByteBuffer.allocateDirect(5).put("hello".getBytes());
+        ByteBuffer second = ByteBuffer.allocateDirect(5).put("world".getBytes());
+        first.flip();
+        second.flip();
+
+        ByteBuffer frame = NostrTURNCodec.encodeFrameBuffers(
+            NostrTURNCodec.encodeHeader(header),
+            3001L,
+            7,
+            List.of(first, second)
+        );
+
+        List<ByteBuffer> decoded = new ArrayList<>();
+        NostrTURNCodec.decodePayloadBuffers(frame, decoded);
+
+        assertEquals(2, decoded.size());
+        assertArrayEquals("hello".getBytes(), bytes(decoded.get(0)));
+        assertArrayEquals("world".getBytes(), bytes(decoded.get(1)));
+        assertTrue(decoded.get(0).isReadOnly());
+        assertEquals(0, first.position());
+        assertEquals(0, second.position());
+    }
+
+    private static byte[] bytes(ByteBuffer source) {
+        ByteBuffer view = source.slice();
+        byte[] result = new byte[view.remaining()];
+        view.get(result);
+        return result;
+    }
+
     @Test(expected = IllegalArgumentException.class)
     public void testDecodeRejectsWrongVersion() {
         ByteBuffer invalid = ByteBuffer.allocate(8).order(ByteOrder.BIG_ENDIAN);

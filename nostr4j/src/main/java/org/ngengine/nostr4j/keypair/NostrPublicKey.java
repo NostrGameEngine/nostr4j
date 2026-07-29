@@ -69,7 +69,7 @@ public final class NostrPublicKey implements NostrKey {
      * @return a new NostrPublicKey instance
      */
     public static NostrPublicKey fromBytes(byte[] data) {
-        ByteBuffer bbf = ByteBuffer.allocate(data.length);
+        ByteBuffer bbf = NGEUtils.getPlatform().getNativeAllocator().malloc(data.length);
         bbf.put(data);
         bbf.rewind();
         return new NostrPublicKey(bbf);
@@ -87,7 +87,7 @@ public final class NostrPublicKey implements NostrKey {
      */
     public static NostrPublicKey fromBytes(ByteBuffer bbf) {
         assert bbf.remaining() > 0 : "ByteBuffer should not be empty";
-        ByteBuffer copy = ByteBuffer.allocate(bbf.remaining());
+        ByteBuffer copy = NGEUtils.getPlatform().getNativeAllocator().malloc(bbf.remaining());
         copy.put(bbf.slice());
         copy.rewind();
         assert bbf.position() == 0 : "ByteBuffer should be at position 0";
@@ -101,8 +101,7 @@ public final class NostrPublicKey implements NostrKey {
      * @return a new NostrPublicKey instance
      */
     public static NostrPublicKey fromHex(String hex) {
-        NostrPublicKey key = new NostrPublicKey(NGEUtils.hexToBytes(hex));
-        return key;
+        return fromBytes(NGEUtils.hexToBytes(hex));
     }
 
     /**
@@ -129,8 +128,7 @@ public final class NostrPublicKey implements NostrKey {
                 throw new IllegalArgumentException("Invalid npub key");
             }
             ByteBuffer data = Bech32.bech32Decode(bech32);
-            NostrPublicKey key = new NostrPublicKey(data);
-            return key;
+            return fromBytes(data);
         } catch (Exception e) {
             throw new IllegalArgumentException("Invalid npub key", e);
         }
@@ -165,6 +163,13 @@ public final class NostrPublicKey implements NostrKey {
         readOnlyData = Collections.unmodifiableList(new ByteBufferList(data));
         assert data.position() == 0 : "Data position must be 0";
         return readOnlyData;
+    }
+
+    @Override
+    public ByteBuffer asReadOnlyBuffer() {
+        ByteBuffer view = data.asReadOnlyBuffer();
+        view.position(0);
+        return view;
     }
 
     @Override

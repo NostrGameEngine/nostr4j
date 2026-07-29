@@ -34,6 +34,7 @@ package org.ngengine.blossom4j;
 import jakarta.annotation.Nullable;
 import java.io.IOException;
 import java.net.URI;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -153,6 +154,21 @@ public class BlossomEndpoint {
             });
     }
 
+    public AsyncTask<BlossomResponse> upload(ByteBuffer data, @Nullable String mimeType, @Nullable SignedNostrEvent authEvent) {
+        ByteBuffer body = data.slice();
+        logger.finer("Uploading blob, size: " + body.remaining() + ", mimeType: " + mimeType + ", authEvent: " + authEvent);
+        Map<String, String> headers = new HashMap<>();
+        headers.put("Content-Type", mimeType != null ? mimeType : "application/octet-stream");
+        headers.put("Content-Length", String.valueOf(body.remaining()));
+        return httpRequest("upload", "PUT", headers, body, authEvent)
+            .then(response -> {
+                handleError(response);
+                Map<String, Object> responseMap = NGEPlatform.get().fromJSON(NGEUtils.safeString(response.body()), Map.class);
+                BlobDescriptor descriptor = new BlobDescriptor(responseMap);
+                return new BlossomResponse(List.of(descriptor), response);
+            });
+    }
+
     /**
      * List blobs uploaded by a given public key
      *
@@ -264,6 +280,29 @@ public class BlossomEndpoint {
             // Using the Authorization HTTP header, the kind 24242 event MUST be base64 encoded and use the Authorization scheme Nostr
             // Example HTTP Authorization header:
             // Authorization: Nostr eyJpZCI6IjhlY2JkY2RkNTMyOTIwMDEwNTUyNGExNDI4NzkxMzg4MWIzOWQxNDA5ZDhiOTBjY2RiNGI0M2Y4ZjBmYzlkMGMiLCJwdWJrZXkiOiI5ZjBjYzE3MDIzYjJjZjUwOWUwZjFkMzA1NzkzZDIwZTdjNzIyNzY5MjhmZDliZjg1NTM2ODg3YWM1NzBhMjgwIiwiY3JlYXRlZF9hdCI6MTcwODc3MTIyNywia2luZCI6MjQyNDIsInRhZ3MiOltbInQiLCJnZXQiXSxbImV4cGlyYXRpb24iLCIxNzA4ODU3NTQwIl1dLCJjb250ZW50IjoiR2V0IEJsb2JzIiwic2lnIjoiMDJmMGQyYWIyM2IwNDQ0NjI4NGIwNzFhOTVjOThjNjE2YjVlOGM3NWFmMDY2N2Y5NmNlMmIzMWM1M2UwN2I0MjFmOGVmYWRhYzZkOTBiYTc1NTFlMzA4NWJhN2M0ZjU2NzRmZWJkMTVlYjQ4NTFjZTM5MGI4MzI4MjJiNDcwZDIifQ==
+            String authJson = NGEPlatform.get().toJSON(authEvent.toMap());
+            String authBase64 = NGEPlatform.get().base64encode(authJson.getBytes(StandardCharsets.UTF_8));
+            headers.put("Authorization", "Nostr " + authBase64);
+            logger.finer("Using Authorization header: " + headers.get("Authorization"));
+        }
+
+        URI url = NGEUtils.safeURI(fullUrl);
+        return NGEPlatform.get().httpRequest(method, url.toString(), body, null, headers);
+    }
+
+    public AsyncTask<NGEHttpResponse> httpRequest(
+        String endpoint,
+        String method,
+        @Nullable Map<String, String> headers,
+        ByteBuffer body,
+        @Nullable SignedNostrEvent authEvent
+    ) {
+        String fullUrl = (this.url.endsWith("/") ? this.url : this.url + "/") + endpoint;
+
+        if (authEvent != null) {
+            if (headers == null) {
+                headers = new HashMap<>();
+            }
             String authJson = NGEPlatform.get().toJSON(authEvent.toMap());
             String authBase64 = NGEPlatform.get().base64encode(authJson.getBytes(StandardCharsets.UTF_8));
             headers.put("Authorization", "Nostr " + authBase64);

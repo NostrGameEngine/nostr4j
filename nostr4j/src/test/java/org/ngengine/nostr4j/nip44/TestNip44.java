@@ -38,6 +38,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -239,6 +240,39 @@ public class TestNip44 {
         } catch (IllegalArgumentException e) {
             assertEquals("NIP44 plaintext too large: 65536 bytes, maximum supported is 65535", e.getMessage());
         }
+    }
+
+    @Test
+    public void testDirectBufferBinaryRoundTripDoesNotConsumeInputs() throws Exception {
+        ByteBuffer conversationKey = direct(new byte[32]);
+        ByteBuffer nonce = direct(new byte[32]);
+        ByteBuffer plaintext = direct("direct NIP-44".getBytes(StandardCharsets.UTF_8));
+
+        ByteBuffer encrypted = Nip44.encryptSyncBinary(plaintext, conversationKey, nonce);
+        ByteBuffer decrypted = Nip44.decryptSyncBinary(encrypted, conversationKey);
+
+        assertArrayEquals(bytes(plaintext), bytes(decrypted));
+        assertEquals(0, plaintext.position());
+        assertEquals(0, conversationKey.position());
+        assertEquals(0, nonce.position());
+
+        ByteBuffer asyncEncrypted = Nip44.encryptBinary(plaintext, conversationKey, nonce).await();
+        ByteBuffer asyncDecrypted = Nip44.decryptBinary(asyncEncrypted, conversationKey).await();
+        assertArrayEquals(bytes(plaintext), bytes(asyncDecrypted));
+    }
+
+    private static ByteBuffer direct(byte[] bytes) {
+        ByteBuffer buffer = ByteBuffer.allocateDirect(bytes.length);
+        buffer.put(bytes);
+        buffer.flip();
+        return buffer;
+    }
+
+    private static byte[] bytes(ByteBuffer source) {
+        ByteBuffer view = source.slice();
+        byte[] result = new byte[view.remaining()];
+        view.get(result);
+        return result;
     }
 
     private static byte[] hexToBytes(String hex) {

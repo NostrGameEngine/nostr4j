@@ -32,6 +32,7 @@ package org.ngengine.nostr4j.signer;
 
 import static org.ngengine.platform.NGEUtils.dbg;
 
+import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -537,7 +538,10 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
 
             // decrypt content
             String content = event.getContent();
-            byte[] conversationKey = Nip44.getConversationKeySync(this.transportSigner.getKeyPair().getPrivateKey(), pubkey);
+            ByteBuffer conversationKey = Nip44.getConversationKeyBufferSync(
+                this.transportSigner.getKeyPair().getPrivateKey(),
+                pubkey
+            );
             String decryptedContent = Nip44.decryptSync(content, conversationKey);
 
             assert dbg(() -> logger.finer("Received response: " + decryptedContent));

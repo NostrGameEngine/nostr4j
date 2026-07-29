@@ -31,6 +31,7 @@
 package org.ngengine.nostr4j.keypair;
 
 import java.io.Serializable;
+import java.nio.ByteBuffer;
 import java.util.Collection;
 
 /**
@@ -66,6 +67,14 @@ public interface NostrKey extends Serializable, Cloneable {
      * @return
      */
     Collection<Byte> asReadOnlyBytes();
+
+    /**
+     * Returns an independent read-only view of the key's internal buffer.
+     *
+     * <p>The returned view has its own position and limit. If the key is backed
+     * by direct memory, the view remains direct.</p>
+     */
+    ByteBuffer asReadOnlyBuffer();
 
     /**
      * Returns the internal bytes representation of the key.

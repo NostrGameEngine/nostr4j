@@ -85,7 +85,7 @@ public final class NostrRoomProof {
                 .wrapPromise((res, rej) -> rej.accept(new IllegalStateException("Missing room private key")));
         }
         String id = computeId(roomKeyPair.getPublicKey(), createdAt, kind, eventPubkey, challenge);
-        return NGEUtils.getPlatform().signAsync(id, roomKeyPair.getPrivateKey()._array());
+        return NGEUtils.getPlatform().schnorrSignAsync(id, roomKeyPair.getPrivateKey().asReadOnlyBuffer());
     }
 
     public static boolean verify(
@@ -112,7 +112,7 @@ public final class NostrRoomProof {
             return false;
         }
         try {
-            return NGEUtils.getPlatform().verify(expectedId, signature, roomPubkey._array());
+            return NGEUtils.getPlatform().schnorrVerify(expectedId, signature, roomPubkey.asReadOnlyBuffer());
         } catch (Exception e) {
             return false;
         }

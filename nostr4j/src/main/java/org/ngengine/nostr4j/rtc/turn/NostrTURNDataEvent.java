@@ -44,6 +44,7 @@ import org.ngengine.nostr4j.nip44.Nip44;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCLocalPeer;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCPeer;
 import org.ngengine.platform.AsyncTask;
+import org.ngengine.platform.NGEPlatform;
 import org.ngengine.platform.NGEUtils;
 
 public final class NostrTURNDataEvent extends NostrTURNEvent {
@@ -51,7 +52,7 @@ public final class NostrTURNDataEvent extends NostrTURNEvent {
     private final long vsocketId;
     private final NostrRTCPeer remotePeer;
     private volatile AsyncTask<SignedNostrEvent> event;
-    private final AsyncTask<byte[]> encryptionKey;
+    private final AsyncTask<ByteBuffer> encryptionKey;
     private final AtomicInteger messageCounter = new AtomicInteger(1);
 
     // created locally to send
@@ -63,6 +64,20 @@ public final class NostrTURNDataEvent extends NostrTURNEvent {
         long vsocketId,
         byte[] encryptionKey
     ) {
+        if (encryptionKey == null) {
+            throw new IllegalArgumentException("Encryption key is required");
+        }
+        return createOutgoing(localPeer, remotePeer, roomKeyPair, channelLabel, vsocketId, binaryBuffer(encryptionKey));
+    }
+
+    public static NostrTURNDataEvent createOutgoing(
+        NostrRTCLocalPeer localPeer,
+        NostrRTCPeer remotePeer,
+        NostrKeyPair roomKeyPair,
+        String channelLabel,
+        long vsocketId,
+        ByteBuffer encryptionKey
+    ) {
         return new NostrTURNDataEvent(localPeer, remotePeer, roomKeyPair, channelLabel, vsocketId, encryptionKey);
     }
 
@@ -72,7 +87,7 @@ public final class NostrTURNDataEvent extends NostrTURNEvent {
         NostrKeyPair roomKeyPair,
         String channelLabel,
         long vsocketId,
-        byte[] encryptionKey
+        ByteBuffer encryptionKey
     ) {
         super("data", localPeer, remotePeer, roomKeyPair, channelLabel);
         this.remotePeer = remotePeer;
@@ -80,10 +95,12 @@ public final class NostrTURNDataEvent extends NostrTURNEvent {
         if (this.vsocketId == 0L) {
             throw new IllegalArgumentException("Invalid TURN data event: vsocketId must be != 0");
         }
-        if (encryptionKey.length != 32) {
-            throw new IllegalArgumentException("Invalid encryption key length: " + encryptionKey.length);
+        if (encryptionKey == null || encryptionKey.remaining() != 32) {
+            throw new IllegalArgumentException(
+                "Invalid encryption key length: " + (encryptionKey == null ? "null" : encryptionKey.remaining())
+            );
         }
-        this.encryptionKey = AsyncTask.completed(encryptionKey);
+        this.encryptionKey = AsyncTask.completed(encryptionKey.slice().asReadOnlyBuffer());
     }
 
     public static NostrTURNDataEvent parseIncoming(
@@ -136,7 +153,7 @@ public final class NostrTURNDataEvent extends NostrTURNEvent {
                     if (decrypted.length != 32) {
                         throw new IllegalArgumentException("Invalid encryption key length: " + decrypted.length);
                     }
-                    return decrypted;
+                    return binaryBuffer(decrypted);
                 });
     }
 
@@ -181,13 +198,12 @@ public final class NostrTURNDataEvent extends NostrTURNEvent {
         if (messageId == 0) {
             throw new IllegalArgumentException("TURN data messageId must be != 0");
         }
-        List<AsyncTask<byte[]>> encryptedTasks = new ArrayList<>();
+        List<AsyncTask<ByteBuffer>> encryptedTasks = new ArrayList<>();
         for (ByteBuffer payload : payloads) {
-            byte[] payloadBytes = new byte[payload.remaining()];
-            payload.duplicate().get(payloadBytes);
+            ByteBuffer payloadView = payload.slice().asReadOnlyBuffer();
             encryptedTasks.add(
                 encryptionKey.compose(encKey -> {
-                    return Nip44.encryptBinary(payloadBytes, encKey);
+                    return Nip44.encryptBinary(payloadView, encKey.asReadOnlyBuffer());
                 })
             );
         }
@@ -196,7 +212,7 @@ public final class NostrTURNDataEvent extends NostrTURNEvent {
             .compose(encryptedPayloads -> {
                 return toEncodedHeader()
                     .then(header -> {
-                        return NostrTURNCodec.encodeFrame(header, getEnvelopeVsocketId(), messageId, encryptedPayloads);
+                        return NostrTURNCodec.encodeFrameBuffers(header, getEnvelopeVsocketId(), messageId, encryptedPayloads);
                     });
             });
     }
@@ -229,26 +245,33 @@ public final class NostrTURNDataEvent extends NostrTURNEvent {
                     return frame;
                 })
                 .then(frame0 -> {
-                    List<byte[]> encryptedPayloads = new ArrayList<>();
-                    NostrTURNCodec.decodePayloads(frame0, encryptedPayloads);
+                    List<ByteBuffer> encryptedPayloads = new ArrayList<>();
+                    NostrTURNCodec.decodePayloadBuffers(frame0, encryptedPayloads);
                     return encryptedPayloads;
                 })
                 .compose(encryptedPayloads -> {
-                    List<AsyncTask<byte[]>> decryptedTasks = new ArrayList<>();
+                    List<AsyncTask<ByteBuffer>> decryptedTasks = new ArrayList<>();
                     for (int i = 0; i < encryptedPayloads.size(); i++) {
-                        byte[] payload = encryptedPayloads.get(i);
+                        ByteBuffer payload = encryptedPayloads.get(i);
 
-                        decryptedTasks.add(Nip44.decryptBinary(payload, encKey));
+                        decryptedTasks.add(Nip44.decryptBinary(payload, encKey.asReadOnlyBuffer()));
                     }
                     return AsyncTask.all(decryptedTasks);
                 })
                 .then(decryptedPayloads -> {
                     List<ByteBuffer> decryptedBuffers = new ArrayList<>();
-                    for (byte[] decrypted : decryptedPayloads) {
-                        decryptedBuffers.add(ByteBuffer.wrap(decrypted).asReadOnlyBuffer());
+                    for (ByteBuffer decrypted : decryptedPayloads) {
+                        decryptedBuffers.add(decrypted.asReadOnlyBuffer());
                     }
                     return decryptedBuffers;
                 });
         });
+    }
+
+    private static ByteBuffer binaryBuffer(byte[] bytes) {
+        ByteBuffer buffer = NGEPlatform.get().getNativeAllocator().malloc(bytes.length);
+        buffer.put(bytes);
+        buffer.flip();
+        return buffer.asReadOnlyBuffer();
     }
 }
