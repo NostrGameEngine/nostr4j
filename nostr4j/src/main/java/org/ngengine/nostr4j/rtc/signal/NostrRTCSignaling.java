@@ -183,6 +183,10 @@ public class NostrRTCSignaling implements Closeable {
 
                             if (ann == null) {
                                 // we don't have one -> create
+                                // Publish the state before notifying listeners. A listener is
+                                // allowed to query getAnnounces() from its callback and must
+                                // observe the announcement that triggered it.
+                                seenAnnounces.add(receivedSignal);
                                 for (Listener listener : listeners) {
                                     try {
                                         listener.onAddAnnounce(receivedSignal);
@@ -190,7 +194,6 @@ public class NostrRTCSignaling implements Closeable {
                                         logger.log(Level.WARNING, "Error in onAddAnnounce", e);
                                     }
                                 }
-                                seenAnnounces.add(receivedSignal);
                             } else {
                                 // we have one -> update
                                 assert dbg(() -> logger.finest("Update announce: " + receivedSignal));
