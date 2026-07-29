@@ -29,6 +29,9 @@ import org.junit.Test;
 import org.ngengine.nostr4j.NostrPool;
 import org.ngengine.nostr4j.RTCSettings;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
+import org.ngengine.nostr4j.rtc.delivery.DeliveryAckTimeoutException;
+import org.ngengine.nostr4j.rtc.delivery.DeliveryFailures;
+import org.ngengine.nostr4j.rtc.delivery.DeliveryTransportReplacedException;
 import org.ngengine.nostr4j.rtc.listeners.NostrRTCSocketListener;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCLocalPeer;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCPeer;
@@ -103,7 +106,7 @@ public class TestRtcPendingSendRecovery {
                 public AsyncTask<Boolean> handle(String packet) {
                     if (attempts.getAndIncrement() == 0) {
                         return AsyncTask.create((resolve, reject) -> {
-                            reject.accept(new NostrTURNChannel.DeliveryAckTimeoutException(54, Long.valueOf(54L)));
+                            reject.accept(new DeliveryAckTimeoutException("TURN", 54, Long.valueOf(54L)));
                         });
                     }
                     return AsyncTask.completed(Boolean.TRUE);
@@ -111,7 +114,7 @@ public class TestRtcPendingSendRecovery {
 
                 @Override
                 public boolean shouldPauseOnError(Throwable error) {
-                    return NostrTURNChannel.isRetryableWriteFailure(error);
+                    return DeliveryFailures.isRetryable(error);
                 }
             },
             logger,
@@ -156,13 +159,13 @@ public class TestRtcPendingSendRecovery {
                 @Override
                 public AsyncTask<Boolean> handle(String packet) {
                     return AsyncTask.create((resolve, reject) -> {
-                        reject.accept(new NostrTURNChannel.DeliveryAckTimeoutException(77, Long.valueOf(77L)));
+                        reject.accept(new DeliveryAckTimeoutException("TURN", 77, Long.valueOf(77L)));
                     });
                 }
 
                 @Override
                 public boolean shouldPauseOnError(Throwable error) {
-                    return NostrTURNChannel.isRetryableWriteFailure(error);
+                    return DeliveryFailures.isRetryable(error);
                 }
             },
             logger,
@@ -199,14 +202,14 @@ public class TestRtcPendingSendRecovery {
                 @Override
                 public AsyncTask<Boolean> handle(String packet) {
                     if (attempts.getAndIncrement() == 0) {
-                        return AsyncTask.failed(new NostrTURNChannel.TransportReplacedException());
+                        return AsyncTask.failed(new DeliveryTransportReplacedException("TURN"));
                     }
                     return AsyncTask.completed(Boolean.TRUE);
                 }
 
                 @Override
                 public boolean shouldPauseOnError(Throwable error) {
-                    return NostrTURNChannel.isRetryableWriteFailure(error);
+                    return DeliveryFailures.isRetryable(error);
                 }
             },
             logger,
@@ -231,7 +234,7 @@ public class TestRtcPendingSendRecovery {
             assertEquals(0, queue.size());
             assertTrue(
                 "transport replacement must be considered retryable",
-                NostrTURNChannel.isRetryableWriteFailure(new NostrTURNChannel.TransportReplacedException())
+                DeliveryFailures.isRetryable(new DeliveryTransportReplacedException("TURN"))
             );
         } finally {
             queue.close();

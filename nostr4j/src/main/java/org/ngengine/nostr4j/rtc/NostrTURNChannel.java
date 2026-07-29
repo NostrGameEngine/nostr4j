@@ -35,20 +35,20 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
 import org.ngengine.nostr4j.rtc.NostrTURNPool.TURNTransport;
+import org.ngengine.nostr4j.rtc.delivery.AcknowledgedDeliveryTracker;
+import org.ngengine.nostr4j.rtc.delivery.AcknowledgedDeliveryTracker.PendingDelivery;
+import org.ngengine.nostr4j.rtc.delivery.DeliveryTransportReplacedException;
 import org.ngengine.nostr4j.rtc.listeners.NostrTURNChannelListener;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCLocalPeer;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCPeer;
@@ -107,65 +107,12 @@ public final class NostrTURNChannel {
     private final boolean requiresDeliveryAck;
     private final int maxDiff;
     private final AtomicInteger outgoingMessageCounter = new AtomicInteger(1);
-    private final Map<Integer, PendingWrite> pendingWrites = new ConcurrentHashMap<Integer, PendingWrite>();
     private final AsyncExecutor ackTimeoutExecutor;
+    private final AcknowledgedDeliveryTracker deliveryTracker;
     private final AsyncExecutor inboundPayloadExecutor;
     private final ExecutionQueue inboundPayloadDispatchQueue;
     private volatile AsyncTask<Void> connectAckDeadlineTask;
     private final AtomicBoolean localResourcesClosed = new AtomicBoolean(false);
-
-    static final class DeliveryAckTimeoutException extends RuntimeException {
-
-        private static final long serialVersionUID = 1L;
-        private final int messageId;
-        private final Long packetId;
-
-        DeliveryAckTimeoutException(int messageId, Long packetId) {
-            super(
-                "TURN delivery ack timeout for messageId=" +
-                messageId +
-                (packetId == null ? "" : ", packetId=" + packetId.longValue())
-            );
-            this.messageId = messageId;
-            this.packetId = packetId;
-        }
-
-        int getMessageId() {
-            return messageId;
-        }
-
-        Long getPacketId() {
-            return packetId;
-        }
-    }
-
-    static final class TransportReplacedException extends RuntimeException {
-
-        private static final long serialVersionUID = 1L;
-
-        TransportReplacedException() {
-            super("TURN transport changed");
-        }
-    }
-
-    private static final class PendingWrite {
-
-        private final int messageId;
-        private final Long packetId;
-        private final long createdAtMs;
-
-        private final Consumer<Boolean> resolve;
-        private final Consumer<Throwable> reject;
-        private volatile AsyncTask<Void> timeoutTask;
-
-        private PendingWrite(int messageId, Long packetId, Consumer<Boolean> resolve, Consumer<Throwable> reject) {
-            this.messageId = messageId;
-            this.packetId = packetId;
-            this.createdAtMs = System.currentTimeMillis();
-            this.resolve = resolve;
-            this.reject = reject;
-        }
-    }
 
     // private final String channelLabel;
     // private final String sessionId;
@@ -199,6 +146,14 @@ public final class NostrTURNChannel {
         this.maxDiff = maxDiff;
         this.vSocketId = nextVsocketId();
         this.ackTimeoutExecutor = NGEPlatform.get().newAsyncExecutor(NostrTURNChannel.class.getSimpleName() + "-ack-timeout");
+        this.deliveryTracker =
+            new AcknowledgedDeliveryTracker(
+                "TURN",
+                DELIVERY_ACK_TIMEOUT_MS,
+                AcknowledgedDeliveryTracker.DEFAULT_MAX_PENDING_DELIVERIES,
+                ackTimeoutExecutor,
+                pending -> logger.warning("TURN delivery_ack timed out; retrying write later " + describePendingWrite(pending))
+            );
         this.inboundPayloadExecutor =
             NGEPlatform.get().newAsyncExecutor(NostrTURNChannel.class.getSimpleName() + "-inbound-payload");
         this.inboundPayloadDispatchQueue = NGEPlatform.get().newExecutionQueue();
@@ -278,7 +233,7 @@ public final class NostrTURNChannel {
             this.incomingDataEvent = null;
             this.outgoingDeliveryAckEvent = null;
             cancelConnectAckTimeout();
-            failPendingWrites(new TransportReplacedException());
+            failPendingWrites(new DeliveryTransportReplacedException("TURN"));
             this.state = 0;
         }
     }
@@ -347,30 +302,13 @@ public final class NostrTURNChannel {
         final int messageId = nextOutgoingMessageId();
         final Long packetId = NostrRTCChannel.tryExtractPacketId(payload);
         return AsyncTask.create((resolve, reject) -> {
-            PendingWrite pendingWrite = null;
             if (requiresDeliveryAck) {
-                pendingWrite = new PendingWrite(messageId, packetId, resolve, reject);
-                PendingWrite existing = pendingWrites.put(Integer.valueOf(messageId), pendingWrite);
-                if (existing != null) {
-                    reject.accept(new IllegalStateException("Duplicate TURN message id: " + messageId));
+                try {
+                    deliveryTracker.register(messageId, packetId, resolve, reject);
+                } catch (Throwable error) {
+                    reject.accept(error);
                     return;
                 }
-
-                pendingWrite.timeoutTask =
-                    ackTimeoutExecutor.runLater(
-                        () -> {
-                            PendingWrite timedOut = pendingWrites.remove(Integer.valueOf(messageId));
-                            if (timedOut != null) {
-                                logger.warning(
-                                    "TURN delivery_ack timed out; retrying write later " + describePendingWrite(timedOut)
-                                );
-                                timedOut.reject.accept(new DeliveryAckTimeoutException(messageId, packetId));
-                            }
-                            return null;
-                        },
-                        DELIVERY_ACK_TIMEOUT_MS,
-                        TimeUnit.MILLISECONDS
-                    );
             }
 
             outgoingDataEvent
@@ -378,9 +316,6 @@ public final class NostrTURNChannel {
                 .compose(bbf -> {
                     TURNTransport activeTransport = this.transport;
                     if (activeTransport == null || activeTransport != currentTransport || !activeTransport.isConnected()) {
-                        if (requiresDeliveryAck) {
-                            clearPendingWrite(messageId);
-                        }
                         return AsyncTask.completed(Boolean.FALSE);
                     }
                     return activeTransport.getTransport().sendBinary(bbf).then(v -> Boolean.TRUE);
@@ -388,10 +323,7 @@ public final class NostrTURNChannel {
                 .then(sent -> {
                     if (requiresDeliveryAck) {
                         if (!Boolean.TRUE.equals(sent)) {
-                            PendingWrite pending = clearPendingWrite(messageId);
-                            if (pending != null) {
-                                pending.resolve.accept(Boolean.FALSE);
-                            }
+                            deliveryTracker.resolve(messageId, false);
                         }
                     } else {
                         resolve.accept(Boolean.TRUE.equals(sent));
@@ -400,10 +332,7 @@ public final class NostrTURNChannel {
                 })
                 .catchException(ex -> {
                     if (requiresDeliveryAck) {
-                        PendingWrite pending = clearPendingWrite(messageId);
-                        if (pending != null) {
-                            pending.reject.accept(ex);
-                        }
+                        deliveryTracker.fail(messageId, ex);
                     } else {
                         reject.accept(ex);
                     }
@@ -479,6 +408,7 @@ public final class NostrTURNChannel {
         } catch (IOException e) {
             logger.log(Level.FINE, "Failed to close TURN inbound payload dispatch queue", e);
         }
+        deliveryTracker.close();
         ackTimeoutExecutor.close();
         inboundPayloadExecutor.close();
     }
@@ -845,19 +775,10 @@ public final class NostrTURNChannel {
         return id;
     }
 
-    private PendingWrite clearPendingWrite(int messageId) {
-        PendingWrite removed = pendingWrites.remove(Integer.valueOf(messageId));
-        if (removed != null && removed.timeoutTask != null) {
-            removed.timeoutTask.cancel();
-        }
-        return removed;
-    }
-
     private void completePendingWrite(int messageId) {
-        PendingWrite pending = clearPendingWrite(messageId);
+        PendingDelivery pending = deliveryTracker.complete(messageId);
         if (pending != null) {
             logger.fine(() -> "TURN delivery_ack received " + describePendingWrite(pending));
-            pending.resolve.accept(Boolean.TRUE);
         } else {
             logger.fine(() ->
                 "TURN delivery_ack received for unknown messageId=" + messageId + " " + describeTurnContext(messageId, null)
@@ -866,14 +787,7 @@ public final class NostrTURNChannel {
     }
 
     private void failPendingWrites(Throwable error) {
-        RuntimeException fallback = new RuntimeException("TURN write failed");
-        Throwable cause = error == null ? fallback : error;
-        for (Integer key : pendingWrites.keySet()) {
-            PendingWrite pending = clearPendingWrite(key.intValue());
-            if (pending != null) {
-                pending.reject.accept(cause);
-            }
-        }
+        deliveryTracker.failAll(error == null ? new RuntimeException("TURN write failed") : error);
     }
 
     private void sendDeliveryAck(int messageId) {
@@ -952,14 +866,13 @@ public final class NostrTURNChannel {
         );
     }
 
-    private String describePendingWrite(PendingWrite pendingWrite) {
-        long ageMs = Math.max(0L, System.currentTimeMillis() - pendingWrite.createdAtMs);
+    private String describePendingWrite(PendingDelivery pendingWrite) {
         return (
-            describeTurnContext(pendingWrite.messageId, pendingWrite.packetId) +
+            describeTurnContext((int) pendingWrite.getAttemptId(), pendingWrite.getPacketId()) +
             ", ageMs=" +
-            ageMs +
+            pendingWrite.getAgeMs() +
             ", pendingAcks=" +
-            pendingWrites.size()
+            deliveryTracker.size()
         );
     }
 
@@ -982,7 +895,6 @@ public final class NostrTURNChannel {
             (transport != null && transport.isConnected())
         );
     }
-
     private static ByteBuffer computeRoutingHash(NostrRTCPeer sourcePeer, NostrRTCPeer targetPeer, String channelLabel) {
         return NostrTURNRoutingHash.compute(
             sourcePeer.getRoomPubkey(),
@@ -994,19 +906,5 @@ public final class NostrTURNChannel {
             sourcePeer.getPubkey(),
             targetPeer.getPubkey()
         );
-    }
-
-    static boolean isRetryableWriteFailure(Throwable error) {
-        Throwable current = error;
-        while (current != null) {
-            if (current instanceof DeliveryAckTimeoutException) {
-                return true;
-            }
-            if (current instanceof TransportReplacedException) {
-                return true;
-            }
-            current = current.getCause();
-        }
-        return false;
     }
 }

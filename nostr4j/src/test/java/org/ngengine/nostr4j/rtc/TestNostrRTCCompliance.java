@@ -254,6 +254,31 @@ public class TestNostrRTCCompliance {
         }
     }
 
+    @Test
+    public void testRtcConnectParserAcceptsDc3AsDirectOnlyLegacyPeer() {
+        NostrKeyPair roomKeyPair = new NostrKeyPair();
+        NostrKeyPairSigner signer = NostrKeyPairSigner.generate();
+        NostrRTCLocalPeer local = localPeer(signer, roomKeyPair, "legacy-session", null);
+        Instant expiry = Instant.now().plusSeconds(60);
+        UnsignedNostrEvent unsigned = new UnsignedNostrEvent()
+            .withKind(25050)
+            .createdAt(Instant.now())
+            .withTag("t", "connect")
+            .withTag("P", roomKeyPair.getPublicKey().asHex())
+            .withTag("d", local.getSessionId())
+            .withTag("i", PROTOCOL_ID)
+            .withTag("y", APP_ID)
+            .withTag("version", NostrRTCConnectSignal.LEGACY_PROTOCOL_VERSION)
+            .withTag("expiration", String.valueOf(expiry.getEpochSecond()))
+            .withContent("legacy");
+        SignedNostrEvent event = NGEUtils.awaitNoThrow(signer.sign(unsigned));
+
+        NostrRTCConnectSignal parsed = new NostrRTCConnectSignal(signer, roomKeyPair, event);
+
+        assertEquals("dc3", parsed.getProtocolVersion());
+        assertTrue(!parsed.supportsRouting());
+    }
+
     private SignedNostrEvent newHeader() {
         NostrKeyPairSigner signer = NostrKeyPairSigner.generate();
         UnsignedNostrEvent ev = new UnsignedNostrEvent()

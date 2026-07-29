@@ -14,6 +14,7 @@ import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import org.junit.Test;
 import org.ngengine.nostr4j.RTCSettings;
@@ -254,6 +255,32 @@ public class TestNostrRTCSocketReadyEmission {
     }
 
     @Test
+    public void testTurnFallbackBootstrapsIdleLogicalChannels() throws Exception {
+        AsyncExecutor executor = NGEUtils.getPlatform().newAsyncExecutor("fallback-bootstraps-idle-channel-test");
+        NostrTURNPool turnPool = new NostrTURNPool();
+        NostrRTCSocket socket = null;
+        try {
+            String turnServer = "ws://127.0.0.1:1/turn";
+            socket = newSocket(executor, turnServer, turnPool);
+            socket.createChannel("alpha");
+
+            assertEquals(0, turnPoolChannelCount(turnPool));
+
+            java.lang.reflect.Method method = NostrRTCSocket.class.getDeclaredMethod("ensureTurnForDownChannels", String.class);
+            method.setAccessible(true);
+            method.invoke(socket, "test-idle-channel");
+
+            assertEquals("Fallback must bootstrap TURN before queued traffic is ready", 1, turnPoolChannelCount(turnPool));
+        } finally {
+            if (socket != null) {
+                socket.close();
+            }
+            turnPool.close();
+            executor.close();
+        }
+    }
+
+    @Test
     public void testTurnFallbackDoesNotClearHealthyRtcChannels() throws Exception {
         AsyncExecutor executor = NGEUtils.getPlatform().newAsyncExecutor("fallback-preserves-healthy-channel-test");
         NostrRTCSocket socket = null;
@@ -272,6 +299,32 @@ public class TestNostrRTCSocketReadyEmission {
             method.invoke(socket, "test-healthy");
 
             assertTrue("Healthy RTC channel handles should be preserved", channel.isConnected());
+        } finally {
+            if (socket != null) {
+                socket.close();
+            }
+            executor.close();
+        }
+    }
+
+    @Test
+    public void testRoomDefersRtcRetryWhileTurnFallbackBootstraps() throws Exception {
+        AsyncExecutor executor = NGEUtils.getPlatform().newAsyncExecutor("fallback-defers-rtc-retry-test");
+        NostrRTCSocket socket = null;
+        try {
+            socket = newSocket(executor);
+            socket.getLocalPeer().setTurnServer("wss://turn.example.test/turn");
+            socket.getRemotePeer().setTurnServer("wss://turn.example.test/turn");
+            socket.createChannel("alpha");
+
+            java.lang.reflect.Method method = NostrRTCSocket.class.getDeclaredMethod("ensureTurnForDownChannels", String.class);
+            method.setAccessible(true);
+            method.invoke(socket, "test");
+
+            assertTrue(
+                "Room loop must not clear TURN fallback by immediately starting another RTC attempt",
+                NostrRTCRoom.shouldDeferRtcAttempt(socket)
+            );
         } finally {
             if (socket != null) {
                 socket.close();
@@ -358,6 +411,11 @@ public class TestNostrRTCSocketReadyEmission {
     }
 
     private static NostrRTCSocket newSocket(AsyncExecutor executor) throws Exception {
+        return newSocket(executor, null, null);
+    }
+
+    private static NostrRTCSocket newSocket(AsyncExecutor executor, String turnServer, NostrTURNPool turnPool)
+        throws Exception {
         NostrKeyPair roomKeyPair = new NostrKeyPair();
         NostrRTCLocalPeer localPeer = new NostrRTCLocalPeer(
             NostrKeyPairSigner.generate(),
@@ -365,7 +423,7 @@ public class TestNostrRTCSocketReadyEmission {
             "ready-app",
             "ready-proto",
             roomKeyPair,
-            null
+            turnServer
         );
         NostrRTCPeer remotePeer = new NostrRTCPeer(
             NGEUtils.awaitNoThrow(NostrKeyPairSigner.generate().getPublicKey()),
@@ -373,9 +431,13 @@ public class TestNostrRTCSocketReadyEmission {
             "ready-proto",
             "remote-ready-session",
             roomKeyPair.getPublicKey(),
-            null
+            turnServer
         );
-        return new NostrRTCSocket(executor, remotePeer, roomKeyPair, localPeer, RTCSettings.DEFAULT, null, null);
+        return new NostrRTCSocket(executor, remotePeer, roomKeyPair, localPeer, RTCSettings.DEFAULT, turnServer, turnPool);
+    }
+
+    private static int turnPoolChannelCount(NostrTURNPool turnPool) {
+        return ((List<?>) readField(turnPool, "channels")).size();
     }
 
     private static Object readField(Object target, String fieldName) {
