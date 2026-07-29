@@ -4,10 +4,11 @@
 
 NIP-DC defines a resilient way for peers to discover each other over Nostr, establish a connection, and exchange binary payloads.
 
-It supports two transports:
+It supports three transport forms:
 
 1. **WebRTC**, for direct peer-to-peer connectivity when possible.
 2. **WebSocket-based TURN with signed headers**, for relay-based transport when direct connectivity is unavailable or unstable.
+3. **dc4 room routing**, which carries a logical peer connection over a bounded graph of direct WebRTC or TURN links.
 
 Both transports use the same room, peer, and authorization model, so applications see one logical connection rather than two unrelated transports.
 
@@ -33,7 +34,9 @@ A **room** is identified by a Nostr keypair shared by all parties allowed to par
 * `roomPubkey` is carried in the `P` tag.
 * Possession of the room private key represents authorization to participate in that room.
 
-When a peer joins a room, other peers in that room **SHOULD** attempt to connect to it.
+When a peer joins a room, other peers **SHOULD** establish its logical room
+presence. Physical connection attempts follow the direct dc3 behavior or the
+bounded dc4 neighbor selection described in Section 15.
 
 ### 1.2 Peer identity
 
@@ -55,7 +58,11 @@ Peers **MUST** automatically open a single RTC data channel labeled `default`. T
 
 Applications **MAY** open additional custom channels on demand. Any custom channel **SHOULD** be opened on both sides before it is used.
 
-NIP-DC does not define any further automatic channel creation, other than the `default` channel. Additional channel setup **MAY** be coordinated at the application layer using the `default` channel.
+NIP-DC does not define any further automatic application-visible channel
+creation, other than the `default` channel. Additional application channel
+setup **MAY** be coordinated using `default`. The reserved dc4 direct-neighbor
+channels in Section 15.2 are internal transport machinery, not application
+channels.
 
 In this document, **channel-local** means scoped to one logical application channel.
 
@@ -862,3 +869,580 @@ A straightforward implementation order is:
 6. optionally add TURN fallback
 7. add offline queueing and `delivery_ack`
 8. finally add transport migration and resume behavior so the logical connection can move between WebRTC and TURN transparently
+
+---
+
+## 15. dc4 routed rooms
+
+Protocol version `dc4` extends the logical connection model to rooms where a
+full mesh is undesirable. Every valid room presence still creates a stable
+logical peer and socket. Only a deterministic bounded subset of peers receives
+a physical WebRTC/TURN link.
+
+The default direct-degree target is `16`. Implementations **MUST** support a
+configured value from `2` through `64`, inclusive, and **MUST** count both
+initiated and accepted links against that value. When the room has no more than
+`maxDirectPeers + 1` members, the direct graph is a full mesh. Larger rooms use:
+
+1. a ring over sorted NodeIds;
+2. deterministic symmetric chord rounds;
+3. deterministic repair edges after a graph partition persists.
+
+With a degree of at least four, the ring uses the two predecessors and two
+successors. A chord score is:
+
+```text
+sha256(
+  UTF8("nip-dc-routing-chord-v1") ||
+  ROUTING_SCOPE ||
+  sha256(sorted NodeIds concatenated) ||
+  uint32_be(round) ||
+  NodeId
+)
+```
+
+Nodes are sorted by that score and adjacent entries are paired. Backbone and
+repair edges take precedence over optional chords. Implementations **SHOULD**
+retain a healthy optional chord briefly across membership churn.
+
+Routing cannot manufacture physical reachability. Partition repair converges
+only when honest peers receive compatible room events and at least one viable
+direct RTC or TURN link can be established between every disconnected
+component.
+
+### 15.1 Routing scope, NodeId, and EdgeId
+
+`ROUTING_SCOPE` is the following concatenation. Lengths are unsigned 32-bit
+big-endian values:
+
+```text
+uint32(room_pubkey_length)    room_pubkey_bytes
+uint32(protocol_utf8_length) protocol_utf8
+uint32(application_length)   application_utf8
+```
+
+A session NodeId is:
+
+```text
+sha256(
+  UTF8("nip-dc-routing-node-v1") ||
+  ROUTING_SCOPE ||
+  uint32(peer_pubkey_length) ||
+  peer_pubkey_bytes ||
+  uint32(session_utf8_length) ||
+  session_utf8
+)
+```
+
+The result is exactly 32 bytes. An undirected edge id is:
+
+```text
+sha256(
+  UTF8("nip-dc-routing-edge-v1") ||
+  ROUTING_SCOPE ||
+  min(NodeIdA, NodeIdB) ||
+  max(NodeIdA, NodeIdB)
+)
+```
+
+Node ordering is unsigned lexicographic byte ordering.
+
+### 15.2 Reserved direct-neighbor channels
+
+The prefix `__nipdc_dc4_route/` is reserved. Applications **MUST NOT** create,
+send directly on, or broadcast on a label with this prefix.
+
+The reliable ordered control channel is:
+
+```text
+__nipdc_dc4_route/control
+```
+
+Data channels encode their transport profile:
+
+```text
+__nipdc_dc4_route/data/o<0|1>r<0|1>x<int32>l<int64>
+__nipdc_dc4_route/broadcast/o<0|1>r<0|1>x<int32>l<int64>
+```
+
+`o` is ordered, `r` is reliable, `x` is `maxRetransmits`, and `l` is
+`maxPacketLifeTime` in milliseconds. `-1` means absent. At most one of `x` and
+`l` may be non-negative. Reserved channels exist only between selected physical
+neighbors and are not application-visible.
+
+### 15.3 Transport selection
+
+For each normal application fragment, a dc4 implementation selects transport
+in this order:
+
+1. use connected direct WebRTC immediately;
+2. otherwise compare a usable direct TURN edge with the best routed path;
+3. use routing when no direct TURN path is usable or when the routed cost is
+   lower;
+4. otherwise use direct TURN;
+5. if no path is ready, keep the same prepared packet pending until the queue
+   timeout or a non-retryable failure.
+
+The reference deterministic edge costs are RTC `10 + 5 per hop`, TURN `35 + 5
+per hop`, and UNKNOWN `50 + 5 per hop`. A failed complete route receives a
+temporary penalty of `1000` for 30 seconds. Planners consider at most four
+simple candidates and sixteen hops, preferring lower cost, fewer TURN edges,
+fewer hops, and then alternatives disjoint from a recently failed path.
+
+Direct WebRTC and direct TURN retain their dc3 wire format. Overlay framing and
+additional end-to-end encryption apply only to multi-hop routed traffic.
+
+## 16. Private topology control plane
+
+Each dc4 peer publishes a replaceable topology snapshot as Nostr kind `30350`.
+The public envelope is:
+
+```yaml
+{
+  "kind": 30350,
+  "content": "<NIP-44 encrypted JSON>",
+  "tags": [
+    ["d", "dc-topology:<room>:<protocol>:<application>:<session>"],
+    ["t", "dc-topology"],
+    ["version", "dc4"],
+    ["P", "<room pubkey>"],
+    ["i", "<protocol id>"],
+    ["y", "<application id>"],
+    ["revision", "<positive monotonic int64>"],
+    ["expiration", "<positive unix seconds>"],
+    ["roomproof", "<id>", "<sig>"]
+  ]
+}
+```
+
+Neighbor identities, edge ids, transport classifications, and the routing
+public key **MUST NOT** appear in public tags. The author encrypts content with
+its peer signer/private key and the room public key using NIP-44. A room member
+decrypts with the room private key and event-author public key.
+
+The topology roomproof challenge is canonical JSON of:
+
+```text
+[
+  room_pubkey_hex,
+  protocol_id,
+  application_id,
+  session_id,
+  unsigned_decimal_revision,
+  decimal_expiration_seconds,
+  sha256(encrypted_content_utf8)_hex
+]
+```
+
+The decrypted JSON is:
+
+```json
+{
+  "formatVersion": "dc4",
+  "revision": 1,
+  "nodeId": "<32-byte hex>",
+  "routingPublicKey": "<32-byte hex>",
+  "issuedAt": 1700000000,
+  "expiresAt": 1700000060,
+  "neighbors": [
+    {
+      "nodeId": "<32-byte hex>",
+      "pubkey": "<32-byte hex>",
+      "sessionId": "<session>",
+      "edgeId": "<32-byte hex>",
+      "transport": "<RTC|TURN|UNKNOWN>"
+    }
+  ]
+}
+```
+
+`issuedAt` **MUST** equal event `created_at`; decrypted expiry and revision
+**MUST** equal their public tags. Revision must strictly increase for a given
+NodeId. A snapshot may list at most 64 direct neighbors.
+
+An edge enters the usable graph only when both newest unexpired endpoint
+snapshots list one another, both compute the same EdgeId, both peer presences
+are current, and both endpoints advertise dc4. Conflicting directional
+transport claims are resolved pessimistically: any TURN claim yields TURN;
+both must claim RTC for RTC; otherwise the edge is UNKNOWN. A unilateral claim
+never creates an edge.
+
+The graph snapshot id is:
+
+```text
+sha256(
+  UTF8("nip-dc-routing-graph-v1") ||
+  sorted_node_ids ||
+  for each edge sorted by EdgeId: EdgeId || uint8(effective_transport_ordinal)
+)
+```
+
+The transport ordinals are RTC `0`, TURN `1`, UNKNOWN `2`.
+
+## 17. Circuit setup and stateless control
+
+All binary integers in Sections 17–20 are big-endian. Widths, signedness, and
+validation are normative. `uint8`, `uint16`, and `uint32` are interpreted
+unsigned; sentinel-bearing `int32` and `int64` fields are signed two's
+complement. Timestamps are positive Unix seconds.
+
+Circuit and setup/message identifiers are random 128-bit values. A v1 circuit
+id remains unchanged at every hop. Forwarding state is keyed by:
+
+```text
+(previous_direct_peer_NodeId, circuit_id)
+```
+
+### 17.1 Route setup envelope
+
+```text
+MAGIC              uint32 = 0x44433453 ("DC4S")
+VERSION            uint8  = 1
+TYPE               uint8  = 1
+SETUP_ID           uint8[16]
+CIRCUIT_ID         uint8[16]
+EXPIRES_AT         int64
+REMAINING_HOPS     uint8
+EPHEMERAL_PUBKEY   uint8[32]
+CIPHERTEXT_LENGTH  uint32
+CIPHERTEXT         uint8[CIPHERTEXT_LENGTH]
+```
+
+The fixed header is 83 bytes. `REMAINING_HOPS` is 1–16, ciphertext is non-empty,
+and total size is at most 65,536 bytes. Expiry must be after receipt time and no
+more than 120 seconds in the future.
+
+The source creates one ephemeral secp256k1 keypair for this setup, encrypts
+small nested layers from destination back toward the first hop using NIP-44
+binary encryption, and destroys the private key after construction.
+
+### 17.2 Route setup layer plaintext
+
+```text
+MAGIC              uint32 = 0x4443344c ("DC4L")
+VERSION            uint8  = 1
+FLAGS              uint8
+CIRCUIT_ID         uint8[16]
+EXPIRES_AT         int64
+REMAINING_HOPS     uint8
+PROFILE_FLAGS      uint8
+MAX_RETRANSMITS    int32
+MAX_LIFETIME_MS    int64
+NEXT_NODE          uint8[32]
+SOURCE_NODE        uint8[32]
+INNER_LENGTH       uint32
+INNER              uint8[INNER_LENGTH]
+```
+
+The fixed portion is 112 bytes. `FLAGS bit 0` means final; all other bits are
+zero. `PROFILE_FLAGS bit 0` is ordered and bit 1 is reliable; all other bits
+are zero. `-1` means an absent partial-reliability field and the two partial
+fields may not both be present.
+
+For an intermediate layer: final is zero, remaining hops is greater than one,
+`NEXT_NODE` is non-zero, `SOURCE_NODE` is zero, and `INNER` is non-empty. For
+the destination layer: final is one, remaining hops is one, `NEXT_NODE` is
+zero, `SOURCE_NODE` is the source, and inner length is zero. Envelope and layer
+circuit id, expiry, and remaining-hop count must match.
+
+An intermediate stores only previous peer, circuit id, next peer, transport
+profile, and expiry. It does not store the full route or application payload.
+Circuit state expires automatically and is bounded as specified in Section 20.
+
+### 17.3 Stateless control envelope
+
+Setup confirmations and delivery/broadcast acknowledgements select an
+independent return route and do not require reverse circuit state.
+
+```text
+MAGIC              uint32 = 0x44433443 ("DC4C")
+VERSION            uint8  = 1
+MESSAGE_ID         uint8[16]
+EXPIRES_AT         int64
+REMAINING_HOPS     uint8
+EPHEMERAL_PUBKEY   uint8[32]
+CIPHERTEXT_LENGTH  uint32
+CIPHERTEXT         uint8[CIPHERTEXT_LENGTH]
+```
+
+The fixed header is 66 bytes. Hop, size, and expiry limits are the same as
+route setup.
+
+Each decrypted stateless onion layer is:
+
+```text
+MAGIC              uint32 = 0x4443344f ("DC4O")
+VERSION            uint8  = 1
+FLAGS              uint8
+EXPIRES_AT         int64
+REMAINING_HOPS     uint8
+NEXT_NODE          uint8[32]
+ORIGIN_NODE        uint8[32]
+INNER_LENGTH       uint32
+INNER              uint8[INNER_LENGTH]
+```
+
+The fixed portion is 83 bytes. `FLAGS bit 0` means final. Intermediate layers
+have a non-zero next node, zero origin, remaining hops greater than one, and a
+non-empty inner payload. The final layer has zero next node, non-zero origin,
+remaining hops one, and carries the end-to-end protected control payload.
+
+### 17.4 End-to-end control plaintext
+
+The final control payload is NIP-44 binary encrypted between the origin and
+destination routing keys:
+
+```text
+MAGIC              uint32 = 0x44433445 ("DC4E")
+VERSION            uint8  = 1
+TYPE               uint8
+SENDER_NODE        uint8[32]
+DESTINATION_NODE   uint8[32]
+CORRELATION_ID     uint8[16]
+CIRCUIT_ID         uint8[16]
+PACKET_ID          int64
+FRAGMENT_ID        int16
+CHANNEL_LENGTH     uint16
+ACK_TOKEN          uint8[16]
+CHANNEL_UTF8       uint8[CHANNEL_LENGTH]
+```
+
+The fixed portion is 130 bytes and channel length is at most 1,024 bytes. Types
+are setup-confirmed `1`, delivery-ack `2`, circuit-error `3`, and broadcast-ack
+`4`. Endpoint identities are authenticated by NIP-44 and must match the
+expected origin and local destination.
+
+## 18. Routed application data
+
+### 18.1 Routed data frame
+
+```text
+MAGIC              uint32 = 0x44433444 ("DC4D")
+VERSION            uint8  = 1
+TYPE               uint8
+FLAGS              uint16
+CIRCUIT_ID         uint8[16]
+ATTEMPT_ID         uint8[16]
+EXPIRES_AT         int64
+CIPHERTEXT_LENGTH  uint32
+CIPHERTEXT         uint8[CIPHERTEXT_LENGTH]
+```
+
+The fixed header is 52 bytes. Types are application data `1`, control `2`, ACK
+`3`, and broadcast repair `4`. For application data, `FLAGS bit 0` means a
+destination acknowledgement is required; all other bits are zero. Ciphertext
+is non-empty, total frame size is at most 1,048,576 bytes, and expiry must be
+within the next 120 seconds.
+
+An intermediate validates the frame and circuit mapping, then forwards the
+same immutable wire bytes. It does not decrypt or copy the application
+ciphertext.
+
+### 18.2 Routed payload plaintext
+
+Application data is encrypted once, end-to-end, with the route-independent
+NIP-44 conversation key derived from the source and destination per-session
+routing keys:
+
+```text
+MAGIC              uint32 = 0x44433450 ("DC4P")
+VERSION            uint8  = 1
+FLAGS              uint8
+SOURCE_NODE        uint8[32]
+DESTINATION_NODE   uint8[32]
+CHANNEL_LENGTH     uint16
+CHANNEL_UTF8       uint8[CHANNEL_LENGTH]
+PACKET_ID          int64
+FRAGMENT_ID        int16
+FRAGMENT_COUNT     int16
+ACK_TOKEN          uint8[16]
+NORMAL_FRAME_LEN   uint32
+NORMAL_FRAME       uint8[NORMAL_FRAME_LEN]
+```
+
+The fixed portion excluding channel and normal-frame bytes is 104 bytes.
+`FLAGS bit 0` requires an ACK, bit 1 is ordered, and bit 2 is reliable; all
+other bits are zero. Channel length is 1–1,024 bytes and may not use the
+reserved routing prefix. The normal frame is the unchanged Section 3 envelope;
+its packet and fragment identity must exactly match the duplicated authenticated
+fields.
+
+NIP-44 plaintext is limited to 65,535 bytes. Therefore:
+
+```text
+maximum_normal_frame_bytes = 65535 - 104 - channel_utf8_length
+```
+
+Routing fragmentation must respect that limit without changing direct
+WebRTC/TURN fragmentation.
+
+For an ACK-requiring packet, `ACK_TOKEN` is 16 random non-zero bytes. For a
+non-ACK packet it is all zero. Route retries preserve normal packet identity,
+ACK token, and ciphertext, but use a fresh `ATTEMPT_ID` and may use another
+circuit.
+
+The destination authenticates and decrypts the payload, validates destination,
+channel, profile, token, and fragment identity, and injects `NORMAL_FRAME` into
+the same normal channel reassembly and PACKET_ID deduplication path. Only after
+that path accepts the frame does it send a delivery ACK.
+
+### 18.3 Delivery and retry rules
+
+A reliable routed send is complete only after the final destination ACK
+arrives. Immediate-hop WebRTC success is insufficient. The destination ACK
+chooses its own current best route back to the source.
+
+If the ACK is lost after delivery, the source times out, penalizes the complete
+failed path, discards the failed source circuit, and retries the same prepared
+packet on an alternative candidate. The destination's normal PACKET_ID cache
+suppresses a second application delivery but emits another ACK. A setup failure
+is retryable and leaves the same prepared packet at the send-queue head.
+
+Unreliable packets create no destination-ACK tracker. Partially reliable
+packets obey their retransmit or lifetime bound. All pending acknowledged
+deliveries fail on transport shutdown.
+
+## 19. Tree broadcast
+
+dc4 broadcast is not one routed unicast per peer and is not flooding. The
+origin builds a deterministic weighted shortest-path tree over one mutually
+attested graph snapshot. Tie-breaking is total cost, TURN-edge count, hop
+count, NodeId, and parent NodeId. The tree must be connected and no path may
+exceed sixteen hops.
+
+The stable payload transmission count is exactly `N - 1`: the origin sends
+only to its children and each receiver forwards only to its children.
+Receivers derive their expected parent from origin, graph snapshot id, and
+local NodeId; a frame arriving from any other neighbor is dropped. Current and
+one recent graph snapshot are retained so in-flight frames can finish. An
+unknown tree id is dropped and never triggers flooding.
+
+The broadcast frame is:
+
+```text
+MAGIC              uint32 = 0x44433442 ("DC4B")
+VERSION            uint8  = 1
+FLAGS              uint8
+HOP_LIMIT          uint8
+RESERVED           uint8 = 0
+MAX_RETRANSMITS    int32
+MAX_LIFETIME_MS    int64
+EXPIRES_AT         int64
+ORIGIN_NODE        uint8[32]
+BROADCAST_ID       uint8[16]
+GRAPH_SNAPSHOT_ID  uint8[32]
+CHANNEL_LENGTH     uint16
+PAYLOAD_LENGTH     uint32
+CHANNEL_UTF8       uint8[CHANNEL_LENGTH]
+PAYLOAD            uint8[PAYLOAD_LENGTH]
+```
+
+The fixed header is 114 bytes. `FLAGS bit 0` is reliable and bit 1 is ordered.
+Hop limit is 1–16, channel length is 1–1,024 bytes, both channel and payload
+are non-empty, reserved routing labels are forbidden, and total size is at
+most 1,048,576 bytes. Expiry is at most 120 seconds in the future.
+
+Broadcast recipients are all authorized room members, so broadcast does not
+add per-destination payload encryption. It relies on the encrypted direct
+links and room authorization and therefore does not hide broadcast content
+from intermediating room members.
+
+An unreliable broadcast forwards/delivers once and has no ACK. For a reliable
+broadcast, the origin freezes target membership at send time. Each recipient
+sends a small end-to-end protected broadcast ACK using normal stateless routed
+control. After the ACK timeout, the origin performs reliable routed unicast
+repair only to missing peers. A repaired recipient deduplicates by
+`(origin, broadcast_id, logical_channel)` and does not deliver twice.
+
+## 20. Validation, caches, and resource limits
+
+Implementations **MUST** validate the fixed header before reading variable
+fields, validate lengths before allocating, require declared variable lengths
+to equal exactly the remaining bytes, reject trailing data, unknown versions,
+unknown types, unknown flag bits, expired frames, excessive future expiry,
+wrong previous-hop circuit mappings, invalid profiles, and reserved logical
+channels.
+
+The dc4 reference limits are:
+
+| Resource | Limit |
+| --- | ---: |
+| configured direct degree | 2–64; default 16 |
+| neighbors in one topology snapshot | 64 |
+| encrypted topology event | 65,536 bytes |
+| retained topology snapshots | 2,048 |
+| topology snapshot lifetime | 300 seconds |
+| route hops | 16 |
+| route candidates | 4 |
+| route setup/stateless control packet | 65,536 bytes |
+| routed or broadcast frame | 1,048,576 bytes |
+| active/pending circuits globally | 4,096 |
+| circuits per direct neighbor | 256 |
+| circuit/frame maximum lifetime | 120 seconds |
+| pending acknowledged deliveries | 4,096 |
+| route/application dedup or ciphertext cache entries | 8,192 |
+| broadcast trackers | 1,024 |
+| tracked direct-neighbor rate states | 128 |
+| control decryptions in flight | 32 |
+| packets per second per direct neighbor | 2,048 |
+| bytes per second per direct neighbor | 8,388,608 |
+| malformed packets per minute per direct neighbor | 128 |
+| cached routing conversation keys | 1,024 |
+| retained broadcast graph snapshots | 2 |
+
+Rate admission occurs before parsing and cryptographic work. State keyed by
+attacker-controlled identifiers must be capacity- and time-bounded. Shutdown
+clears circuits, delivery trackers, ciphertext/dedup caches, topology state,
+broadcast trackers, conversation keys, and rate state. Per-session routing and
+setup private keys are best-effort overwritten when their lifetime ends.
+
+Implementations **MUST NOT** log plaintext payloads, routing private keys,
+conversation keys, ACK tokens, complete encrypted route packets, or full paths
+at normal log levels.
+
+## 21. Security properties and limitations
+
+dc4 provides:
+
+* room-authorized, private topology publication against observers lacking the
+  room private key;
+* mutual edge attestation rather than unilateral reachability claims;
+* per-hop authenticated onion control and once-per-payload end-to-end
+  authentication for routed unicast;
+* final-destination delivery confirmation and route-level failure recovery;
+* bounded forwarding, deduplication, and acknowledgement state.
+
+It does not provide:
+
+* Sybil resistance;
+* proof that a mutually claimed edge really works;
+* identification of a guilty hop after a failed ACK;
+* topology secrecy from room members;
+* protection against a room member leaking the decrypted topology;
+* protection against traffic correlation by colluding hops that observe the
+  unchanged v1 circuit id;
+* protection against an intermediary dropping or delaying traffic;
+* privacy mode, IP hiding, cover traffic, or Tor-grade anonymity.
+
+Routing private keys are session-ephemeral and are distinct from room and peer
+identity keys. A routing-key change invalidates cached conversations and old
+routed ciphertext. Current topology publication distributes the replacement
+public key.
+
+## 22. dc3 compatibility
+
+A dc4 implementation may accept a `dc3` connect event so existing direct
+WebRTC and direct TURN peers continue to work. Such a peer:
+
+* receives a normal logical socket;
+* can be selected for a direct physical link under the degree cap;
+* is excluded from dc4 topology publication and graph construction;
+* cannot act as a routed source, destination, or intermediary;
+* cannot be reached through dc4 routing when it is not directly selected.
+
+dc4 peers preserve the public send, receive, channel, and callback shape. A
+routed message resolves the original logical source socket and channel; the
+last physical hop is never exposed as the application sender.
+
+Applications that require all members of a room to remain mutually reachable
+through routing **MUST** require dc4 presence from those members.

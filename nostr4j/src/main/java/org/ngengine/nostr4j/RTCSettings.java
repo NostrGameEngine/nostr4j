@@ -49,6 +49,8 @@ public final class RTCSettings implements Cloneable, Serializable {
     public static final Duration ROOM_LOOP_INTERVAL = Duration.ofSeconds(1);
     public static final Duration P2P_TIMEOUT = Duration.ofSeconds(30);
     public static final Duration QUEUED_SEND_TIMEOUT = Duration.ofSeconds(30);
+    public static final int DEFAULT_MAX_DIRECT_PEERS = 16;
+    public static final int MIN_MAX_DIRECT_PEERS = 2;
 
     public static final Collection<String> PUBLIC_STUN_SERVERS = Collections.unmodifiableCollection(
         Arrays.asList(
@@ -77,6 +79,7 @@ public final class RTCSettings implements Cloneable, Serializable {
     private final Duration p2pAttemptTimeout;
     private final Duration queuedSendTimeout;
     private final Duration p2pGiveupTimeout;
+    private final int maxDirectPeers;
 
     public RTCSettings(
         Duration announceInterval,
@@ -92,7 +95,8 @@ public final class RTCSettings implements Cloneable, Serializable {
             roomLoopInterval,
             p2pAttemptTimeout,
             QUEUED_SEND_TIMEOUT,
-            SIGNALING_ANNOUNCE_EXPIRATION
+            SIGNALING_ANNOUNCE_EXPIRATION,
+            DEFAULT_MAX_DIRECT_PEERS
         );
     }
 
@@ -111,7 +115,8 @@ public final class RTCSettings implements Cloneable, Serializable {
             roomLoopInterval,
             p2pAttemptTimeout,
             queuedSendTimeout,
-            SIGNALING_ANNOUNCE_EXPIRATION
+            SIGNALING_ANNOUNCE_EXPIRATION,
+            DEFAULT_MAX_DIRECT_PEERS
         );
     }
 
@@ -124,6 +129,34 @@ public final class RTCSettings implements Cloneable, Serializable {
         Duration queuedSendTimeout,
         Duration signalingAnnounceExpiration
     ) {
+        this(
+            announceInterval,
+            peerExpiration,
+            delayedCandidatesInterval,
+            roomLoopInterval,
+            p2pAttemptTimeout,
+            queuedSendTimeout,
+            signalingAnnounceExpiration,
+            DEFAULT_MAX_DIRECT_PEERS
+        );
+    }
+
+    public RTCSettings(
+        Duration announceInterval,
+        Duration peerExpiration,
+        Duration delayedCandidatesInterval,
+        Duration roomLoopInterval,
+        Duration p2pAttemptTimeout,
+        Duration queuedSendTimeout,
+        Duration signalingAnnounceExpiration,
+        int maxDirectPeers
+    ) {
+        if (maxDirectPeers < MIN_MAX_DIRECT_PEERS) {
+            throw new IllegalArgumentException("maxDirectPeers must be at least " + MIN_MAX_DIRECT_PEERS);
+        }
+        if (maxDirectPeers > 64) {
+            throw new IllegalArgumentException("maxDirectPeers must not exceed 64");
+        }
         this.signalingLoopInterval = announceInterval;
         this.signalingAnnounceExpiration = signalingAnnounceExpiration;
         this.peerExpiration = peerExpiration;
@@ -132,6 +165,7 @@ public final class RTCSettings implements Cloneable, Serializable {
         this.p2pAttemptTimeout = p2pAttemptTimeout;
         this.queuedSendTimeout = queuedSendTimeout;
         this.p2pGiveupTimeout = p2pAttemptTimeout.multipliedBy(4);
+        this.maxDirectPeers = maxDirectPeers;
     }
 
     public Duration getSignalingAnnounceExpiration() {
@@ -166,6 +200,23 @@ public final class RTCSettings implements Cloneable, Serializable {
         return queuedSendTimeout;
     }
 
+    public int getMaxDirectPeers() {
+        return maxDirectPeers;
+    }
+
+    public RTCSettings withMaxDirectPeers(int maxDirectPeers) {
+        return new RTCSettings(
+            signalingLoopInterval,
+            peerExpiration,
+            delayedCandidatesInterval,
+            roomLoopInterval,
+            p2pAttemptTimeout,
+            queuedSendTimeout,
+            signalingAnnounceExpiration,
+            maxDirectPeers
+        );
+    }
+
     public static final RTCSettings DEFAULT = new RTCSettings(
         SIGNALING_LOOP_INTERVAL,
         PEER_EXPIRATION,
@@ -173,7 +224,8 @@ public final class RTCSettings implements Cloneable, Serializable {
         ROOM_LOOP_INTERVAL,
         P2P_TIMEOUT,
         QUEUED_SEND_TIMEOUT,
-        SIGNALING_ANNOUNCE_EXPIRATION
+        SIGNALING_ANNOUNCE_EXPIRATION,
+        DEFAULT_MAX_DIRECT_PEERS
     );
 
     @Override
@@ -197,7 +249,8 @@ public final class RTCSettings implements Cloneable, Serializable {
             delayedCandidatesInterval == that.delayedCandidatesInterval &&
             roomLoopInterval == that.roomLoopInterval &&
             p2pAttemptTimeout == that.p2pAttemptTimeout &&
-            queuedSendTimeout == that.queuedSendTimeout
+            queuedSendTimeout == that.queuedSendTimeout &&
+            maxDirectPeers == that.maxDirectPeers
         );
     }
 
@@ -210,7 +263,8 @@ public final class RTCSettings implements Cloneable, Serializable {
             delayedCandidatesInterval,
             roomLoopInterval,
             p2pAttemptTimeout,
-            queuedSendTimeout
+            queuedSendTimeout,
+            maxDirectPeers
         );
     }
 
@@ -232,6 +286,8 @@ public final class RTCSettings implements Cloneable, Serializable {
             p2pAttemptTimeout +
             ", queuedSendTimeout=" +
             queuedSendTimeout +
+            ", maxDirectPeers=" +
+            maxDirectPeers +
             '}'
         );
     }

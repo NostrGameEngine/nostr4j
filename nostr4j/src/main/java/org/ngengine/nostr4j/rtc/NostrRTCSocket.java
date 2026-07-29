@@ -46,6 +46,9 @@ import java.util.logging.Logger;
 import org.ngengine.nostr4j.RTCSettings;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
 import org.ngengine.nostr4j.rtc.listeners.NostrRTCSocketListener;
+import org.ngengine.nostr4j.rtc.routing.InternalRoutedTransport;
+import org.ngengine.nostr4j.rtc.routing.InternalRoutingChannels;
+import org.ngengine.nostr4j.rtc.routing.RouteTransportProfile;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCAnswerSignal;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCLocalPeer;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCOfferSignal;
@@ -88,6 +91,7 @@ public final class NostrRTCSocket {
     }
 
     private final List<NostrRTCSocketListener> listeners = new CopyOnWriteArrayList<>();
+    private final List<NostrRTCSocketListener> internalListeners = new CopyOnWriteArrayList<>();
     private final CopyOnWriteArrayList<RTCTransportIceCandidate> localIceCandidates = new CopyOnWriteArrayList<>();
 
     private final RTCSettings settings;
@@ -109,6 +113,8 @@ public final class NostrRTCSocket {
     private volatile TransportPath activeTransportPath = TransportPath.NONE;
     private volatile boolean turnFallbackAllowed = false;
     private final SafeFlag forceTURN = new SafeFlag(false);
+    private volatile boolean physicalLinkEnabled = true;
+    private volatile InternalRoutedTransport routedTransport;
     private volatile Instant lastRtcAttemptSince;
 
     private class NostrRTCListener implements RTCTransportListener {
@@ -121,6 +127,9 @@ public final class NostrRTCSocket {
 
         @Override
         public void onLocalRTCIceCandidate(RTCTransportIceCandidate candidateString) {
+            if (!physicalLinkEnabled) {
+                return;
+            }
             logger.fine("Received local ICE candidate: " + candidateString);
             localIceCandidates.addIfAbsent(candidateString);
             emitCandidates();
@@ -128,6 +137,13 @@ public final class NostrRTCSocket {
 
         @Override
         public void onRTCConnected() {
+            if (!physicalLinkEnabled) {
+                RTCTransport currentTransport = transport;
+                if (currentTransport != null) {
+                    currentTransport.close();
+                }
+                return;
+            }
             logger.fine("Link established");
             connected = true;
             turnFallbackAllowed = false;
@@ -166,6 +182,9 @@ public final class NostrRTCSocket {
             //     }
             // }
             NostrRTCChannel logicalChannel = channels.get(chan.getName());
+            if (logicalChannel == null) {
+                logicalChannel = getOrCreateInternalRoutingChannel(chan);
+            }
             // if (logicalChannel == null && isDefaultChannelName(chan.getName())) {
             //     logicalChannel =
             //         getOrCreateLogicalChannel(
@@ -214,6 +233,9 @@ public final class NostrRTCSocket {
         @Override
         public void onRTCChannelReady(RTCDataChannel channel) {
             NostrRTCChannel logicalChannel = channels.get(channel.getName());
+            if (logicalChannel == null) {
+                logicalChannel = getOrCreateInternalRoutingChannel(channel);
+            }
             // if (logicalChannel == null && isDefaultChannelName(channel.getName())) {
             //     logicalChannel =
             //         getOrCreateLogicalChannel(
@@ -372,23 +394,37 @@ public final class NostrRTCSocket {
     }
 
     private void ensureTurnForDownChannels(String reason) {
+        if (!physicalLinkEnabled) {
+            return;
+        }
         if (connected && !forceTURN.get()) {
             logger.fine("Skipping TURN fallback reset because RTC transport is still connected. reason=" + reason);
             return;
         }
         turnFallbackAllowed = true;
         int clearedRtcChannels = 0;
+        int bootstrappedTurnChannels = 0;
         for (NostrRTCChannel channel : channels.values()) {
-            if (!channel.isClosed() && channel.isConnected()) {
+            if (channel.isClosed()) {
+                continue;
+            }
+            if (channel.isConnected()) {
                 clearedRtcChannels++;
                 channel.setChannel(null);
+            } else {
+                channel.activateFallbackIfNeeded();
             }
+            bootstrappedTurnChannels++;
         }
         logger.fine(
             "Enabled TURN fallback. reason=" +
             reason +
             ", clearedRtcChannels=" +
             clearedRtcChannels +
+            ", bootstrappedTurnChannels=" +
+            bootstrappedTurnChannels +
+            ", turnConfigurationComplete=" +
+            hasCompleteTurnConfiguration() +
             ", totalChannels=" +
             channels.size()
         );
@@ -430,6 +466,48 @@ public final class NostrRTCSocket {
 
     boolean isForceTURN() {
         return forceTURN.get();
+    }
+
+    void setPhysicalLinkEnabled(boolean enabled) {
+        if (physicalLinkEnabled == enabled) {
+            return;
+        }
+        physicalLinkEnabled = enabled;
+        if (!enabled) {
+            connected = false;
+            turnFallbackAllowed = false;
+            cancelRtcConnectTimeout();
+            pendingConnectionSince = null;
+            RTCTransport currentTransport = transport;
+            transport = null;
+            if (currentTransport != null) {
+                try {
+                    currentTransport.close();
+                } catch (Throwable error) {
+                    logger.log(Level.FINE, "Failed to close disabled physical RTC transport", error);
+                }
+            }
+            for (NostrRTCChannel channel : channels.values()) {
+                channel.disablePhysicalTransports();
+            }
+            switchActiveTransport(TransportPath.NONE, "physical-link-disabled");
+        }
+    }
+
+    boolean isPhysicalLinkEnabled() {
+        return physicalLinkEnabled;
+    }
+
+    TransportPath getActiveTransportPath() {
+        return activeTransportPath;
+    }
+
+    void setRoutedTransport(InternalRoutedTransport routedTransport) {
+        this.routedTransport = routedTransport;
+    }
+
+    InternalRoutedTransport getRoutedTransport() {
+        return routedTransport;
     }
 
     private void resurrectChannel(NostrRTCChannel channel) {
@@ -487,6 +565,22 @@ public final class NostrRTCSocket {
         return localPeer.getPubkey().asHex().compareTo(remote.getPubkey().asHex()) < 0;
     }
 
+    private NostrRTCChannel getOrCreateInternalRoutingChannel(RTCDataChannel nativeChannel) {
+        RouteTransportProfile profile = InternalRoutingChannels.profile(nativeChannel.getName());
+        if (profile == null) return null;
+        if (nativeChannel.isOrdered() != profile.isOrdered() || nativeChannel.isReliable() != profile.isReliable()) {
+            logger.warning("Rejected internal routing channel with mismatched transport profile");
+            return null;
+        }
+        return createChannel(
+            nativeChannel.getName(),
+            profile.isOrdered(),
+            profile.isReliable(),
+            profile.getMaxRetransmits(),
+            profile.getMaxPacketLifeTime()
+        );
+    }
+
     private static String normalizeChannelName(String name) {
         String nativeName = DEFAULT_CHANNEL_NAME.equals(name) ? RTCTransport.DEFAULT_CHANNEL : name;
         if (nativeName == null || nativeName.isEmpty()) {
@@ -512,6 +606,9 @@ public final class NostrRTCSocket {
             switchActiveTransport(TransportPath.TURN, "turn-channel-ready");
         }
         for (NostrRTCSocketListener listener : listeners) {
+            if (InternalRoutingChannels.isReserved(channel.getName()) && !internalListeners.contains(listener)) {
+                continue;
+            }
             try {
                 listener.onRTCChannelReady(channel);
             } catch (Throwable e) {
@@ -557,6 +654,9 @@ public final class NostrRTCSocket {
     }
 
     boolean hasUsableTransport() {
+        if (!physicalLinkEnabled) {
+            return false;
+        }
         if (connected) {
             return true;
         }
@@ -572,7 +672,7 @@ public final class NostrRTCSocket {
     }
 
     boolean shouldAttemptRtcUpgrade() {
-        if (stopped || forceTURN.get() || activeTransportPath != TransportPath.TURN) {
+        if (stopped || !physicalLinkEnabled || forceTURN.get() || activeTransportPath != TransportPath.TURN) {
             return false;
         }
         if (transport != null || isPendingConnection()) {
@@ -629,6 +729,7 @@ public final class NostrRTCSocket {
             }
         }
         listeners.clear();
+        internalListeners.clear();
         connected = false;
         switchActiveTransport(TransportPath.NONE, "socket-closed");
     }
@@ -659,6 +760,9 @@ public final class NostrRTCSocket {
     }
 
     void prepareRtcTransportAttempt() {
+        if (!physicalLinkEnabled) {
+            return;
+        }
         logger.fine("Preparing RTC transport attempt");
         connected = false;
         cancelRtcConnectTimeout();
@@ -679,12 +783,28 @@ public final class NostrRTCSocket {
         }
     }
 
-    void addListener(NostrRTCSocketListener listener) {
+    /**
+     * Add a lifecycle listener to this socket.
+     *
+     * @param listener listener to add
+     */
+    public void addListener(NostrRTCSocketListener listener) {
         listeners.add(listener);
     }
 
-    void removeListener(NostrRTCSocketListener listener) {
+    void addInternalListener(NostrRTCSocketListener listener) {
+        internalListeners.add(listener);
+        listeners.add(listener);
+    }
+
+    /**
+     * Remove a lifecycle listener from this socket.
+     *
+     * @param listener listener to remove
+     */
+    public void removeListener(NostrRTCSocketListener listener) {
         listeners.remove(listener);
+        internalListeners.remove(listener);
     }
 
     // internal, emit all candidates after a delay
@@ -723,6 +843,7 @@ public final class NostrRTCSocket {
      */
     AsyncTask<NostrRTCOfferSignal> listen() {
         try {
+            if (!physicalLinkEnabled) throw new IllegalStateException("Physical peer link is disabled");
             if (this.transport != null) throw new IllegalStateException("Already connected");
 
             logger.fine("Listening for RTC connections on connection ID: " + localPeer.getSessionId());
@@ -775,6 +896,9 @@ public final class NostrRTCSocket {
      */
     AsyncTask<NostrRTCAnswerSignal> connect(NostrRTCSignal offerOrAnswer) {
         Objects.requireNonNull(offerOrAnswer);
+        if (!physicalLinkEnabled) {
+            return AsyncTask.failed(new IllegalStateException("Physical peer link is disabled"));
+        }
         logger.fine("Connecting to RTC socket " + offerOrAnswer);
         this.lastRtcAttemptSince = Instant.now();
         this.pendingConnectionSince = Instant.now();
@@ -829,6 +953,9 @@ public final class NostrRTCSocket {
      */
     void mergeRemoteRTCIceCandidate(NostrRTCRouteSignal candidate) {
         Objects.requireNonNull(candidate);
+        if (!physicalLinkEnabled) {
+            return;
+        }
         NostrRTCPeer currentRemotePeer = this.remotePeer;
         if (currentRemotePeer != null) {
             candidate.updatePeer(currentRemotePeer);
@@ -875,6 +1002,9 @@ public final class NostrRTCSocket {
                             maxPacketLifeTime
                         );
                         for (NostrRTCSocketListener listener : listeners) {
+                            if (InternalRoutingChannels.isReserved(channelName) && !internalListeners.contains(listener)) {
+                                continue;
+                            }
                             try {
                                 listener.onRTCChannel(nchan);
                             } catch (Throwable e) {
@@ -931,6 +1061,7 @@ public final class NostrRTCSocket {
     }
 
     boolean isPendingConnection() {
+        if (!physicalLinkEnabled) return false;
         if (pendingConnectionSince == null) return false;
         if (connected || stopped) return false;
         return pendingConnectionSince.plus(settings.getPeerExpiration()).isAfter(Instant.now());

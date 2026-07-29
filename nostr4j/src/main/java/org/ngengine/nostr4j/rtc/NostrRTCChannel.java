@@ -44,6 +44,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.rtc.listeners.NostrRTCChannelListener;
 import org.ngengine.nostr4j.rtc.listeners.NostrTURNChannelListener;
+import org.ngengine.nostr4j.rtc.routing.InternalRoutedTransport;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCPeer;
 import org.ngengine.nostr4j.rtc.turn.NostrTURNDataEvent;
 import org.ngengine.platform.AsyncTask;
@@ -231,7 +232,17 @@ public final class NostrRTCChannel {
     }
 
     AsyncTask<Boolean> write(PreparedPacket packet) {
-        ByteBuffer[] frames = encodePacketFragments(packet, MAX_APPLICATION_FRAGMENT_SIZE);
+        int payloadChunkSize = MAX_APPLICATION_FRAGMENT_SIZE;
+        InternalRoutedTransport routed = socket.getRoutedTransport();
+        if (!socket.isRTCConnected() && routed != null && routed.shouldUseRoute(this)) {
+            int routedFramedLimit = routed.maximumNormalFrameBytes(this);
+            payloadChunkSize = Math.min(
+                payloadChunkSize,
+                Math.max(1, routedFramedLimit - PAYLOAD_ENVELOPE_HEADER_SIZE)
+            );
+        }
+
+        ByteBuffer[] frames = encodePacketFragments(packet, payloadChunkSize);
         AsyncTask<Boolean> chain = AsyncTask.completed(Boolean.TRUE);
         for (ByteBuffer frame : frames) {
             final ByteBuffer framePayload = frame.asReadOnlyBuffer();
@@ -280,7 +291,7 @@ public final class NostrRTCChannel {
 
     private AsyncTask<Boolean> writeSingleFragment(ByteBuffer payload) {
         RTCDataChannel currentChannel = this.channel;
-        if (isConnected() && !socket.isForceTURN()) {
+        if (socket.isPhysicalLinkEnabled() && isConnected() && !socket.isForceTURN()) {
             return NGEPlatform
                 .get()
                 .wrapPromise((res, rej) -> {
@@ -299,6 +310,13 @@ public final class NostrRTCChannel {
                         });
                 });
         }
+        InternalRoutedTransport routed = socket.getRoutedTransport();
+        if (routed != null && routed.shouldUseRoute(this)) {
+            return routed.writeRouted(this, payload.asReadOnlyBuffer());
+        }
+        if (!socket.isPhysicalLinkEnabled()) {
+            return AsyncTask.completed(Boolean.FALSE);
+        }
         if (socket.isTurnFallbackAllowed() || socket.isForceTURN()) {
             ensureTurn();
         }
@@ -313,8 +331,15 @@ public final class NostrRTCChannel {
         if (closed) {
             return false;
         }
-        if (!socket.isForceTURN() && channel != null) {
+        if (socket.isPhysicalLinkEnabled() && !socket.isForceTURN() && channel != null) {
             return true;
+        }
+        InternalRoutedTransport routed = socket.getRoutedTransport();
+        if (routed != null && routed.isRouteReady(this)) {
+            return true;
+        }
+        if (!socket.isPhysicalLinkEnabled()) {
+            return false;
         }
         if (socket.isTurnFallbackAllowed() || socket.isForceTURN()) {
             NostrTURNChannel currentTurnSend = this.turnSend;
@@ -424,6 +449,9 @@ public final class NostrRTCChannel {
     }
 
     boolean hasUsableTransport() {
+        if (!socket.isPhysicalLinkEnabled()) {
+            return false;
+        }
         return channel != null || isTurnReady();
     }
 
@@ -476,6 +504,35 @@ public final class NostrRTCChannel {
                 listener.onRTCSocketMessage(this, payload.duplicate(), true);
             } catch (Throwable e) {
                 logger.log(Level.SEVERE, "Exception in listener", e);
+            }
+        }
+    }
+
+    boolean onRoutedSocketMessage(ByteBuffer bbf) {
+        if (tryExtractPacketId(bbf) == null) {
+            return false;
+        }
+        ByteBuffer payload = unwrapIncomingPayload(bbf);
+        if (payload != null) {
+            for (NostrRTCChannelListener listener : listeners) {
+                try {
+                    listener.onRTCSocketMessage(this, payload.duplicate(), false);
+                } catch (Throwable e) {
+                    logger.log(Level.SEVERE, "Exception in listener", e);
+                }
+            }
+        }
+        // A syntactically valid fragment is acknowledged even when it was a
+        // duplicate or is still waiting for other normal NIP-DC fragments.
+        return true;
+    }
+
+    void onRoutedBroadcastMessage(ByteBuffer payload) {
+        for (NostrRTCChannelListener listener : listeners) {
+            try {
+                listener.onRTCSocketMessage(this, payload.asReadOnlyBuffer(), false);
+            } catch (Throwable error) {
+                logger.log(Level.SEVERE, "Exception in listener", error);
             }
         }
     }
@@ -564,9 +621,22 @@ public final class NostrRTCChannel {
     }
 
     void activateFallbackIfNeeded() {
-        if (socket.isTurnFallbackAllowed()) {
+        if (socket.isPhysicalLinkEnabled() && socket.isTurnFallbackAllowed()) {
             ensureTurn();
         }
+    }
+
+    void disablePhysicalTransports() {
+        RTCDataChannel currentChannel = channel;
+        channel = null;
+        if (currentChannel != null) {
+            try {
+                currentChannel.close();
+            } catch (Throwable error) {
+                logger.log(Level.FINE, "Failed to close disabled RTC data channel", error);
+            }
+        }
+        disposeTurn();
     }
 
     private void disposeTurn() {
@@ -583,7 +653,7 @@ public final class NostrRTCChannel {
     }
 
     private void ensureTurn() {
-        if (closed || socket.isClosed()) {
+        if (closed || socket.isClosed() || !socket.isPhysicalLinkEnabled()) {
             return;
         }
 

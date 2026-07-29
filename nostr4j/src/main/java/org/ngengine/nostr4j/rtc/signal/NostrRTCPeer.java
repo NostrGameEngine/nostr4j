@@ -157,7 +157,6 @@ public class NostrRTCPeer {
         NostrRTCProtocolVersion.validateSupported(nipDcVersion);
         this.nipDcVersion = nipDcVersion;
     }
-
     public Instant getLastSeen() {
         if (lastSeen == null) return Instant.now();
         return lastSeen;
