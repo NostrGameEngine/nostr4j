@@ -47,6 +47,8 @@ import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
+import org.ngengine.nostr4j.rtc.delivery.DeliveryAckTimeoutException;
+import org.ngengine.nostr4j.rtc.delivery.DeliveryTransportReplacedException;
 import org.ngengine.nostr4j.rtc.listeners.NostrTURNChannelListener;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCLocalPeer;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCPeer;
@@ -224,8 +226,8 @@ public class NostrRTCSmokeTest {
                 } catch (Throwable expected) {
                     assertTrue(
                         "Expected retryable TURN write failure but got: " + expected,
-                        containsCause(expected, NostrTURNChannel.DeliveryAckTimeoutException.class) ||
-                        containsCause(expected, NostrTURNChannel.TransportReplacedException.class)
+                        containsCause(expected, DeliveryAckTimeoutException.class) ||
+                        containsCause(expected, DeliveryTransportReplacedException.class)
                     );
                 }
             }

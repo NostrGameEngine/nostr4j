@@ -73,6 +73,7 @@ import org.ngengine.nostr4j.TestEnvironment;
 import org.ngengine.nostr4j.TestLogger;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
+import org.ngengine.nostr4j.rtc.delivery.DeliveryFailures;
 import org.ngengine.nostr4j.rtc.listeners.NostrRTCChannelListener;
 import org.ngengine.nostr4j.rtc.listeners.NostrRTCSocketListener;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCAnswerSignal;
@@ -854,7 +855,7 @@ public class NostrRTCIntegrationTest {
 
                         @Override
                         public boolean shouldPauseOnError(Throwable error) {
-                            return NostrTURNChannel.isRetryableWriteFailure(error);
+                            return DeliveryFailures.isRetryable(error);
                         }
                     },
                     logger,

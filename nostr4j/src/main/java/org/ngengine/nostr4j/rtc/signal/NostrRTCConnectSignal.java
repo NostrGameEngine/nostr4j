@@ -47,9 +47,11 @@ import org.ngengine.platform.NGEUtils;
 public final class NostrRTCConnectSignal extends NostrRTCSignal {
 
     private static final long serialVersionUID = 2L;
-    public static final String PROTOCOL_VERSION = "dc3";
+    public static final String PROTOCOL_VERSION = "dc4";
+    public static final String LEGACY_PROTOCOL_VERSION = "dc3";
     private volatile Instant expireAt;
     private final String message;
+    private final String protocolVersion;
 
     public NostrRTCConnectSignal(
         NostrSigner localSigner,
@@ -61,16 +63,23 @@ public final class NostrRTCConnectSignal extends NostrRTCSignal {
         super(localSigner, "connect", roomKeyPair, peer);
         this.expireAt = Objects.requireNonNull(expireAt, "Expire at cannot be null");
         this.message = message;
+        this.protocolVersion = PROTOCOL_VERSION;
     }
 
     public NostrRTCConnectSignal(NostrSigner localSigner, NostrKeyPair roomKeyPair, SignedNostrEvent event) {
         super(localSigner, "connect", roomKeyPair, event);
         String version = NGEUtils.safeString(event.getFirstTagFirstValue("version"));
-        if (!PROTOCOL_VERSION.equals(version)) {
+        if (!PROTOCOL_VERSION.equals(version) && !LEGACY_PROTOCOL_VERSION.equals(version)) {
             throw new IllegalArgumentException(
-                "Connect signaling version must be " + PROTOCOL_VERSION + " but was: " + version
+                "Connect signaling version must be " +
+                PROTOCOL_VERSION +
+                " or " +
+                LEGACY_PROTOCOL_VERSION +
+                " but was: " +
+                version
             );
         }
+        this.protocolVersion = version;
         this.expireAt = event.getExpiration();
         this.message = event.getContent();
     }
@@ -87,9 +96,17 @@ public final class NostrRTCConnectSignal extends NostrRTCSignal {
         return now.isAfter(expireAt);
     }
 
+    public String getProtocolVersion() {
+        return protocolVersion;
+    }
+
+    public boolean supportsRouting() {
+        return PROTOCOL_VERSION.equals(protocolVersion);
+    }
+
     @Override
     protected final AsyncTask<UnsignedNostrEvent> computeEvent(UnsignedNostrEvent event) {
-        event.withTag("version", PROTOCOL_VERSION);
+        event.withTag("version", protocolVersion);
         event.withTag("expiration", String.valueOf(expireAt.getEpochSecond()));
         if (message != null) {
             event.withContent(message);

@@ -116,6 +116,10 @@ public class NostrRTCPeer {
         return pubkey;
     }
 
+    public NostrPublicKey getRoomPubkey() {
+        return roomPubkey;
+    }
+
     public Instant getLastSeen() {
         if (lastSeen == null) return Instant.now();
         return lastSeen;

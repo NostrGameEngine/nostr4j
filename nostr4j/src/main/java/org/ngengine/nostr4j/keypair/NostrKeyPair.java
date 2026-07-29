@@ -32,7 +32,7 @@ package org.ngengine.nostr4j.keypair;
 
 import java.io.Serializable;
 
-public final class NostrKeyPair implements Serializable, Cloneable {
+public final class NostrKeyPair implements Serializable, Cloneable, AutoCloseable {
 
     private NostrPublicKey publicKey;
     private NostrPrivateKey privateKey;
@@ -60,6 +60,25 @@ public final class NostrKeyPair implements Serializable, Cloneable {
         return this.privateKey;
     }
 
+    /**
+     * Best-effort destruction of the private half of this key pair. The public
+     * key remains available for identity and audit purposes.
+     */
+    public void destroy() {
+        if (privateKey != null) {
+            privateKey.destroy();
+        }
+    }
+
+    public boolean isDestroyed() {
+        return privateKey == null || privateKey.isDestroyed();
+    }
+
+    @Override
+    public void close() {
+        destroy();
+    }
+
     @Override
     public NostrKeyPair clone() throws CloneNotSupportedException {
         try {
@@ -71,7 +90,7 @@ public final class NostrKeyPair implements Serializable, Cloneable {
 
     @Override
     public String toString() {
-        return ("KeyPair{" + "publicKey=" + publicKey + ", privateKey=" + privateKey + '}');
+        return ("KeyPair{" + "publicKey=" + publicKey + ", privateKey=" + (isDestroyed() ? "<destroyed>" : privateKey) + '}');
     }
 
     @Override

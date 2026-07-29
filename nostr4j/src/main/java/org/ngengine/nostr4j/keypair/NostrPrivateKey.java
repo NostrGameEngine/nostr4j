@@ -32,7 +32,9 @@ package org.ngengine.nostr4j.keypair;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.ReadOnlyBufferException;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Objects;
@@ -43,7 +45,7 @@ import org.ngengine.nostr4j.utils.ByteBufferList;
 import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEUtils;
 
-public final class NostrPrivateKey implements NostrKey {
+public final class NostrPrivateKey implements NostrKey, AutoCloseable {
 
     // nip-49
     public enum KeySecurity {
@@ -76,6 +78,7 @@ public final class NostrPrivateKey implements NostrKey {
     private transient volatile Collection<Byte> readOnlyData;
     private transient ByteBuffer data;
     private transient volatile byte[] array;
+    private transient volatile boolean destroyed;
 
     /**
      * Creates a new NostrPrivateKey from the given byte array.
@@ -196,7 +199,8 @@ public final class NostrPrivateKey implements NostrKey {
         this.data = data;
     }
 
-    public Collection<Byte> asReadOnlyBytes() {
+    public synchronized Collection<Byte> asReadOnlyBytes() {
+        requireUsable();
         if (readOnlyData != null) return readOnlyData;
         readOnlyData = Collections.unmodifiableList(new ByteBufferList(data));
         assert data.position() == 0 : "Data position must be 0";
@@ -204,7 +208,8 @@ public final class NostrPrivateKey implements NostrKey {
     }
 
     @Override
-    public String asHex() {
+    public synchronized String asHex() {
+        requireUsable();
         if (hex != null) return hex;
         hex = NGEUtils.bytesToHex(data);
         assert data.position() == 0 : "Data position must be 0";
@@ -212,7 +217,8 @@ public final class NostrPrivateKey implements NostrKey {
     }
 
     @Override
-    public byte[] _array() {
+    public synchronized byte[] _array() {
+        requireUsable();
         if (this.array == null) {
             byte array[] = new byte[data.limit()];
             data.slice().get(array);
@@ -223,7 +229,8 @@ public final class NostrPrivateKey implements NostrKey {
     }
 
     @Override
-    public String asBech32() {
+    public synchronized String asBech32() {
+        requireUsable();
         try {
             if (bech32 != null) return bech32;
             bech32 = Bech32.bech32Encode(BECH32_PREFIX, this.data);
@@ -241,17 +248,17 @@ public final class NostrPrivateKey implements NostrKey {
 
     @Override
     public boolean equals(Object obj) {
+        if (obj == this) return true;
+        if (destroyed) return false;
         if (obj == null || !(obj instanceof NostrPrivateKey)) {
             assert data.position() == 0 : "Data position must be 0";
             return false;
         }
-        if (obj == this) {
-            assert data.position() == 0 : "Data position must be 0";
-            return true;
-        }
 
         ByteBuffer b1 = this.data;
-        ByteBuffer b2 = ((NostrPrivateKey) obj).data;
+        NostrPrivateKey other = (NostrPrivateKey) obj;
+        if (other.destroyed) return false;
+        ByteBuffer b2 = other.data;
 
         if (b1 == null || b2 == null) {
             return false;
@@ -276,23 +283,26 @@ public final class NostrPrivateKey implements NostrKey {
 
     @Override
     public int hashCode() {
-        if (data == null) return 0;
+        if (destroyed || data == null) return 0;
         int hashcode = data.hashCode();
         assert data.position() == 0 : "Data position must be 0";
         return hashcode;
     }
 
     @Override
-    public NostrPrivateKey clone() {
-        try {
-            return (NostrPrivateKey) super.clone();
-        } catch (Exception e) {
-            return fromBytes(data);
+    public synchronized NostrPrivateKey clone() {
+        requireUsable();
+        NostrPrivateKey copy = fromBytes(data);
+        copy.keySecurity = keySecurity;
+        if (publicKey != null) {
+            copy.publicKey = publicKey.clone();
         }
+        return copy;
     }
 
     @Override
-    public void preload() {
+    public synchronized void preload() {
+        requireUsable();
         asHex();
         asBech32();
         asReadOnlyBytes();
@@ -300,7 +310,8 @@ public final class NostrPrivateKey implements NostrKey {
         assert data.position() == 0 : "Data position must be 0";
     }
 
-    public NostrPublicKey getPublicKey() {
+    public synchronized NostrPublicKey getPublicKey() {
+        requireUsable();
         if (publicKey == null) {
             byte bdata[] = this._array();
             bdata = NGEUtils.getPlatform().genPubKey(bdata);
@@ -310,7 +321,10 @@ public final class NostrPrivateKey implements NostrKey {
         return publicKey;
     }
 
-    private void writeObject(java.io.ObjectOutputStream out) throws IOException {
+    private synchronized void writeObject(java.io.ObjectOutputStream out) throws IOException {
+        if (destroyed) {
+            throw new IOException("Cannot serialize a destroyed private key");
+        }
         out.writeObject(this._array());
         out.writeObject(hex);
         out.writeObject(bech32);
@@ -325,7 +339,54 @@ public final class NostrPrivateKey implements NostrKey {
         hex = (String) in.readObject();
         bech32 = (String) in.readObject();
         publicKey = (NostrPublicKey) in.readObject();
+        destroyed = false;
         assert data.position() == 0 : "Data position must be 0";
+    }
+
+    /**
+     * Best-effort destruction of the in-memory private key material.
+     * <p>
+     * Any mutable backing storage and cached byte array are overwritten. Cached
+     * textual encodings are released, but the JVM cannot guarantee immediate
+     * removal of immutable {@link String} copies or copies made by native
+     * cryptographic code.
+     * </p>
+     */
+    public synchronized void destroy() {
+        if (destroyed) return;
+        destroyed = true;
+        if (array != null) {
+            Arrays.fill(array, (byte) 0);
+            array = null;
+        }
+        if (data != null && !data.isReadOnly()) {
+            try {
+                for (int i = 0; i < data.limit(); i++) {
+                    data.put(i, (byte) 0);
+                }
+            } catch (ReadOnlyBufferException ignored) {
+                // Best effort: callers can provide externally owned read-only storage.
+            }
+        }
+        readOnlyData = null;
+        hex = null;
+        bech32 = null;
+        publicKey = null;
+    }
+
+    public boolean isDestroyed() {
+        return destroyed;
+    }
+
+    @Override
+    public void close() {
+        destroy();
+    }
+
+    private void requireUsable() {
+        if (destroyed) {
+            throw new IllegalStateException("Private key has been destroyed");
+        }
     }
 
     /**
