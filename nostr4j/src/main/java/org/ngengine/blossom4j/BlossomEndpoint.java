@@ -96,7 +96,7 @@ public class BlossomEndpoint {
             }
             headers.put("Range", "bytes=" + byteRange[0] + "-" + byteRange[1]);
         }
-        return httpRequest(endpoint, "GET", headers, null, authEvent)
+        return httpRequest(endpoint, "GET", headers, authEvent)
             .then(response -> {
                 handleError(response);
                 byte body[] = response.body();
@@ -125,7 +125,7 @@ public class BlossomEndpoint {
     public AsyncTask<Boolean> exists(String sha256OrPath, @Nullable SignedNostrEvent authEvent) {
         logger.finer("Checking if blob exists: " + sha256OrPath + ", authEvent: " + authEvent);
         String endpoint = sha256OrPath;
-        return httpRequest(endpoint, "HEAD", null, null, authEvent)
+        return httpRequest(endpoint, "HEAD", null, authEvent)
             .then(res -> {
                 return res.status();
             });
@@ -214,7 +214,7 @@ public class BlossomEndpoint {
             endpoint += "?" + query.toString();
         }
 
-        return httpRequest(endpoint.toString(), "GET", null, null, authEvent)
+        return httpRequest(endpoint.toString(), "GET", null, authEvent)
             .then(response -> {
                 handleError(response);
                 Collection<Map<String, Object>> rs = NGEPlatform
@@ -239,7 +239,7 @@ public class BlossomEndpoint {
     public AsyncTask<BlossomResponse> delete(String sha256, @Nullable SignedNostrEvent authEvent) {
         logger.finer("Deleting blob with SHA256: " + sha256 + ", authEvent: " + authEvent);
         String endpoint = sha256;
-        return httpRequest(endpoint, "DELETE", null, null, authEvent)
+        return httpRequest(endpoint, "DELETE", null, authEvent)
             .then(response -> {
                 handleError(response);
                 return new BlossomResponse(List.of(), response);
@@ -262,6 +262,15 @@ public class BlossomEndpoint {
     @Override
     public int hashCode() {
         return url.hashCode();
+    }
+
+    public AsyncTask<NGEHttpResponse> httpRequest(
+        String endpoint,
+        String method,
+        @Nullable Map<String, String> headers,
+        @Nullable SignedNostrEvent authEvent
+    ) {
+        return httpRequest(endpoint, method, headers, (byte[]) null, authEvent);
     }
 
     public AsyncTask<NGEHttpResponse> httpRequest(

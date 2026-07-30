@@ -32,6 +32,7 @@ package org.ngengine.nostr4j.nip44;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.Objects;
 import org.ngengine.nostr4j.keypair.NostrPrivateKey;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.platform.AsyncExecutor;
@@ -55,12 +56,12 @@ public class Nip44 {
     private static final AsyncExecutor executor = NGEUtils.getPlatform().newAsyncExecutor(Nip44.class);
 
     public static byte[] getConversationKeySync(NostrPrivateKey privateKey, NostrPublicKey publicKey) {
-        return toByteArray(getConversationKeyBufferSync(privateKey, publicKey));
+        return NGEUtils.safeByteArray(getConversationKeyBufferSync(privateKey, publicKey));
     }
 
     public static ByteBuffer getConversationKeyBufferSync(NostrPrivateKey privateKey, NostrPublicKey publicKey) {
         ByteBuffer xOnlyPublicKey = publicKey.asReadOnlyBuffer();
-        ByteBuffer publicKey33 = allocate(xOnlyPublicKey.remaining() + 1);
+        ByteBuffer publicKey33 = NGEUtils.getPlatform().getNativeAllocator().malloc(xOnlyPublicKey.remaining() + 1);
         publicKey33.put((byte) 0x02);
         publicKey33.put(xOnlyPublicKey);
         publicKey33.flip();
@@ -108,7 +109,7 @@ public class Nip44 {
             );
         }
         int paddedLen = calcPaddedLength(unpaddedLen);
-        ByteBuffer output = allocate(paddedLen + 2);
+        ByteBuffer output = NGEUtils.getPlatform().getNativeAllocator().malloc(paddedLen + 2);
         output.put((byte) (unpaddedLen >> 8));
         output.put((byte) unpaddedLen);
         output.put(input);
@@ -127,7 +128,7 @@ public class Nip44 {
             throw new IllegalArgumentException("Conversation key must be 32 bytes");
         }
         ByteBuffer nonceBuffer = nonce == null ? null : ByteBuffer.wrap(nonce);
-        return toByteArray(encryptSyncBinary(ByteBuffer.wrap(data), ByteBuffer.wrap(conversationKey), nonceBuffer));
+        return NGEUtils.safeByteArray(encryptSyncBinary(ByteBuffer.wrap(data), ByteBuffer.wrap(conversationKey), nonceBuffer));
     }
 
     public static ByteBuffer encryptSyncBinary(ByteBuffer data, ByteBuffer conversationKey, ByteBuffer nonce) {
@@ -146,7 +147,10 @@ public class Nip44 {
         ByteBuffer padded = pad(data);
         ByteBuffer ciphertext = NGEUtils.getPlatform().chacha20(keys.chachaKey, keys.chachaNonce, padded, true);
         ByteBuffer mac = NGEUtils.getPlatform().hmac(keys.hmacKey, nonce, ciphertext);
-        ByteBuffer output = allocate(VERSION_SIZE + NONCE_SIZE + ciphertext.remaining() + MAC_SIZE);
+        ByteBuffer output = NGEUtils
+            .getPlatform()
+            .getNativeAllocator()
+            .malloc(VERSION_SIZE + NONCE_SIZE + ciphertext.remaining() + MAC_SIZE);
         output.put(VERSION_V2);
         output.put(nonce.slice());
         output.put(ciphertext.slice());
@@ -196,7 +200,7 @@ public class Nip44 {
     }
 
     public static byte[] decryptSyncBinary(byte[] payloadData, byte[] conversationKey) {
-        return toByteArray(decryptSyncBinary(ByteBuffer.wrap(payloadData), ByteBuffer.wrap(conversationKey)));
+        return NGEUtils.safeByteArray(decryptSyncBinary(ByteBuffer.wrap(payloadData), ByteBuffer.wrap(conversationKey)));
     }
 
     public static ByteBuffer decryptSyncBinary(ByteBuffer payloadData, ByteBuffer conversationKey) {
@@ -243,7 +247,7 @@ public class Nip44 {
 
         ByteBuffer payloadData = NGEUtils.getPlatform().base64decodeBuffer(payload);
         ByteBuffer decrypted = decryptSyncBinary(payloadData, conversationKey);
-        return new String(toByteArray(decrypted), StandardCharsets.UTF_8);
+        return new String(NGEUtils.safeByteArray(decrypted), StandardCharsets.UTF_8);
     }
 
     private static boolean constantTimeEquals(ByteBuffer a, ByteBuffer b) {
@@ -256,10 +260,6 @@ public class Nip44 {
         return result == 0;
     }
 
-    private static ByteBuffer allocate(int size) {
-        return NGEUtils.getPlatform().getNativeAllocator().malloc(size);
-    }
-
     private static ByteBuffer range(ByteBuffer source, int offset, int length) {
         ByteBuffer view = source.slice();
         if (offset < 0 || length < 0 || offset + length > view.remaining()) {
@@ -268,13 +268,6 @@ public class Nip44 {
         view.position(offset);
         view.limit(offset + length);
         return view.slice();
-    }
-
-    private static byte[] toByteArray(ByteBuffer source) {
-        ByteBuffer view = source.slice();
-        byte[] output = new byte[view.remaining()];
-        view.get(output);
-        return output;
     }
 
     private static void requireLength(ByteBuffer buffer, int expected, String name) {
@@ -358,9 +351,9 @@ public class Nip44 {
     }
 
     public static AsyncTask<ByteBuffer> encryptBinary(ByteBuffer data, ByteBuffer conversationKey, ByteBuffer nonce) {
-        ByteBuffer dataView = readOnlyView(data);
-        ByteBuffer keyView = readOnlyView(conversationKey);
-        ByteBuffer nonceView = nonce == null ? null : readOnlyView(nonce);
+        ByteBuffer dataView = Objects.requireNonNull(data, "data").slice().asReadOnlyBuffer();
+        ByteBuffer keyView = Objects.requireNonNull(conversationKey, "conversationKey").slice().asReadOnlyBuffer();
+        ByteBuffer nonceView = nonce == null ? null : nonce.slice().asReadOnlyBuffer();
         return executor.run(() -> {
             return encryptSyncBinary(dataView, keyView, nonceView);
         });
@@ -371,17 +364,10 @@ public class Nip44 {
     }
 
     public static AsyncTask<ByteBuffer> decryptBinary(ByteBuffer payloadData, ByteBuffer conversationKey) {
-        ByteBuffer payloadView = readOnlyView(payloadData);
-        ByteBuffer keyView = readOnlyView(conversationKey);
+        ByteBuffer payloadView = Objects.requireNonNull(payloadData, "payloadData").slice().asReadOnlyBuffer();
+        ByteBuffer keyView = Objects.requireNonNull(conversationKey, "conversationKey").slice().asReadOnlyBuffer();
         return executor.run(() -> {
             return decryptSyncBinary(payloadView, keyView);
         });
-    }
-
-    private static ByteBuffer readOnlyView(ByteBuffer source) {
-        if (source == null) {
-            throw new NullPointerException("source");
-        }
-        return source.slice().asReadOnlyBuffer();
     }
 }

@@ -47,9 +47,14 @@ public class Nip04 {
     public static String encryptSync(String plaintext, NostrPrivateKey ourPrivateKey, NostrPublicKey theirPublicKey) {
         ByteBuffer pub = prefixedPublicKey(theirPublicKey);
         ByteBuffer shared = NGEPlatform.get().secp256k1SharedSecret(ourPrivateKey.asReadOnlyBuffer(), pub);
-        ByteBuffer sharedX = range(shared, 1, 32);
+        shared.position(1);
+        shared.limit(33);
+        ByteBuffer sharedX = shared.slice();
         ByteBuffer iv = NGEPlatform.get().randomBytesBuffer(16);
-        ByteBuffer data = utf8(plaintext);
+        byte[] encoded = plaintext.getBytes(StandardCharsets.UTF_8);
+        ByteBuffer data = NGEPlatform.get().getNativeAllocator().malloc(encoded.length);
+        data.put(encoded);
+        data.flip();
         ByteBuffer ciphertext = NGEPlatform.get().aes256cbc(sharedX, iv, data, true);
         String b64ciphertext = NGEPlatform.get().base64encode(ciphertext);
         String b64iv = NGEPlatform.get().base64encode(iv);
@@ -80,36 +85,16 @@ public class Nip04 {
         ByteBuffer data = NGEPlatform.get().base64decodeBuffer(parts[0]);
         ByteBuffer pub = prefixedPublicKey(theirPublicKey);
         ByteBuffer shared = NGEPlatform.get().secp256k1SharedSecret(ourPrivateKey.asReadOnlyBuffer(), pub);
-        ByteBuffer sharedX = range(shared, 1, 32);
+        shared.position(1);
+        shared.limit(33);
+        ByteBuffer sharedX = shared.slice();
         ByteBuffer plaintext = NGEPlatform.get().aes256cbc(sharedX, iv, data, false);
-        return new String(toByteArray(plaintext), StandardCharsets.UTF_8);
+        return new String(NGEUtils.safeByteArray(plaintext), StandardCharsets.UTF_8);
     }
 
     public static AsyncTask<String> decrypt(String ciphertext, NostrPrivateKey ourPrivateKey, NostrPublicKey theirPublicKey) {
         return executor.run(() -> {
             return decryptSync(ciphertext, ourPrivateKey, theirPublicKey);
         });
-    }
-
-    private static ByteBuffer range(ByteBuffer source, int offset, int length) {
-        ByteBuffer view = source.duplicate();
-        view.position(offset);
-        view.limit(offset + length);
-        return view.slice();
-    }
-
-    private static byte[] toByteArray(ByteBuffer source) {
-        ByteBuffer view = source.slice();
-        byte[] result = new byte[view.remaining()];
-        view.get(result);
-        return result;
-    }
-
-    private static ByteBuffer utf8(String value) {
-        byte[] encoded = value.getBytes(StandardCharsets.UTF_8);
-        ByteBuffer output = NGEPlatform.get().getNativeAllocator().malloc(encoded.length);
-        output.put(encoded);
-        output.flip();
-        return output;
     }
 }

@@ -67,7 +67,10 @@ public final class NostrTURNDataEvent extends NostrTURNEvent {
         if (encryptionKey == null) {
             throw new IllegalArgumentException("Encryption key is required");
         }
-        return createOutgoing(localPeer, remotePeer, roomKeyPair, channelLabel, vsocketId, binaryBuffer(encryptionKey));
+        ByteBuffer encryptionKeyBuffer = NGEPlatform.get().getNativeAllocator().malloc(encryptionKey.length);
+        encryptionKeyBuffer.put(encryptionKey);
+        encryptionKeyBuffer.flip();
+        return createOutgoing(localPeer, remotePeer, roomKeyPair, channelLabel, vsocketId, encryptionKeyBuffer);
     }
 
     public static NostrTURNDataEvent createOutgoing(
@@ -153,7 +156,10 @@ public final class NostrTURNDataEvent extends NostrTURNEvent {
                     if (decrypted.length != 32) {
                         throw new IllegalArgumentException("Invalid encryption key length: " + decrypted.length);
                     }
-                    return binaryBuffer(decrypted);
+                    ByteBuffer encryptionKey = NGEPlatform.get().getNativeAllocator().malloc(decrypted.length);
+                    encryptionKey.put(decrypted);
+                    encryptionKey.flip();
+                    return encryptionKey.asReadOnlyBuffer();
                 });
     }
 
@@ -266,12 +272,5 @@ public final class NostrTURNDataEvent extends NostrTURNEvent {
                     return decryptedBuffers;
                 });
         });
-    }
-
-    private static ByteBuffer binaryBuffer(byte[] bytes) {
-        ByteBuffer buffer = NGEPlatform.get().getNativeAllocator().malloc(bytes.length);
-        buffer.put(bytes);
-        buffer.flip();
-        return buffer.asReadOnlyBuffer();
     }
 }
