@@ -31,6 +31,7 @@
 package org.ngengine.nostr4j.rtc;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
@@ -84,6 +85,37 @@ public class OnionTopologyDemoTest {
         assertEquals(63, OnionTopologyDemo.maximumDirectPeersFor(64));
         assertThrows(IllegalArgumentException.class, () -> OnionTopologyDemo.maximumDirectPeersFor(2));
         assertThrows(IllegalArgumentException.class, () -> OnionTopologyDemo.maximumDirectPeersFor(65));
+    }
+
+    @Test
+    public void relayPoolShardingKeepsConcurrentRequestsBelowTheRelayLimit() {
+        assertEquals(1, OnionTopologyDemo.requiredRelayPoolCount(6));
+        assertEquals(2, OnionTopologyDemo.requiredRelayPoolCount(8));
+        assertEquals(11, OnionTopologyDemo.requiredRelayPoolCount(64));
+        assertEquals(0, OnionTopologyDemo.relayPoolIndexForPeer(5));
+        assertEquals(1, OnionTopologyDemo.relayPoolIndexForPeer(6));
+
+        for (int peerCount = 1; peerCount <= 64; peerCount++) {
+            int poolCount = OnionTopologyDemo.requiredRelayPoolCount(peerCount);
+            int[] peersPerPool = new int[poolCount];
+            for (int peerIndex = 0; peerIndex < peerCount; peerIndex++) {
+                peersPerPool[OnionTopologyDemo.relayPoolIndexForPeer(peerIndex)]++;
+            }
+            for (int peers : peersPerPool) {
+                assertTrue(
+                    peers *
+                    OnionTopologyDemo.RELAY_SUBSCRIPTIONS_PER_PEER <=
+                    OnionTopologyDemo.MAX_RELAY_SUBSCRIPTIONS_PER_CONNECTION
+                );
+            }
+        }
+    }
+
+    @Test
+    public void recognizesRelayRequestLimitNotices() {
+        assertTrue(OnionTopologyDemo.isRelayRequestLimitNotice("ERROR: too many concurrent REQs"));
+        assertTrue(OnionTopologyDemo.isRelayRequestLimitNotice("rate-limit: slow down"));
+        assertFalse(OnionTopologyDemo.isRelayRequestLimitNotice("auth-required: subscription rejected"));
     }
 
     @Test
