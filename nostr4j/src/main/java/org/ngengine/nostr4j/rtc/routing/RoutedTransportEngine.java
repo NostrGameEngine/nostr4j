@@ -854,12 +854,11 @@ public final class RoutedTransportEngine implements InternalRoutedTransport, Clo
     }
 
     private static RouteTransportProfile profile(NostrRTCChannel channel) {
-        Duration lifetime = channel.getMaxPacketLifeTime();
-        return new RouteTransportProfile(
+        return RouteTransportProfile.fromChannel(
             channel.isOrdered(),
             channel.isReliable(),
-            lifetime == null ? Integer.valueOf(channel.getMaxRetransmits()) : null,
-            lifetime
+            channel.getMaxRetransmits(),
+            channel.getMaxPacketLifeTime()
         );
     }
 

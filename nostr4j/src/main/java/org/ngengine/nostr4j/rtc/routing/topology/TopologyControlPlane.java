@@ -26,6 +26,7 @@ import org.ngengine.nostr4j.NostrPool;
 import org.ngengine.nostr4j.NostrSubscription;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
+import org.ngengine.nostr4j.proto.NostrMessageAck;
 import org.ngengine.nostr4j.rtc.routing.NodeId;
 import org.ngengine.nostr4j.rtc.routing.RoutingLimits;
 import org.ngengine.nostr4j.rtc.routing.RoutingProtocol;
@@ -105,20 +106,21 @@ public final class TopologyControlPlane implements Closeable {
         if (closed) throw new IllegalStateException("Topology control plane is closed");
         if (started) return;
         started = true;
-        NostrFilter filter = new NostrFilter()
-            .withKind(RoutingProtocol.TOPOLOGY_EVENT_KIND)
-            .withTag("t", RoutingProtocol.TOPOLOGY_EVENT_TYPE)
-            .withTag("version", RoutingProtocol.VERSION)
-            .withTag("P", scope.getRoomPubkey().asHex())
-            .withTag("i", scope.getProtocolId())
-            .withTag("y", scope.getApplicationId())
-            .since(Instant.now().minus(expiration).truncatedTo(ChronoUnit.SECONDS))
-            .limit(RoutingLimits.MAX_TOPOLOGY_SNAPSHOTS);
+        NostrFilter filter = subscriptionFilter(scope, expiration, Instant.now());
         subscription = pool.subscribe(filter);
         subscription.addEventListener((sub, event, stored) -> acceptEvent(event, Instant.now()));
         subscription.open();
         requestPublish(currentNeighbors);
         scheduleRefresh();
+    }
+
+    static NostrFilter subscriptionFilter(RoutingScope scope, Duration expiration, Instant now) {
+        return new NostrFilter()
+            .withKind(RoutingProtocol.TOPOLOGY_EVENT_KIND)
+            .withTag("t", RoutingProtocol.TOPOLOGY_EVENT_TYPE)
+            .withTag("P", scope.getRoomPubkey().asHex())
+            .since(now.minus(expiration).truncatedTo(ChronoUnit.SECONDS))
+            .limit(RoutingLimits.MAX_TOPOLOGY_SNAPSHOTS);
     }
 
     public synchronized void updatePresences(Collection<NostrRTCConnectSignal> announces, Instant now) {
@@ -136,8 +138,10 @@ public final class TopologyControlPlane implements Closeable {
     public synchronized void requestPublish(Collection<TopologyNeighbor> neighbors) {
         List<TopologyNeighbor> sorted = new ArrayList<TopologyNeighbor>(neighbors);
         sorted.sort(Comparator.comparing(TopologyNeighbor::getNodeId));
+        boolean changed = !sorted.equals(currentNeighbors);
         currentNeighbors = Collections.unmodifiableList(sorted);
-        if (!started || closed || debounceTask != null) return;
+        boolean initialPublish = revision.get() == 0L;
+        if (!started || closed || debounceTask != null || (!changed && !initialPublish)) return;
         debounceTask =
             executor.runLater(
                 () -> {
@@ -181,7 +185,20 @@ public final class TopologyControlPlane implements Closeable {
             .encode(snapshot, localPeer, roomKeys, createdAt)
             .then(event -> {
                 store.accept(snapshot, Instant.now());
-                pool.publish(event);
+                for (AsyncTask<NostrMessageAck> published : pool.publish(event)) {
+                    published
+                        .then(ack -> {
+                            if (ack.getStatus() == NostrMessageAck.Status.FAILURE) {
+                                logger.warning(
+                                    "Relay rejected private topology snapshot " + event.getId() + ": " + ack.getMessage()
+                                );
+                            }
+                            return ack;
+                        })
+                        .catchException(error ->
+                            logger.log(Level.WARNING, "Failed to publish private topology snapshot " + event.getId(), error)
+                        );
+                }
                 notifyChanged();
                 return event;
             });
@@ -194,6 +211,12 @@ public final class TopologyControlPlane implements Closeable {
             presence = presences.get(presenceKey(event.getPubkey().asHex(), address));
         }
         if (presence == null) {
+            logger.fine(
+                "Ignoring private topology event without matching dc4 presence: author=" +
+                event.getPubkey().asHex() +
+                " d=" +
+                event.getFirstTagFirstValue("d")
+            );
             return;
         }
         try {

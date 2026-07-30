@@ -45,6 +45,16 @@ public final class RouteTransportProfile {
         this.maxPacketLifeTime = maxPacketLifeTime;
     }
 
+    public static RouteTransportProfile fromChannel(
+        boolean ordered,
+        boolean reliable,
+        int maxRetransmits,
+        @Nullable Duration maxPacketLifeTime
+    ) {
+        Integer retransmitLimit = reliable || maxPacketLifeTime != null ? null : Integer.valueOf(Math.max(0, maxRetransmits));
+        return new RouteTransportProfile(ordered, reliable, retransmitLimit, maxPacketLifeTime);
+    }
+
     public boolean isOrdered() {
         return ordered;
     }

@@ -36,35 +36,6 @@ tasks.named('test') {
     }
 }
 
-def configureOnionTopologyDemo = { JavaExec demoTask ->
-    demoTask.group = 'application'
-    demoTask.mainClass = 'org.ngengine.nostr4j.rtc.OnionTopologyDemo'
-    demoTask.classpath = sourceSets.main.runtimeClasspath
-    demoTask.dependsOn tasks.named('classes')
-    demoTask.systemProperty 'nostr4j.demo.peers', providers.gradleProperty('peerCount').getOrElse('10')
-    demoTask.systemProperty 'nostr4j.demo.maxDirectPeers', providers.gradleProperty('maxDirectPeers').getOrElse('2')
-    demoTask.systemProperty(
-        'nostr4j.demo.output',
-        providers.gradleProperty('output').getOrElse(
-            layout.buildDirectory.file('demo/onion-topology.png').get().asFile.absolutePath
-        )
-    )
-}
-
-tasks.register('runOnionTopologyDemo', JavaExec) {
-    description = 'Renders the bounded onion peer graph to PNG and prints its adjacency list'
-    configureOnionTopologyDemo(delegate)
-    systemProperty 'java.awt.headless', 'true'
-}
-
-tasks.register('runOnionTopologyDemoWindow', JavaExec) {
-    description = 'Opens the interactive AWT onion routing and broadcast simulator'
-    configureOnionTopologyDemo(delegate)
-    systemProperty 'nostr4j.demo.window', 'true'
-}
-
- 
-
 task runBenchmarks(type: JavaExec) {    
     group = 'application'
     description = 'Runs the benchmarks app with production optimizations'
@@ -72,6 +43,34 @@ task runBenchmarks(type: JavaExec) {
     classpath = sourceSets.test.runtimeClasspath
     jvmArgs = [  '-XX:+UseG1GC']
     dependsOn build 
+}
+
+tasks.register('runOnionTopologyDemo', JavaExec) {
+    group = 'application'
+    description = 'Runs the headful onion topology demo over real nostr4j WebRTC DataChannels'
+    mainClass = 'org.ngengine.nostr4j.rtc.OnionTopologyDemo'
+    classpath = sourceSets.main.runtimeClasspath
+    dependsOn tasks.named('classes')
+    jvmArgs = [
+        '-Djava.awt.headless=false',
+        '-Dnge-platforms.allowLoopbackInURIs=true',
+        '--enable-native-access=ALL-UNNAMED',
+    ]
+    standardInput = System.in
+}
+
+tasks.register('verifyOnionTopologyDemo', JavaExec) {
+    group = 'verification'
+    description = 'Opens the headful onion demo and verifies real multi-hop send plus tree broadcast'
+    mainClass = 'org.ngengine.nostr4j.rtc.OnionTopologyDemo'
+    classpath = sourceSets.main.runtimeClasspath
+    dependsOn tasks.named('classes')
+    args = ['--verify', '--peers=6', '--max-direct=2', '--timeout=120']
+    jvmArgs = [
+        '-Djava.awt.headless=false',
+        '-Dnge-platforms.allowLoopbackInURIs=true',
+        '--enable-native-access=ALL-UNNAMED',
+    ]
 }
 
  task traceBenchmarks(type: JavaExec) {
