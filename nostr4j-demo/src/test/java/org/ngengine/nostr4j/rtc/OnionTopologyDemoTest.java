@@ -56,6 +56,7 @@ public class OnionTopologyDemoTest {
     public void defaultsToNgengineRelayAndHeadfulMultiHopShape() {
         OnionTopologyDemo.Options options = OnionTopologyDemo.Options.parse(new String[0]);
 
+        assertEquals("Onion Routing Demo", OnionTopologyDemo.WINDOW_TITLE);
         assertEquals("wss://relay.ngengine.org", options.relay);
         assertEquals(8, options.peerCount);
         assertEquals(2, options.maxDirectPeers);
@@ -116,6 +117,26 @@ public class OnionTopologyDemoTest {
         assertTrue(OnionTopologyDemo.isRelayRequestLimitNotice("ERROR: too many concurrent REQs"));
         assertTrue(OnionTopologyDemo.isRelayRequestLimitNotice("rate-limit: slow down"));
         assertFalse(OnionTopologyDemo.isRelayRequestLimitNotice("auth-required: subscription rejected"));
+    }
+
+    @Test
+    public void deliveryGlowStartsBrightAndExpires() {
+        long receivedAt = 10_000L;
+
+        assertEquals(1f, OnionTopologyDemo.deliveryGlowIntensity(receivedAt, receivedAt), 0f);
+        assertEquals(
+            0.5f,
+            OnionTopologyDemo.deliveryGlowIntensity(
+                receivedAt,
+                receivedAt + OnionTopologyDemo.DELIVERY_GLOW_DURATION_NANOS / 2L
+            ),
+            0.001f
+        );
+        assertEquals(
+            0f,
+            OnionTopologyDemo.deliveryGlowIntensity(receivedAt, receivedAt + OnionTopologyDemo.DELIVERY_GLOW_DURATION_NANOS),
+            0f
+        );
     }
 
     @Test

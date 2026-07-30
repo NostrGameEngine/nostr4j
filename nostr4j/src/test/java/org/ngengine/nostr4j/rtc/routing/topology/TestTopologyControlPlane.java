@@ -123,6 +123,37 @@ public class TestTopologyControlPlane {
     }
 
     @Test
+    public void testDebouncedPublishDoesNothingAfterClose() {
+        NostrKeyPair roomKeys = new NostrKeyPair();
+        NostrRTCLocalPeer local = new NostrRTCLocalPeer(
+            new NostrKeyPairSigner(new NostrKeyPair()),
+            Collections.emptyList(),
+            "close-app",
+            "close-proto",
+            "close-session",
+            roomKeys,
+            null
+        );
+        RoutingScope scope = new RoutingScope(roomKeys.getPublicKey(), local.getProtocolId(), local.getApplicationId());
+        CapturingPool pool = new CapturingPool();
+        TopologyControlPlane control = new TopologyControlPlane(
+            scope,
+            local,
+            roomKeys,
+            new NostrKeyPair(),
+            pool,
+            Duration.ofSeconds(30),
+            Duration.ofSeconds(5)
+        );
+
+        control.start();
+        control.close();
+        control.publishDebouncedNow();
+
+        assertTrue("A closed control plane must not publish a queued snapshot", pool.events.isEmpty());
+    }
+
+    @Test
     public void testOldReplacementAndExpiredSnapshotAreIgnored() {
         NostrKeyPair roomKeys = new NostrKeyPair();
         RoutingScope scope = new RoutingScope(roomKeys.getPublicKey(), "store-proto", "store-app");

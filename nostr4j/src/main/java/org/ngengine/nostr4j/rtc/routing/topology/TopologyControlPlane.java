@@ -145,17 +145,21 @@ public final class TopologyControlPlane implements Closeable {
         debounceTask =
             executor.runLater(
                 () -> {
-                    synchronized (TopologyControlPlane.this) {
-                        debounceTask = null;
-                    }
-                    publishNow(Instant.now())
-                        .catchException(error -> logger.log(Level.WARNING, "Failed to publish private topology snapshot", error)
-                        );
+                    publishDebouncedNow();
                     return null;
                 },
                 PUBLISH_DEBOUNCE_MS,
                 TimeUnit.MILLISECONDS
             );
+    }
+
+    void publishDebouncedNow() {
+        synchronized (this) {
+            debounceTask = null;
+            if (closed || !started) return;
+        }
+        publishNow(Instant.now())
+            .catchException(error -> logger.log(Level.WARNING, "Failed to publish private topology snapshot", error));
     }
 
     AsyncTask<SignedNostrEvent> publishNow(Instant requestedAt) {
