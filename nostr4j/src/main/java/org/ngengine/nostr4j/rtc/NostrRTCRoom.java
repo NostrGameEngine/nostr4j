@@ -70,6 +70,7 @@ import org.ngengine.nostr4j.rtc.routing.topology.OverlayPlan;
 import org.ngengine.nostr4j.rtc.routing.topology.TopologyControlPlane;
 import org.ngengine.nostr4j.rtc.routing.topology.TopologyGraph;
 import org.ngengine.nostr4j.rtc.routing.topology.TopologyNeighbor;
+import org.ngengine.nostr4j.rtc.routing.topology.TopologySnapshot;
 import org.ngengine.nostr4j.rtc.routing.topology.TopologyTransport;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCAnswerSignal;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCConnectSignal;
@@ -1086,6 +1087,25 @@ public final class NostrRTCRoom implements Closeable {
         return Collections.unmodifiableList(new ArrayList<NostrRTCSocket>(connections.values()));
     }
 
+    /**
+     * Return the immutable, mutually attested topology currently used for
+     * routed sends and tree broadcasts.
+     *
+     * @return the current local routing topology snapshot
+     */
+    TopologyGraph getRoutingTopology() {
+        return routingGraph;
+    }
+
+    /**
+     * Return the valid private topology snapshots currently known by this room.
+     *
+     * @return an immutable snapshot collection
+     */
+    Collection<TopologySnapshot> getRoutingTopologySnapshots() {
+        return Collections.unmodifiableList(new ArrayList<TopologySnapshot>(topologyControl.getSnapshots(Instant.now())));
+    }
+
     private void onReceiveOffer(NostrRTCOfferSignal offer) {
         synchronized (this) {
             NostrRTCPeer remotePeer = offer.getPeer();
@@ -1334,12 +1354,11 @@ public final class NostrRTCRoom implements Closeable {
             if (sample == null) {
                 return AsyncTask.failed(new IllegalStateException("No channel named " + channel + " is available"));
             }
-            Duration lifetime = sample.getMaxPacketLifeTime();
-            RouteTransportProfile profile = new RouteTransportProfile(
+            RouteTransportProfile profile = RouteTransportProfile.fromChannel(
                 sample.isOrdered(),
                 sample.isReliable(),
-                lifetime == null ? Integer.valueOf(sample.getMaxRetransmits()) : null,
-                lifetime
+                sample.getMaxRetransmits(),
+                sample.getMaxPacketLifeTime()
             );
             return broadcastEngine.broadcast(channel, profile, bbf.asReadOnlyBuffer(), Instant.now()).then(ignored -> null);
         }
