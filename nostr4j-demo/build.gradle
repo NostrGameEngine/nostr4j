@@ -65,7 +65,7 @@ tasks.register('verifyOnionTopologyDemo', JavaExec) {
     mainClass = 'org.ngengine.nostr4j.rtc.OnionTopologyDemo'
     classpath = sourceSets.main.runtimeClasspath
     dependsOn tasks.named('classes')
-    args = ['--verify', '--peers=6', '--max-direct=2', '--timeout=180']
+    args = ['--verify', '--peers=8', '--max-direct=2', '--timeout=180']
     jvmArgs = [
         '-Djava.awt.headless=false',
         '-Dnge-platforms.allowLoopbackInURIs=true',

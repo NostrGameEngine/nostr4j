@@ -132,6 +132,10 @@ public final class OnionTopologyDemo extends JFrame {
     static final String APPLICATION_ID = "nostr4j-onion-topology-demo";
     static final String PROTOCOL_ID = "onion-topology-v1";
     private static final String MESSAGE_PREFIX = "onion-demo-v1";
+    static final int RELAY_SUBSCRIPTIONS_PER_PEER = 3;
+    static final int MAX_RELAY_SUBSCRIPTIONS_PER_CONNECTION = 18;
+    static final int MAX_PEERS_PER_RELAY_CONNECTION = MAX_RELAY_SUBSCRIPTIONS_PER_CONNECTION / RELAY_SUBSCRIPTIONS_PER_PEER;
+    private static final long PEER_START_STAGGER_MILLIS = 125L;
 
     private static final Color BACKGROUND = new Color(8, 13, 24);
     private static final Color PANEL = new Color(14, 22, 38);
@@ -144,6 +148,7 @@ public final class OnionTopologyDemo extends JFrame {
 
     private final Options options;
     private final CopyOnWriteArrayList<DemoPeer> peers = new CopyOnWriteArrayList<DemoPeer>();
+    private final CopyOnWriteArrayList<NostrPool> signalingPools = new CopyOnWriteArrayList<NostrPool>();
     private final Map<String, DemoPeer> peersByIdentity = new ConcurrentHashMap<String, DemoPeer>();
     private final Map<Long, PendingTransfer> pendingTransfers = new ConcurrentHashMap<Long, PendingTransfer>();
     private final Map<Long, Set<NodeId>> broadcastReceivers = new ConcurrentHashMap<Long, Set<NodeId>>();
@@ -153,6 +158,7 @@ public final class OnionTopologyDemo extends JFrame {
     private final AtomicBoolean verified = new AtomicBoolean();
     private final AtomicBoolean broadcastVerified = new AtomicBoolean();
     private final AtomicInteger verificationStage = new AtomicInteger();
+    private final AtomicInteger relayRequestLimitErrors = new AtomicInteger();
     private final AtomicLong networkSequence = new AtomicLong();
     private final ExecutorService networkExecutor = Executors.newSingleThreadExecutor(r -> daemonThread(r, "onion-demo-network")
     );
@@ -177,7 +183,6 @@ public final class OnionTopologyDemo extends JFrame {
     private final JTextField message = new JTextField("Hello over real onion routing");
     private final JSlider hopDelay = new JSlider(150, 1800, 750);
 
-    private volatile NostrPool pool;
     private volatile NostrTURNPool turnPool;
     private volatile NostrKeyPair roomKeys;
     private volatile RoutingScope routingScope;
@@ -437,8 +442,8 @@ public final class OnionTopologyDemo extends JFrame {
         lastResult = "Rebuilding real WebRTC rooms";
         networkExecutor.execute(() -> {
             try {
-                connectSignalingPool();
                 closeCurrentNetwork();
+                connectSignalingPools(peerCount);
                 buildNetwork(peerCount, maxDirectPeers);
             } catch (Throwable error) {
                 closeCurrentNetwork();
@@ -455,7 +460,7 @@ public final class OnionTopologyDemo extends JFrame {
     private void startNetwork() {
         networkExecutor.execute(() -> {
             try {
-                connectSignalingPool();
+                connectSignalingPools(options.peerCount);
                 buildNetwork(options.peerCount, options.maxDirectPeers);
                 if (options.verify) {
                     scheduler.scheduleWithFixedDelay(this::triggerVerificationSend, 4L, 5L, TimeUnit.SECONDS);
@@ -495,18 +500,66 @@ public final class OnionTopologyDemo extends JFrame {
         });
     }
 
-    private void connectSignalingPool() throws Exception {
-        if (pool != null) return;
-        log("Connecting Nostr signaling pool to " + options.relay);
-        NostrPool newPool = new NostrPool();
-        try {
-            newPool.addRelay(new NostrRelay(options.relay)).await();
-            pool = newPool;
-            SwingUtilities.invokeLater(() -> relayStatus.setText(options.relay + " · signaling connected"));
-        } catch (Exception error) {
-            newPool.close();
-            throw error;
+    static int requiredRelayPoolCount(int peerCount) {
+        if (peerCount < 1) throw new IllegalArgumentException("Peer count must be positive");
+        return (peerCount + MAX_PEERS_PER_RELAY_CONNECTION - 1) / MAX_PEERS_PER_RELAY_CONNECTION;
+    }
+
+    static int relayPoolIndexForPeer(int peerIndex) {
+        if (peerIndex < 0) throw new IllegalArgumentException("Peer index must not be negative");
+        return peerIndex / MAX_PEERS_PER_RELAY_CONNECTION;
+    }
+
+    static boolean isRelayRequestLimitNotice(String notice) {
+        if (notice == null) return false;
+        String normalized = notice.toLowerCase(Locale.ROOT);
+        return (
+            (normalized.contains("too many") && (normalized.contains("req") || normalized.contains("request"))) ||
+            normalized.contains("rate limit") ||
+            normalized.contains("rate-limit")
+        );
+    }
+
+    private void connectSignalingPools(int peerCount) throws Exception {
+        int requiredPools = requiredRelayPoolCount(peerCount);
+        log(
+            "Connecting " +
+            requiredPools +
+            " Nostr signaling connection" +
+            (requiredPools == 1 ? "" : "s") +
+            " to " +
+            options.relay
+        );
+        for (int index = 0; index < requiredPools; index++) {
+            if (index < signalingPools.size()) {
+                signalingPools.get(index).ensureRelay(options.relay).await();
+                continue;
+            }
+            NostrPool newPool = new NostrPool();
+            NostrRelay relay = new NostrRelay(options.relay);
+            int poolNumber = index + 1;
+            newPool.addNoticeListener((source, notice, error) -> {
+                String detail = notice != null ? notice : error != null ? rootMessage(error) : "Unknown relay notice";
+                if (isRelayRequestLimitNotice(detail)) {
+                    relayRequestLimitErrors.incrementAndGet();
+                    lastResult = "Relay request limit: " + detail;
+                }
+                log("RELAY NOTICE [signaling connection " + poolNumber + "] " + detail);
+            });
+            try {
+                newPool.addRelay(relay).await();
+                signalingPools.add(newPool);
+            } catch (Exception error) {
+                newPool.clean();
+                relay.disconnect("Onion demo signaling connection failed");
+                throw error;
+            }
         }
+        SwingUtilities.invokeLater(() ->
+            relayStatus.setText(
+                options.relay + " · " + requiredPools + " signaling connection" + (requiredPools == 1 ? "" : "s")
+            )
+        );
     }
 
     private void buildNetwork(int peerCount, int maxDirectPeers) throws Exception {
@@ -536,6 +589,7 @@ public final class OnionTopologyDemo extends JFrame {
         for (DemoPeer peer : peers) {
             peer.room.start().await();
             log(peer.name + " announced dc4 presence " + shortId(peer.nodeId));
+            if (peer.index + 1 < peers.size()) Thread.sleep(PEER_START_STAGGER_MILLIS);
         }
 
         lastResult = "Waiting for real WebRTC links";
@@ -610,7 +664,8 @@ public final class OnionTopologyDemo extends JFrame {
             roomKeys,
             null
         );
-        NostrRTCRoom room = new NostrRTCRoom(settings, local, roomKeys, pool, null, turnPool);
+        NostrPool peerPool = signalingPools.get(relayPoolIndexForPeer(index));
+        NostrRTCRoom room = new NostrRTCRoom(settings, local, roomKeys, peerPool, null, turnPool);
         DemoPeer demoPeer = new DemoPeer(index, "P" + (index + 1), local, room);
         peers.add(demoPeer);
         peersByIdentity.put(identityKey(local), demoPeer);
@@ -683,7 +738,13 @@ public final class OnionTopologyDemo extends JFrame {
                 if (verificationStage.compareAndSet(0, 1)) {
                     scheduler.schedule(this::verifyRebuildControls, 1200L, TimeUnit.MILLISECONDS);
                 } else {
+                    if (relayRequestLimitErrors.get() != 0) {
+                        log("VERIFY FAILED: relay reported " + relayRequestLimitErrors.get() + " request-limit error(s)");
+                        scheduler.schedule(() -> shutdown(2), 200L, TimeUnit.MILLISECONDS);
+                        return;
+                    }
                     log("VERIFIED: rebuilt controls produced a second working real WebRTC onion network");
+                    log("VERIFIED: relay accepted all sharded subscriptions without request-limit notices");
                     scheduler.schedule(() -> shutdown(0), 1500L, TimeUnit.MILLISECONDS);
                 }
             }
@@ -1178,9 +1239,12 @@ public final class OnionTopologyDemo extends JFrame {
                 }
                 log("Closing rooms and Nostr signaling");
                 closeCurrentNetwork();
-                NostrPool currentPool = pool;
-                pool = null;
-                if (currentPool != null) currentPool.close();
+                for (NostrPool signalingPool : signalingPools) {
+                    for (NostrRelay relay : signalingPool.clean()) {
+                        relay.disconnect("Onion topology demo closed");
+                    }
+                }
+                signalingPools.clear();
                 scheduler.shutdownNow();
                 networkExecutor.shutdownNow();
                 SwingUtilities.invokeLater(() -> {
