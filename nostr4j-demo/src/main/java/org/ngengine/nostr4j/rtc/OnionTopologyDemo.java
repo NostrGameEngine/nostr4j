@@ -128,6 +128,7 @@ import org.ngengine.platform.transport.RTCTransportIceCandidate;
  */
 public final class OnionTopologyDemo extends JFrame {
 
+    static final String WINDOW_TITLE = "Onion Routing Demo";
     static final String DEFAULT_RELAY = "wss://relay.ngengine.org";
     static final String APPLICATION_ID = "nostr4j-onion-topology-demo";
     static final String PROTOCOL_ID = "onion-topology-v1";
@@ -136,6 +137,7 @@ public final class OnionTopologyDemo extends JFrame {
     static final int MAX_RELAY_SUBSCRIPTIONS_PER_CONNECTION = 18;
     static final int MAX_PEERS_PER_RELAY_CONNECTION = MAX_RELAY_SUBSCRIPTIONS_PER_CONNECTION / RELAY_SUBSCRIPTIONS_PER_PEER;
     private static final long PEER_START_STAGGER_MILLIS = 125L;
+    static final long DELIVERY_GLOW_DURATION_NANOS = TimeUnit.MILLISECONDS.toNanos(1_600L);
 
     private static final Color BACKGROUND = new Color(8, 13, 24);
     private static final Color PANEL = new Color(14, 22, 38);
@@ -196,7 +198,7 @@ public final class OnionTopologyDemo extends JFrame {
     private volatile String lastTopologySummary = "";
 
     private OnionTopologyDemo(Options options) {
-        super("nostr4j · Real Onion WebRTC Topology");
+        super(WINDOW_TITLE);
         this.options = options;
         this.configuredPeerCount = options.peerCount;
         this.configuredMaxDirectPeers = options.maxDirectPeers;
@@ -263,7 +265,7 @@ public final class OnionTopologyDemo extends JFrame {
         header.setBackground(PANEL);
         header.setBorder(BorderFactory.createEmptyBorder(14, 18, 14, 18));
 
-        JLabel title = new JLabel("REAL ONION ROUTING · NOSTR4J / WEBRTC");
+        JLabel title = new JLabel(WINDOW_TITLE);
         title.setForeground(TEXT);
         title.setFont(title.getFont().deriveFont(Font.BOLD, 17f));
         header.add(title, BorderLayout.WEST);
@@ -683,6 +685,8 @@ public final class OnionTopologyDemo extends JFrame {
 
     private void onApplicationMessage(DemoPeer receiver, NostrRTCPeer remote, ByteBuffer payload) {
         if (!peers.contains(receiver)) return;
+        receiver.lastReceivedAtNanos = System.nanoTime();
+        repaintSoon();
         String message = StandardCharsets.UTF_8.decode(payload.asReadOnlyBuffer()).toString();
         String[] fields = message.split("\\|", 6);
         if (fields.length < 5 || !MESSAGE_PREFIX.equals(fields[0])) {
@@ -750,6 +754,15 @@ public final class OnionTopologyDemo extends JFrame {
             }
         }
         repaintSoon();
+    }
+
+    static float deliveryGlowIntensity(long receivedAtNanos, long nowNanos) {
+        if (receivedAtNanos <= 0L || nowNanos <= receivedAtNanos) {
+            return receivedAtNanos > 0L && nowNanos == receivedAtNanos ? 1f : 0f;
+        }
+        long elapsed = nowNanos - receivedAtNanos;
+        if (elapsed >= DELIVERY_GLOW_DURATION_NANOS) return 0f;
+        return 1f - (float) elapsed / (float) DELIVERY_GLOW_DURATION_NANOS;
     }
 
     private void verifyRebuildControls() {
@@ -1525,13 +1538,28 @@ public final class OnionTopologyDemo extends JFrame {
         }
 
         private void drawNodes(Graphics2D g, ActiveTopology topology, Map<NodeId, Point> positions) {
+            long nowNanos = System.nanoTime();
             for (Map.Entry<NodeId, DemoPeer> entry : topology.peersByNode.entrySet()) {
                 DemoPeer peer = entry.getValue();
                 Point point = positions.get(entry.getKey());
                 int logicalPeers = peer.room.getPeers().size();
                 boolean discoveredAll = logicalPeers == Math.max(0, peers.size() - 1);
+                float deliveryGlow = deliveryGlowIntensity(peer.lastReceivedAtNanos, nowNanos);
+                if (deliveryGlow > 0f) {
+                    int outerAlpha = Math.max(18, Math.round(118f * deliveryGlow));
+                    int innerAlpha = Math.max(28, Math.round(178f * deliveryGlow));
+                    g.setColor(new Color(RTC.getRed(), RTC.getGreen(), RTC.getBlue(), outerAlpha));
+                    g.fillOval(point.x - 43, point.y - 43, 86, 86);
+                    g.setColor(new Color(255, 255, 255, innerAlpha));
+                    g.fillOval(point.x - 34, point.y - 34, 68, 68);
+                }
                 g.setColor(discoveredAll ? new Color(38, 61, 82) : new Color(57, 47, 38));
                 g.fillOval(point.x - 28, point.y - 28, 56, 56);
+                if (deliveryGlow > 0f) {
+                    int fillAlpha = Math.max(42, Math.round(205f * deliveryGlow));
+                    g.setColor(new Color(RTC.getRed(), RTC.getGreen(), RTC.getBlue(), fillAlpha));
+                    g.fillOval(point.x - 27, point.y - 27, 54, 54);
+                }
                 g.setColor(discoveredAll ? RTC : ONION);
                 g.setStroke(new BasicStroke(2.5f));
                 g.drawOval(point.x - 28, point.y - 28, 56, 56);
@@ -1595,6 +1623,7 @@ public final class OnionTopologyDemo extends JFrame {
         final NodeId nodeId;
         final Set<NostrRTCSocket> observedSockets = ConcurrentHashMap.newKeySet();
         final AtomicLong received = new AtomicLong();
+        volatile long lastReceivedAtNanos;
 
         private DemoPeer(int index, String name, NostrRTCLocalPeer localPeer, NostrRTCRoom room) {
             this.index = index;
