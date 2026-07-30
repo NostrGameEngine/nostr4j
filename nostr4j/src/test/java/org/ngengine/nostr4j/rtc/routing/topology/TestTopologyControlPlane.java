@@ -11,15 +11,18 @@ import static org.junit.Assert.assertTrue;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.TimeUnit;
 import org.junit.Test;
+import org.ngengine.nostr4j.NostrFilter;
 import org.ngengine.nostr4j.NostrPool;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
 import org.ngengine.nostr4j.proto.NostrMessageAck;
 import org.ngengine.nostr4j.rtc.routing.NodeId;
+import org.ngengine.nostr4j.rtc.routing.RoutingProtocol;
 import org.ngengine.nostr4j.rtc.routing.RoutingScope;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCLocalPeer;
 import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
@@ -27,6 +30,22 @@ import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEUtils;
 
 public class TestTopologyControlPlane {
+
+    @Test
+    public void testSubscriptionUsesOnlyNip01IndexableSingleLetterTags() {
+        NostrKeyPair roomKeys = new NostrKeyPair();
+        RoutingScope scope = new RoutingScope(roomKeys.getPublicKey(), "filter-proto", "filter-app");
+
+        NostrFilter filter = TopologyControlPlane.subscriptionFilter(scope, Duration.ofSeconds(60), Instant.now());
+
+        assertEquals(List.of(RoutingProtocol.TOPOLOGY_EVENT_KIND), filter.getKinds());
+        assertEquals(List.of(RoutingProtocol.TOPOLOGY_EVENT_TYPE), filter.getTagValues("t"));
+        assertEquals(List.of(roomKeys.getPublicKey().asHex()), filter.getTagValues("P"));
+        assertEquals(2, filter.getTags().size());
+        assertFalse("protocol scope is validated after relay delivery", filter.getTags().containsKey("i"));
+        assertFalse("application scope is validated after relay delivery", filter.getTags().containsKey("y"));
+        assertFalse("multi-letter tags are not NIP-01 relay filter keys", filter.getTags().containsKey("version"));
+    }
 
     @Test
     public void testPublisherUsesMonotonicRevisionAndCreatedAt() {
@@ -60,6 +79,44 @@ public class TestTopologyControlPlane {
             assertTrue(second.getCreatedAt().isAfter(first.getCreatedAt()));
             assertEquals(2, pool.events.size());
             assertEquals(1, control.getSnapshots(now).size());
+        } finally {
+            control.close();
+        }
+    }
+
+    @Test
+    public void testUnchangedNeighborsDoNotTriggerPublishFeedbackLoop() throws Exception {
+        NostrKeyPair roomKeys = new NostrKeyPair();
+        NostrRTCLocalPeer local = new NostrRTCLocalPeer(
+            new NostrKeyPairSigner(new NostrKeyPair()),
+            Collections.emptyList(),
+            "feedback-app",
+            "feedback-proto",
+            "feedback-session",
+            roomKeys,
+            null
+        );
+        RoutingScope scope = new RoutingScope(roomKeys.getPublicKey(), local.getProtocolId(), local.getApplicationId());
+        CapturingPool pool = new CapturingPool();
+        TopologyControlPlane control = new TopologyControlPlane(
+            scope,
+            local,
+            roomKeys,
+            new NostrKeyPair(),
+            pool,
+            Duration.ofSeconds(30),
+            Duration.ofSeconds(5)
+        );
+        try {
+            control.setListener(() -> control.requestPublish(Collections.emptyList()));
+            control.start();
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+            while (pool.events.isEmpty() && System.nanoTime() < deadline) {
+                Thread.sleep(20L);
+            }
+            assertEquals(1, pool.events.size());
+            Thread.sleep(800L);
+            assertEquals("an unchanged topology must not republish itself", 1, pool.events.size());
         } finally {
             control.close();
         }
@@ -116,7 +173,7 @@ public class TestTopologyControlPlane {
 
     private static final class CapturingPool extends NostrPool {
 
-        private final List<SignedNostrEvent> events = new ArrayList<SignedNostrEvent>();
+        private final List<SignedNostrEvent> events = new CopyOnWriteArrayList<SignedNostrEvent>();
 
         @Override
         public List<AsyncTask<NostrMessageAck>> publish(SignedNostrEvent event) {

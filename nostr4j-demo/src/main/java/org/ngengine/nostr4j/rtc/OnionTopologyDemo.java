@@ -31,497 +31,1191 @@
 package org.ngengine.nostr4j.rtc;
 
 import java.awt.BasicStroke;
+import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.FontMetrics;
+import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.GraphicsEnvironment;
 import java.awt.RenderingHints;
-import java.awt.geom.Ellipse2D;
-import java.awt.geom.Line2D;
-import java.awt.image.BufferedImage;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
-import javax.imageio.ImageIO;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.logging.ConsoleHandler;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import javax.swing.BorderFactory;
+import javax.swing.JButton;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JSplitPane;
+import javax.swing.JTextArea;
+import javax.swing.SwingUtilities;
+import javax.swing.Timer;
+import org.ngengine.nostr4j.NostrPool;
+import org.ngengine.nostr4j.NostrRelay;
+import org.ngengine.nostr4j.RTCSettings;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
 import org.ngengine.nostr4j.keypair.NostrPrivateKey;
+import org.ngengine.nostr4j.rtc.listeners.NostrRTCSocketListener;
 import org.ngengine.nostr4j.rtc.routing.EdgeId;
+import org.ngengine.nostr4j.rtc.routing.InternalRoutedTransport;
+import org.ngengine.nostr4j.rtc.routing.InternalRoutingChannels;
 import org.ngengine.nostr4j.rtc.routing.NodeId;
 import org.ngengine.nostr4j.rtc.routing.RoutePath;
+import org.ngengine.nostr4j.rtc.routing.RouteTransportProfile;
+import org.ngengine.nostr4j.rtc.routing.RoutedTransportEngine;
 import org.ngengine.nostr4j.rtc.routing.RoutingScope;
 import org.ngengine.nostr4j.rtc.routing.WeightedRoutePlanner;
-import org.ngengine.nostr4j.rtc.routing.broadcast.BroadcastTree;
-import org.ngengine.nostr4j.rtc.routing.broadcast.BroadcastTreeBuilder;
-import org.ngengine.nostr4j.rtc.routing.topology.BoundedOverlaySelector;
-import org.ngengine.nostr4j.rtc.routing.topology.DesiredDirectEdge;
-import org.ngengine.nostr4j.rtc.routing.topology.OverlayEdgePriority;
-import org.ngengine.nostr4j.rtc.routing.topology.OverlayPlan;
+import org.ngengine.nostr4j.rtc.routing.topology.TopologyControlPlane;
 import org.ngengine.nostr4j.rtc.routing.topology.TopologyEdge;
 import org.ngengine.nostr4j.rtc.routing.topology.TopologyGraph;
+import org.ngengine.nostr4j.rtc.routing.topology.TopologySnapshot;
 import org.ngengine.nostr4j.rtc.routing.topology.TopologyTransport;
+import org.ngengine.nostr4j.rtc.signal.NostrRTCLocalPeer;
+import org.ngengine.nostr4j.rtc.signal.NostrRTCPeer;
+import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
+import org.ngengine.platform.transport.RTCTransportIceCandidate;
 
 /**
- * Visualizes the production dc4 bounded-overlay selection with Java2D.
+ * Headful topology viewer backed by real nostr4j rooms and WebRTC DataChannels.
  *
- * <p>The default is intentionally small: ten logical peers and at most two
- * physical direct links per peer. This produces a connected ring while the
- * highlighted route demonstrates how non-neighboring peers communicate through
- * onion-routed intermediate hops.</p>
+ * <p>The relay is used only for Nostr discovery, encrypted signaling, and
+ * private dc4 topology events. Green links are actual WebRTC connections.
+ * Routed sends and broadcasts call the public {@link NostrRTCRoom} API and are
+ * forwarded by nostr4j's onion transport.</p>
  */
-public final class OnionTopologyDemo {
+public final class OnionTopologyDemo extends JFrame {
 
-    public static final int DEFAULT_PEER_COUNT = 10;
-    public static final int DEFAULT_MAX_DIRECT_PEERS = 2;
-    public static final int IMAGE_WIDTH = 1280;
-    public static final int IMAGE_HEIGHT = 840;
+    static final String DEFAULT_RELAY = "wss://relay.ngengine.org";
+    static final String APPLICATION_ID = "nostr4j-onion-topology-demo";
+    static final String PROTOCOL_ID = "onion-topology-v1";
+    private static final String MESSAGE_PREFIX = "onion-demo-v1";
 
-    private static final Color BACKGROUND = new Color(12, 17, 23);
-    private static final Color PANEL = new Color(19, 27, 35);
-    private static final Color GRID = new Color(42, 56, 68);
-    private static final Color TEXT = new Color(225, 235, 241);
-    private static final Color MUTED = new Color(137, 157, 169);
-    private static final Color CYAN = new Color(69, 211, 198);
-    private static final Color ORANGE = new Color(255, 173, 77);
-    private static final Color VIOLET = new Color(155, 135, 245);
-    private static final Color NODE = new Color(34, 50, 62);
+    private static final Color BACKGROUND = new Color(8, 13, 24);
+    private static final Color PANEL = new Color(14, 22, 38);
+    private static final Color TEXT = new Color(224, 232, 244);
+    private static final Color MUTED = new Color(125, 143, 166);
+    private static final Color RTC = new Color(57, 220, 151);
+    private static final Color TURN = new Color(87, 180, 255);
+    private static final Color PENDING = new Color(62, 75, 94);
+    private static final Color ONION = new Color(255, 174, 66);
 
-    private OnionTopologyDemo() {}
+    private final Options options;
+    private final CopyOnWriteArrayList<DemoPeer> peers = new CopyOnWriteArrayList<DemoPeer>();
+    private final Map<String, DemoPeer> peersByIdentity = new ConcurrentHashMap<String, DemoPeer>();
+    private final Map<Long, PendingTransfer> pendingTransfers = new ConcurrentHashMap<Long, PendingTransfer>();
+    private final Map<Long, Set<NodeId>> broadcastReceivers = new ConcurrentHashMap<Long, Set<NodeId>>();
+    private final AtomicLong transferSequence = new AtomicLong();
+    private final AtomicBoolean sendBusy = new AtomicBoolean();
+    private final AtomicBoolean closing = new AtomicBoolean();
+    private final AtomicBoolean verified = new AtomicBoolean();
+    private final AtomicBoolean broadcastVerified = new AtomicBoolean();
+    private final ExecutorService networkExecutor = Executors.newSingleThreadExecutor(r -> daemonThread(r, "onion-demo-network")
+    );
+    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(
+        2,
+        r -> daemonThread(r, "onion-demo-timer")
+    );
+
+    private final TopologyPanel topologyPanel = new TopologyPanel();
+    private final JTextArea eventLog = new JTextArea();
+    private final JLabel status = new JLabel("Starting…");
+    private final JLabel relayStatus = new JLabel(DEFAULT_RELAY);
+    private final JButton sendButton = new JButton("Send routed packet");
+    private final JButton broadcastButton = new JButton("Broadcast");
+
+    private volatile NostrPool pool;
+    private volatile NostrTURNPool turnPool;
+    private volatile NostrKeyPair roomKeys;
+    private volatile RoutingScope routingScope;
+    private volatile RoutePath highlightedRoute;
+    private volatile long highlightedAtNanos;
+    private volatile String lastResult = "Waiting for real WebRTC links";
+    private volatile String lastTopologySummary = "";
+
+    private OnionTopologyDemo(Options options) {
+        super("nostr4j · Real Onion WebRTC Topology");
+        this.options = options;
+        setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
+        setMinimumSize(new Dimension(980, 720));
+        setSize(1220, 820);
+        setLocationByPlatform(true);
+        getContentPane().setBackground(BACKGROUND);
+        buildUi();
+        addWindowListener(
+            new WindowAdapter() {
+                @Override
+                public void windowClosing(WindowEvent event) {
+                    shutdown(0);
+                }
+            }
+        );
+        new Timer(200, event -> refreshUi()).start();
+    }
 
     public static void main(String[] args) throws Exception {
-        int peerCount = Integer.getInteger("nostr4j.demo.peers", DEFAULT_PEER_COUNT);
-        int maxDirectPeers = Integer.getInteger("nostr4j.demo.maxDirectPeers", DEFAULT_MAX_DIRECT_PEERS);
-        Path output = Paths
-            .get(System.getProperty("nostr4j.demo.output", "build/demo/onion-topology.png"))
-            .toAbsolutePath()
-            .normalize();
-
-        DemoTopology topology = buildTopology(peerCount, maxDirectPeers);
-        BufferedImage image = renderImage(topology);
-        writeImage(image, output);
-        printTextGraph(topology, output);
-
-        if (Boolean.getBoolean("nostr4j.demo.window")) {
-            showWindow(topology);
+        Options options = Options.parse(args);
+        if (GraphicsEnvironment.isHeadless()) {
+            throw new IllegalStateException("OnionTopologyDemo must run headful; java.awt.headless is true");
         }
+        configureTopologyLogging();
+        AtomicReference<OnionTopologyDemo> reference = new AtomicReference<OnionTopologyDemo>();
+        SwingUtilities.invokeAndWait(() -> {
+            OnionTopologyDemo demo = new OnionTopologyDemo(options);
+            reference.set(demo);
+            demo.setVisible(true);
+        });
+        reference.get().startNetwork();
     }
 
-    public static DemoTopology buildTopology(int peerCount, int maxDirectPeers) {
-        if (peerCount < 3) {
-            throw new IllegalArgumentException("peerCount must be at least 3");
-        }
-        if (maxDirectPeers < 2 || maxDirectPeers > 64) {
-            throw new IllegalArgumentException("maxDirectPeers must be between 2 and 64");
-        }
+    private static void configureTopologyLogging() {
+        configureFineLogger(TopologyControlPlane.class);
+        configureFineLogger(RoutedTransportEngine.class);
+        configureFineLogger(NostrRTCChannel.class);
+    }
 
-        NostrPrivateKey roomPrivateKey = NostrPrivateKey.fromHex(
-            "0000000000000000000000000000000000000000000000000000000000000001"
+    private static void configureFineLogger(Class<?> type) {
+        Logger logger = Logger.getLogger(type.getName());
+        logger.setUseParentHandlers(false);
+        logger.setLevel(Level.FINE);
+        ConsoleHandler handler = new ConsoleHandler();
+        handler.setLevel(Level.FINE);
+        logger.addHandler(handler);
+    }
+
+    private static Thread daemonThread(Runnable runnable, String name) {
+        Thread thread = new Thread(runnable, name);
+        thread.setDaemon(true);
+        return thread;
+    }
+
+    private void buildUi() {
+        JPanel header = new JPanel(new BorderLayout(18, 0));
+        header.setBackground(PANEL);
+        header.setBorder(BorderFactory.createEmptyBorder(14, 18, 14, 18));
+
+        JLabel title = new JLabel("REAL ONION ROUTING · NOSTR4J / WEBRTC");
+        title.setForeground(TEXT);
+        title.setFont(title.getFont().deriveFont(Font.BOLD, 17f));
+        header.add(title, BorderLayout.WEST);
+
+        JPanel actions = new JPanel();
+        actions.setOpaque(false);
+        configureButton(sendButton);
+        configureButton(broadcastButton);
+        sendButton.setEnabled(false);
+        broadcastButton.setEnabled(false);
+        sendButton.addActionListener(event -> triggerRoutedSend(false));
+        broadcastButton.addActionListener(event -> triggerBroadcast());
+        actions.add(sendButton);
+        actions.add(broadcastButton);
+        header.add(actions, BorderLayout.EAST);
+
+        JPanel footer = new JPanel(new BorderLayout(12, 0));
+        footer.setBackground(PANEL);
+        footer.setBorder(BorderFactory.createEmptyBorder(8, 14, 8, 14));
+        status.setForeground(TEXT);
+        relayStatus.setForeground(MUTED);
+        footer.add(status, BorderLayout.WEST);
+        footer.add(relayStatus, BorderLayout.EAST);
+
+        eventLog.setEditable(false);
+        eventLog.setBackground(new Color(7, 11, 19));
+        eventLog.setForeground(new Color(183, 198, 218));
+        eventLog.setCaretColor(TEXT);
+        eventLog.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        eventLog.setBorder(BorderFactory.createEmptyBorder(8, 10, 8, 10));
+
+        JScrollPane logScroll = new JScrollPane(eventLog);
+        logScroll.setBorder(BorderFactory.createLineBorder(new Color(28, 42, 63)));
+        JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT, topologyPanel, logScroll);
+        split.setBorder(null);
+        split.setResizeWeight(0.79);
+        split.setDividerSize(5);
+        split.setBackground(BACKGROUND);
+
+        add(header, BorderLayout.NORTH);
+        add(split, BorderLayout.CENTER);
+        add(footer, BorderLayout.SOUTH);
+    }
+
+    private static void configureButton(JButton button) {
+        button.setFocusPainted(false);
+        button.setBackground(new Color(33, 47, 68));
+        button.setForeground(TEXT);
+        button.setBorder(
+            BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(66, 86, 113)),
+                BorderFactory.createEmptyBorder(7, 12, 7, 12)
+            )
         );
-        RoutingScope scope;
-        try (NostrKeyPair roomKeys = new NostrKeyPair(roomPrivateKey)) {
-            scope = new RoutingScope(roomKeys.getPublicKey(), "dc4-demo", "nostr4j-onion-visualizer");
+    }
+
+    private void startNetwork() {
+        networkExecutor.execute(() -> {
+            try {
+                log("Connecting Nostr signaling pool to " + options.relay);
+                NostrPool newPool = new NostrPool();
+                newPool.addRelay(new NostrRelay(options.relay)).await();
+                pool = newPool;
+                SwingUtilities.invokeLater(() -> relayStatus.setText(options.relay + " · signaling connected"));
+
+                roomKeys =
+                    options.roomPrivateKey == null
+                        ? new NostrKeyPair()
+                        : new NostrKeyPair(NostrPrivateKey.fromHex(options.roomPrivateKey));
+                routingScope = new RoutingScope(roomKeys.getPublicKey(), PROTOCOL_ID, APPLICATION_ID);
+                turnPool = new NostrTURNPool();
+                RTCSettings settings = RTCSettings.DEFAULT.withMaxDirectPeers(options.maxDirectPeers);
+
+                for (int index = 0; index < options.peerCount; index++) {
+                    createPeer(index, settings);
+                }
+                for (DemoPeer peer : peers) {
+                    peer.room.start().await();
+                    log(peer.name + " announced dc4 presence " + shortId(peer.nodeId));
+                }
+
+                log(
+                    "Room " +
+                    roomKeys.getPublicKey().asHex() +
+                    " · " +
+                    options.peerCount +
+                    " peers · maxDirectPeers=" +
+                    options.maxDirectPeers
+                );
+                SwingUtilities.invokeLater(() -> {
+                    sendButton.setEnabled(true);
+                    broadcastButton.setEnabled(true);
+                });
+                scheduler.scheduleWithFixedDelay(() -> triggerRoutedSend(true), 4L, 5L, TimeUnit.SECONDS);
+                scheduler.scheduleWithFixedDelay(this::reportTopology, 2L, 3L, TimeUnit.SECONDS);
+                if (options.verify) {
+                    scheduler.schedule(
+                        () -> {
+                            if (!verified.get() || !broadcastVerified.get()) {
+                                log(
+                                    "VERIFY FAILED: real multi-hop send/broadcast did not both complete within " +
+                                    options.timeoutSeconds +
+                                    "s"
+                                );
+                                shutdown(2);
+                            }
+                        },
+                        options.timeoutSeconds,
+                        TimeUnit.SECONDS
+                    );
+                }
+            } catch (Throwable error) {
+                lastResult = "Startup failed: " + rootMessage(error);
+                log("STARTUP FAILED: " + rootMessage(error));
+                error.printStackTrace();
+                if (options.verify) shutdown(2);
+            }
+        });
+    }
+
+    private void createPeer(int index, RTCSettings settings) {
+        NostrKeyPair identity = new NostrKeyPair();
+        NostrRTCLocalPeer local = new NostrRTCLocalPeer(
+            new NostrKeyPairSigner(identity),
+            options.stunServers,
+            APPLICATION_ID,
+            PROTOCOL_ID,
+            "onion-" + roomKeys.getPublicKey().asHex().substring(0, 10) + "-" + index,
+            roomKeys,
+            null
+        );
+        NostrRTCRoom room = new NostrRTCRoom(settings, local, roomKeys, pool, null, turnPool);
+        DemoPeer demoPeer = new DemoPeer(index, "P" + (index + 1), local, room);
+        peers.add(demoPeer);
+        peersByIdentity.put(identityKey(local), demoPeer);
+
+        room.addPeerDiscoveryListener((remote, announce, state) -> repaintSoon());
+        room.addPeerSocketAvailableListener((remote, socket) -> {
+            if (demoPeer.observedSockets.add(socket)) {
+                socket.addListener(new SocketObserver(demoPeer, remote));
+            }
+            repaintSoon();
+        });
+        room.addDisconnectionListener((remote, socket) -> repaintSoon());
+        room.addMessageListener((remote, socket, channel, payload, turn) -> onApplicationMessage(demoPeer, remote, payload));
+    }
+
+    private void onApplicationMessage(DemoPeer receiver, NostrRTCPeer remote, ByteBuffer payload) {
+        String message = StandardCharsets.UTF_8.decode(payload.asReadOnlyBuffer()).toString();
+        String[] fields = message.split("\\|", -1);
+        if (fields.length < 5 || !MESSAGE_PREFIX.equals(fields[0])) {
+            log(receiver.name + " received " + payload.remaining() + " application bytes");
+            return;
+        }
+        long id;
+        try {
+            id = Long.parseLong(fields[2]);
+        } catch (NumberFormatException ignored) {
+            return;
+        }
+        String kind = fields[1];
+        receiver.received.incrementAndGet();
+        PendingTransfer pending = pendingTransfers.remove(id);
+        if ("route".equals(kind)) {
+            int hops = pending == null ? 0 : pending.route.getHopCount();
+            lastResult = receiver.name + " received routed #" + id + " across " + hops + " WebRTC hops";
+            log("DELIVERED #" + id + " to " + receiver.name + " from " + shortPeer(remote) + " · hops=" + hops);
+            if (pending != null && pending.destination.equals(receiver.nodeId) && pending.route.getHopCount() > 1) {
+                verified.set(true);
+                log("VERIFIED: nostr4j onion payload crossed real WebRTC DataChannels " + describe(pending.route));
+                if (options.verify) {
+                    scheduler.schedule(this::triggerBroadcast, 800L, TimeUnit.MILLISECONDS);
+                }
+            }
+        } else if ("broadcast".equals(kind)) {
+            lastResult = receiver.name + " received broadcast #" + id;
+            log("BROADCAST #" + id + " reached " + receiver.name);
+            Set<NodeId> receivers = broadcastReceivers.computeIfAbsent(id, ignored -> ConcurrentHashMap.newKeySet());
+            receivers.add(receiver.nodeId);
+            if (
+                options.verify &&
+                verified.get() &&
+                receivers.size() == Math.max(0, peers.size() - 1) &&
+                broadcastVerified.compareAndSet(false, true)
+            ) {
+                log("VERIFIED: broadcast #" + id + " reached every other peer over the real WebRTC tree");
+                broadcastReceivers.remove(id);
+                scheduler.schedule(() -> shutdown(0), 800L, TimeUnit.MILLISECONDS);
+            }
+        }
+        repaintSoon();
+    }
+
+    private void triggerRoutedSend(boolean automatic) {
+        if (automatic && verified.get()) return;
+        if (closing.get() || !sendBusy.compareAndSet(false, true)) return;
+        networkExecutor.execute(() -> {
+            boolean handedOff = false;
+            try {
+                ActiveTopology topology = captureTopology();
+                SelectedRoute selected = selectRoomRoute(topology);
+                if (selected == null) {
+                    if (!automatic) log("No active multi-hop path yet; waiting for mutually attested WebRTC links");
+                    lastResult =
+                        "Converging: " +
+                        topology.activeEdgeCount() +
+                        " onion-ready WebRTC links; waiting for private dc4 attestations/channels";
+                    return;
+                }
+                RoutePath route = selected.route;
+                DemoPeer source = selected.source;
+                DemoPeer destination = topology.peersByNode.get(route.getDestination());
+                NostrRTCPeer remote = findRemotePeer(source.room, destination.localPeer);
+                if (remote == null) {
+                    lastResult = "Logical membership is still converging";
+                    return;
+                }
+                NostrRTCSocket destinationSocket = source.room.getSocket(remote);
+                if (destinationSocket == null || destinationSocket.isPhysicalLinkEnabled()) {
+                    lastResult = "Waiting for a non-direct logical destination";
+                    return;
+                }
+                NostrRTCChannel logicalChannel = destinationSocket.getChannel(NostrRTCSocket.DEFAULT_CHANNEL_NAME);
+                InternalRoutedTransport routedTransport = destinationSocket.getRoutedTransport();
+                boolean routeReady =
+                    logicalChannel != null &&
+                    routedTransport != null &&
+                    logicalChannel.isReady() &&
+                    routedTransport.isRouteReady(logicalChannel) &&
+                    routedTransport.shouldUseRoute(logicalChannel);
+                if (!routeReady) {
+                    lastResult = "Selected path is visible but its logical routed channel is not ready";
+                    if (!automatic) log(lastResult);
+                    return;
+                }
+
+                long id = transferSequence.incrementAndGet();
+                PendingTransfer transfer = new PendingTransfer(id, source.nodeId, destination.nodeId, route);
+                pendingTransfers.put(id, transfer);
+                highlightedRoute = route;
+                highlightedAtNanos = System.nanoTime();
+                String message =
+                    MESSAGE_PREFIX + "|route|" + id + "|" + source.nodeId.asHex() + "|" + destination.nodeId.asHex();
+                log("SEND #" + id + " " + source.name + " → " + destination.name + " via " + describe(route));
+                handedOff = true;
+                source.room
+                    .send(remote, ByteBuffer.wrap(message.getBytes(StandardCharsets.UTF_8)))
+                    .then(ignored -> {
+                        log("ACK #" + id + " end-to-end delivery acknowledged");
+                        finishSend();
+                        return null;
+                    })
+                    .catchException(error -> {
+                        pendingTransfers.remove(id);
+                        lastResult = "Route attempt failed: " + rootMessage(error);
+                        log("RETRY #" + id + " failed while topology converges: " + rootMessage(error));
+                        finishSend();
+                    });
+            } catch (Throwable error) {
+                lastResult = "Route attempt failed: " + rootMessage(error);
+                log("ROUTED SEND FAILED: " + rootMessage(error));
+            } finally {
+                if (!handedOff) finishSend();
+            }
+        });
+    }
+
+    private void triggerBroadcast() {
+        if (closing.get() || !sendBusy.compareAndSet(false, true)) return;
+        networkExecutor.execute(() -> {
+            boolean handedOff = false;
+            try {
+                ActiveTopology topology = captureTopology();
+                if (topology.graph.connectedComponents().size() != 1 || peers.isEmpty()) {
+                    log("Broadcast waits for one connected, mutually attested topology");
+                    return;
+                }
+                DemoPeer source = peers.get(0);
+                long id = transferSequence.incrementAndGet();
+                String message =
+                    MESSAGE_PREFIX + "|broadcast|" + id + "|" + source.nodeId.asHex() + "|" + Instant.now().toEpochMilli();
+                broadcastReceivers.put(id, ConcurrentHashMap.newKeySet());
+                log("BROADCAST #" + id + " from " + source.name + " through nostr4j's WebRTC tree");
+                handedOff = true;
+                source.room
+                    .broadcast(ByteBuffer.wrap(message.getBytes(StandardCharsets.UTF_8)))
+                    .then(ignored -> {
+                        lastResult = "Broadcast #" + id + " forwarded over the onion tree";
+                        finishSend();
+                        return null;
+                    })
+                    .catchException(error -> {
+                        broadcastReceivers.remove(id);
+                        lastResult = "Broadcast failed: " + rootMessage(error);
+                        log("BROADCAST FAILED: " + rootMessage(error));
+                        finishSend();
+                    });
+            } catch (Throwable error) {
+                lastResult = "Broadcast failed: " + rootMessage(error);
+                log("BROADCAST FAILED: " + rootMessage(error));
+            } finally {
+                if (!handedOff) finishSend();
+            }
+        });
+    }
+
+    private void finishSend() {
+        sendBusy.set(false);
+        repaintSoon();
+    }
+
+    static RoutePath chooseMultiHopRoute(TopologyGraph graph) {
+        ArrayList<NodeId> nodes = new ArrayList<NodeId>(graph.getNodes());
+        Collections.sort(nodes);
+        RoutePath selected = null;
+        for (NodeId source : nodes) {
+            RoutePath candidate = chooseMultiHopRoute(graph, source);
+            if (
+                candidate != null &&
+                (
+                    selected == null ||
+                    candidate.getHopCount() > selected.getHopCount() ||
+                    (candidate.getHopCount() == selected.getHopCount() && compareRoute(candidate, selected) < 0)
+                )
+            ) {
+                selected = candidate;
+            }
+        }
+        return selected;
+    }
+
+    static RoutePath chooseMultiHopRoute(TopologyGraph graph, NodeId source) {
+        if (!graph.getNodes().contains(source)) return null;
+        WeightedRoutePlanner planner = new WeightedRoutePlanner();
+        ArrayList<NodeId> nodes = new ArrayList<NodeId>(graph.getNodes());
+        Collections.sort(nodes);
+        RoutePath selected = null;
+        for (NodeId destination : nodes) {
+            if (source.equals(destination) || graph.findEdge(source, destination) != null) continue;
+            List<RoutePath> routes = planner.plan(graph, source, destination, Instant.now());
+            if (routes.isEmpty() || routes.get(0).getHopCount() < 2) continue;
+            RoutePath candidate = routes.get(0);
+            if (
+                selected == null ||
+                candidate.getHopCount() > selected.getHopCount() ||
+                (candidate.getHopCount() == selected.getHopCount() && compareRoute(candidate, selected) < 0)
+            ) {
+                selected = candidate;
+            }
+        }
+        return selected;
+    }
+
+    private SelectedRoute selectRoomRoute(ActiveTopology active) {
+        SelectedRoute selected = null;
+        for (DemoPeer peer : peers) {
+            RoutePath candidate = chooseMultiHopRoute(peer.room.getRoutingTopology(), peer.nodeId);
+            if (candidate == null || !pathIsPhysicallyActive(candidate, active.graph)) continue;
+            if (
+                selected == null ||
+                candidate.getHopCount() > selected.route.getHopCount() ||
+                (candidate.getHopCount() == selected.route.getHopCount() && compareRoute(candidate, selected.route) < 0)
+            ) {
+                selected = new SelectedRoute(peer, candidate);
+            }
+        }
+        return selected;
+    }
+
+    private static boolean pathIsPhysicallyActive(RoutePath route, TopologyGraph active) {
+        List<NodeId> nodes = route.getNodes();
+        for (int index = 0; index + 1 < nodes.size(); index++) {
+            if (active.findEdge(nodes.get(index), nodes.get(index + 1)) == null) return false;
+        }
+        return true;
+    }
+
+    private static int compareRoute(RoutePath left, RoutePath right) {
+        int count = Math.min(left.getNodes().size(), right.getNodes().size());
+        for (int index = 0; index < count; index++) {
+            int comparison = left.getNodes().get(index).compareTo(right.getNodes().get(index));
+            if (comparison != 0) return comparison;
+        }
+        return Integer.compare(left.getNodes().size(), right.getNodes().size());
+    }
+
+    private ActiveTopology captureTopology() {
+        RoutingScope scope = routingScope;
+        LinkedHashMap<NodeId, DemoPeer> byNode = new LinkedHashMap<NodeId, DemoPeer>();
+        HashSet<NodeId> graphNodes = new HashSet<NodeId>();
+        for (DemoPeer peer : peers) {
+            byNode.put(peer.nodeId, peer);
+            graphNodes.add(peer.nodeId);
         }
 
-        List<NodeId> members = new ArrayList<NodeId>(peerCount);
-        for (int index = 1; index <= peerCount; index++) {
-            byte[] bytes = new byte[NodeId.SIZE];
-            bytes[NodeId.SIZE - 4] = (byte) (index >>> 24);
-            bytes[NodeId.SIZE - 3] = (byte) (index >>> 16);
-            bytes[NodeId.SIZE - 2] = (byte) (index >>> 8);
-            bytes[NodeId.SIZE - 1] = (byte) index;
-            members.add(NodeId.fromHex(toHex(bytes)));
-        }
-
-        OverlayPlan plan = new BoundedOverlaySelector().select(scope, members, maxDirectPeers);
-        if (!plan.isConnected()) {
-            throw new IllegalStateException("The generated overlay is not connected");
-        }
-        for (NodeId node : plan.getNodes()) {
-            if (plan.degree(node) > maxDirectPeers) {
-                throw new IllegalStateException("The generated overlay exceeds maxDirectPeers");
+        HashMap<LinkKey, LinkAccumulator> accumulated = new HashMap<LinkKey, LinkAccumulator>();
+        if (scope != null) {
+            for (DemoPeer local : peers) {
+                for (NostrRTCSocket socket : local.room.getSockets()) {
+                    DemoPeer remote = peersByIdentity.get(identityKey(socket.getRemotePeer()));
+                    if (remote == null || remote == local || !socket.isPhysicalLinkEnabled()) continue;
+                    LinkKey key = new LinkKey(local.nodeId, remote.nodeId);
+                    LinkAccumulator link = accumulated.computeIfAbsent(key, ignored -> new LinkAccumulator(key));
+                    link.enabledSides.add(local.nodeId);
+                    NostrRTCSocket.TransportPath path = socket.getActiveTransportPath();
+                    if (path == NostrRTCSocket.TransportPath.RTC && socket.isRTCConnected()) {
+                        link.rtcSides.add(local.nodeId);
+                    } else if (path == NostrRTCSocket.TransportPath.TURN && socket.hasUsableTransport()) {
+                        link.turnSides.add(local.nodeId);
+                    }
+                    NostrRTCChannel control = socket.getChannel(InternalRoutingChannels.CONTROL);
+                    NostrRTCChannel data = socket.getChannel(
+                        InternalRoutingChannels.data(RouteTransportProfile.RELIABLE_ORDERED)
+                    );
+                    if (control != null && control.isConnected() && data != null && data.isConnected()) {
+                        link.internalChannelSides.add(local.nodeId);
+                    }
+                }
             }
         }
 
-        Map<NodeId, String> labels = new LinkedHashMap<NodeId, String>();
-        for (int index = 0; index < plan.getNodes().size(); index++) {
-            labels.put(plan.getNodes().get(index), String.format("P%02d", index + 1));
+        ArrayList<LinkView> links = new ArrayList<LinkView>();
+        HashSet<TopologyEdge> activeEdges = new HashSet<TopologyEdge>();
+        for (LinkAccumulator link : accumulated.values()) {
+            LinkState state = LinkState.PENDING;
+            TopologyTransport transport = TopologyTransport.UNKNOWN;
+            if (link.turnSides.size() == 2 && link.internalChannelSides.size() == 2) {
+                state = LinkState.TURN;
+                transport = TopologyTransport.TURN;
+            } else if (link.rtcSides.size() == 2 && link.internalChannelSides.size() == 2) {
+                state = LinkState.RTC;
+                transport = TopologyTransport.RTC;
+            }
+            links.add(new LinkView(link.key, state));
+            if (transport != TopologyTransport.UNKNOWN) {
+                activeEdges.add(
+                    new TopologyEdge(
+                        EdgeId.derive(scope, link.key.first, link.key.second),
+                        link.key.first,
+                        link.key.second,
+                        transport,
+                        transport
+                    )
+                );
+            }
         }
-        Set<TopologyEdge> graphEdges = new HashSet<TopologyEdge>();
-        for (DesiredDirectEdge edge : plan.getEdges()) {
-            graphEdges.add(
-                new TopologyEdge(
-                    EdgeId.derive(scope, edge.getFirst(), edge.getSecond()),
-                    edge.getFirst(),
-                    edge.getSecond(),
-                    TopologyTransport.RTC,
-                    TopologyTransport.RTC
-                )
+        links.sort(Comparator.comparing((LinkView link) -> link.key.first).thenComparing(link -> link.key.second));
+        return new ActiveTopology(new TopologyGraph(graphNodes, activeEdges), byNode, links);
+    }
+
+    private void refreshUi() {
+        ActiveTopology topology = captureTopology();
+        int logical = 0;
+        for (DemoPeer peer : peers) logical += peer.room.getPeers().size();
+        int expectedLogical = peers.size() * Math.max(0, peers.size() - 1);
+        status.setText(
+            "peers " +
+            peers.size() +
+            "/" +
+            options.peerCount +
+            "  ·  logical sockets " +
+            logical +
+            "/" +
+            expectedLogical +
+            "  ·  real RTC edges " +
+            topology.activeEdgeCount() +
+            "  ·  " +
+            lastResult
+        );
+        topologyPanel.snapshot = topology;
+        topologyPanel.repaint();
+    }
+
+    private void reportTopology() {
+        ActiveTopology active = captureTopology();
+        ArrayList<String> rooms = new ArrayList<String>();
+        for (DemoPeer peer : peers) {
+            TopologyGraph graph = peer.room.getRoutingTopology();
+            Collection<TopologySnapshot> snapshots = peer.room.getRoutingTopologySnapshots();
+            int neighborClaims = snapshots.stream().mapToInt(snapshot -> snapshot.getNeighbors().size()).sum();
+            rooms.add(
+                peer.name +
+                "=" +
+                graph.getNodes().size() +
+                "n/" +
+                graph.getEdges().size() +
+                "e/" +
+                snapshots.size() +
+                "s/" +
+                neighborClaims +
+                "c"
             );
         }
-        TopologyGraph graph = new TopologyGraph(new HashSet<NodeId>(plan.getNodes()), graphEdges);
-        NodeId source = plan.getNodes().get(0);
-        // Keep the static example inside the protocol hop budget even when the
-        // interactive demo is opened with a large, degree-two ring.
-        NodeId destination = plan.getNodes().get(Math.min(plan.getNodes().size() / 2, 8));
-        List<NodeId> route = firstRoute(graph, source, destination);
-        return new DemoTopology(plan, graph, labels, route, maxDirectPeers);
-    }
-
-    public static BufferedImage renderImage(DemoTopology topology) {
-        BufferedImage image = new BufferedImage(IMAGE_WIDTH, IMAGE_HEIGHT, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D graphics = image.createGraphics();
-        try {
-            graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            graphics.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-            paint(graphics, topology);
-        } finally {
-            graphics.dispose();
+        String summary = "TOPOLOGY real=" + active.activeEdgeCount() + "e · " + String.join(" ", rooms);
+        if (!summary.equals(lastTopologySummary)) {
+            lastTopologySummary = summary;
+            log(summary);
         }
-        return image;
     }
 
-    private static void paint(Graphics2D graphics, DemoTopology topology) {
-        graphics.setColor(BACKGROUND);
-        graphics.fillRect(0, 0, IMAGE_WIDTH, IMAGE_HEIGHT);
+    private void repaintSoon() {
+        SwingUtilities.invokeLater(topologyPanel::repaint);
+    }
 
-        graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 27));
-        graphics.setColor(TEXT);
-        graphics.drawString("NIP-DC · onion-routed peer overlay", 48, 58);
-        graphics.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 14));
-        graphics.setColor(MUTED);
-        graphics.drawString(
-            topology.getPlan().getNodes().size() +
-            " logical peers  /  max " +
-            topology.getMaxDirectPeers() +
-            " direct links per peer  /  production BoundedOverlaySelector",
-            49,
-            87
+    private void log(String message) {
+        String line = String.format(Locale.ROOT, "%1$tH:%1$tM:%1$tS  %2$s%n", new java.util.Date(), message);
+        System.out.print(line);
+        System.out.flush();
+        SwingUtilities.invokeLater(() -> {
+            eventLog.append(line);
+            eventLog.setCaretPosition(eventLog.getDocument().getLength());
+        });
+    }
+
+    private void shutdown(int exitCode) {
+        if (!closing.compareAndSet(false, true)) return;
+        sendButton.setEnabled(false);
+        broadcastButton.setEnabled(false);
+        Thread closer = daemonThread(
+            () -> {
+                if (options.verify) {
+                    Thread haltWatchdog = daemonThread(
+                        () -> {
+                            try {
+                                Thread.sleep(5000L);
+                            } catch (InterruptedException ignored) {
+                                Thread.currentThread().interrupt();
+                            }
+                            Runtime.getRuntime().halt(exitCode);
+                        },
+                        "onion-demo-exit-watchdog"
+                    );
+                    haltWatchdog.start();
+                }
+                log("Closing rooms and Nostr signaling");
+                for (DemoPeer peer : peers) {
+                    try {
+                        peer.room.close();
+                    } catch (Throwable ignored) {}
+                }
+                NostrTURNPool currentTurnPool = turnPool;
+                if (currentTurnPool != null) currentTurnPool.close();
+                NostrPool currentPool = pool;
+                if (currentPool != null) currentPool.close();
+                scheduler.shutdownNow();
+                networkExecutor.shutdownNow();
+                SwingUtilities.invokeLater(() -> {
+                    dispose();
+                    System.exit(exitCode);
+                });
+            },
+            "onion-demo-close"
         );
+        closer.start();
+    }
 
-        drawStat(graphics, 48, 112, 176, "PEERS", Integer.toString(topology.getPlan().getNodes().size()), CYAN);
-        drawStat(graphics, 239, 112, 176, "DIRECT EDGES", Integer.toString(topology.getPlan().getEdges().size()), VIOLET);
-        drawStat(graphics, 430, 112, 176, "MAX DIRECT/PEER", Integer.toString(topology.maximumDirectConnections()), ORANGE);
-        drawStat(graphics, 621, 112, 176, "CONNECTED", topology.getPlan().isConnected() ? "YES" : "NO", CYAN);
-
-        int centerX = 420;
-        int centerY = 455;
-        int radius = 220;
-        Map<NodeId, java.awt.Point> positions = circularPositions(topology.getPlan().getNodes(), centerX, centerY, radius);
-
-        graphics.setStroke(new BasicStroke(1.4f));
-        for (DesiredDirectEdge edge : sortedEdges(topology)) {
-            if (!topology.routeContains(edge.getFirst(), edge.getSecond())) {
-                drawEdge(graphics, positions, edge, edge.getPriority() == OverlayEdgePriority.CHORD ? VIOLET : GRID, 1.5f);
-            }
+    private static NostrRTCPeer findRemotePeer(NostrRTCRoom room, NostrRTCPeer expected) {
+        String identity = identityKey(expected);
+        for (NostrRTCPeer peer : room.getPeers()) {
+            if (identity.equals(identityKey(peer))) return peer;
         }
-        for (DesiredDirectEdge edge : sortedEdges(topology)) {
-            if (topology.routeContains(edge.getFirst(), edge.getSecond())) {
-                drawEdge(graphics, positions, edge, ORANGE, 5.0f);
-            }
+        return null;
+    }
+
+    private static String identityKey(NostrRTCPeer peer) {
+        return peer.getPubkey().asHex() + "/" + peer.getSessionId();
+    }
+
+    private static String shortPeer(NostrRTCPeer peer) {
+        return peer.getPubkey().asHex().substring(0, 8);
+    }
+
+    private static String shortId(NodeId node) {
+        return node.asHex().substring(0, 8);
+    }
+
+    private String describe(RoutePath route) {
+        ArrayList<String> names = new ArrayList<String>();
+        Map<NodeId, DemoPeer> byNode = captureTopology().peersByNode;
+        for (NodeId node : route.getNodes()) {
+            DemoPeer peer = byNode.get(node);
+            names.add(peer == null ? shortId(node) : peer.name);
         }
-
-        for (NodeId node : topology.getPlan().getNodes()) {
-            drawNode(graphics, topology, positions.get(node), node);
-        }
-
-        drawSidebar(graphics, topology);
-        drawFooter(graphics, topology);
+        return String.join(" → ", names) + " (" + route.getHopCount() + " hops)";
     }
 
-    private static void drawStat(Graphics2D graphics, int x, int y, int width, String label, String value, Color accent) {
-        graphics.setColor(PANEL);
-        graphics.fillRoundRect(x, y, width, 76, 12, 12);
-        graphics.setColor(accent);
-        graphics.fillRoundRect(x, y, 5, 76, 12, 12);
-        graphics.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 11));
-        graphics.setColor(MUTED);
-        graphics.drawString(label, x + 18, y + 24);
-        graphics.setFont(new Font(Font.MONOSPACED, Font.BOLD, 25));
-        graphics.setColor(TEXT);
-        graphics.drawString(value, x + 18, y + 55);
+    private static String rootMessage(Throwable error) {
+        Throwable current = error;
+        while (current.getCause() != null) current = current.getCause();
+        String message = current.getMessage();
+        return message == null || message.isBlank() ? current.getClass().getSimpleName() : message;
     }
 
-    private static Map<NodeId, java.awt.Point> circularPositions(List<NodeId> nodes, int centerX, int centerY, int radius) {
-        Map<NodeId, java.awt.Point> result = new HashMap<NodeId, java.awt.Point>();
-        for (int index = 0; index < nodes.size(); index++) {
-            double angle = -Math.PI / 2.0 + 2.0 * Math.PI * index / nodes.size();
-            int x = centerX + (int) Math.round(Math.cos(angle) * radius);
-            int y = centerY + (int) Math.round(Math.sin(angle) * radius);
-            result.put(nodes.get(index), new java.awt.Point(x, y));
-        }
-        return result;
-    }
+    static final class Options {
 
-    private static List<DesiredDirectEdge> sortedEdges(DemoTopology topology) {
-        List<DesiredDirectEdge> edges = new ArrayList<DesiredDirectEdge>(topology.getPlan().getEdges());
-        edges.sort(
-            Comparator
-                .comparing((DesiredDirectEdge edge) -> topology.getLabels().get(edge.getFirst()))
-                .thenComparing(edge -> topology.getLabels().get(edge.getSecond()))
-        );
-        return edges;
-    }
+        final String relay;
+        final int peerCount;
+        final int maxDirectPeers;
+        final int timeoutSeconds;
+        final boolean verify;
+        final String roomPrivateKey;
+        final Collection<String> stunServers;
 
-    private static void drawEdge(
-        Graphics2D graphics,
-        Map<NodeId, java.awt.Point> positions,
-        DesiredDirectEdge edge,
-        Color color,
-        float width
-    ) {
-        java.awt.Point first = positions.get(edge.getFirst());
-        java.awt.Point second = positions.get(edge.getSecond());
-        graphics.setStroke(new BasicStroke(width, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-        graphics.setColor(color);
-        graphics.draw(new Line2D.Double(first.x, first.y, second.x, second.y));
-    }
-
-    private static void drawNode(Graphics2D graphics, DemoTopology topology, java.awt.Point position, NodeId node) {
-        boolean source = node.equals(topology.getRoute().get(0));
-        boolean destination = node.equals(topology.getRoute().get(topology.getRoute().size() - 1));
-        boolean routed = topology.getRoute().contains(node);
-        Color border = source ? CYAN : destination ? ORANGE : routed ? VIOLET : GRID;
-        double size = source || destination ? 56.0 : 48.0;
-
-        graphics.setColor(NODE);
-        graphics.fill(new Ellipse2D.Double(position.x - size / 2, position.y - size / 2, size, size));
-        graphics.setColor(border);
-        graphics.setStroke(new BasicStroke(source || destination ? 4.0f : 2.2f));
-        graphics.draw(new Ellipse2D.Double(position.x - size / 2, position.y - size / 2, size, size));
-
-        String label = topology.getLabels().get(node);
-        graphics.setFont(new Font(Font.MONOSPACED, Font.BOLD, 13));
-        FontMetrics metrics = graphics.getFontMetrics();
-        graphics.setColor(TEXT);
-        graphics.drawString(label, position.x - metrics.stringWidth(label) / 2, position.y + 5);
-
-        String degree = "d=" + topology.getPlan().degree(node);
-        graphics.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 10));
-        metrics = graphics.getFontMetrics();
-        graphics.setColor(MUTED);
-        graphics.drawString(degree, position.x - metrics.stringWidth(degree) / 2, position.y + 43);
-    }
-
-    private static void drawSidebar(Graphics2D graphics, DemoTopology topology) {
-        int x = 835;
-        int y = 112;
-        int width = 397;
-        int height = 596;
-        graphics.setColor(PANEL);
-        graphics.fillRoundRect(x, y, width, height, 14, 14);
-
-        graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 18));
-        graphics.setColor(TEXT);
-        graphics.drawString("Direct-neighbor table", x + 24, y + 38);
-        graphics.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 11));
-        graphics.setColor(MUTED);
-        graphics.drawString("Only physical RTC/TURN edges are listed", x + 24, y + 60);
-
-        int rowY = y + 95;
-        int shown = 0;
-        for (NodeId node : topology.getPlan().getNodes()) {
-            if (rowY > y + height - 55) {
-                graphics.drawString("… " + (topology.getPlan().getNodes().size() - shown) + " more peers", x + 24, rowY);
-                break;
-            }
-            List<String> neighbors = new ArrayList<String>();
-            for (NodeId neighbor : topology.getPlan().getNeighbors(node)) {
-                neighbors.add(topology.getLabels().get(neighbor));
-            }
-            Collections.sort(neighbors);
-            graphics.setFont(new Font(Font.MONOSPACED, Font.BOLD, 13));
-            graphics.setColor(topology.getRoute().contains(node) ? ORANGE : CYAN);
-            graphics.drawString(topology.getLabels().get(node), x + 24, rowY);
-            graphics.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 13));
-            graphics.setColor(TEXT);
-            graphics.drawString("→  " + String.join(", ", neighbors), x + 78, rowY);
-            rowY += 42;
-            shown++;
-        }
-    }
-
-    private static void drawFooter(Graphics2D graphics, DemoTopology topology) {
-        int x = 48;
-        int y = 738;
-        graphics.setColor(PANEL);
-        graphics.fillRoundRect(x, y, 1184, 66, 12, 12);
-        graphics.setColor(ORANGE);
-        graphics.fillOval(x + 20, y + 20, 12, 12);
-        graphics.setFont(new Font(Font.MONOSPACED, Font.BOLD, 12));
-        graphics.setColor(TEXT);
-        graphics.drawString(
-            "Example onion route  " + topology.routeLabels() + "  (" + (topology.getRoute().size() - 1) + " hops)",
-            x + 45,
-            y + 29
-        );
-        graphics.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 11));
-        graphics.setColor(MUTED);
-        graphics.drawString(
-            "Orange edges carry this logical connection; intermediate peers forward opaque payloads and learn only adjacent hops.",
-            x + 45,
-            y + 49
-        );
-    }
-
-    private static List<NodeId> firstRoute(TopologyGraph graph, NodeId source, NodeId destination) {
-        List<RoutePath> routes = new WeightedRoutePlanner().plan(graph, source, destination, java.time.Instant.now());
-        if (routes.isEmpty()) {
-            throw new IllegalStateException("No dc4 route exists between the selected demo peers");
-        }
-        return routes.get(0).getNodes();
-    }
-
-    private static void writeImage(BufferedImage image, Path output) throws IOException {
-        Path parent = output.getParent();
-        if (parent != null) {
-            Files.createDirectories(parent);
-        }
-        if (!ImageIO.write(image, "png", output.toFile())) {
-            throw new IOException("No PNG writer is available");
-        }
-    }
-
-    private static void printTextGraph(DemoTopology topology, Path output) {
-        System.out.println();
-        System.out.println("NIP-DC onion topology");
-        System.out.println(
-            "peers=" +
-            topology.getPlan().getNodes().size() +
-            " directEdges=" +
-            topology.getPlan().getEdges().size() +
-            " maxDirectConnectionsPerPeer=" +
-            topology.maximumDirectConnections() +
-            " connected=" +
-            topology.getPlan().isConnected()
-        );
-        for (NodeId node : topology.getPlan().getNodes()) {
-            List<String> neighbors = new ArrayList<String>();
-            for (NodeId neighbor : topology.getPlan().getNeighbors(node)) {
-                neighbors.add(topology.getLabels().get(neighbor));
-            }
-            Collections.sort(neighbors);
-            System.out.printf("  %s -> %s%n", topology.getLabels().get(node), String.join(", ", neighbors));
-        }
-        System.out.println("onionRoute=" + topology.routeLabels());
-        System.out.println("png=" + output);
-    }
-
-    private static void showWindow(DemoTopology topology) {
-        if (GraphicsEnvironment.isHeadless()) {
-            throw new IllegalStateException("Cannot open the demo window in a headless graphics environment");
-        }
-        OnionTopologyWindow.show(topology);
-    }
-
-    private static String toHex(byte[] bytes) {
-        char[] digits = "0123456789abcdef".toCharArray();
-        char[] result = new char[bytes.length * 2];
-        for (int index = 0; index < bytes.length; index++) {
-            int value = bytes[index] & 0xff;
-            result[index * 2] = digits[value >>> 4];
-            result[index * 2 + 1] = digits[value & 0x0f];
-        }
-        return new String(result);
-    }
-
-    public static final class DemoTopology {
-
-        private final OverlayPlan plan;
-        private final TopologyGraph graph;
-        private final Map<NodeId, String> labels;
-        private final List<NodeId> route;
-        private final int maxDirectPeers;
-
-        private DemoTopology(
-            OverlayPlan plan,
-            TopologyGraph graph,
-            Map<NodeId, String> labels,
-            List<NodeId> route,
-            int maxDirectPeers
+        private Options(
+            String relay,
+            int peerCount,
+            int maxDirectPeers,
+            int timeoutSeconds,
+            boolean verify,
+            String roomPrivateKey,
+            Collection<String> stunServers
         ) {
-            this.plan = plan;
-            this.graph = graph;
-            this.labels = Collections.unmodifiableMap(new LinkedHashMap<NodeId, String>(labels));
-            this.route = route;
+            this.relay = relay;
+            this.peerCount = peerCount;
             this.maxDirectPeers = maxDirectPeers;
+            this.timeoutSeconds = timeoutSeconds;
+            this.verify = verify;
+            this.roomPrivateKey = roomPrivateKey;
+            this.stunServers = stunServers;
         }
 
-        public OverlayPlan getPlan() {
-            return plan;
-        }
-
-        public Map<NodeId, String> getLabels() {
-            return labels;
-        }
-
-        public TopologyGraph getGraph() {
-            return graph;
-        }
-
-        public List<NodeId> getRoute() {
-            return route;
-        }
-
-        public int getMaxDirectPeers() {
-            return maxDirectPeers;
-        }
-
-        public int maximumDirectConnections() {
-            int maximum = 0;
-            for (NodeId node : plan.getNodes()) {
-                maximum = Math.max(maximum, plan.degree(node));
-            }
-            return maximum;
-        }
-
-        public List<NodeId> route(NodeId source, NodeId destination) {
-            return firstRoute(graph, source, destination);
-        }
-
-        public BroadcastTree broadcastTree(NodeId source) {
-            return new BroadcastTreeBuilder().build(graph, source);
-        }
-
-        public NodeId node(String label) {
-            for (Map.Entry<NodeId, String> entry : labels.entrySet()) {
-                if (entry.getValue().equals(label)) {
-                    return entry.getKey();
+        static Options parse(String[] args) {
+            String relay = DEFAULT_RELAY;
+            int peerCount = 8;
+            int maxDirectPeers = 2;
+            int timeoutSeconds = 120;
+            boolean verify = false;
+            String roomPrivateKey = null;
+            Collection<String> stun = List.of("stun.cloudflare.com:3478", "stun.l.google.com:19302");
+            for (String argument : args) {
+                if ("--verify".equals(argument)) {
+                    verify = true;
+                } else if ("--no-stun".equals(argument)) {
+                    stun = Collections.emptyList();
+                } else if (argument.startsWith("--relay=")) {
+                    relay = argument.substring("--relay=".length()).trim();
+                } else if (argument.startsWith("--peers=")) {
+                    peerCount = integer(argument, "--peers=");
+                } else if (argument.startsWith("--max-direct=")) {
+                    maxDirectPeers = integer(argument, "--max-direct=");
+                } else if (argument.startsWith("--timeout=")) {
+                    timeoutSeconds = integer(argument, "--timeout=");
+                } else if (argument.startsWith("--room-key=")) {
+                    roomPrivateKey = argument.substring("--room-key=".length()).trim();
+                } else {
+                    throw new IllegalArgumentException("Unknown OnionTopologyDemo argument: " + argument);
                 }
             }
-            return null;
+            if (!relay.startsWith("wss://") && !relay.startsWith("ws://")) {
+                throw new IllegalArgumentException("Relay must use ws:// or wss://");
+            }
+            if (peerCount < 3 || peerCount > 64) {
+                throw new IllegalArgumentException("Peer count must be between 3 and 64");
+            }
+            if (maxDirectPeers < RTCSettings.MIN_MAX_DIRECT_PEERS || maxDirectPeers >= peerCount) {
+                throw new IllegalArgumentException("maxDirectPeers must be between 2 and peers - 1");
+            }
+            if (timeoutSeconds < 10) {
+                throw new IllegalArgumentException("Timeout must be at least 10 seconds");
+            }
+            if (roomPrivateKey != null && !roomPrivateKey.matches("[0-9a-fA-F]{64}")) {
+                throw new IllegalArgumentException("Room key must be a 64-character hexadecimal private key");
+            }
+            return new Options(relay, peerCount, maxDirectPeers, timeoutSeconds, verify, roomPrivateKey, List.copyOf(stun));
         }
 
-        public String label(NodeId node) {
-            return labels.get(node);
+        private static int integer(String argument, String prefix) {
+            try {
+                return Integer.parseInt(argument.substring(prefix.length()));
+            } catch (NumberFormatException error) {
+                throw new IllegalArgumentException("Invalid integer argument: " + argument, error);
+            }
+        }
+    }
+
+    private final class SocketObserver implements NostrRTCSocketListener {
+
+        private final DemoPeer local;
+        private final NostrRTCPeer remote;
+
+        private SocketObserver(DemoPeer local, NostrRTCPeer remote) {
+            this.local = local;
+            this.remote = remote;
         }
 
-        public boolean routeContains(NodeId first, NodeId second) {
-            for (int index = 0; index + 1 < route.size(); index++) {
-                NodeId left = route.get(index);
-                NodeId right = route.get(index + 1);
-                if ((left.equals(first) && right.equals(second)) || (left.equals(second) && right.equals(first))) {
-                    return true;
+        @Override
+        public void onRTCSocketRouteUpdate(
+            NostrRTCSocket socket,
+            Collection<RTCTransportIceCandidate> candidates,
+            String turnServer
+        ) {}
+
+        @Override
+        public void onRTCSocketClose(NostrRTCSocket socket) {
+            repaintSoon();
+        }
+
+        @Override
+        public void onRTCChannelReady(NostrRTCChannel channel) {
+            repaintSoon();
+        }
+
+        @Override
+        public void onRTCChannel(NostrRTCChannel channel) {
+            repaintSoon();
+        }
+
+        @Override
+        public void onRTCSocketTransportSwitch(
+            NostrRTCSocket socket,
+            NostrRTCSocket.TransportPath from,
+            NostrRTCSocket.TransportPath to,
+            String reason
+        ) {
+            log(local.name + " ↔ " + shortPeer(remote) + " transport " + from + " → " + to + " (" + reason + ")");
+            repaintSoon();
+        }
+
+        @Override
+        public void onRTCSocketTransportDegraded(NostrRTCSocket socket, NostrRTCSocket.TransportPath active, String reason) {
+            log(local.name + " ↔ " + shortPeer(remote) + " degraded: " + reason);
+            repaintSoon();
+        }
+    }
+
+    private final class TopologyPanel extends JPanel {
+
+        private volatile ActiveTopology snapshot = ActiveTopology.empty();
+
+        private TopologyPanel() {
+            setOpaque(true);
+            setBackground(BACKGROUND);
+            setMinimumSize(new Dimension(600, 440));
+        }
+
+        @Override
+        protected void paintComponent(Graphics graphics) {
+            super.paintComponent(graphics);
+            Graphics2D g = (Graphics2D) graphics.create();
+            try {
+                g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                ActiveTopology topology = snapshot;
+                Map<NodeId, Point> positions = positions(topology.peersByNode.keySet(), getWidth(), getHeight());
+                drawLinks(g, topology.links, positions);
+                drawHighlightedRoute(g, positions);
+                drawNodes(g, topology, positions);
+                drawLegend(g);
+            } finally {
+                g.dispose();
+            }
+        }
+
+        private void drawLinks(Graphics2D g, List<LinkView> links, Map<NodeId, Point> positions) {
+            for (LinkView link : links) {
+                Point first = positions.get(link.key.first);
+                Point second = positions.get(link.key.second);
+                if (first == null || second == null) continue;
+                if (link.state == LinkState.PENDING) {
+                    g.setColor(PENDING);
+                    g.setStroke(
+                        new BasicStroke(1.4f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 1f, new float[] { 6f, 7f }, 0f)
+                    );
+                } else {
+                    g.setColor(link.state == LinkState.TURN ? TURN : RTC);
+                    g.setStroke(new BasicStroke(3.0f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
                 }
+                g.drawLine(first.x, first.y, second.x, second.y);
             }
-            return false;
         }
 
-        public String routeLabels() {
-            List<String> routeLabels = new ArrayList<String>(route.size());
-            for (NodeId node : route) {
-                routeLabels.add(labels.get(node));
+        private void drawHighlightedRoute(Graphics2D g, Map<NodeId, Point> positions) {
+            RoutePath route = highlightedRoute;
+            if (route == null) return;
+            long elapsed = System.nanoTime() - highlightedAtNanos;
+            if (elapsed > TimeUnit.SECONDS.toNanos(8)) return;
+            g.setColor(ONION);
+            g.setStroke(new BasicStroke(6f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            List<NodeId> nodes = route.getNodes();
+            for (int index = 0; index + 1 < nodes.size(); index++) {
+                Point first = positions.get(nodes.get(index));
+                Point second = positions.get(nodes.get(index + 1));
+                if (first != null && second != null) g.drawLine(first.x, first.y, second.x, second.y);
             }
-            return String.join(" → ", routeLabels);
+            double phase = (elapsed / 1_000_000_000d) * 0.8d;
+            double edgePosition = phase % Math.max(1, route.getHopCount());
+            int edgeIndex = Math.min(route.getHopCount() - 1, (int) edgePosition);
+            double fraction = edgePosition - edgeIndex;
+            Point first = positions.get(nodes.get(edgeIndex));
+            Point second = positions.get(nodes.get(edgeIndex + 1));
+            if (first != null && second != null) {
+                int x = (int) Math.round(first.x + (second.x - first.x) * fraction);
+                int y = (int) Math.round(first.y + (second.y - first.y) * fraction);
+                g.setColor(Color.WHITE);
+                g.fillOval(x - 6, y - 6, 12, 12);
+            }
+        }
+
+        private void drawNodes(Graphics2D g, ActiveTopology topology, Map<NodeId, Point> positions) {
+            for (Map.Entry<NodeId, DemoPeer> entry : topology.peersByNode.entrySet()) {
+                DemoPeer peer = entry.getValue();
+                Point point = positions.get(entry.getKey());
+                int logicalPeers = peer.room.getPeers().size();
+                boolean discoveredAll = logicalPeers == Math.max(0, peers.size() - 1);
+                g.setColor(discoveredAll ? new Color(38, 61, 82) : new Color(57, 47, 38));
+                g.fillOval(point.x - 28, point.y - 28, 56, 56);
+                g.setColor(discoveredAll ? RTC : ONION);
+                g.setStroke(new BasicStroke(2.5f));
+                g.drawOval(point.x - 28, point.y - 28, 56, 56);
+                g.setFont(getFont().deriveFont(Font.BOLD, 14f));
+                center(g, peer.name, point.x, point.y + 5, TEXT);
+                g.setFont(getFont().deriveFont(Font.PLAIN, 11f));
+                center(g, shortId(peer.nodeId), point.x, point.y + 44, MUTED);
+                center(g, "rx " + peer.received.get(), point.x, point.y + 59, MUTED);
+            }
+        }
+
+        private void drawLegend(Graphics2D g) {
+            int x = 18;
+            int y = 25;
+            g.setFont(getFont().deriveFont(Font.PLAIN, 12f));
+            legend(g, x, y, RTC, "real WebRTC");
+            legend(g, x + 125, y, PENDING, "selected / connecting");
+            legend(g, x + 300, y, ONION, "active onion route");
+        }
+
+        private void legend(Graphics2D g, int x, int y, Color color, String label) {
+            g.setColor(color);
+            g.fillRoundRect(x, y - 8, 22, 5, 4, 4);
+            g.setColor(MUTED);
+            g.drawString(label, x + 30, y);
+        }
+
+        private Map<NodeId, Point> positions(Collection<NodeId> nodeIds, int width, int height) {
+            ArrayList<NodeId> sorted = new ArrayList<NodeId>(nodeIds);
+            Collections.sort(sorted);
+            HashMap<NodeId, Point> result = new HashMap<NodeId, Point>();
+            double radius = Math.max(120d, Math.min(width * 0.38d, height * 0.35d));
+            double centerX = width / 2d;
+            double centerY = height / 2d + 15d;
+            for (int index = 0; index < sorted.size(); index++) {
+                double angle = -Math.PI / 2d + (Math.PI * 2d * index / Math.max(1, sorted.size()));
+                result.put(
+                    sorted.get(index),
+                    new Point(
+                        (int) Math.round(centerX + Math.cos(angle) * radius),
+                        (int) Math.round(centerY + Math.sin(angle) * radius)
+                    )
+                );
+            }
+            return result;
+        }
+
+        private void center(Graphics2D g, String value, int centerX, int baseline, Color color) {
+            FontMetrics metrics = g.getFontMetrics();
+            g.setColor(color);
+            g.drawString(value, centerX - metrics.stringWidth(value) / 2, baseline);
+        }
+    }
+
+    private final class DemoPeer {
+
+        final int index;
+        final String name;
+        final NostrRTCLocalPeer localPeer;
+        final NostrRTCRoom room;
+        final NodeId nodeId;
+        final Set<NostrRTCSocket> observedSockets = ConcurrentHashMap.newKeySet();
+        final AtomicLong received = new AtomicLong();
+
+        private DemoPeer(int index, String name, NostrRTCLocalPeer localPeer, NostrRTCRoom room) {
+            this.index = index;
+            this.name = name;
+            this.localPeer = localPeer;
+            this.room = room;
+            this.nodeId = NodeId.derive(routingScope, localPeer.getPubkey(), localPeer.getSessionId());
+        }
+    }
+
+    private enum LinkState {
+        PENDING,
+        RTC,
+        TURN,
+    }
+
+    private static final class LinkKey {
+
+        final NodeId first;
+        final NodeId second;
+
+        private LinkKey(NodeId left, NodeId right) {
+            if (left.compareTo(right) <= 0) {
+                first = left;
+                second = right;
+            } else {
+                first = right;
+                second = left;
+            }
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            return other instanceof LinkKey && first.equals(((LinkKey) other).first) && second.equals(((LinkKey) other).second);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(first, second);
+        }
+    }
+
+    private static final class LinkAccumulator {
+
+        final LinkKey key;
+        final Set<NodeId> enabledSides = new HashSet<NodeId>();
+        final Set<NodeId> rtcSides = new HashSet<NodeId>();
+        final Set<NodeId> turnSides = new HashSet<NodeId>();
+        final Set<NodeId> internalChannelSides = new HashSet<NodeId>();
+
+        private LinkAccumulator(LinkKey key) {
+            this.key = key;
+        }
+    }
+
+    private static final class LinkView {
+
+        final LinkKey key;
+        final LinkState state;
+
+        private LinkView(LinkKey key, LinkState state) {
+            this.key = key;
+            this.state = state;
+        }
+    }
+
+    private static final class ActiveTopology {
+
+        final TopologyGraph graph;
+        final Map<NodeId, DemoPeer> peersByNode;
+        final List<LinkView> links;
+
+        private ActiveTopology(TopologyGraph graph, Map<NodeId, DemoPeer> peersByNode, List<LinkView> links) {
+            this.graph = graph;
+            this.peersByNode = Collections.unmodifiableMap(new LinkedHashMap<NodeId, DemoPeer>(peersByNode));
+            this.links = Collections.unmodifiableList(new ArrayList<LinkView>(links));
+        }
+
+        static ActiveTopology empty() {
+            return new ActiveTopology(
+                new TopologyGraph(Collections.emptySet(), Collections.emptySet()),
+                Collections.emptyMap(),
+                Collections.emptyList()
+            );
+        }
+
+        int activeEdgeCount() {
+            return graph.getEdges().size();
+        }
+    }
+
+    private static final class PendingTransfer {
+
+        final long id;
+        final NodeId source;
+        final NodeId destination;
+        final RoutePath route;
+
+        private PendingTransfer(long id, NodeId source, NodeId destination, RoutePath route) {
+            this.id = id;
+            this.source = source;
+            this.destination = destination;
+            this.route = route;
+        }
+    }
+
+    private static final class SelectedRoute {
+
+        final DemoPeer source;
+        final RoutePath route;
+
+        private SelectedRoute(DemoPeer source, RoutePath route) {
+            this.source = source;
+            this.route = route;
+        }
+    }
+
+    private static final class Point {
+
+        final int x;
+        final int y;
+
+        private Point(int x, int y) {
+            this.x = x;
+            this.y = y;
         }
     }
 }
