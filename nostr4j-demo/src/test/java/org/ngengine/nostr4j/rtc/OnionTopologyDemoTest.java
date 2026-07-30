@@ -32,6 +32,7 @@ package org.ngengine.nostr4j.rtc;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
@@ -77,6 +78,15 @@ public class OnionTopologyDemoTest {
     }
 
     @Test
+    public void controlModelsSupportThreeThroughSixtyFourPeers() {
+        assertEquals(2, OnionTopologyDemo.maximumDirectPeersFor(3));
+        assertEquals(7, OnionTopologyDemo.maximumDirectPeersFor(8));
+        assertEquals(63, OnionTopologyDemo.maximumDirectPeersFor(64));
+        assertThrows(IllegalArgumentException.class, () -> OnionTopologyDemo.maximumDirectPeersFor(2));
+        assertThrows(IllegalArgumentException.class, () -> OnionTopologyDemo.maximumDirectPeersFor(65));
+    }
+
+    @Test
     public void selectsANonDirectMultiHopRouteFromActiveRtcEdges() {
         RoutingScope scope = new RoutingScope(
             new NostrKeyPair().getPublicKey(),
@@ -95,6 +105,29 @@ public class OnionTopologyDemoTest {
         assertEquals(3, route.getHopCount());
         assertEquals(nodes.get(0), route.getSource());
         assertEquals(nodes.get(3), route.getDestination());
+    }
+
+    @Test
+    public void selectsTheExactSenderAndRecipientChosenByTheControls() {
+        RoutingScope scope = new RoutingScope(
+            new NostrKeyPair().getPublicKey(),
+            OnionTopologyDemo.PROTOCOL_ID,
+            OnionTopologyDemo.APPLICATION_ID
+        );
+        List<NodeId> nodes = List.of(node(1), node(2), node(3), node(4));
+        Set<TopologyEdge> edges = new HashSet<TopologyEdge>();
+        edges.add(edge(scope, nodes.get(0), nodes.get(1)));
+        edges.add(edge(scope, nodes.get(1), nodes.get(2)));
+        edges.add(edge(scope, nodes.get(2), nodes.get(3)));
+        TopologyGraph graph = new TopologyGraph(new HashSet<NodeId>(nodes), edges);
+
+        RoutePath route = OnionTopologyDemo.chooseRoute(graph, nodes.get(1), nodes.get(3));
+
+        assertNotNull(route);
+        assertEquals(nodes.get(1), route.getSource());
+        assertEquals(nodes.get(3), route.getDestination());
+        assertEquals(2, route.getHopCount());
+        assertNull(OnionTopologyDemo.chooseRoute(graph, nodes.get(2), nodes.get(2)));
     }
 
     private static TopologyEdge edge(RoutingScope scope, NodeId first, NodeId second) {

@@ -33,12 +33,14 @@ package org.ngengine.nostr4j.rtc;
 import java.awt.BasicStroke;
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.GraphicsEnvironment;
+import java.awt.GridLayout;
 import java.awt.RenderingHints;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
@@ -64,21 +66,31 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.ConsoleHandler;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.swing.BorderFactory;
+import javax.swing.Box;
+import javax.swing.BoxLayout;
 import javax.swing.JButton;
+import javax.swing.JComboBox;
+import javax.swing.JComponent;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
+import javax.swing.JSlider;
+import javax.swing.JSpinner;
 import javax.swing.JSplitPane;
 import javax.swing.JTextArea;
+import javax.swing.JTextField;
+import javax.swing.SpinnerNumberModel;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
+import javax.swing.border.EmptyBorder;
 import org.ngengine.nostr4j.NostrPool;
 import org.ngengine.nostr4j.NostrRelay;
 import org.ngengine.nostr4j.RTCSettings;
@@ -94,6 +106,8 @@ import org.ngengine.nostr4j.rtc.routing.RouteTransportProfile;
 import org.ngengine.nostr4j.rtc.routing.RoutedTransportEngine;
 import org.ngengine.nostr4j.rtc.routing.RoutingScope;
 import org.ngengine.nostr4j.rtc.routing.WeightedRoutePlanner;
+import org.ngengine.nostr4j.rtc.routing.broadcast.BroadcastTree;
+import org.ngengine.nostr4j.rtc.routing.broadcast.BroadcastTreeBuilder;
 import org.ngengine.nostr4j.rtc.routing.topology.TopologyControlPlane;
 import org.ngengine.nostr4j.rtc.routing.topology.TopologyEdge;
 import org.ngengine.nostr4j.rtc.routing.topology.TopologyGraph;
@@ -138,6 +152,8 @@ public final class OnionTopologyDemo extends JFrame {
     private final AtomicBoolean closing = new AtomicBoolean();
     private final AtomicBoolean verified = new AtomicBoolean();
     private final AtomicBoolean broadcastVerified = new AtomicBoolean();
+    private final AtomicInteger verificationStage = new AtomicInteger();
+    private final AtomicLong networkSequence = new AtomicLong();
     private final ExecutorService networkExecutor = Executors.newSingleThreadExecutor(r -> daemonThread(r, "onion-demo-network")
     );
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(
@@ -151,22 +167,42 @@ public final class OnionTopologyDemo extends JFrame {
     private final JLabel relayStatus = new JLabel(DEFAULT_RELAY);
     private final JButton sendButton = new JButton("Send routed packet");
     private final JButton broadcastButton = new JButton("Broadcast");
+    private final JButton rebuildButton = new JButton("Rebuild and reconnect");
+    private final SpinnerNumberModel peerModel;
+    private final SpinnerNumberModel directConnectionsModel;
+    private final JSpinner peerSpinner;
+    private final JSpinner directConnectionsSpinner;
+    private final JComboBox<String> sender = new JComboBox<String>();
+    private final JComboBox<String> recipient = new JComboBox<String>();
+    private final JTextField message = new JTextField("Hello over real onion routing");
+    private final JSlider hopDelay = new JSlider(150, 1800, 750);
 
     private volatile NostrPool pool;
     private volatile NostrTURNPool turnPool;
     private volatile NostrKeyPair roomKeys;
     private volatile RoutingScope routingScope;
     private volatile RoutePath highlightedRoute;
+    private volatile BroadcastTree highlightedBroadcast;
     private volatile long highlightedAtNanos;
+    private volatile int configuredPeerCount;
+    private volatile int configuredMaxDirectPeers;
+    private volatile int visualHopDelayMillis = 750;
     private volatile String lastResult = "Waiting for real WebRTC links";
     private volatile String lastTopologySummary = "";
 
     private OnionTopologyDemo(Options options) {
         super("nostr4j · Real Onion WebRTC Topology");
         this.options = options;
+        this.configuredPeerCount = options.peerCount;
+        this.configuredMaxDirectPeers = options.maxDirectPeers;
+        this.peerModel = new SpinnerNumberModel(options.peerCount, 3, 64, 1);
+        this.directConnectionsModel =
+            new SpinnerNumberModel(options.maxDirectPeers, RTCSettings.MIN_MAX_DIRECT_PEERS, options.peerCount - 1, 1);
+        this.peerSpinner = new JSpinner(peerModel);
+        this.directConnectionsSpinner = new JSpinner(directConnectionsModel);
         setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
-        setMinimumSize(new Dimension(980, 720));
-        setSize(1220, 820);
+        setMinimumSize(new Dimension(1180, 760));
+        setSize(1480, 920);
         setLocationByPlatform(true);
         getContentPane().setBackground(BACKGROUND);
         buildUi();
@@ -227,17 +263,29 @@ public final class OnionTopologyDemo extends JFrame {
         title.setFont(title.getFont().deriveFont(Font.BOLD, 17f));
         header.add(title, BorderLayout.WEST);
 
-        JPanel actions = new JPanel();
-        actions.setOpaque(false);
         configureButton(sendButton);
         configureButton(broadcastButton);
+        configureButton(rebuildButton);
         sendButton.setEnabled(false);
         broadcastButton.setEnabled(false);
-        sendButton.addActionListener(event -> triggerRoutedSend(false));
-        broadcastButton.addActionListener(event -> triggerBroadcast());
-        actions.add(sendButton);
-        actions.add(broadcastButton);
-        header.add(actions, BorderLayout.EAST);
+        rebuildButton.setEnabled(false);
+        sender.setEnabled(false);
+        recipient.setEnabled(false);
+        message.setEnabled(false);
+        sendButton.addActionListener(event -> triggerRoutedSend());
+        broadcastButton.addActionListener(event -> triggerBroadcast((String) sender.getSelectedItem(), message.getText()));
+        rebuildButton.addActionListener(event -> requestRebuild());
+        peerSpinner.setName("peerCount");
+        directConnectionsSpinner.setName("maxDirectConnections");
+        sender.setName("sender");
+        recipient.setName("recipient");
+        message.setName("payload");
+        hopDelay.setName("hopDelay");
+        rebuildButton.setName("rebuildTopology");
+        sendButton.setName("sendUnicast");
+        broadcastButton.setName("sendBroadcast");
+        peerSpinner.addChangeListener(event -> updateDirectConnectionsMaximum());
+        hopDelay.addChangeListener(event -> visualHopDelayMillis = hopDelay.getValue());
 
         JPanel footer = new JPanel(new BorderLayout(12, 0));
         footer.setBackground(PANEL);
@@ -264,7 +312,90 @@ public final class OnionTopologyDemo extends JFrame {
 
         add(header, BorderLayout.NORTH);
         add(split, BorderLayout.CENTER);
+        add(buildControls(), BorderLayout.EAST);
         add(footer, BorderLayout.SOUTH);
+    }
+
+    private JComponent buildControls() {
+        JPanel controls = new JPanel();
+        controls.setLayout(new BoxLayout(controls, BoxLayout.Y_AXIS));
+        controls.setPreferredSize(new Dimension(370, 820));
+        controls.setBorder(new EmptyBorder(18, 18, 18, 18));
+        controls.setBackground(PANEL);
+
+        JLabel help = new JLabel(
+            "<html>Configure and rebuild real WebRTC rooms, then choose exactly which logical peers exchange data.</html>"
+        );
+        help.setForeground(MUTED);
+        help.setAlignmentX(Component.LEFT_ALIGNMENT);
+        controls.add(help);
+        controls.add(Box.createVerticalStrut(18));
+
+        controls.add(sectionLabel("TOPOLOGY"));
+        controls.add(labeled("Peers in the room", peerSpinner));
+        controls.add(labeled("Max direct connections per peer", directConnectionsSpinner));
+        rebuildButton.setAlignmentX(Component.LEFT_ALIGNMENT);
+        rebuildButton.setMaximumSize(new Dimension(Integer.MAX_VALUE, 38));
+        controls.add(rebuildButton);
+        controls.add(Box.createVerticalStrut(20));
+
+        controls.add(sectionLabel("MESSAGE"));
+        controls.add(labeled("Sender", sender));
+        controls.add(labeled("Recipient", recipient));
+        controls.add(labeled("Payload", message));
+        JPanel actions = new JPanel(new GridLayout(1, 2, 8, 0));
+        actions.setOpaque(false);
+        actions.setAlignmentX(Component.LEFT_ALIGNMENT);
+        actions.setMaximumSize(new Dimension(Integer.MAX_VALUE, 38));
+        actions.add(sendButton);
+        actions.add(broadcastButton);
+        controls.add(actions);
+        controls.add(Box.createVerticalStrut(20));
+
+        controls.add(sectionLabel("VISUAL SPEED"));
+        hopDelay.setOpaque(false);
+        hopDelay.setMajorTickSpacing(550);
+        hopDelay.setPaintTicks(true);
+        hopDelay.setToolTipText("Visual delay between route hops; WebRTC transport is not throttled");
+        hopDelay.setAlignmentX(Component.LEFT_ALIGNMENT);
+        controls.add(hopDelay);
+        JLabel delayLabel = new JLabel("150 ms  ← fast        slow →  1800 ms");
+        delayLabel.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 10));
+        delayLabel.setForeground(MUTED);
+        delayLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        controls.add(delayLabel);
+        controls.add(Box.createVerticalGlue());
+
+        JLabel note = new JLabel(
+            "<html>The animation follows the route selected by nostr4j. Every green/blue edge is a real RTC/TURN link.</html>"
+        );
+        note.setForeground(MUTED);
+        note.setAlignmentX(Component.LEFT_ALIGNMENT);
+        controls.add(note);
+        return controls;
+    }
+
+    private JLabel sectionLabel(String text) {
+        JLabel label = new JLabel(text);
+        label.setFont(new Font(Font.MONOSPACED, Font.BOLD, 11));
+        label.setForeground(ONION);
+        label.setBorder(new EmptyBorder(0, 0, 7, 0));
+        label.setAlignmentX(Component.LEFT_ALIGNMENT);
+        return label;
+    }
+
+    private JComponent labeled(String text, JComponent component) {
+        JPanel row = new JPanel(new BorderLayout(0, 5));
+        row.setOpaque(false);
+        row.setAlignmentX(Component.LEFT_ALIGNMENT);
+        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 61));
+        JLabel label = new JLabel(text);
+        label.setForeground(MUTED);
+        row.add(label, BorderLayout.NORTH);
+        component.setPreferredSize(new Dimension(330, 32));
+        row.add(component, BorderLayout.CENTER);
+        row.setBorder(new EmptyBorder(0, 0, 9, 0));
+        return row;
     }
 
     private static void configureButton(JButton button) {
@@ -279,44 +410,56 @@ public final class OnionTopologyDemo extends JFrame {
         );
     }
 
+    private void updateDirectConnectionsMaximum() {
+        int peerCount = ((Number) peerModel.getNumber()).intValue();
+        int maximum = maximumDirectPeersFor(peerCount);
+        directConnectionsModel.setMaximum(Integer.valueOf(maximum));
+        if (((Number) directConnectionsModel.getNumber()).intValue() > maximum) {
+            directConnectionsModel.setValue(Integer.valueOf(maximum));
+        }
+    }
+
+    static int maximumDirectPeersFor(int peerCount) {
+        if (peerCount < 3 || peerCount > 64) {
+            throw new IllegalArgumentException("Peer count must be between 3 and 64");
+        }
+        return peerCount - 1;
+    }
+
+    private void requestRebuild() {
+        int peerCount = ((Number) peerSpinner.getValue()).intValue();
+        int maxDirectPeers = ((Number) directConnectionsSpinner.getValue()).intValue();
+        if (!sendBusy.compareAndSet(false, true)) {
+            log("Wait for the current network operation to finish before rebuilding");
+            return;
+        }
+        setControlsReady(false);
+        lastResult = "Rebuilding real WebRTC rooms";
+        networkExecutor.execute(() -> {
+            try {
+                connectSignalingPool();
+                closeCurrentNetwork();
+                buildNetwork(peerCount, maxDirectPeers);
+            } catch (Throwable error) {
+                closeCurrentNetwork();
+                lastResult = "Rebuild failed: " + rootMessage(error);
+                log("REBUILD FAILED: " + rootMessage(error));
+                error.printStackTrace();
+            } finally {
+                sendBusy.set(false);
+                SwingUtilities.invokeLater(() -> setControlsReady(!peers.isEmpty()));
+            }
+        });
+    }
+
     private void startNetwork() {
         networkExecutor.execute(() -> {
             try {
-                log("Connecting Nostr signaling pool to " + options.relay);
-                NostrPool newPool = new NostrPool();
-                newPool.addRelay(new NostrRelay(options.relay)).await();
-                pool = newPool;
-                SwingUtilities.invokeLater(() -> relayStatus.setText(options.relay + " · signaling connected"));
-
-                roomKeys =
-                    options.roomPrivateKey == null
-                        ? new NostrKeyPair()
-                        : new NostrKeyPair(NostrPrivateKey.fromHex(options.roomPrivateKey));
-                routingScope = new RoutingScope(roomKeys.getPublicKey(), PROTOCOL_ID, APPLICATION_ID);
-                turnPool = new NostrTURNPool();
-                RTCSettings settings = RTCSettings.DEFAULT.withMaxDirectPeers(options.maxDirectPeers);
-
-                for (int index = 0; index < options.peerCount; index++) {
-                    createPeer(index, settings);
+                connectSignalingPool();
+                buildNetwork(options.peerCount, options.maxDirectPeers);
+                if (options.verify) {
+                    scheduler.scheduleWithFixedDelay(this::triggerVerificationSend, 4L, 5L, TimeUnit.SECONDS);
                 }
-                for (DemoPeer peer : peers) {
-                    peer.room.start().await();
-                    log(peer.name + " announced dc4 presence " + shortId(peer.nodeId));
-                }
-
-                log(
-                    "Room " +
-                    roomKeys.getPublicKey().asHex() +
-                    " · " +
-                    options.peerCount +
-                    " peers · maxDirectPeers=" +
-                    options.maxDirectPeers
-                );
-                SwingUtilities.invokeLater(() -> {
-                    sendButton.setEnabled(true);
-                    broadcastButton.setEnabled(true);
-                });
-                scheduler.scheduleWithFixedDelay(() -> triggerRoutedSend(true), 4L, 5L, TimeUnit.SECONDS);
                 scheduler.scheduleWithFixedDelay(this::reportTopology, 2L, 3L, TimeUnit.SECONDS);
                 if (options.verify) {
                     scheduler.schedule(
@@ -335,22 +478,135 @@ public final class OnionTopologyDemo extends JFrame {
                     );
                 }
             } catch (Throwable error) {
+                closeCurrentNetwork();
                 lastResult = "Startup failed: " + rootMessage(error);
                 log("STARTUP FAILED: " + rootMessage(error));
                 error.printStackTrace();
-                if (options.verify) shutdown(2);
+                if (options.verify) {
+                    shutdown(2);
+                } else {
+                    SwingUtilities.invokeLater(() -> {
+                        peerSpinner.setEnabled(true);
+                        directConnectionsSpinner.setEnabled(true);
+                        rebuildButton.setEnabled(true);
+                    });
+                }
             }
         });
     }
 
-    private void createPeer(int index, RTCSettings settings) {
+    private void connectSignalingPool() throws Exception {
+        if (pool != null) return;
+        log("Connecting Nostr signaling pool to " + options.relay);
+        NostrPool newPool = new NostrPool();
+        try {
+            newPool.addRelay(new NostrRelay(options.relay)).await();
+            pool = newPool;
+            SwingUtilities.invokeLater(() -> relayStatus.setText(options.relay + " · signaling connected"));
+        } catch (Exception error) {
+            newPool.close();
+            throw error;
+        }
+    }
+
+    private void buildNetwork(int peerCount, int maxDirectPeers) throws Exception {
+        configuredPeerCount = peerCount;
+        configuredMaxDirectPeers = maxDirectPeers;
+        verified.set(false);
+        broadcastVerified.set(false);
+        pendingTransfers.clear();
+        broadcastReceivers.clear();
+        highlightedRoute = null;
+        highlightedBroadcast = null;
+        lastTopologySummary = "";
+
+        roomKeys =
+            options.roomPrivateKey == null
+                ? new NostrKeyPair()
+                : new NostrKeyPair(NostrPrivateKey.fromHex(options.roomPrivateKey));
+        routingScope = new RoutingScope(roomKeys.getPublicKey(), PROTOCOL_ID, APPLICATION_ID);
+        turnPool = new NostrTURNPool();
+        RTCSettings settings = RTCSettings.DEFAULT.withMaxDirectPeers(maxDirectPeers);
+        long generation = networkSequence.incrementAndGet();
+
+        for (int index = 0; index < peerCount; index++) {
+            createPeer(index, generation, settings);
+        }
+        SwingUtilities.invokeLater(this::populatePeerSelectors);
+        for (DemoPeer peer : peers) {
+            peer.room.start().await();
+            log(peer.name + " announced dc4 presence " + shortId(peer.nodeId));
+        }
+
+        lastResult = "Waiting for real WebRTC links";
+        log("Room " + roomKeys.getPublicKey().asHex() + " · " + peerCount + " peers · maxDirectPeers=" + maxDirectPeers);
+        SwingUtilities.invokeLater(() -> setControlsReady(true));
+    }
+
+    private void closeCurrentNetwork() {
+        if (!peers.isEmpty()) log("Closing " + peers.size() + " current WebRTC rooms");
+        ArrayList<DemoPeer> previousPeers = new ArrayList<DemoPeer>(peers);
+        peers.clear();
+        peersByIdentity.clear();
+        pendingTransfers.clear();
+        broadcastReceivers.clear();
+        highlightedRoute = null;
+        highlightedBroadcast = null;
+        routingScope = null;
+        for (DemoPeer peer : previousPeers) {
+            try {
+                peer.room.close();
+            } catch (Throwable ignored) {}
+        }
+        NostrTURNPool previousTurnPool = turnPool;
+        turnPool = null;
+        if (previousTurnPool != null) previousTurnPool.close();
+        NostrKeyPair previousRoomKeys = roomKeys;
+        roomKeys = null;
+        if (previousRoomKeys != null) previousRoomKeys.close();
+        SwingUtilities.invokeLater(this::populatePeerSelectors);
+    }
+
+    private void setControlsReady(boolean networkReady) {
+        boolean configurable = !options.verify && !closing.get() && !sendBusy.get();
+        peerSpinner.setEnabled(configurable);
+        directConnectionsSpinner.setEnabled(configurable);
+        rebuildButton.setEnabled(configurable);
+        sender.setEnabled(networkReady);
+        recipient.setEnabled(networkReady);
+        message.setEnabled(networkReady);
+        sendButton.setEnabled(networkReady && !closing.get() && !sendBusy.get());
+        broadcastButton.setEnabled(networkReady && !closing.get() && !sendBusy.get());
+    }
+
+    private void populatePeerSelectors() {
+        Object previousSender = sender.getSelectedItem();
+        Object previousRecipient = recipient.getSelectedItem();
+        sender.removeAllItems();
+        recipient.removeAllItems();
+        for (DemoPeer peer : peers) {
+            sender.addItem(peer.name);
+            recipient.addItem(peer.name);
+        }
+        restoreSelection(sender, previousSender, 0);
+        restoreSelection(recipient, previousRecipient, Math.min(1, Math.max(0, peers.size() - 1)));
+    }
+
+    private static void restoreSelection(JComboBox<String> selector, Object previous, int fallbackIndex) {
+        if (previous != null) selector.setSelectedItem(previous);
+        if (selector.getSelectedIndex() < 0 && selector.getItemCount() > 0) {
+            selector.setSelectedIndex(Math.min(fallbackIndex, selector.getItemCount() - 1));
+        }
+    }
+
+    private void createPeer(int index, long generation, RTCSettings settings) {
         NostrKeyPair identity = new NostrKeyPair();
         NostrRTCLocalPeer local = new NostrRTCLocalPeer(
             new NostrKeyPairSigner(identity),
             options.stunServers,
             APPLICATION_ID,
             PROTOCOL_ID,
-            "onion-" + roomKeys.getPublicKey().asHex().substring(0, 10) + "-" + index,
+            "onion-" + roomKeys.getPublicKey().asHex().substring(0, 10) + "-" + generation + "-" + index,
             roomKeys,
             null
         );
@@ -371,8 +627,9 @@ public final class OnionTopologyDemo extends JFrame {
     }
 
     private void onApplicationMessage(DemoPeer receiver, NostrRTCPeer remote, ByteBuffer payload) {
+        if (!peers.contains(receiver)) return;
         String message = StandardCharsets.UTF_8.decode(payload.asReadOnlyBuffer()).toString();
-        String[] fields = message.split("\\|", -1);
+        String[] fields = message.split("\\|", 6);
         if (fields.length < 5 || !MESSAGE_PREFIX.equals(fields[0])) {
             log(receiver.name + " received " + payload.remaining() + " application bytes");
             return;
@@ -384,22 +641,35 @@ public final class OnionTopologyDemo extends JFrame {
             return;
         }
         String kind = fields[1];
+        String applicationPayload = fields.length == 6 ? fields[5] : "";
         receiver.received.incrementAndGet();
         PendingTransfer pending = pendingTransfers.remove(id);
         if ("route".equals(kind)) {
             int hops = pending == null ? 0 : pending.route.getHopCount();
             lastResult = receiver.name + " received routed #" + id + " across " + hops + " WebRTC hops";
-            log("DELIVERED #" + id + " to " + receiver.name + " from " + shortPeer(remote) + " · hops=" + hops);
+            log(
+                "DELIVERED #" +
+                id +
+                " to " +
+                receiver.name +
+                " from " +
+                shortPeer(remote) +
+                " · hops=" +
+                hops +
+                " · payload=\"" +
+                applicationPayload +
+                "\""
+            );
             if (pending != null && pending.destination.equals(receiver.nodeId) && pending.route.getHopCount() > 1) {
                 verified.set(true);
                 log("VERIFIED: nostr4j onion payload crossed real WebRTC DataChannels " + describe(pending.route));
                 if (options.verify) {
-                    scheduler.schedule(this::triggerBroadcast, 800L, TimeUnit.MILLISECONDS);
+                    scheduler.schedule(() -> triggerBroadcast(), 800L, TimeUnit.MILLISECONDS);
                 }
             }
         } else if ("broadcast".equals(kind)) {
             lastResult = receiver.name + " received broadcast #" + id;
-            log("BROADCAST #" + id + " reached " + receiver.name);
+            log("BROADCAST #" + id + " reached " + receiver.name + " · payload=\"" + applicationPayload + "\"");
             Set<NodeId> receivers = broadcastReceivers.computeIfAbsent(id, ignored -> ConcurrentHashMap.newKeySet());
             receivers.add(receiver.nodeId);
             if (
@@ -410,22 +680,84 @@ public final class OnionTopologyDemo extends JFrame {
             ) {
                 log("VERIFIED: broadcast #" + id + " reached every other peer over the real WebRTC tree");
                 broadcastReceivers.remove(id);
-                scheduler.schedule(() -> shutdown(0), 800L, TimeUnit.MILLISECONDS);
+                if (verificationStage.compareAndSet(0, 1)) {
+                    scheduler.schedule(this::verifyRebuildControls, 1200L, TimeUnit.MILLISECONDS);
+                } else {
+                    log("VERIFIED: rebuilt controls produced a second working real WebRTC onion network");
+                    scheduler.schedule(() -> shutdown(0), 1500L, TimeUnit.MILLISECONDS);
+                }
             }
         }
         repaintSoon();
     }
 
-    private void triggerRoutedSend(boolean automatic) {
-        if (automatic && verified.get()) return;
+    private void verifyRebuildControls() {
+        if (closing.get()) return;
+        if (sendBusy.get()) {
+            scheduler.schedule(this::verifyRebuildControls, 500L, TimeUnit.MILLISECONDS);
+            return;
+        }
+        int rebuiltPeerCount = configuredPeerCount > 3 ? configuredPeerCount - 1 : configuredPeerCount + 1;
+        int rebuiltMaxDirectPeers = Math.min(configuredMaxDirectPeers, rebuiltPeerCount - 1);
+        log(
+            "VERIFY CONTROLS: changing peer spinner " +
+            configuredPeerCount +
+            " → " +
+            rebuiltPeerCount +
+            " and rebuilding real WebRTC rooms"
+        );
+        SwingUtilities.invokeLater(() -> {
+            peerSpinner.setValue(Integer.valueOf(rebuiltPeerCount));
+            directConnectionsSpinner.setValue(Integer.valueOf(rebuiltMaxDirectPeers));
+            requestRebuild();
+        });
+    }
+
+    private void triggerVerificationSend() {
+        if (closing.get() || verified.get() || sendBusy.get()) return;
+        ActiveTopology topology = captureTopology();
+        SelectedRoute selected = selectRoomRoute(topology);
+        if (selected == null) return;
+        DemoPeer destination = topology.peersByNode.get(selected.route.getDestination());
+        if (destination == null) return;
+        SwingUtilities.invokeLater(() -> {
+            if (closing.get() || verified.get() || sendBusy.get()) return;
+            sender.setSelectedItem(selected.source.name);
+            recipient.setSelectedItem(destination.name);
+            message.setText("Verification payload selected by the controls");
+            log("VERIFY CONTROLS: selected sender=" + selected.source.name + " recipient=" + destination.name);
+            triggerRoutedSend();
+        });
+    }
+
+    private void triggerRoutedSend() {
+        String requestedSource = (String) sender.getSelectedItem();
+        String requestedDestination = (String) recipient.getSelectedItem();
+        String requestedPayload = message.getText();
+        if (requestedSource == null || requestedDestination == null) {
+            log("Choose a sender and recipient");
+            return;
+        }
+        if (requestedSource.equals(requestedDestination)) {
+            log("Choose two different peers");
+            lastResult = "Sender and recipient must be different";
+            return;
+        }
         if (closing.get() || !sendBusy.compareAndSet(false, true)) return;
+        SwingUtilities.invokeLater(() -> setControlsReady(false));
         networkExecutor.execute(() -> {
             boolean handedOff = false;
             try {
                 ActiveTopology topology = captureTopology();
-                SelectedRoute selected = selectRoomRoute(topology);
+                SelectedRoute selected = selectRoomRoute(topology, requestedSource, requestedDestination);
                 if (selected == null) {
-                    if (!automatic) log("No active multi-hop path yet; waiting for mutually attested WebRTC links");
+                    log(
+                        "No active route from " +
+                        requestedSource +
+                        " to " +
+                        requestedDestination +
+                        " yet; waiting for mutually attested WebRTC links"
+                    );
                     lastResult =
                         "Converging: " +
                         topology.activeEdgeCount() +
@@ -441,21 +773,23 @@ public final class OnionTopologyDemo extends JFrame {
                     return;
                 }
                 NostrRTCSocket destinationSocket = source.room.getSocket(remote);
-                if (destinationSocket == null || destinationSocket.isPhysicalLinkEnabled()) {
-                    lastResult = "Waiting for a non-direct logical destination";
+                if (destinationSocket == null) {
+                    lastResult = "Waiting for the selected logical destination socket";
                     return;
                 }
                 NostrRTCChannel logicalChannel = destinationSocket.getChannel(NostrRTCSocket.DEFAULT_CHANNEL_NAME);
-                InternalRoutedTransport routedTransport = destinationSocket.getRoutedTransport();
-                boolean routeReady =
-                    logicalChannel != null &&
-                    routedTransport != null &&
-                    logicalChannel.isReady() &&
-                    routedTransport.isRouteReady(logicalChannel) &&
-                    routedTransport.shouldUseRoute(logicalChannel);
+                boolean routeReady = logicalChannel != null && logicalChannel.isReady();
+                if (route.getHopCount() > 1) {
+                    InternalRoutedTransport routedTransport = destinationSocket.getRoutedTransport();
+                    routeReady =
+                        routeReady &&
+                        routedTransport != null &&
+                        routedTransport.isRouteReady(logicalChannel) &&
+                        routedTransport.shouldUseRoute(logicalChannel);
+                }
                 if (!routeReady) {
-                    lastResult = "Selected path is visible but its logical routed channel is not ready";
-                    if (!automatic) log(lastResult);
+                    lastResult = "Selected path is visible but its logical channel is not ready";
+                    log(lastResult);
                     return;
                 }
 
@@ -463,10 +797,31 @@ public final class OnionTopologyDemo extends JFrame {
                 PendingTransfer transfer = new PendingTransfer(id, source.nodeId, destination.nodeId, route);
                 pendingTransfers.put(id, transfer);
                 highlightedRoute = route;
+                highlightedBroadcast = null;
                 highlightedAtNanos = System.nanoTime();
                 String message =
-                    MESSAGE_PREFIX + "|route|" + id + "|" + source.nodeId.asHex() + "|" + destination.nodeId.asHex();
-                log("SEND #" + id + " " + source.name + " → " + destination.name + " via " + describe(route));
+                    MESSAGE_PREFIX +
+                    "|route|" +
+                    id +
+                    "|" +
+                    source.nodeId.asHex() +
+                    "|" +
+                    destination.nodeId.asHex() +
+                    "|" +
+                    requestedPayload;
+                log(
+                    "SEND #" +
+                    id +
+                    " " +
+                    source.name +
+                    " → " +
+                    destination.name +
+                    " via " +
+                    describe(route) +
+                    " · payload=\"" +
+                    requestedPayload +
+                    "\""
+                );
                 handedOff = true;
                 source.room
                     .send(remote, ByteBuffer.wrap(message.getBytes(StandardCharsets.UTF_8)))
@@ -491,7 +846,23 @@ public final class OnionTopologyDemo extends JFrame {
     }
 
     private void triggerBroadcast() {
+        String sourceName = peers.isEmpty() ? null : peers.get(0).name;
+        SwingUtilities.invokeLater(() -> {
+            if (sourceName == null || closing.get()) return;
+            sender.setSelectedItem(sourceName);
+            message.setText("Verification broadcast payload selected by the controls");
+            log("VERIFY CONTROLS: selected broadcast sender=" + sourceName);
+            triggerBroadcast((String) sender.getSelectedItem(), message.getText());
+        });
+    }
+
+    private void triggerBroadcast(String sourceName, String applicationPayload) {
+        if (sourceName == null) {
+            log("Choose the broadcast sender");
+            return;
+        }
         if (closing.get() || !sendBusy.compareAndSet(false, true)) return;
+        SwingUtilities.invokeLater(() -> setControlsReady(false));
         networkExecutor.execute(() -> {
             boolean handedOff = false;
             try {
@@ -500,12 +871,35 @@ public final class OnionTopologyDemo extends JFrame {
                     log("Broadcast waits for one connected, mutually attested topology");
                     return;
                 }
-                DemoPeer source = peers.get(0);
+                DemoPeer source = findPeer(sourceName);
+                if (source == null) {
+                    log("The selected broadcast sender is no longer part of the current room");
+                    return;
+                }
+                highlightedRoute = null;
+                highlightedBroadcast = new BroadcastTreeBuilder().build(topology.graph, source.nodeId);
+                highlightedAtNanos = System.nanoTime();
                 long id = transferSequence.incrementAndGet();
                 String message =
-                    MESSAGE_PREFIX + "|broadcast|" + id + "|" + source.nodeId.asHex() + "|" + Instant.now().toEpochMilli();
+                    MESSAGE_PREFIX +
+                    "|broadcast|" +
+                    id +
+                    "|" +
+                    source.nodeId.asHex() +
+                    "|" +
+                    Instant.now().toEpochMilli() +
+                    "|" +
+                    applicationPayload;
                 broadcastReceivers.put(id, ConcurrentHashMap.newKeySet());
-                log("BROADCAST #" + id + " from " + source.name + " through nostr4j's WebRTC tree");
+                log(
+                    "BROADCAST #" +
+                    id +
+                    " from " +
+                    source.name +
+                    " through nostr4j's WebRTC tree · payload=\"" +
+                    applicationPayload +
+                    "\""
+                );
                 handedOff = true;
                 source.room
                     .broadcast(ByteBuffer.wrap(message.getBytes(StandardCharsets.UTF_8)))
@@ -531,6 +925,7 @@ public final class OnionTopologyDemo extends JFrame {
 
     private void finishSend() {
         sendBusy.set(false);
+        SwingUtilities.invokeLater(() -> setControlsReady(!peers.isEmpty()));
         repaintSoon();
     }
 
@@ -576,6 +971,14 @@ public final class OnionTopologyDemo extends JFrame {
         return selected;
     }
 
+    static RoutePath chooseRoute(TopologyGraph graph, NodeId source, NodeId destination) {
+        if (source.equals(destination) || !graph.getNodes().contains(source) || !graph.getNodes().contains(destination)) {
+            return null;
+        }
+        List<RoutePath> routes = new WeightedRoutePlanner().plan(graph, source, destination, Instant.now());
+        return routes.isEmpty() ? null : routes.get(0);
+    }
+
     private SelectedRoute selectRoomRoute(ActiveTopology active) {
         SelectedRoute selected = null;
         for (DemoPeer peer : peers) {
@@ -590,6 +993,21 @@ public final class OnionTopologyDemo extends JFrame {
             }
         }
         return selected;
+    }
+
+    private SelectedRoute selectRoomRoute(ActiveTopology active, String sourceName, String destinationName) {
+        DemoPeer source = findPeer(sourceName);
+        DemoPeer destination = findPeer(destinationName);
+        if (source == null || destination == null) return null;
+        RoutePath route = chooseRoute(source.room.getRoutingTopology(), source.nodeId, destination.nodeId);
+        return route == null || !pathIsPhysicallyActive(route, active.graph) ? null : new SelectedRoute(source, route);
+    }
+
+    private DemoPeer findPeer(String name) {
+        for (DemoPeer peer : peers) {
+            if (peer.name.equals(name)) return peer;
+        }
+        return null;
     }
 
     private static boolean pathIsPhysicallyActive(RoutePath route, TopologyGraph active) {
@@ -682,7 +1100,9 @@ public final class OnionTopologyDemo extends JFrame {
             "peers " +
             peers.size() +
             "/" +
-            options.peerCount +
+            configuredPeerCount +
+            "  ·  max direct " +
+            configuredMaxDirectPeers +
             "  ·  logical sockets " +
             logical +
             "/" +
@@ -739,8 +1159,7 @@ public final class OnionTopologyDemo extends JFrame {
 
     private void shutdown(int exitCode) {
         if (!closing.compareAndSet(false, true)) return;
-        sendButton.setEnabled(false);
-        broadcastButton.setEnabled(false);
+        SwingUtilities.invokeLater(() -> setControlsReady(false));
         Thread closer = daemonThread(
             () -> {
                 if (options.verify) {
@@ -758,14 +1177,9 @@ public final class OnionTopologyDemo extends JFrame {
                     haltWatchdog.start();
                 }
                 log("Closing rooms and Nostr signaling");
-                for (DemoPeer peer : peers) {
-                    try {
-                        peer.room.close();
-                    } catch (Throwable ignored) {}
-                }
-                NostrTURNPool currentTurnPool = turnPool;
-                if (currentTurnPool != null) currentTurnPool.close();
+                closeCurrentNetwork();
                 NostrPool currentPool = pool;
+                pool = null;
                 if (currentPool != null) currentPool.close();
                 scheduler.shutdownNow();
                 networkExecutor.shutdownNow();
@@ -877,7 +1291,7 @@ public final class OnionTopologyDemo extends JFrame {
             if (peerCount < 3 || peerCount > 64) {
                 throw new IllegalArgumentException("Peer count must be between 3 and 64");
             }
-            if (maxDirectPeers < RTCSettings.MIN_MAX_DIRECT_PEERS || maxDirectPeers >= peerCount) {
+            if (maxDirectPeers < RTCSettings.MIN_MAX_DIRECT_PEERS || maxDirectPeers > maximumDirectPeersFor(peerCount)) {
                 throw new IllegalArgumentException("maxDirectPeers must be between 2 and peers - 1");
             }
             if (timeoutSeconds < 10) {
@@ -968,6 +1382,7 @@ public final class OnionTopologyDemo extends JFrame {
                 Map<NodeId, Point> positions = positions(topology.peersByNode.keySet(), getWidth(), getHeight());
                 drawLinks(g, topology.links, positions);
                 drawHighlightedRoute(g, positions);
+                drawHighlightedBroadcast(g, positions);
                 drawNodes(g, topology, positions);
                 drawLegend(g);
             } finally {
@@ -995,9 +1410,11 @@ public final class OnionTopologyDemo extends JFrame {
 
         private void drawHighlightedRoute(Graphics2D g, Map<NodeId, Point> positions) {
             RoutePath route = highlightedRoute;
-            if (route == null) return;
+            if (route == null || route.getHopCount() == 0) return;
             long elapsed = System.nanoTime() - highlightedAtNanos;
-            if (elapsed > TimeUnit.SECONDS.toNanos(8)) return;
+            long hopDuration = TimeUnit.MILLISECONDS.toNanos(Math.max(1, visualHopDelayMillis));
+            long routeDuration = hopDuration * route.getHopCount();
+            if (elapsed > routeDuration + TimeUnit.SECONDS.toNanos(3)) return;
             g.setColor(ONION);
             g.setStroke(new BasicStroke(6f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
             List<NodeId> nodes = route.getNodes();
@@ -1006,10 +1423,9 @@ public final class OnionTopologyDemo extends JFrame {
                 Point second = positions.get(nodes.get(index + 1));
                 if (first != null && second != null) g.drawLine(first.x, first.y, second.x, second.y);
             }
-            double phase = (elapsed / 1_000_000_000d) * 0.8d;
-            double edgePosition = phase % Math.max(1, route.getHopCount());
+            double edgePosition = Math.min(route.getHopCount(), (double) elapsed / hopDuration);
             int edgeIndex = Math.min(route.getHopCount() - 1, (int) edgePosition);
-            double fraction = edgePosition - edgeIndex;
+            double fraction = edgePosition >= route.getHopCount() ? 1d : edgePosition - edgeIndex;
             Point first = positions.get(nodes.get(edgeIndex));
             Point second = positions.get(nodes.get(edgeIndex + 1));
             if (first != null && second != null) {
@@ -1017,6 +1433,30 @@ public final class OnionTopologyDemo extends JFrame {
                 int y = (int) Math.round(first.y + (second.y - first.y) * fraction);
                 g.setColor(Color.WHITE);
                 g.fillOval(x - 6, y - 6, 12, 12);
+            }
+        }
+
+        private void drawHighlightedBroadcast(Graphics2D g, Map<NodeId, Point> positions) {
+            BroadcastTree tree = highlightedBroadcast;
+            if (tree == null) return;
+            long elapsed = System.nanoTime() - highlightedAtNanos;
+            long hopDuration = TimeUnit.MILLISECONDS.toNanos(Math.max(1, visualHopDelayMillis));
+            int maximumDepth = 0;
+            for (NodeId node : tree.getNodes()) maximumDepth = Math.max(maximumDepth, tree.getDepth(node));
+            if (elapsed > hopDuration * maximumDepth + TimeUnit.SECONDS.toNanos(3)) return;
+            double visibleDepth = Math.min(maximumDepth, (double) elapsed / hopDuration);
+            g.setColor(ONION);
+            g.setStroke(new BasicStroke(5f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            for (NodeId child : tree.getNodes()) {
+                NodeId parent = tree.getParent(child);
+                if (parent == null || tree.getDepth(child) > visibleDepth + 1d) continue;
+                Point first = positions.get(parent);
+                Point second = positions.get(child);
+                if (first == null || second == null) continue;
+                double fraction = Math.min(1d, Math.max(0d, visibleDepth - tree.getDepth(parent)));
+                int x = (int) Math.round(first.x + (second.x - first.x) * fraction);
+                int y = (int) Math.round(first.y + (second.y - first.y) * fraction);
+                g.drawLine(first.x, first.y, x, y);
             }
         }
 

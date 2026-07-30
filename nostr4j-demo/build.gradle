@@ -61,11 +61,11 @@ tasks.register('runOnionTopologyDemo', JavaExec) {
 
 tasks.register('verifyOnionTopologyDemo', JavaExec) {
     group = 'verification'
-    description = 'Opens the headful onion demo and verifies real multi-hop send plus tree broadcast'
+    description = 'Verifies headful controls, rebuild, multi-hop send, and broadcast over real WebRTC'
     mainClass = 'org.ngengine.nostr4j.rtc.OnionTopologyDemo'
     classpath = sourceSets.main.runtimeClasspath
     dependsOn tasks.named('classes')
-    args = ['--verify', '--peers=6', '--max-direct=2', '--timeout=120']
+    args = ['--verify', '--peers=6', '--max-direct=2', '--timeout=180']
     jvmArgs = [
         '-Djava.awt.headless=false',
         '-Dnge-platforms.allowLoopbackInURIs=true',
