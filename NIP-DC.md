@@ -137,7 +137,7 @@ PAYLOAD            uint8[*]
 
 ### 3.1 Fragmentation
 
-Maximum payload size is **65523 bytes**.
+Maximum application payload per fragment is **65491 bytes**. With the 12-byte Payload Envelope header, a complete framed fragment is at most **65503 bytes**. This universal limit applies to both WebRTC and TURN so that the same fragment can be retried on either transport.
 
 If a payload is larger, the sender **MUST** fragment it and the receiver **MUST** reassemble it using `FRAGMENT_ID` and `FRAGMENT_COUNT`.
 
@@ -238,14 +238,14 @@ Peers periodically broadcast presence so other peers can discover them.
     ["P", "<room hex pubkey>"],
     ["d", "<session id>"],
     ["i", "<protocol identifier>"],
-    ["version", "dc3"],
+    ["version", "dc4"],
     ["y", "<application id>"],
     ["expiration", "<unix timestamp seconds>"]
   ]
 }
 ```
 
-`version` **MUST** be `dc3`.
+`version` **MUST** be `dc4`.
 
 A peer **SHOULD** refresh presence before `expiration`.
 
@@ -723,10 +723,12 @@ The relay routes by reciprocal socket matching and **MUST NOT** interpret the pa
 
 #### Payload encryption
 
-The payload is encrypted using a NIP-44-like scheme:
+Each payload blob is encrypted using NIP-44 binary encryption:
 
 * generate a random 32-byte symmetric secret
-* use it as the conversation key to encrypt the raw binary payload
+* calculate the directional routing hash defined below
+* prefix the plaintext Payload Envelope with the 32-byte routing hash
+* use the symmetric secret as the conversation key to encrypt that prefixed plaintext
 * do not base64-encode the output
 
 That secret is then hex-encoded, encrypted with regular NIP-44 using the sender/receiver conversation key, and included in the `enc` tag.
@@ -738,6 +740,32 @@ let secret = bytesToHex(randomBytes(32));
 const conversationKey = deriveConversationKey(senderPrivKey, receiverPubKey);
 const enc = ["enc", "nip44-v2", nip44Encrypt(secret, conversationKey)];
 ```
+
+NIP-44 permits at most 65535 plaintext bytes. The routing hash occupies 32 bytes, leaving at most 65503 bytes for the Payload Envelope and 65491 bytes for application data after its 12-byte header.
+
+#### Routing context
+
+The routing hash cryptographically binds a payload to its intended NIP-DC route:
+
+```text
+ROUTING_HASH = SHA-256(CANONICAL_ROUTING_CONTEXT)
+```
+
+`CANONICAL_ROUTING_CONTEXT` is the concatenation of the following fields in this exact order. Every field is encoded as a 4-byte unsigned big-endian byte length followed by the field bytes:
+
+1. UTF-8 bytes of `NIP-DC/TURN/DATA/ROUTING-HASH/v1`
+2. raw 32-byte `roomPubkey`
+3. UTF-8 `channelLabel`
+4. UTF-8 source `sessionId`
+5. UTF-8 target `sessionId`
+6. UTF-8 `protocolId`
+7. UTF-8 `applicationId`
+8. raw 32-byte source pubkey
+9. raw 32-byte target pubkey
+
+The context is directional: swapping source and target sessions or pubkeys produces a different hash. Public keys are encoded as their raw 32 bytes, not as hexadecimal text.
+
+`roomproof`, TURN URL or identity, envelope `VSOCKET_ID`, and envelope `MESSAGE_ID` are deliberately excluded. A relay may therefore perform the permitted envelope rewrite and peers may reuse the signed data header without changing the end-to-end routing binding.
 
 #### Header
 
@@ -754,7 +782,7 @@ const enc = ["enc", "nip44-v2", nip44Encrypt(secret, conversationKey)];
 
 #### Payload
 
-One or more encrypted binary blobs.
+One or more encrypted binary blobs. After authenticating and decrypting every blob, the receiver **MUST** require and verify the first 32 plaintext bytes against its locally calculated incoming routing hash. It **MUST** reject the complete TURN frame if any blob is too short or has a different hash, without delivering any blob or sending a successful `delivery_ack`. Once all blobs validate, the receiver strips the hashes and exposes only the original Payload Envelopes.
 
 #### Acceptance, ordering, and offline queueing
 

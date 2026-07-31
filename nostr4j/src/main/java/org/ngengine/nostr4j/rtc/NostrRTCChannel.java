@@ -45,6 +45,7 @@ import java.util.logging.Logger;
 import org.ngengine.nostr4j.rtc.listeners.NostrRTCChannelListener;
 import org.ngengine.nostr4j.rtc.listeners.NostrTURNChannelListener;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCPeer;
+import org.ngengine.nostr4j.rtc.turn.NostrTURNDataEvent;
 import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEPlatform;
 import org.ngengine.platform.transport.RTCDataChannel;
@@ -52,8 +53,10 @@ import org.ngengine.platform.transport.RTCDataChannel;
 public final class NostrRTCChannel {
 
     private static final Logger logger = Logger.getLogger(NostrRTCChannel.class.getName());
-    private static final int MAX_FRAGMENT_SIZE = 0xFFFF;
-    private static final int INNER_FRAME_HEADER_SIZE = Long.BYTES + Short.BYTES + Short.BYTES;
+    static final int PAYLOAD_ENVELOPE_HEADER_SIZE = Long.BYTES + Short.BYTES + Short.BYTES;
+    static final int MAX_FRAMED_PAYLOAD_SIZE = NostrTURNDataEvent.MAX_FRAMED_PAYLOAD_SIZE;
+    static final int MAX_APPLICATION_FRAGMENT_SIZE = MAX_FRAMED_PAYLOAD_SIZE - PAYLOAD_ENVELOPE_HEADER_SIZE;
+    private static final int INNER_FRAME_HEADER_SIZE = PAYLOAD_ENVELOPE_HEADER_SIZE;
     private static final int RECEIVE_DEDUP_WINDOW = 4096;
     private static final long FRAGMENT_REASSEMBLY_TIMEOUT_MS = 30_000L;
     private RTCDataChannel channel;
@@ -228,15 +231,7 @@ public final class NostrRTCChannel {
     }
 
     AsyncTask<Boolean> write(PreparedPacket packet) {
-        int limit = MAX_FRAGMENT_SIZE;
-        int payloadChunkSize;
-        if (limit <= 0) {
-            payloadChunkSize = Integer.MAX_VALUE - INNER_FRAME_HEADER_SIZE;
-        } else {
-            payloadChunkSize = Math.max(1, limit - INNER_FRAME_HEADER_SIZE);
-        }
-
-        ByteBuffer[] frames = encodePacketFragments(packet, payloadChunkSize);
+        ByteBuffer[] frames = encodePacketFragments(packet, MAX_APPLICATION_FRAGMENT_SIZE);
         AsyncTask<Boolean> chain = AsyncTask.completed(Boolean.TRUE);
         for (ByteBuffer frame : frames) {
             final ByteBuffer framePayload = frame.asReadOnlyBuffer();
@@ -251,8 +246,9 @@ public final class NostrRTCChannel {
         return chain;
     }
 
+    /** Returns the maximum application bytes carried by one Payload Envelope fragment. */
     public int getMaxFragmentSize() {
-        return MAX_FRAGMENT_SIZE;
+        return MAX_APPLICATION_FRAGMENT_SIZE;
     }
 
     private ByteBuffer[] encodePacketFragments(PreparedPacket packet, int payloadChunkSize) {

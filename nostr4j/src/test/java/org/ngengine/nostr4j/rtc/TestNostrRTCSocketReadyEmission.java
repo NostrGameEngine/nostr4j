@@ -330,10 +330,14 @@ public class TestNostrRTCSocketReadyEmission {
         try {
             socket = newSocket(executor);
             NostrRTCChannel channel = socket.createChannel("alpha");
-            assertEquals(0xFFFF, channel.getMaxFragmentSize());
+            assertEquals(65491, channel.getMaxFragmentSize());
 
-            int innerFrameHeaderSize = getInnerFrameHeaderSize();
-            int payloadChunkSize = channel.getMaxFragmentSize() - innerFrameHeaderSize;
+            int payloadChunkSize = channel.getMaxFragmentSize();
+            NostrRTCChannel.PreparedPacket oneByteOver = channel.prepareOutgoingPacket(
+                ByteBuffer.allocate(channel.getMaxFragmentSize() + 1)
+            );
+            assertEquals(2, encodePacketFragments(channel, oneByteOver, payloadChunkSize).length);
+
             byte[] payload = new byte[channel.getMaxFragmentSize() * 2 + 123];
             NostrRTCChannel.PreparedPacket packet = channel.prepareOutgoingPacket(ByteBuffer.wrap(payload));
 
@@ -342,7 +346,7 @@ public class TestNostrRTCSocketReadyEmission {
             for (ByteBuffer fragment : framed) {
                 assertTrue(
                     "Fragment plaintext exceeds NIP-44 max plaintext size",
-                    fragment.remaining() <= channel.getMaxFragmentSize()
+                    fragment.remaining() <= channel.getMaxFragmentSize() + getInnerFrameHeaderSize()
                 );
             }
         } finally {

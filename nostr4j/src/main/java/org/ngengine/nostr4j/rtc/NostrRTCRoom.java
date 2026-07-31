@@ -587,6 +587,7 @@ public final class NostrRTCRoom implements Closeable {
     }
 
     private void onAddAnnounce(NostrRTCConnectSignal announce) {
+        mergeSocketAdvertisedVersion(announce);
         for (NostrRTCRoomPeerDiscoveredListener listener : onPeerDiscoveredListeners) {
             try {
                 listener.onRoomPeerDiscovered(
@@ -601,6 +602,7 @@ public final class NostrRTCRoom implements Closeable {
     }
 
     private void onUpdateAnnounce(NostrRTCConnectSignal announce) {
+        mergeSocketAdvertisedVersion(announce);
         for (NostrRTCRoomPeerDiscoveredListener listener : onPeerDiscoveredListeners) {
             try {
                 listener.onRoomPeerDiscovered(
@@ -611,6 +613,13 @@ public final class NostrRTCRoom implements Closeable {
             } catch (Throwable e) {
                 logger.log(Level.SEVERE, "Exception in listener", e);
             }
+        }
+    }
+
+    private void mergeSocketAdvertisedVersion(NostrRTCConnectSignal announce) {
+        NostrRTCSocket socket = connections.get(announce.getPeer());
+        if (socket != null && socket.getRemotePeer() != null) {
+            socket.getRemotePeer().mergeAuthenticatedAnnouncement(announce.getPeer());
         }
     }
 

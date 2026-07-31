@@ -43,16 +43,22 @@ import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.nip44.Nip44;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCLocalPeer;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCPeer;
+import org.ngengine.nostr4j.rtc.signal.NostrRTCProtocolVersion;
 import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEPlatform;
 import org.ngengine.platform.NGEUtils;
 
 public final class NostrTURNDataEvent extends NostrTURNEvent {
 
+    public static final int NIP44_MAX_PLAINTEXT_SIZE = 0xFFFF;
+    public static final int ROUTING_HASH_SIZE = NostrTURNRoutingHash.ROUTING_HASH_SIZE;
+    public static final int MAX_FRAMED_PAYLOAD_SIZE = NIP44_MAX_PLAINTEXT_SIZE - ROUTING_HASH_SIZE;
+
     private final long vsocketId;
     private final NostrRTCPeer remotePeer;
     private volatile AsyncTask<SignedNostrEvent> event;
     private final AsyncTask<ByteBuffer> encryptionKey;
+    private final ByteBuffer routingHash;
     private final AtomicInteger messageCounter = new AtomicInteger(1);
 
     // created locally to send
@@ -81,7 +87,27 @@ public final class NostrTURNDataEvent extends NostrTURNEvent {
         long vsocketId,
         ByteBuffer encryptionKey
     ) {
-        return new NostrTURNDataEvent(localPeer, remotePeer, roomKeyPair, channelLabel, vsocketId, encryptionKey);
+        return new NostrTURNDataEvent(
+            localPeer,
+            remotePeer,
+            roomKeyPair,
+            channelLabel,
+            vsocketId,
+            encryptionKey,
+            computeOutgoingRoutingHash(localPeer, remotePeer, channelLabel)
+        );
+    }
+
+    public static NostrTURNDataEvent createOutgoing(
+        NostrRTCLocalPeer localPeer,
+        NostrRTCPeer remotePeer,
+        NostrKeyPair roomKeyPair,
+        String channelLabel,
+        long vsocketId,
+        ByteBuffer encryptionKey,
+        ByteBuffer routingHash
+    ) {
+        return new NostrTURNDataEvent(localPeer, remotePeer, roomKeyPair, channelLabel, vsocketId, encryptionKey, routingHash);
     }
 
     private NostrTURNDataEvent(
@@ -90,7 +116,8 @@ public final class NostrTURNDataEvent extends NostrTURNEvent {
         NostrKeyPair roomKeyPair,
         String channelLabel,
         long vsocketId,
-        ByteBuffer encryptionKey
+        ByteBuffer encryptionKey,
+        ByteBuffer routingHash
     ) {
         super("data", localPeer, remotePeer, roomKeyPair, channelLabel);
         this.remotePeer = remotePeer;
@@ -104,6 +131,7 @@ public final class NostrTURNDataEvent extends NostrTURNEvent {
             );
         }
         this.encryptionKey = AsyncTask.completed(encryptionKey.slice().asReadOnlyBuffer());
+        this.routingHash = validateRoutingHash(routingHash);
     }
 
     public static NostrTURNDataEvent parseIncoming(
@@ -114,7 +142,27 @@ public final class NostrTURNDataEvent extends NostrTURNEvent {
         String channelLabel,
         long envelopeVsocketId
     ) {
-        return new NostrTURNDataEvent(event, localPeer, remotePeer, roomKeyPair, channelLabel, envelopeVsocketId);
+        return new NostrTURNDataEvent(
+            event,
+            localPeer,
+            remotePeer,
+            roomKeyPair,
+            channelLabel,
+            envelopeVsocketId,
+            computeIncomingRoutingHash(localPeer, remotePeer, channelLabel)
+        );
+    }
+
+    public static NostrTURNDataEvent parseIncoming(
+        SignedNostrEvent event,
+        NostrRTCLocalPeer localPeer,
+        NostrRTCPeer remotePeer,
+        NostrKeyPair roomKeyPair,
+        String channelLabel,
+        long envelopeVsocketId,
+        ByteBuffer routingHash
+    ) {
+        return new NostrTURNDataEvent(event, localPeer, remotePeer, roomKeyPair, channelLabel, envelopeVsocketId, routingHash);
     }
 
     // Received from peer
@@ -124,11 +172,13 @@ public final class NostrTURNDataEvent extends NostrTURNEvent {
         NostrRTCPeer remotePeer,
         NostrKeyPair roomKeyPair,
         String channelLabel,
-        long envelopeVsocketId
+        long envelopeVsocketId,
+        ByteBuffer routingHash
     ) {
         super("data", event, localPeer, null, null, null);
         this.remotePeer = remotePeer;
         this.vsocketId = envelopeVsocketId;
+        this.routingHash = validateRoutingHash(routingHash);
         if (remotePeer == null) {
             throw new IllegalArgumentException("Remote peer is required for TURN data event");
         }
@@ -207,9 +257,10 @@ public final class NostrTURNDataEvent extends NostrTURNEvent {
         List<AsyncTask<ByteBuffer>> encryptedTasks = new ArrayList<>();
         for (ByteBuffer payload : payloads) {
             ByteBuffer payloadView = payload.slice().asReadOnlyBuffer();
+            ByteBuffer plaintext = addRoutingHash(payloadView);
             encryptedTasks.add(
                 encryptionKey.compose(encKey -> {
-                    return Nip44.encryptBinary(payloadView, encKey.asReadOnlyBuffer());
+                    return Nip44.encryptBinary(plaintext, encKey.asReadOnlyBuffer());
                 })
             );
         }
@@ -267,10 +318,104 @@ public final class NostrTURNDataEvent extends NostrTURNEvent {
                 .then(decryptedPayloads -> {
                     List<ByteBuffer> decryptedBuffers = new ArrayList<>();
                     for (ByteBuffer decrypted : decryptedPayloads) {
-                        decryptedBuffers.add(decrypted.asReadOnlyBuffer());
+                        decryptedBuffers.add(stripAndValidateRoutingHash(decrypted));
                     }
                     return decryptedBuffers;
                 });
         });
+    }
+
+    private ByteBuffer addRoutingHash(ByteBuffer payload) {
+        if (routingHash == null) {
+            return payload;
+        }
+        if (payload.remaining() > MAX_FRAMED_PAYLOAD_SIZE) {
+            throw new IllegalArgumentException(
+                "TURN dc4 framed payload too large: " +
+                payload.remaining() +
+                " bytes, maximum supported is " +
+                MAX_FRAMED_PAYLOAD_SIZE
+            );
+        }
+        ByteBuffer plaintext = NGEPlatform.get().getNativeAllocator().malloc(ROUTING_HASH_SIZE + payload.remaining());
+        plaintext.put(routingHash.duplicate());
+        plaintext.put(payload.duplicate());
+        plaintext.flip();
+        return plaintext.asReadOnlyBuffer();
+    }
+
+    private ByteBuffer stripAndValidateRoutingHash(ByteBuffer decrypted) {
+        ByteBuffer plaintext = decrypted.slice().asReadOnlyBuffer();
+        if (routingHash == null) {
+            return plaintext;
+        }
+        if (plaintext.remaining() < ROUTING_HASH_SIZE) {
+            throw new IllegalArgumentException("TURN dc4 payload is missing its routing hash");
+        }
+        int mismatch = 0;
+        int plaintextStart = plaintext.position();
+        int expectedStart = routingHash.position();
+        for (int i = 0; i < ROUTING_HASH_SIZE; i++) {
+            mismatch |= plaintext.get(plaintextStart + i) ^ routingHash.get(expectedStart + i);
+        }
+        if (mismatch != 0) {
+            throw new IllegalArgumentException("TURN dc4 routing hash mismatch");
+        }
+        plaintext.position(plaintextStart + ROUTING_HASH_SIZE);
+        return plaintext.slice().asReadOnlyBuffer();
+    }
+
+    private static ByteBuffer validateRoutingHash(ByteBuffer routingHash) {
+        if (routingHash == null) {
+            return null;
+        }
+        if (routingHash.remaining() != ROUTING_HASH_SIZE) {
+            throw new IllegalArgumentException("TURN routing hash must be " + ROUTING_HASH_SIZE + " bytes");
+        }
+        ByteBuffer copy = NGEPlatform.get().getNativeAllocator().malloc(ROUTING_HASH_SIZE);
+        copy.put(routingHash.duplicate());
+        copy.flip();
+        return copy.asReadOnlyBuffer();
+    }
+
+    private static ByteBuffer computeOutgoingRoutingHash(
+        NostrRTCLocalPeer localPeer,
+        NostrRTCPeer remotePeer,
+        String channelLabel
+    ) {
+        if (!usesRoutingHash(localPeer, remotePeer)) {
+            return null;
+        }
+        return computeRoutingHash(localPeer, remotePeer, channelLabel);
+    }
+
+    private static ByteBuffer computeIncomingRoutingHash(
+        NostrRTCLocalPeer localPeer,
+        NostrRTCPeer remotePeer,
+        String channelLabel
+    ) {
+        if (!usesRoutingHash(localPeer, remotePeer)) {
+            return null;
+        }
+        return computeRoutingHash(remotePeer, localPeer, channelLabel);
+    }
+
+    private static boolean usesRoutingHash(NostrRTCPeer localPeer, NostrRTCPeer remotePeer) {
+        return (
+            Math.min(localPeer.getNipDcVersion(), remotePeer.getNipDcVersion()) >= NostrRTCProtocolVersion.ROUTING_HASH_VERSION
+        );
+    }
+
+    private static ByteBuffer computeRoutingHash(NostrRTCPeer sourcePeer, NostrRTCPeer targetPeer, String channelLabel) {
+        return NostrTURNRoutingHash.compute(
+            sourcePeer.getRoomPubkey(),
+            channelLabel,
+            sourcePeer.getSessionId(),
+            targetPeer.getSessionId(),
+            sourcePeer.getProtocolId(),
+            sourcePeer.getApplicationId(),
+            sourcePeer.getPubkey(),
+            targetPeer.getPubkey()
+        );
     }
 }

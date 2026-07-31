@@ -52,6 +52,7 @@ import org.ngengine.nostr4j.rtc.NostrTURNPool.TURNTransport;
 import org.ngengine.nostr4j.rtc.listeners.NostrTURNChannelListener;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCLocalPeer;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCPeer;
+import org.ngengine.nostr4j.rtc.signal.NostrRTCProtocolVersion;
 import org.ngengine.nostr4j.rtc.turn.NostrTURNAckEvent;
 import org.ngengine.nostr4j.rtc.turn.NostrTURNChallengeEvent;
 import org.ngengine.nostr4j.rtc.turn.NostrTURNCodec;
@@ -60,6 +61,7 @@ import org.ngengine.nostr4j.rtc.turn.NostrTURNDataEvent;
 import org.ngengine.nostr4j.rtc.turn.NostrTURNDeliveryAckEvent;
 import org.ngengine.nostr4j.rtc.turn.NostrTURNDisconnectEvent;
 import org.ngengine.nostr4j.rtc.turn.NostrTURNEvent;
+import org.ngengine.nostr4j.rtc.turn.NostrTURNRoutingHash;
 import org.ngengine.platform.AsyncExecutor;
 import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.ExecutionQueue;
@@ -84,6 +86,8 @@ public final class NostrTURNChannel {
     private final List<NostrTURNChannelListener> listeners = new CopyOnWriteArrayList<>();
 
     private final ByteBuffer encryptionKey;
+    private final ByteBuffer outgoingRoutingHash;
+    private final ByteBuffer incomingRoutingHash;
 
     private volatile TURNTransport transport;
     private volatile NostrTURNDataEvent incomingDataEvent;
@@ -183,6 +187,14 @@ public final class NostrTURNChannel {
         this.localPeer = Objects.requireNonNull(localPeer, "Local peer cannot be null");
         this.remotePeer = Objects.requireNonNull(remotePeer, "Remote peer cannot be null");
         this.channelLabel = Objects.requireNonNull(channelLabel, "Channel label cannot be null");
+        int negotiatedVersion = Math.min(localPeer.getNipDcVersion(), remotePeer.getNipDcVersion());
+        if (negotiatedVersion >= NostrRTCProtocolVersion.ROUTING_HASH_VERSION) {
+            this.outgoingRoutingHash = computeRoutingHash(localPeer, remotePeer, channelLabel);
+            this.incomingRoutingHash = computeRoutingHash(remotePeer, localPeer, channelLabel);
+        } else {
+            this.outgoingRoutingHash = null;
+            this.incomingRoutingHash = null;
+        }
         this.requiresDeliveryAck = reliable;
         this.maxDiff = maxDiff;
         this.vSocketId = nextVsocketId();
@@ -328,7 +340,8 @@ public final class NostrTURNChannel {
                     roomKeyPair,
                     channelLabel,
                     vSocketId,
-                    encryptionKey.asReadOnlyBuffer()
+                    encryptionKey.asReadOnlyBuffer(),
+                    outgoingRoutingHash == null ? null : outgoingRoutingHash.asReadOnlyBuffer()
                 );
         }
         final int messageId = nextOutgoingMessageId();
@@ -577,7 +590,15 @@ public final class NostrTURNChannel {
 
         long envelopeVsocketId = NostrTURNCodec.extractVsocketId(msg);
         incomingDataEvent =
-            NostrTURNDataEvent.parseIncoming(header, localPeer, remotePeer, roomKeyPair, channelLabel, envelopeVsocketId);
+            NostrTURNDataEvent.parseIncoming(
+                header,
+                localPeer,
+                remotePeer,
+                roomKeyPair,
+                channelLabel,
+                envelopeVsocketId,
+                incomingRoutingHash == null ? null : incomingRoutingHash.asReadOnlyBuffer()
+            );
 
         incomingDataEvent
             .decodeFramePayloads(msg)
@@ -959,6 +980,19 @@ public final class NostrTURNChannel {
             state +
             ", transportConnected=" +
             (transport != null && transport.isConnected())
+        );
+    }
+
+    private static ByteBuffer computeRoutingHash(NostrRTCPeer sourcePeer, NostrRTCPeer targetPeer, String channelLabel) {
+        return NostrTURNRoutingHash.compute(
+            sourcePeer.getRoomPubkey(),
+            channelLabel,
+            sourcePeer.getSessionId(),
+            targetPeer.getSessionId(),
+            sourcePeer.getProtocolId(),
+            sourcePeer.getApplicationId(),
+            sourcePeer.getPubkey(),
+            targetPeer.getPubkey()
         );
     }
 

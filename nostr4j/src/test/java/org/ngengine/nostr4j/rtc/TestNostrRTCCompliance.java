@@ -218,7 +218,7 @@ public class TestNostrRTCCompliance {
         );
 
         SignedNostrEvent event = NGEUtils.awaitNoThrow(connect.toEvent(null));
-        assertEquals("dc3", event.getFirstTagFirstValue("version"));
+        assertEquals("dc4", event.getFirstTagFirstValue("version"));
 
         try {
             new NostrRTCDisconnectSignal(signer, roomKeyPair, event);
@@ -250,7 +250,7 @@ public class TestNostrRTCCompliance {
             new NostrRTCConnectSignal(signer, roomKeyPair, event);
             fail("Expected connect version validation to fail");
         } catch (IllegalArgumentException expected) {
-            assertTrue(expected.getMessage().contains("Connect signaling version"));
+            assertTrue(expected.getMessage().contains("Unsupported NIP-DC version"));
         }
     }
 

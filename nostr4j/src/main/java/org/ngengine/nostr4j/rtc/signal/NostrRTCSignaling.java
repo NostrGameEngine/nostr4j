@@ -195,6 +195,7 @@ public class NostrRTCSignaling implements Closeable {
                                 // we have one -> update
                                 assert dbg(() -> logger.finest("Update announce: " + receivedSignal));
                                 ann.updateExpireAt(receivedSignal.getExpireAt());
+                                ann.getPeer().mergeAuthenticatedAnnouncement(receivedSignal.getPeer());
                                 for (Listener listener : listeners) {
                                     try {
                                         listener.onUpdateAnnounce(ann);
@@ -244,6 +245,7 @@ public class NostrRTCSignaling implements Closeable {
                             logger.finest("Received offer from: " + event.getPubkey());
                             NostrRTCOfferSignal offer = new NostrRTCOfferSignal(localPeer.getSigner(), roomKeyPair, event);
                             offer.await();
+                            mergeAdvertisedVersion(offer);
                             for (Listener listener : listeners) {
                                 try {
                                     listener.onReceiveOffer(offer);
@@ -259,6 +261,7 @@ public class NostrRTCSignaling implements Closeable {
                             logger.finest("Received answer from: " + event.getPubkey());
                             NostrRTCAnswerSignal answer = new NostrRTCAnswerSignal(localPeer.getSigner(), roomKeyPair, event);
                             answer.await();
+                            mergeAdvertisedVersion(answer);
                             for (Listener listener : listeners) {
                                 try {
                                     listener.onReceiveAnswer(answer);
@@ -274,6 +277,7 @@ public class NostrRTCSignaling implements Closeable {
                             assert dbg(() -> logger.finest("Received candidate event from: " + event.getPubkey()));
                             NostrRTCRouteSignal route = new NostrRTCRouteSignal(localPeer.getSigner(), roomKeyPair, event);
                             route.await();
+                            mergeAdvertisedVersion(route);
                             for (Listener listener : listeners) {
                                 try {
                                     listener.onReceiveCandidates(route);
@@ -286,6 +290,17 @@ public class NostrRTCSignaling implements Closeable {
                 }
                 return null;
             });
+    }
+
+    private void mergeAdvertisedVersion(NostrRTCSignal signal) {
+        NostrRTCConnectSignal announcement = seenAnnounces
+            .stream()
+            .filter(candidate -> candidate.getPeer().equals(signal.getPeer()))
+            .findFirst()
+            .orElse(null);
+        if (announcement != null) {
+            signal.getPeer().mergeAuthenticatedAnnouncement(announcement.getPeer());
+        }
     }
 
     public boolean isDiscoveryStarted() {

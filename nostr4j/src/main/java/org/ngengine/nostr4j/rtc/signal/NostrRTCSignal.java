@@ -96,7 +96,16 @@ public abstract class NostrRTCSignal implements Serializable {
         if (requiresRoomProof(type) && !verifyRoomProof(roomPubkey, event)) {
             throw new IllegalArgumentException("Invalid roomproof");
         }
-        this.peer = new NostrRTCPeer(event.getPubkey(), applicationId, protocolId, sessionId, roomPubkey, null);
+        this.peer =
+            new NostrRTCPeer(
+                event.getPubkey(),
+                applicationId,
+                protocolId,
+                sessionId,
+                roomPubkey,
+                null,
+                NostrRTCProtocolVersion.MIN_SUPPORTED_NIP_DC_VERSION
+            );
         this.roomKeyPair = roomKeyPair;
         this.type = type;
         this.localSigner = localSigner;

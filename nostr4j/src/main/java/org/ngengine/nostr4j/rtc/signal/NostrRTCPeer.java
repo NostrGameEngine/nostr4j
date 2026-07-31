@@ -54,6 +54,7 @@ public class NostrRTCPeer {
     private final String sessionId;
     private final NostrPublicKey roomPubkey;
     private String turnServer;
+    private volatile int nipDcVersion;
 
     /**
      * Creates a new peer with the given information.
@@ -73,12 +74,34 @@ public class NostrRTCPeer {
         NostrPublicKey roomPubkey,
         @Nullable String turnServer
     ) {
+        this(
+            pubkey,
+            applicationId,
+            protocolId,
+            sessionId,
+            roomPubkey,
+            turnServer,
+            NostrRTCProtocolVersion.CURRENT_NIP_DC_VERSION
+        );
+    }
+
+    public NostrRTCPeer(
+        NostrPublicKey pubkey,
+        String applicationId,
+        String protocolId,
+        String sessionId,
+        NostrPublicKey roomPubkey,
+        @Nullable String turnServer,
+        int nipDcVersion
+    ) {
         this.pubkey = Objects.requireNonNull(pubkey, "Pubkey cannot be null");
         this.applicationId = Objects.requireNonNull(applicationId, "Application ID cannot be null");
         this.protocolId = Objects.requireNonNull(protocolId, "Protocol ID cannot be null");
         this.sessionId = Objects.requireNonNull(sessionId, "Session ID cannot be null");
         this.roomPubkey = Objects.requireNonNull(roomPubkey, "Room pubkey cannot be null");
         this.turnServer = turnServer;
+        NostrRTCProtocolVersion.validateSupported(nipDcVersion);
+        this.nipDcVersion = nipDcVersion;
     }
 
     public void merge(NostrRTCPeer other) {
@@ -89,6 +112,12 @@ public class NostrRTCPeer {
         if (this.turnServer == null && other.turnServer != null) {
             this.turnServer = other.turnServer;
         }
+    }
+
+    /** Merges version metadata obtained from a verified presence announcement. */
+    public void mergeAuthenticatedAnnouncement(NostrRTCPeer other) {
+        merge(other);
+        this.nipDcVersion = other.nipDcVersion;
     }
 
     public void setTurnServer(String turnServer) {
@@ -114,6 +143,19 @@ public class NostrRTCPeer {
 
     public NostrPublicKey getPubkey() {
         return pubkey;
+    }
+
+    public NostrPublicKey getRoomPubkey() {
+        return roomPubkey;
+    }
+
+    public int getNipDcVersion() {
+        return nipDcVersion;
+    }
+
+    public void setNipDcVersion(int nipDcVersion) {
+        NostrRTCProtocolVersion.validateSupported(nipDcVersion);
+        this.nipDcVersion = nipDcVersion;
     }
 
     public Instant getLastSeen() {
@@ -161,6 +203,8 @@ public class NostrRTCPeer {
             ", turnServer='" +
             turnServer +
             '\'' +
+            ", nipDcVersion=" +
+            nipDcVersion +
             ", lastSeen=" +
             lastSeen +
             '}'
