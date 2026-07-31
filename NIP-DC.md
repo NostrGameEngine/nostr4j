@@ -35,8 +35,8 @@ A **room** is identified by a Nostr keypair shared by all parties allowed to par
 * Possession of the room private key represents authorization to participate in that room.
 
 When a peer joins a room, other peers **SHOULD** establish its logical room
-presence. Physical connection attempts follow the direct dc3 behavior or the
-bounded dc4 neighbor selection described in Section 15.
+presence. Physical connection attempts follow the direct transport behavior or
+the bounded neighbor selection described in Section 15.
 
 ### 1.2 Peer identity
 
@@ -989,8 +989,10 @@ temporary penalty of `1000` for 30 seconds. Planners consider at most four
 simple candidates and sixteen hops, preferring lower cost, fewer TURN edges,
 fewer hops, and then alternatives disjoint from a recently failed path.
 
-Direct WebRTC and direct TURN retain their dc3 wire format. Overlay framing and
-additional end-to-end encryption apply only to multi-hop routed traffic.
+Direct WebRTC carries the normal Payload Envelope. Direct TURN additionally
+applies the dc4 per-blob routing hash from Section 13.5. Overlay framing and
+its end-to-end encryption apply only to multi-hop routed traffic and are
+carried inside those direct transport rules on every physical hop.
 
 ## 16. Private topology control plane
 
@@ -1429,20 +1431,8 @@ identity keys. A routing-key change invalidates cached conversations and old
 routed ciphertext. Current topology publication distributes the replacement
 public key.
 
-## 22. dc3 compatibility
-
-A dc4 implementation may accept a `dc3` connect event so existing direct
-WebRTC and direct TURN peers continue to work. Such a peer:
-
-* receives a normal logical socket;
-* can be selected for a direct physical link under the degree cap;
-* is excluded from dc4 topology publication and graph construction;
-* cannot act as a routed source, destination, or intermediary;
-* cannot be reached through dc4 routing when it is not directly selected.
+## 22. Application-visible routing semantics
 
 dc4 peers preserve the public send, receive, channel, and callback shape. A
 routed message resolves the original logical source socket and channel; the
 last physical hop is never exposed as the application sender.
-
-Applications that require all members of a room to remain mutually reachable
-through routing **MUST** require dc4 presence from those members.
