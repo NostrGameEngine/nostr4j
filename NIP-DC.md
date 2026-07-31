@@ -741,8 +741,6 @@ const conversationKey = deriveConversationKey(senderPrivKey, receiverPubKey);
 const enc = ["enc", "nip44-v2", nip44Encrypt(secret, conversationKey)];
 ```
 
-NIP-44 permits at most 65535 plaintext bytes. The routing hash occupies 32 bytes, leaving at most 65503 bytes for the Payload Envelope and 65491 bytes for application data after its 12-byte header.
-
 #### Routing context
 
 The routing hash cryptographically binds a payload to its intended NIP-DC route:
@@ -753,19 +751,14 @@ ROUTING_HASH = SHA-256(CANONICAL_ROUTING_CONTEXT)
 
 `CANONICAL_ROUTING_CONTEXT` is the concatenation of the following fields in this exact order. Every field is encoded as a 4-byte unsigned big-endian byte length followed by the field bytes:
 
-1. UTF-8 bytes of `NIP-DC/TURN/DATA/ROUTING-HASH/v1`
-2. raw 32-byte `roomPubkey`
-3. UTF-8 `channelLabel`
-4. UTF-8 source `sessionId`
-5. UTF-8 target `sessionId`
-6. UTF-8 `protocolId`
-7. UTF-8 `applicationId`
-8. raw 32-byte source pubkey
-9. raw 32-byte target pubkey
-
-The context is directional: swapping source and target sessions or pubkeys produces a different hash. Public keys are encoded as their raw 32 bytes, not as hexadecimal text.
-
-`roomproof`, TURN URL or identity, envelope `VSOCKET_ID`, and envelope `MESSAGE_ID` are deliberately excluded. A relay may therefore perform the permitted envelope rewrite and peers may reuse the signed data header without changing the end-to-end routing binding.
+1. raw 32-byte `roomPubkey`
+2. UTF-8 `channelLabel`
+3. UTF-8 source `sessionId`
+4. UTF-8 target `sessionId`
+5. UTF-8 `protocolId`
+6. UTF-8 `applicationId`
+7. raw 32-byte source pubkey
+8. raw 32-byte target pubkey
 
 #### Header
 

@@ -59,7 +59,7 @@ public class TestNostrTURNRoutingHash {
             TARGET
         );
 
-        assertEquals("b4b995151259c2788a47681ad07ebce1719aa83af7cb07137818d9fb6c3886f4", NGEUtils.bytesToHex(hash));
+        assertEquals("19d17bf07732fac845698bdbe2d05408793da9fac3d6aa2b88d75a13b64bbf42", NGEUtils.bytesToHex(hash));
         assertEquals(0, hash.position());
         assertEquals(NostrTURNRoutingHash.ROUTING_HASH_SIZE, hash.remaining());
     }

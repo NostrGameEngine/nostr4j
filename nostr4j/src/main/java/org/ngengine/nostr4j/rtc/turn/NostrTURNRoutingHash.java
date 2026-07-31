@@ -41,7 +41,6 @@ import org.ngengine.platform.NGEPlatform;
 public final class NostrTURNRoutingHash {
 
     public static final int ROUTING_HASH_SIZE = 32;
-    public static final String DOMAIN = "NIP-DC/TURN/DATA/ROUTING-HASH/v1";
 
     private static final int LENGTH_PREFIX_SIZE = Integer.BYTES;
 
@@ -58,7 +57,6 @@ public final class NostrTURNRoutingHash {
         NostrPublicKey targetPubkey
     ) {
         ByteBuffer[] fields = new ByteBuffer[] {
-            utf8(DOMAIN),
             rawKey(roomPubkey, "roomPubkey"),
             utf8(Objects.requireNonNull(channelLabel, "channelLabel")),
             utf8(Objects.requireNonNull(sourceSessionId, "sourceSessionId")),
