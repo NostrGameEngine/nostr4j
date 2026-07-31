@@ -74,12 +74,39 @@ public class NWCWallet implements Wallet {
     public static final int REQUEST_KIND = 23194;
     public static final int RESPONSE_KIND = 23195;
     public static final int NOTIFICATION_KIND = 23196;
+    private static final String NIP44_V2 = "nip44_v2";
+    private static final String NIP04 = "nip04";
+    private static final List<String> DEFAULT_SUPPORTED_METHODS = List.of(
+        "pay_invoice",
+        "make_invoice",
+        "lookup_invoice",
+        "list_transactions",
+        "get_balance"
+    );
 
     protected final NostrPool pool;
     protected final NWCUri uri;
     protected volatile AsyncTask<List<String>> supportedMethods = null;
+    private volatile AsyncTask<WalletCapabilities> capabilities = null;
     protected boolean tempPool = false;
     protected Runnable closer;
+
+    private static final class WalletCapabilities {
+
+        private final List<String> supportedMethods;
+        private final NostrSigner.EncryptAlgo encryptionAlgorithm;
+        private final String encryptionCode;
+
+        private WalletCapabilities(
+            List<String> supportedMethods,
+            NostrSigner.EncryptAlgo encryptionAlgorithm,
+            String encryptionCode
+        ) {
+            this.supportedMethods = supportedMethods;
+            this.encryptionAlgorithm = encryptionAlgorithm;
+            this.encryptionCode = encryptionCode;
+        }
+    }
 
     public NWCWallet(NWCUri uri) {
         this(null, uri);
@@ -118,32 +145,75 @@ public class NWCWallet implements Wallet {
         }
     }
 
-    public AsyncTask<List<String>> getSupportedMethods() {
+    private AsyncTask<WalletCapabilities> getCapabilities() {
         logger.finest("Fetching supported methods for wallet: " + uri);
+        if (capabilities == null) {
+            synchronized (this) {
+                if (capabilities == null) {
+                    capabilities =
+                        pool
+                            .fetch(
+                                new NostrFilter().withKind(INFO_KIND).withAuthor(uri.getPubkey()).limit(1),
+                                1,
+                                Duration.ofSeconds(30)
+                            )
+                            .then(evs -> {
+                                if (evs.isEmpty()) {
+                                    logger.warning(
+                                        "No INFO event found for " +
+                                        uri.getPubkey().asHex() +
+                                        "; using legacy NIP-04 encryption and default capabilities"
+                                    );
+                                    return new WalletCapabilities(
+                                        DEFAULT_SUPPORTED_METHODS,
+                                        NostrSigner.EncryptAlgo.NIP04,
+                                        null
+                                    );
+                                }
+
+                                SignedNostrEvent ev = evs.get(0);
+                                List<String> methods = Collections.unmodifiableList(
+                                    new ArrayList<>(Arrays.asList(ev.getContent().split(" ")))
+                                );
+                                String encryptionTag = ev.getFirstTagFirstValue("encryption");
+                                if (encryptionTag == null || encryptionTag.isBlank()) {
+                                    return new WalletCapabilities(methods, NostrSigner.EncryptAlgo.NIP04, null);
+                                }
+
+                                List<String> encryptionModes = Arrays.asList(encryptionTag.trim().split("\\s+"));
+                                if (encryptionModes.contains(NIP44_V2)) {
+                                    return new WalletCapabilities(methods, NostrSigner.EncryptAlgo.NIP44, NIP44_V2);
+                                }
+                                if (encryptionModes.contains(NIP04)) {
+                                    return new WalletCapabilities(methods, NostrSigner.EncryptAlgo.NIP04, NIP04);
+                                }
+                                throw new IllegalStateException(
+                                    "Wallet does not support a compatible NWC encryption scheme: " + encryptionTag
+                                );
+                            });
+                }
+            }
+        }
+        return capabilities;
+    }
+
+    public AsyncTask<List<String>> getSupportedMethods() {
         if (supportedMethods == null) {
-            supportedMethods =
-                pool
-                    .fetch(
-                        new NostrFilter().withKind(INFO_KIND).withAuthor(uri.getPubkey()).limit(1),
-                        1,
-                        Duration.ofSeconds(30)
-                    )
-                    .then(evs -> {
-                        if (evs.isEmpty()) {
-                            logger.warning(
-                                "INFO event found for " + uri.getPubkey().asHex() + " will run with default capabilities"
-                            );
-                            return List.of("pay_invoice", "make_invoice", "lookup_invoice", "list_transactions", "get_balance");
-                        }
-                        SignedNostrEvent ev = evs.get(0);
-                        return Collections.unmodifiableList(new ArrayList<>(Arrays.asList(ev.getContent().split(" "))));
-                    });
+            synchronized (this) {
+                if (supportedMethods == null) {
+                    supportedMethods = getCapabilities().then(info -> info.supportedMethods);
+                }
+            }
         }
         logger.finest("Supported methods: " + supportedMethods);
         return supportedMethods;
     }
 
-    private AsyncTask<Map<String, Object>> waitForReply(String method, SignedNostrEvent ev) {
+    private AsyncTask<Map<String, Object>> waitForReply(
+        String method,
+        SignedNostrEvent ev,
+        NostrSigner.EncryptAlgo encryptionAlgorithm
+    ) {
         NostrKeyPairSigner signer = uri.getSigner();
 
         return signer
@@ -166,7 +236,7 @@ public class NWCWallet implements Wallet {
             .compose(response -> {
                 String content = response.getContent();
                 return signer
-                    .decrypt(content, uri.getPubkey(), NostrSigner.EncryptAlgo.NIP04)
+                    .decrypt(content, uri.getPubkey(), encryptionAlgorithm)
                     .then(decryptedContent -> {
                         logger.finest("Receiving response: " + decryptedContent);
                         Map<String, Object> data = NGEPlatform.get().fromJSON(decryptedContent, Map.class);
@@ -189,9 +259,9 @@ public class NWCWallet implements Wallet {
     }
 
     private AsyncTask<Map<String, Object>> makeReq(String method, Map<String, Object> params, @Nullable Instant expiresAt) {
-        return getSupportedMethods()
-            .compose(supported -> {
-                if (!supported.contains(method)) {
+        return getCapabilities()
+            .compose(info -> {
+                if (!info.supportedMethods.contains(method)) {
                     throw new IllegalArgumentException("Method " + method + " is not supported by this wallet");
                 }
                 logger.finest(
@@ -210,12 +280,15 @@ public class NWCWallet implements Wallet {
                 req.withContent(json);
                 req.withKind(REQUEST_KIND);
                 req.withTag("p", uri.getPubkey().asHex());
+                if (info.encryptionCode != null) {
+                    req.withTag("encryption", info.encryptionCode);
+                }
                 if (expiresAt != null) {
                     req.withExpiration(expiresAt);
                 }
                 logger.finest("Making request: " + req.toString());
                 return signer
-                    .encrypt(json, uri.getPubkey(), NostrSigner.EncryptAlgo.NIP04)
+                    .encrypt(json, uri.getPubkey(), info.encryptionAlgorithm)
                     .compose(encryptedJson -> {
                         req.withContent(encryptedJson);
                         return signer.sign(req);
@@ -224,7 +297,7 @@ public class NWCWallet implements Wallet {
                         logger.finest("Sending request event: " + sev);
                         pool.publish(sev);
                         logger.finest("Request event sent, waiting for reply...");
-                        AsyncTask<Map<String, Object>> res = waitForReply(method, sev);
+                        AsyncTask<Map<String, Object>> res = waitForReply(method, sev, info.encryptionAlgorithm);
                         return res;
                     });
             });
