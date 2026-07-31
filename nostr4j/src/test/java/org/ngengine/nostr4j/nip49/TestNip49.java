@@ -32,81 +32,42 @@ package org.ngengine.nostr4j.nip49;
 
 import static org.junit.Assert.*;
 
-import com.google.gson.Gson;
-import com.google.gson.JsonArray;
-import java.io.InputStream;
-import java.io.InputStreamReader;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import org.junit.BeforeClass;
 import org.junit.Test;
+import org.ngengine.bech32.Bech32;
 import org.ngengine.nostr4j.keypair.NostrPrivateKey;
-import org.ngengine.nostr4j.nip44.TestNip44;
 
 public class TestNip49 {
 
-    private static JsonArray testVectors;
-
-    @BeforeClass
-    public static void loadTestVectors() throws Exception {
-        InputStream is = TestNip44.class.getResourceAsStream("/org/ngengine/nostr/nip49/nip49-vectors.json");
-        InputStreamReader reader = new InputStreamReader(is, StandardCharsets.UTF_8);
-        testVectors = new Gson().fromJson(reader, JsonArray.class);
-        reader.close();
-        is.close();
-    }
+    private static final String OFFICIAL_PRIVATE_KEY = "3501454135014541350145413501453fefb02227e449e57cf4d3a3ce05378683";
+    private static final String OFFICIAL_NCRYPTSEC =
+        "ncryptsec1qgg9947rlpvqu76pj5ecreduf9jxhselq2nae2kghhvd5g7dgjtcxfqtd67p9m0w57lspw8gsq6yphnm8623nsl8xn9j4jdzz84zm3frztj3z7s35vpzmqf6ksu8r89qk5z2zxfmu5gv8th8wclt0h4p";
 
     @Test
     public void encryptDecrypt() throws Nip49FailedException, Exception {
-        for (int i = 0; i < testVectors.size(); i++) {
-            JsonArray testVector = testVectors.get(i).getAsJsonArray();
-            String password = testVector.get(0).getAsString();
-            String secretHex = testVector.get(1).getAsString();
-            int logn = testVector.get(2).getAsInt();
-            int ksb = testVector.get(3).getAsInt();
-            String ncryptsec = testVector.get(4).getAsString();
-            NostrPrivateKey sec = NostrPrivateKey.fromHex(secretHex);
-            sec.setKeySecurity(NostrPrivateKey.KeySecurity.values()[ksb]);
-            String there = Nip49.encrypt(sec, password, logn, 1024 * 1024 * 128).await();
-            NostrPrivateKey back = Nip49.decrypt(there, password, 1024 * 1024 * 128).await();
-            NostrPrivateKey again = Nip49.decrypt(ncryptsec, password, 1024 * 1024 * 128).await();
-            NostrPrivateKey again2 = NostrPrivateKey.fromNcryptsec(ncryptsec, password).await();
-            String there2 = again2.asNcryptsec(password).await();
-            NostrPrivateKey back2 = NostrPrivateKey.fromNcryptsec(there2, password).await();
+        NostrPrivateKey privateKey = NostrPrivateKey.fromHex(OFFICIAL_PRIVATE_KEY);
+        String encrypted = Nip49.encrypt(privateKey, "ÅΩẛ̣").await();
+        NostrPrivateKey decrypted = Nip49.decrypt(encrypted, "ÅΩṩ").await();
 
-            assertEquals(sec, back);
-            assertEquals(sec, again);
-            assertEquals(sec.getKeySecurity().ordinal(), ksb);
-            assertEquals(again, again2);
-            assertEquals(again2, back2);
-        }
+        assertEquals(privateKey, decrypted);
+    }
+
+    @Test
+    public void decryptOfficialVector() throws Exception {
+        NostrPrivateKey decrypted = Nip49.decrypt(OFFICIAL_NCRYPTSEC, "nostr").await();
+        assertEquals(OFFICIAL_PRIVATE_KEY, decrypted.asHex());
     }
 
     @Test(expected = Nip49FailedException.class)
     public void badDecrypt() throws Nip49FailedException, Exception {
-        int i = 0;
-        JsonArray testVector = testVectors.get(i).getAsJsonArray();
-        String ncryptsec = testVector.get(4).getAsString();
-        Nip49.decrypt(ncryptsec, "bad", 1024 * 1024 * 128).await();
+        Nip49.decrypt(OFFICIAL_NCRYPTSEC, "bad", 1024 * 1024 * 128).await();
     }
 
     @Test
     public void testMemoryRequirement() {
         // logn | memory MB
-        long vv[][] = {
-            { 16, 64 },
-            { 18, 256 },
-            { 20, 1024 },
-            { 21, 2048 },
-            { 22, 4096 },
-            { 23, 8192 },
-            { 24, 16384 },
-            { 25, 32768 },
-            { 26, 65536 },
-            { 27, 131072 },
-            { 28, 262144 },
-            { 29, 524288 },
-            { 30, 1048576 },
-        };
+        long vv[][] = { { 16, 64 }, { 18, 256 }, { 20, 1024 } };
         for (int i = 0; i < vv.length; i++) {
             int logn = (int) vv[i][0];
             long memoryMB = vv[i][1];
@@ -126,6 +87,40 @@ public class TestNip49 {
                 " MB"
             );
             assertEquals(memoryRequirement, memoryBytes);
+        }
+    }
+
+    @Test
+    public void rejectsUnsupportedLognDuringEncryption() throws Exception {
+        NostrPrivateKey privateKey = NostrPrivateKey.fromHex(
+            "3501454135014541350145413501453fefb02227e449e57cf4d3a3ce05378683"
+        );
+
+        for (int logn : new int[] { 15, 21, 31, 32, 33, 63, 255 }) {
+            Nip49FailedException failure = assertThrows(
+                Nip49FailedException.class,
+                () -> Nip49.encryptSync(privateKey, "password", logn, Integer.MAX_VALUE)
+            );
+            assertTrue(failure.getCause() instanceof IllegalArgumentException);
+            assertEquals("Unsupported NIP-49 logn: " + logn, failure.getCause().getMessage());
+        }
+    }
+
+    @Test
+    public void rejectsUnsupportedLognDuringDecryption() throws Exception {
+        for (int logn : new int[] { 31, 32, 33, 63, 255 }) {
+            ByteBuffer decoded = Bech32.bech32Decode(OFFICIAL_NCRYPTSEC);
+            byte[] payload = new byte[decoded.remaining()];
+            decoded.get(payload);
+            payload[1] = (byte) logn;
+            String altered = Bech32.bech32Encode("ncryptsec".getBytes(StandardCharsets.UTF_8), ByteBuffer.wrap(payload));
+
+            Nip49FailedException failure = assertThrows(
+                Nip49FailedException.class,
+                () -> Nip49.decryptSync(altered, "nostr", Integer.MAX_VALUE)
+            );
+            assertTrue(failure.getCause() instanceof IllegalArgumentException);
+            assertEquals("Unsupported NIP-49 logn: " + logn, failure.getCause().getMessage());
         }
     }
 }

@@ -43,12 +43,25 @@ public class Nip49 {
     private static final byte[] HRP = "ncryptsec".getBytes(StandardCharsets.UTF_8);
     private static final int DEFAULT_MEMORY_LIMIT = 1024 * 1024 * 257;
     private static final int DEFAULT_LOGN = 16;
+    private static final int MIN_LOGN = 16;
+    private static final int MAX_LOGN = 20;
     private static final AsyncExecutor executor = NGEPlatform.get().newAsyncExecutor(Nip49.class);
 
     public static long getApproximatedMemoryRequirement(int logn) {
-        long n = 1 << logn;
-        long bytes = 128l * n * 8l;
-        return bytes;
+        long n = validateAndGetN(logn);
+        return Math.multiplyExact(Math.multiplyExact(128L, n), 8L);
+    }
+
+    private static long validateAndGetN(int logn) {
+        if (logn < MIN_LOGN || logn > MAX_LOGN) {
+            throw new IllegalArgumentException("Unsupported NIP-49 logn: " + logn);
+        }
+
+        long n = 1L << logn;
+        if (n <= 0 || n > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException("NIP-49 scrypt N is out of range: " + n);
+        }
+        return n;
     }
 
     public static String encryptSync(NostrPrivateKey priv, String password) throws Nip49FailedException {
@@ -62,17 +75,14 @@ public class Nip49 {
     public static String encryptSync(NostrPrivateKey priv, String password, int logn, int memoryLimitBytes)
         throws Nip49FailedException {
         try {
-            NGEPlatform platform = NGEPlatform.get();
-
-            byte privateKey[] = priv._array();
-
-            if (logn < 1) {
-                throw new IllegalArgumentException("logn must be be >= 1");
-            }
-            if (getApproximatedMemoryRequirement(logn) > memoryLimitBytes) {
+            long n = validateAndGetN(logn);
+            long memoryRequirement = getApproximatedMemoryRequirement(logn);
+            if (memoryRequirement > memoryLimitBytes) {
                 throw new IllegalArgumentException("logn is too large for the specified memory limit");
             }
 
+            NGEPlatform platform = NGEPlatform.get();
+            byte privateKey[] = priv._array();
             byte normalizedPassword[] = platform.nfkc(password).getBytes(StandardCharsets.UTF_8);
 
             byte[] salt = platform.randomBytes(16);
@@ -80,9 +90,7 @@ public class Nip49 {
             byte[] nonce = platform.randomBytes(24);
             byte versionNumber = 0x02;
 
-            int n = 1 << logn;
-
-            byte[] symmetricKey = platform.scrypt(normalizedPassword, salt, n, 8, 1, 32);
+            byte[] symmetricKey = platform.scrypt(normalizedPassword, salt, (int) n, 8, 1, 32);
             assert symmetricKey.length == 32;
 
             byte[] associatedData = new byte[] { keySecurityByte };
@@ -127,9 +135,11 @@ public class Nip49 {
             if (versionNumber != 0x02) {
                 throw new IllegalArgumentException("Unsupported version number");
             }
-            int logn = decoded.get();
-            if (logn < 1 || logn > 30) {
-                throw new IllegalArgumentException("logn must be between 1 and 30");
+            int logn = Byte.toUnsignedInt(decoded.get());
+            long n = validateAndGetN(logn);
+            long memoryRequirement = getApproximatedMemoryRequirement(logn);
+            if (memoryRequirement > memoryLimitBytes) {
+                throw new IllegalArgumentException("logn is too large for the specified memory limit");
             }
             byte[] salt = new byte[16];
             decoded.get(salt);
@@ -140,12 +150,7 @@ public class Nip49 {
             byte keySecurityByte = associatedData[0];
             NostrPrivateKey.KeySecurity keySecurity = NostrPrivateKey.KeySecurity.values()[keySecurityByte];
 
-            if (getApproximatedMemoryRequirement(logn) > memoryLimitBytes) {
-                throw new IllegalArgumentException("logn is too large for the specified memory limit");
-            }
-
-            int n = 1 << logn;
-            byte[] symmetricKey = platform.scrypt(normalizedPassword, salt, n, 8, 1, 32);
+            byte[] symmetricKey = platform.scrypt(normalizedPassword, salt, (int) n, 8, 1, 32);
             assert symmetricKey.length == 32;
             byte[] cipherText = new byte[decoded.remaining()];
             decoded.get(cipherText);
