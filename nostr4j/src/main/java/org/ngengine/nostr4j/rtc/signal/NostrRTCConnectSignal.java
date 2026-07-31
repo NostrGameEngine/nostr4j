@@ -53,6 +53,7 @@ public final class NostrRTCConnectSignal extends NostrRTCSignal {
     /** @deprecated Use {@link #CURRENT_NIP_DC_VERSION}. */
     @Deprecated
     public static final String PROTOCOL_VERSION = "dc" + CURRENT_NIP_DC_VERSION;
+
     public static final String LEGACY_PROTOCOL_VERSION = "dc3";
     private volatile Instant expireAt;
     private final String message;

@@ -895,6 +895,7 @@ public final class NostrTURNChannel {
             (transport != null && transport.isConnected())
         );
     }
+
     private static ByteBuffer computeRoutingHash(NostrRTCPeer sourcePeer, NostrRTCPeer targetPeer, String channelLabel) {
         return NostrTURNRoutingHash.compute(
             sourcePeer.getRoomPubkey(),

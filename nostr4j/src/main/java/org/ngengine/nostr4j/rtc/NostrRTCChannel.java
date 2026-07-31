@@ -236,10 +236,7 @@ public final class NostrRTCChannel {
         InternalRoutedTransport routed = socket.getRoutedTransport();
         if (!socket.isRTCConnected() && routed != null && routed.shouldUseRoute(this)) {
             int routedFramedLimit = routed.maximumNormalFrameBytes(this);
-            payloadChunkSize = Math.min(
-                payloadChunkSize,
-                Math.max(1, routedFramedLimit - PAYLOAD_ENVELOPE_HEADER_SIZE)
-            );
+            payloadChunkSize = Math.min(payloadChunkSize, Math.max(1, routedFramedLimit - PAYLOAD_ENVELOPE_HEADER_SIZE));
         }
 
         ByteBuffer[] frames = encodePacketFragments(packet, payloadChunkSize);
