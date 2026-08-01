@@ -56,9 +56,20 @@ import org.ngengine.platform.jvm.JVMAsyncPlatform;
 
 public class TestNostrEvent {
 
+    private static void setPlatformTestFlags(boolean noAuxRandom, boolean emptyNonce) throws Exception {
+        setPlatformTestFlag("_NO_AUX_RANDOM", noAuxRandom);
+        setPlatformTestFlag("_EMPTY_NONCE", emptyNonce);
+    }
+
+    private static void setPlatformTestFlag(String name, boolean value) throws Exception {
+        Field field = JVMAsyncPlatform.class.getDeclaredField(name);
+        field.setAccessible(true);
+        field.setBoolean(null, value);
+    }
+
     @Test
     public void testSigning() throws Exception {
-        JVMAsyncPlatform._NO_AUX_RANDOM = true;
+        setPlatformTestFlags(true, false);
         String nsec = "nsec1v92q43n3ywpmp2p9nuaqmrrsa095rfys28p0rejn47vcqvktytxqaezlcl";
         String noteId = "note164s5jz53dt0kt4ralz96phw7kstvrzzdw0waxdyu5epqn7ssdg0su6wzjn";
         String signature =
@@ -79,7 +90,7 @@ public class TestNostrEvent {
 
     @Test
     public void testSigningAUXRandom() throws Exception {
-        JVMAsyncPlatform._NO_AUX_RANDOM = false;
+        setPlatformTestFlags(false, false);
         String nsec = "nsec1v92q43n3ywpmp2p9nuaqmrrsa095rfys28p0rejn47vcqvktytxqaezlcl";
         String noteId = "note164s5jz53dt0kt4ralz96phw7kstvrzzdw0waxdyu5epqn7ssdg0su6wzjn";
         String signature =
@@ -142,7 +153,7 @@ public class TestNostrEvent {
 
     @Test
     public void testEventSerialization() throws Exception {
-        JVMAsyncPlatform._NO_AUX_RANDOM = true;
+        setPlatformTestFlags(true, false);
         UnsignedNostrEvent event = new UnsignedNostrEvent()
             .withContent("test123")
             .withKind(1)
@@ -172,7 +183,7 @@ public class TestNostrEvent {
 
     @Test
     public void testVerifyRejectsForgedEventWithMismatchedCanonicalId() throws Exception {
-        JVMAsyncPlatform._NO_AUX_RANDOM = true;
+        setPlatformTestFlags(true, false);
         NostrSigner signer = new NostrKeyPairSigner(
             new NostrKeyPair(NostrPrivateKey.fromBech32("nsec1ksrsh0gvc7ug848ec5u0qj604ga47qhafl9de5rvdx292mkq9p0ss7w60k"))
         );
