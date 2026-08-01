@@ -31,19 +31,16 @@
 package org.ngengine.nostr4j.utils;
 
 import java.util.concurrent.atomic.AtomicLong;
+import org.ngengine.platform.NGEPlatform;
+import org.ngengine.platform.NGEUtils;
 
 public class UniqueId {
 
     private static final AtomicLong COUNTER = new AtomicLong(0);
-    private static final String INSTANCE_ID = System.currentTimeMillis() + "j" + random();
 
     public static String getNext() {
         long current = COUNTER.incrementAndGet();
-        return "nostr4j" + current + "j" + INSTANCE_ID + "j" + random();
-    }
-
-    private static String random() {
-        int i = (int) (Math.random() * Integer.MAX_VALUE);
-        return Integer.toHexString(i);
+        byte[] random = NGEPlatform.get().randomBytes(16);
+        return "nostr4j" + current + "j" + NGEUtils.bytesToHex(random);
     }
 }
