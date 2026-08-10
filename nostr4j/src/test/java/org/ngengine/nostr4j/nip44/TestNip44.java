@@ -204,7 +204,7 @@ public class TestNip44 {
 
             try {
                 NostrPrivateKey privateKey = NostrPrivateKey.fromHex(sec1Hex);
-                NostrPublicKey publicKey = NostrPublicKey.fromHex(pub2Hex);
+                NostrPublicKey publicKey = NostrPublicKey.fromHex(pub2Hex, false);
                 Nip44.getConversationKey(privateKey, publicKey).await();
                 fail("Expected exception for invalid keys: sec1=" + sec1Hex + ", pub2=" + pub2Hex);
             } catch (Exception e) {

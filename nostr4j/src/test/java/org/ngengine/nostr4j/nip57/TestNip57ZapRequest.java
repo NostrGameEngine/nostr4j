@@ -47,9 +47,9 @@ import org.ngengine.platform.NGEPlatform;
 
 public class TestNip57ZapRequest {
 
-    private static final String SENDER = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
-    private static final String RECIPIENT = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789";
-    private static final String PROVIDER = "1111111111111111111111111111111111111111111111111111111111111111";
+    private static final String SENDER = "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
+    private static final String RECIPIENT = "f115b2e070b81abed59186904bca89415edc8aee806087c0fe4cbf7997d98ca9";
+    private static final String PROVIDER = "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d";
 
     private Map<String, Object> buildZapRequestMap() {
         Map<String, Object> map = new LinkedHashMap<>();

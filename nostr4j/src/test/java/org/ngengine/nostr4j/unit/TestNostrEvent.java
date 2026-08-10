@@ -173,6 +173,10 @@ public class TestNostrEvent {
         assertTrue(signedEvent.verify());
         assertVerify(signedEvent);
 
+        SignedNostrEvent parsedEvent = new SignedNostrEvent(new HashMap<>(signedEvent.toMap()));
+        parsedEvent.getPubkey();
+        assertTrue(parsedEvent.verify());
+
         String json = NostrMessage.toJSON(signedEvent);
         String expectedJson =
             "[\"EVENT\",{\"sig\":\"2270df3c1461aab13e63ec36426f5d5d9f8d4435c4ab0c5717b7b533f2aba02126cc56349f7c98b234f7b5525b00e62dfd336ff6f10770ea097304406968ab16\",\"kind\":1,\"created_at\":1742147457,\"id\":\"a908e34b0bef12578b983477791ad4c93ed8f115d5b339ab89503fc321078f75\",\"content\":\"test123\",\"pubkey\":\"c56a8bec9a793b9b6be37a0d14e89e4c23a6d9a61b016d16e2f8df90254a63d4\",\"tags\":[[\"a\",\"1\"],[\"b\",\"1\",\"2\",\"3\"],[\"expiration\",\"1742147457\"]]}]";
@@ -227,7 +231,10 @@ public class TestNostrEvent {
     public void testSignedEventFromMapKeepsTagsImmutable() {
         Map<String, Object> map = new HashMap<>();
         map.put("id", "abc");
-        map.put("pubkey", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
+        map.put(
+            "pubkey",
+            NostrPublicKey.fromHex("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", false).asHex()
+        );
         map.put("kind", 1);
         map.put("content", "test");
         map.put("created_at", 1742147457L);
@@ -256,7 +263,7 @@ public class TestNostrEvent {
 
         SignedNostrEvent event = new SignedNostrEvent(
             "abc",
-            NostrPublicKey.fromHex("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"),
+            NostrPublicKey.fromHex("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", false),
             1,
             "test",
             Instant.ofEpochSecond(1742147457L),
