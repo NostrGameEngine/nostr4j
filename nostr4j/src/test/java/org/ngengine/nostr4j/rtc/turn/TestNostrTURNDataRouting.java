@@ -45,6 +45,7 @@ import java.util.List;
 import org.junit.Test;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
+import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.nip44.Nip44;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCLocalPeer;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCPeer;
@@ -97,6 +98,34 @@ public class TestNostrTURNDataRouting {
         );
         ByteBuffer maliciouslyRewritten = NostrTURNCodec.withVsocketId(first, 9902L);
         expectDecodeFailure(fixture, maliciouslyRewritten, "rewritten-channel");
+    }
+
+    @Test
+    public void testDc4ExternalVsocketRewriteCannotCrossRoutingContexts() throws Exception {
+        Fixture fixture = fixture(NostrRTCProtocolVersion.CURRENT_NIP_DC_VERSION);
+        byte[] payload = "channel-bound".getBytes(StandardCharsets.UTF_8);
+        ByteBuffer original = fixture.outgoing("default", key()).encodeToFrame(List.of(ByteBuffer.wrap(payload)), 23).await();
+        long originalVsocketId = NostrTURNCodec.extractVsocketId(original);
+        ByteBuffer rewritten = NostrTURNCodec.withVsocketId(original, 9902L);
+
+        assertArrayEquals(bytes(original), bytes(NostrTURNCodec.withVsocketId(rewritten, originalVsocketId)));
+        assertArrayEquals(payload, bytes(decode(fixture, rewritten, "default").iterator().next()));
+
+        NostrPublicKey room = fixture.room.getPublicKey();
+        NostrPublicKey alice = fixture.alice.getPubkey();
+        NostrPublicKey bob = fixture.bob.getPubkey();
+        List<ByteBuffer> otherRoutingContexts = List.of(
+            routingHash(new NostrKeyPair().getPublicKey(), "default", "alice", "bob", PROTOCOL, APPLICATION, alice, bob),
+            routingHash(room, "other", "alice", "bob", PROTOCOL, APPLICATION, alice, bob),
+            routingHash(room, "default", "alice-other", "bob", PROTOCOL, APPLICATION, alice, bob),
+            routingHash(room, "default", "alice", "bob-other", PROTOCOL, APPLICATION, alice, bob),
+            routingHash(room, "default", "alice", "bob", "routing-v2", APPLICATION, alice, bob),
+            routingHash(room, "default", "alice", "bob", PROTOCOL, "other-app", alice, bob),
+            routingHash(room, "default", "bob", "alice", PROTOCOL, APPLICATION, bob, alice)
+        );
+        for (ByteBuffer otherRoutingContext : otherRoutingContexts) {
+            expectDecodeFailure(fixture, rewritten, "default", otherRoutingContext);
+        }
     }
 
     @Test
@@ -177,15 +206,30 @@ public class TestNostrTURNDataRouting {
     }
 
     private static void expectDecodeFailure(Fixture fixture, ByteBuffer frame, String channel) throws Exception {
+        expectDecodeFailure(fixture, frame, channel, null);
+    }
+
+    private static void expectDecodeFailure(Fixture fixture, ByteBuffer frame, String channel, ByteBuffer routingHash)
+        throws Exception {
         SignedNostrEvent header = NostrTURNCodec.decodeHeader(frame);
-        NostrTURNDataEvent incoming = NostrTURNDataEvent.parseIncoming(
-            header,
-            fixture.bob,
-            fixture.aliceRemote,
-            fixture.room,
-            channel,
-            NostrTURNCodec.extractVsocketId(frame)
-        );
+        NostrTURNDataEvent incoming = routingHash == null
+            ? NostrTURNDataEvent.parseIncoming(
+                header,
+                fixture.bob,
+                fixture.aliceRemote,
+                fixture.room,
+                channel,
+                NostrTURNCodec.extractVsocketId(frame)
+            )
+            : NostrTURNDataEvent.parseIncoming(
+                header,
+                fixture.bob,
+                fixture.aliceRemote,
+                fixture.room,
+                channel,
+                NostrTURNCodec.extractVsocketId(frame),
+                routingHash
+            );
         try {
             incoming.decodeFramePayloads(frame).await();
             fail("Expected routing hash validation failure");
@@ -234,6 +278,19 @@ public class TestNostrTURNDataRouting {
             bytes[i] = (byte) (i + 1);
         }
         return ByteBuffer.wrap(bytes).asReadOnlyBuffer();
+    }
+
+    private static ByteBuffer routingHash(
+        NostrPublicKey room,
+        String channel,
+        String sourceSession,
+        String targetSession,
+        String protocol,
+        String application,
+        NostrPublicKey source,
+        NostrPublicKey target
+    ) {
+        return NostrTURNRoutingHash.compute(room, channel, sourceSession, targetSession, protocol, application, source, target);
     }
 
     private static Fixture fixture(int version) {
