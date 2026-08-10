@@ -36,6 +36,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import org.junit.Test;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
@@ -44,6 +45,8 @@ import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.platform.NGEUtils;
 
 public class TestNostrKeyPair {
+
+    private static final String INVALID_PUBLIC_KEY_HEX = "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
 
     @Test
     public void testHexKeys() throws Exception {
@@ -174,11 +177,64 @@ public class TestNostrKeyPair {
         }
         direct.flip();
 
-        NostrPublicKey publicKey = new NostrPublicKey(direct);
+        NostrPublicKey publicKey = new NostrPublicKey(direct, false);
         ByteBuffer view = publicKey.asReadOnlyBuffer();
         assertTrue(view.isDirect());
         assertTrue(view.isReadOnly());
         assertEquals(32, view.remaining());
+    }
+
+    @Test
+    public void testPublicKeyVerificationDefaultsToTrue() {
+        byte[] invalid = NGEUtils.hexToByteArray(INVALID_PUBLIC_KEY_HEX);
+        String invalidNpub = NostrPublicKey.fromHex(INVALID_PUBLIC_KEY_HEX, false).asBech32();
+
+        expectInvalidPublicKey(() -> NostrPublicKey.fromHex(INVALID_PUBLIC_KEY_HEX));
+        expectInvalidPublicKey(() -> NostrPublicKey.fromBytes(invalid));
+        expectInvalidPublicKey(() -> NostrPublicKey.fromBytes(ByteBuffer.wrap(invalid)));
+        expectInvalidPublicKey(() -> new NostrPublicKey(ByteBuffer.wrap(invalid)));
+        expectInvalidPublicKey(() -> NostrPublicKey.fromBech32(invalidNpub));
+        expectInvalidPublicKey(() -> NostrPublicKey.fromNpub(invalidNpub));
+    }
+
+    @Test
+    public void testPublicKeyVerificationCanBeDisabled() {
+        byte[] invalid = NGEUtils.hexToByteArray(INVALID_PUBLIC_KEY_HEX);
+        String invalidNpub = NostrPublicKey.fromHex(INVALID_PUBLIC_KEY_HEX, false).asBech32();
+
+        assertEquals(INVALID_PUBLIC_KEY_HEX, NostrPublicKey.fromHex(INVALID_PUBLIC_KEY_HEX, false).asHex());
+        assertEquals(INVALID_PUBLIC_KEY_HEX, NostrPublicKey.fromBytes(invalid, false).asHex());
+        assertEquals(INVALID_PUBLIC_KEY_HEX, NostrPublicKey.fromBytes(ByteBuffer.wrap(invalid), false).asHex());
+        assertEquals(INVALID_PUBLIC_KEY_HEX, new NostrPublicKey(ByteBuffer.wrap(invalid), false).asHex());
+        assertEquals(INVALID_PUBLIC_KEY_HEX, NostrPublicKey.fromBech32(invalidNpub, false).asHex());
+        assertEquals(INVALID_PUBLIC_KEY_HEX, NostrPublicKey.fromNpub(invalidNpub, false).asHex());
+    }
+
+    @Test
+    public void testPublicKeyVerificationIsLazyAndCached() throws Exception {
+        byte[] valid = NGEUtils.hexToByteArray("79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798");
+        byte[] invalid = NGEUtils.hexToByteArray(INVALID_PUBLIC_KEY_HEX);
+        NostrPublicKey validPublicKey = NostrPublicKey.fromBytes(valid, false);
+        NostrPublicKey invalidPublicKey = NostrPublicKey.fromBytes(invalid, false);
+        Field verifiedField = NostrPublicKey.class.getDeclaredField("verified");
+        verifiedField.setAccessible(true);
+
+        assertNull(verifiedField.get(validPublicKey));
+        assertTrue(validPublicKey.verify());
+        assertEquals(Boolean.TRUE, verifiedField.get(validPublicKey));
+        assertTrue(validPublicKey.verify());
+
+        assertNull(verifiedField.get(invalidPublicKey));
+        assertFalse(invalidPublicKey.verify());
+        assertEquals(Boolean.FALSE, verifiedField.get(invalidPublicKey));
+        assertFalse(invalidPublicKey.verify());
+    }
+
+    private static void expectInvalidPublicKey(Runnable operation) {
+        try {
+            operation.run();
+            fail("Expected invalid Nostr public key rejection");
+        } catch (IllegalArgumentException expected) {}
     }
 
     private byte[] bytes(ByteBuffer source) {

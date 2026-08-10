@@ -309,7 +309,7 @@ public final class NostrPrivateKey implements NostrKey {
     public NostrPublicKey getPublicKey() {
         if (publicKey == null) {
             ByteBuffer publicKeyData = NGEUtils.getPlatform().genPubKey(asReadOnlyBuffer());
-            publicKey = new NostrPublicKey(publicKeyData);
+            publicKey = new NostrPublicKey(publicKeyData, false);
         }
         assert data.position() == 0 : "Data position must be 0";
         return publicKey;

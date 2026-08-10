@@ -61,6 +61,7 @@ public final class NostrPublicKey implements NostrKey {
     private transient ByteBuffer data;
     private transient volatile byte[] array;
     private transient volatile Integer hashCode;
+    private transient volatile Boolean verified;
 
     /**
      * Creates a new NostrPublicKey from the given byte array.
@@ -69,10 +70,21 @@ public final class NostrPublicKey implements NostrKey {
      * @return a new NostrPublicKey instance
      */
     public static NostrPublicKey fromBytes(byte[] data) {
+        return fromBytes(data, true);
+    }
+
+    /**
+     * Creates a new NostrPublicKey from the given byte array.
+     *
+     * @param data the byte array containing the public key data
+     * @param verify whether to verify that the x-only key represents a secp256k1 point
+     * @return a new NostrPublicKey instance
+     */
+    public static NostrPublicKey fromBytes(byte[] data, boolean verify) {
         ByteBuffer bbf = NGEUtils.getPlatform().getNativeAllocator().malloc(data.length);
         bbf.put(data);
         bbf.rewind();
-        return new NostrPublicKey(bbf);
+        return new NostrPublicKey(bbf, verify);
     }
 
     /**
@@ -86,12 +98,27 @@ public final class NostrPublicKey implements NostrKey {
      * @return a new NostrPublicKey instance
      */
     public static NostrPublicKey fromBytes(ByteBuffer bbf) {
+        return fromBytes(bbf, true);
+    }
+
+    /**
+     * Creates a new NostrPublicKey from the given ByteBuffer.
+     * <p>
+     * This method copies the content of the provided ByteBuffer, use the constructor
+     * if you want to directly use the provided ByteBuffer as an internal reference.
+     * </p>
+     *
+     * @param bbf the ByteBuffer containing the public key data
+     * @param verify whether to verify that the x-only key represents a secp256k1 point
+     * @return a new NostrPublicKey instance
+     */
+    public static NostrPublicKey fromBytes(ByteBuffer bbf, boolean verify) {
         assert bbf.remaining() > 0 : "ByteBuffer should not be empty";
         ByteBuffer copy = NGEUtils.getPlatform().getNativeAllocator().malloc(bbf.remaining());
         copy.put(bbf.slice());
         copy.rewind();
         assert bbf.position() == 0 : "ByteBuffer should be at position 0";
-        return new NostrPublicKey(copy);
+        return new NostrPublicKey(copy, verify);
     }
 
     /**
@@ -101,7 +128,18 @@ public final class NostrPublicKey implements NostrKey {
      * @return a new NostrPublicKey instance
      */
     public static NostrPublicKey fromHex(String hex) {
-        return fromBytes(NGEUtils.hexToBytes(hex));
+        return fromHex(hex, true);
+    }
+
+    /**
+     * Creates a new NostrPublicKey from the given hex string.
+     *
+     * @param hex the hex string containing the public key data
+     * @param verify whether to verify that the x-only key represents a secp256k1 point
+     * @return a new NostrPublicKey instance
+     */
+    public static NostrPublicKey fromHex(String hex, boolean verify) {
+        return fromBytes(NGEUtils.hexToBytes(hex), verify);
     }
 
     /**
@@ -113,7 +151,20 @@ public final class NostrPublicKey implements NostrKey {
      */
     @Deprecated
     public static NostrPublicKey fromNpub(String bech32) {
-        return fromBech32(bech32);
+        return fromNpub(bech32, true);
+    }
+
+    /**
+     * Creates a new NostrPublicKey from the given Bech32 string.
+     *
+     * @param bech32 the Bech32 string containing the public key data
+     * @param verify whether to verify that the x-only key represents a secp256k1 point
+     * @return a new NostrPublicKey instance
+     * @deprecated use {@link #fromBech32(String, boolean)} instead
+     */
+    @Deprecated
+    public static NostrPublicKey fromNpub(String bech32, boolean verify) {
+        return fromBech32(bech32, verify);
     }
 
     /**
@@ -123,12 +174,23 @@ public final class NostrPublicKey implements NostrKey {
      * @return a new NostrPublicKey instance
      */
     public static NostrPublicKey fromBech32(String bech32) {
+        return fromBech32(bech32, true);
+    }
+
+    /**
+     * Creates a new NostrPublicKey from the given Bech32 string.
+     *
+     * @param bech32 the Bech32 string containing the public key data
+     * @param verify whether to verify that the x-only key represents a secp256k1 point
+     * @return a new NostrPublicKey instance
+     */
+    public static NostrPublicKey fromBech32(String bech32, boolean verify) {
         try {
             if (!bech32.startsWith("npub")) {
                 throw new IllegalArgumentException("Invalid npub key");
             }
             ByteBuffer data = Bech32.bech32Decode(bech32);
-            return fromBytes(data);
+            return fromBytes(data, verify);
         } catch (Exception e) {
             throw new IllegalArgumentException("Invalid npub key", e);
         }
@@ -151,11 +213,43 @@ public final class NostrPublicKey implements NostrKey {
      * @param data the {@link ByteBuffer} containing the public key data
      */
     public NostrPublicKey(ByteBuffer data) {
+        this(data, true);
+    }
+
+    /**
+     * Creates a new NostrPublicKey from the given data.
+     *
+     * @param data the {@link ByteBuffer} containing the public key data
+     * @param verify whether to verify that the x-only key represents a secp256k1 point
+     */
+    public NostrPublicKey(ByteBuffer data, boolean verify) {
         assert data.position() == 0 : "data should be at position 0";
         if (data.remaining() != 32) {
             throw new IllegalArgumentException("Invalid public key length");
         }
         this.data = data;
+        if (verify && !verify()) {
+            throw new IllegalArgumentException("Invalid Nostr public key");
+        }
+    }
+
+    /**
+     * Verifies that this x-only public key represents a secp256k1 point.
+     *
+     * @return true if this public key is valid
+     */
+    public boolean verify() {
+        Boolean cached = verified;
+        if (cached != null) {
+            return cached.booleanValue();
+        }
+
+        byte[] compressedPublicKey = new byte[33];
+        compressedPublicKey[0] = 0x02;
+        data.duplicate().get(compressedPublicKey, 1, 32);
+        boolean valid = NGEUtils.getPlatform().secp256k1PublicKeyVerify(compressedPublicKey);
+        verified = Boolean.valueOf(valid);
+        return valid;
     }
 
     public Collection<Byte> asReadOnlyBytes() {

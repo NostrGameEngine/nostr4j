@@ -115,6 +115,6 @@ public class TestNostrTURNRoutingHash {
         for (int i = 0; i < bytes.length; i++) {
             bytes[i] = (byte) (firstByte + i);
         }
-        return NostrPublicKey.fromBytes(bytes);
+        return NostrPublicKey.fromBytes(bytes, false);
     }
 }

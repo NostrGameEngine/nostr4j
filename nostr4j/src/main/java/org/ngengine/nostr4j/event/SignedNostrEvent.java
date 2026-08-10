@@ -110,6 +110,7 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
         this.content = content;
         this.signature = signature;
         this.pubkey = pubkey.asHex();
+        this.parsedPublicKey = pubkey;
         this.identifier = new Identifier(id, created_at);
 
         Map<String, List<TagValue>> tagsMap = new LinkedHashMap<>();
@@ -195,7 +196,7 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
 
     public NostrPublicKey getPubkey() {
         if (parsedPublicKey == null) {
-            parsedPublicKey = NostrPublicKey.fromHex(pubkey);
+            parsedPublicKey = NostrPublicKey.fromHex(pubkey, false);
         }
         return parsedPublicKey;
     }

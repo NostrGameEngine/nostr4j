@@ -63,7 +63,7 @@ public class TestNWCCaching {
         relays.add("wss://relay-one.example");
 
         NWCUri uri = new NWCUri(
-            NostrPublicKey.fromHex("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"),
+            NostrPublicKey.fromHex("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", false),
             relays,
             "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
             null
@@ -82,7 +82,7 @@ public class TestNWCCaching {
     public void testSupportedMethodsCacheReturnsImmutableList() throws Exception {
         SignedNostrEvent event = new SignedNostrEvent(
             "abc",
-            NostrPublicKey.fromHex("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"),
+            NostrPublicKey.fromHex("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", false),
             NWCWallet.INFO_KIND,
             "pay_invoice make_invoice",
             Instant.ofEpochSecond(1742147457L),
@@ -105,7 +105,7 @@ public class TestNWCCaching {
         NWCWallet wallet = new NWCWallet(
             pool,
             new NWCUri(
-                NostrPublicKey.fromHex("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"),
+                NostrPublicKey.fromHex("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", false),
                 List.of("wss://relay.example"),
                 "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
                 null
