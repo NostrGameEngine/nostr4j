@@ -62,6 +62,7 @@ import org.ngengine.platform.AsyncExecutor;
 import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEPlatform;
 import org.ngengine.platform.NGEUtils;
+import org.ngengine.platform.SafeFlag;
 import org.ngengine.platform.transport.RTCTransportIceCandidate;
 
 public final class NostrRTCRoom implements Closeable {
@@ -86,7 +87,7 @@ public final class NostrRTCRoom implements Closeable {
     private final NostrKeyPair roomKeyPair;
     private final String turnServerUrl;
     private final NostrTURNPool turnPool;
-    private volatile boolean forceTURN = false;
+    private final SafeFlag forceTURN = new SafeFlag(false);
 
     private void drainQueue(NostrRTCChannel channel) {
         BlockingPacketQueue<NostrRTCChannel.PreparedPacket> queue = pendingSends.get(channel);
@@ -283,7 +284,7 @@ public final class NostrRTCRoom implements Closeable {
             turnServerUrl,
             turnPool
         );
-        socket.setForceTURN(forceTURN);
+        socket.setForceTURN(forceTURN.get());
         return socket;
     }
 
@@ -338,14 +339,14 @@ public final class NostrRTCRoom implements Closeable {
     }
 
     public void setForceTURN(boolean forceTURN) {
-        this.forceTURN = forceTURN;
+        this.forceTURN.set(forceTURN);
         for (NostrRTCSocket socket : connections.values()) {
             socket.setForceTURN(forceTURN);
         }
     }
 
     public boolean isForceTURN() {
-        return forceTURN;
+        return forceTURN.get();
     }
 
     public NostrRTCRoom addListener(NostrRTCRoomListener listener) {

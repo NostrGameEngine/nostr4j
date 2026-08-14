@@ -49,24 +49,25 @@ import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEPlatform;
 import org.ngengine.platform.NGEUtils;
+import org.ngengine.platform.SafeFlag;
 import org.ngengine.platform.transport.NGEHttpResponse;
 
 public class BlossomEndpoint {
 
     private static final java.util.logging.Logger logger = java.util.logging.Logger.getLogger(BlossomEndpoint.class.getName());
     private final String url;
-    private volatile boolean verifyBlobs = true;
+    private final SafeFlag verifyBlobs = new SafeFlag(true);
 
     public BlossomEndpoint(String url) {
         this.url = url;
     }
 
     public void setVerifyBlobs(boolean verify) {
-        this.verifyBlobs = verify;
+        this.verifyBlobs.set(verify);
     }
 
     public boolean isVerifyBlobs() {
-        return this.verifyBlobs;
+        return this.verifyBlobs.get();
     }
 
     /**
@@ -100,7 +101,7 @@ public class BlossomEndpoint {
             .then(response -> {
                 handleError(response);
                 byte body[] = response.body();
-                if (verifyBlobs) {
+                if (verifyBlobs.get()) {
                     // Verify that the SHA256 of the body matches the requested SHA256
                     byte hash[] = NGEPlatform.get().sha256(body);
                     String computedSha256 = NGEUtils.bytesToHex(hash);

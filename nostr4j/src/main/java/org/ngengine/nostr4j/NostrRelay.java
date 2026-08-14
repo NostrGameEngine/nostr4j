@@ -61,6 +61,7 @@ import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.ExecutionQueue;
 import org.ngengine.platform.NGEPlatform;
 import org.ngengine.platform.NGEUtils;
+import org.ngengine.platform.SafeFlag;
 import org.ngengine.platform.transport.WebsocketTransport;
 import org.ngengine.platform.transport.WebsocketTransportListener;
 
@@ -135,7 +136,7 @@ public final class NostrRelay {
     protected volatile long ackTimeoutS = TimeUnit.MINUTES.toSeconds(21);
     protected volatile boolean enableAutoReconnect = true;
     protected volatile int maxSendFailures = 5;
-    protected volatile boolean verifyEvents = true;
+    protected final SafeFlag verifyEvents = new SafeFlag(true);
     protected volatile boolean parallelEvents = true;
     protected final AtomicLong connectAttemptGeneration = new AtomicLong();
     protected final AtomicLong statusTimeoutGeneration = new AtomicLong();
@@ -374,11 +375,11 @@ public final class NostrRelay {
     }
 
     public void setVerifyEvents(boolean verify) {
-        this.verifyEvents = verify;
+        this.verifyEvents.set(verify);
     }
 
     public boolean isVerifyEvents() {
-        return this.verifyEvents;
+        return this.verifyEvents.get();
     }
 
     public void setAsyncEventsVerification(boolean v) {
@@ -735,7 +736,9 @@ public final class NostrRelay {
             if (rcv == null) throw new Exception("Unknown message type: " + prefix);
             final NostrMessage message = rcv;
 
-            final AsyncTask<Boolean> asyncVerifyPromise = (rcv instanceof SignedNostrEvent && verifyEvents && parallelEvents)
+            final AsyncTask<Boolean> asyncVerifyPromise = (
+                    rcv instanceof SignedNostrEvent && verifyEvents.get() && parallelEvents
+                )
                 ? (AsyncTask<Boolean>) ((SignedNostrEvent) rcv).verifyAsync()
                 : null;
 
@@ -778,7 +781,7 @@ public final class NostrRelay {
                             if (!asyncVerifyPromise.await()) {
                                 throw new Exception("Event verification failed");
                             }
-                        } else if (verifyEvents && message instanceof SignedNostrEvent) {
+                        } else if (verifyEvents.get() && message instanceof SignedNostrEvent) {
                             SignedNostrEvent event = (SignedNostrEvent) message;
                             if (!event.verify()) {
                                 throw new Exception("Event verification failed");

@@ -52,6 +52,7 @@ import org.ngengine.platform.AsyncExecutor;
 import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEPlatform;
 import org.ngengine.platform.NGEUtils;
+import org.ngengine.platform.SafeFlag;
 
 /**
  * Represents a subscription to a Nostr relay based on specific filter criteria.
@@ -94,7 +95,7 @@ public class NostrSubscription extends NostrMessage {
     private final List<String> closeReasons = new CopyOnWriteArrayList<>();
 
     private volatile boolean opened = false;
-    private volatile boolean verifyMatchLocally = true;
+    private final SafeFlag verifyMatchLocally = new SafeFlag(true);
 
     /**
      * Creates a new subscription with the specified parameters.
@@ -196,7 +197,7 @@ public class NostrSubscription extends NostrMessage {
      * @param verifyMatchLocally Whether to verify event matches locally before calling listeners
      */
     public void setVerifyMatchLocally(boolean verifyMatchLocally) {
-        this.verifyMatchLocally = verifyMatchLocally;
+        this.verifyMatchLocally.set(verifyMatchLocally);
     }
 
     /**
@@ -363,7 +364,7 @@ public class NostrSubscription extends NostrMessage {
         if (onEventListeners.isEmpty()) return;
         AsyncExecutor executor = this.exc;
         if (executor == null) return;
-        if (verifyMatchLocally && !matchesAnyFilter(event)) {
+        if (verifyMatchLocally.get() && !matchesAnyFilter(event)) {
             logger.fine("Received event that does not match any filter: " + event.getId());
             return;
         }

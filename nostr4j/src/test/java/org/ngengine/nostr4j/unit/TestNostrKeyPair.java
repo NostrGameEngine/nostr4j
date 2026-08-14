@@ -43,6 +43,7 @@ import org.ngengine.nostr4j.keypair.NostrKeyPair;
 import org.ngengine.nostr4j.keypair.NostrPrivateKey;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.platform.NGEUtils;
+import org.ngengine.platform.SafeFlag;
 
 public class TestNostrKeyPair {
 
@@ -216,17 +217,25 @@ public class TestNostrKeyPair {
         byte[] invalid = NGEUtils.hexToByteArray(INVALID_PUBLIC_KEY_HEX);
         NostrPublicKey validPublicKey = NostrPublicKey.fromBytes(valid, false);
         NostrPublicKey invalidPublicKey = NostrPublicKey.fromBytes(invalid, false);
-        Field verifiedField = NostrPublicKey.class.getDeclaredField("verified");
-        verifiedField.setAccessible(true);
+        Field cachedField = NostrPublicKey.class.getDeclaredField("verificationCached");
+        Field resultField = NostrPublicKey.class.getDeclaredField("verificationResult");
+        cachedField.setAccessible(true);
+        resultField.setAccessible(true);
+        SafeFlag validCached = (SafeFlag) cachedField.get(validPublicKey);
+        SafeFlag validResult = (SafeFlag) resultField.get(validPublicKey);
+        SafeFlag invalidCached = (SafeFlag) cachedField.get(invalidPublicKey);
+        SafeFlag invalidResult = (SafeFlag) resultField.get(invalidPublicKey);
 
-        assertNull(verifiedField.get(validPublicKey));
+        assertFalse(validCached.get());
         assertTrue(validPublicKey.verify());
-        assertEquals(Boolean.TRUE, verifiedField.get(validPublicKey));
+        assertTrue(validCached.get());
+        assertTrue(validResult.get());
         assertTrue(validPublicKey.verify());
 
-        assertNull(verifiedField.get(invalidPublicKey));
+        assertFalse(invalidCached.get());
         assertFalse(invalidPublicKey.verify());
-        assertEquals(Boolean.FALSE, verifiedField.get(invalidPublicKey));
+        assertTrue(invalidCached.get());
+        assertFalse(invalidResult.get());
         assertFalse(invalidPublicKey.verify());
     }
 

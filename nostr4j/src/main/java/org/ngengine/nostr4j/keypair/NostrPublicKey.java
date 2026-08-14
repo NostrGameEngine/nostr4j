@@ -38,6 +38,7 @@ import java.util.Collections;
 import org.ngengine.bech32.Bech32;
 import org.ngengine.nostr4j.utils.ByteBufferList;
 import org.ngengine.platform.NGEUtils;
+import org.ngengine.platform.SafeFlag;
 
 /**
  * Represents a Nostr public key.
@@ -61,7 +62,8 @@ public final class NostrPublicKey implements NostrKey {
     private transient ByteBuffer data;
     private transient volatile byte[] array;
     private transient volatile Integer hashCode;
-    private transient volatile Boolean verified;
+    private transient SafeFlag verificationCached = new SafeFlag(false);
+    private transient SafeFlag verificationResult = new SafeFlag(false);
 
     /**
      * Creates a new NostrPublicKey from the given byte array.
@@ -239,16 +241,16 @@ public final class NostrPublicKey implements NostrKey {
      * @return true if this public key is valid
      */
     public boolean verify() {
-        Boolean cached = verified;
-        if (cached != null) {
-            return cached.booleanValue();
+        if (verificationCached.get()) {
+            return verificationResult.get();
         }
 
         byte[] compressedPublicKey = new byte[33];
         compressedPublicKey[0] = 0x02;
         data.duplicate().get(compressedPublicKey, 1, 32);
         boolean valid = NGEUtils.getPlatform().secp256k1PublicKeyVerify(compressedPublicKey);
-        verified = Boolean.valueOf(valid);
+        verificationResult.set(valid);
+        verificationCached.set(true);
         return valid;
     }
 
@@ -373,6 +375,8 @@ public final class NostrPublicKey implements NostrKey {
         data = ByteBuffer.wrap(array);
         hex = (String) in.readObject();
         bech32 = (String) in.readObject();
+        verificationCached = new SafeFlag(false);
+        verificationResult = new SafeFlag(false);
         assert data.position() == 0 : "Data position must be 0";
     }
 }

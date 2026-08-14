@@ -52,6 +52,7 @@ import org.ngengine.nostr4j.utils.ImmutableSnapshot;
 import org.ngengine.nostr4j.utils.ZeroCounter;
 import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEUtils;
+import org.ngengine.platform.SafeFlag;
 
 public class SignedNostrEvent extends NostrMessage implements NostrEvent {
 
@@ -95,7 +96,8 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
     private transient String bech32Id;
     private transient NostrPublicKey parsedPublicKey;
     private transient Instant expiresAt;
-    private transient volatile Boolean verified;
+    private transient SafeFlag verificationCached = new SafeFlag(false);
+    private transient SafeFlag verificationResult = new SafeFlag(false);
 
     public SignedNostrEvent(
         String id,
@@ -250,35 +252,42 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
     }
 
     public boolean verify() throws Exception {
-        Boolean cached = this.verified;
-        if (cached != null) {
-            return cached.booleanValue();
+        if (this.verificationCached.get()) {
+            return this.verificationResult.get();
         }
         String computedId = NostrEvent.computeEventId(this.pubkey, this);
         boolean result =
             this.identifier.id.equals(computedId) &&
             NGEUtils.getPlatform().schnorrVerify(computedId, this.signature, this.getPubkey().asReadOnlyBuffer());
-        this.verified = Boolean.valueOf(result);
+        this.verificationResult.set(result);
+        this.verificationCached.set(true);
         return result;
     }
 
     public AsyncTask<Boolean> verifyAsync() {
-        Boolean cached = this.verified;
-        if (cached != null) {
-            return AsyncTask.completed(cached);
+        if (this.verificationCached.get()) {
+            return AsyncTask.completed(this.verificationResult.get());
         }
         String computedId = NostrEvent.computeEventId(this.pubkey, this);
         if (!this.identifier.id.equals(computedId)) {
-            this.verified = false;
+            this.verificationResult.set(false);
+            this.verificationCached.set(true);
             return AsyncTask.completed(false);
         }
         return NGEUtils
             .getPlatform()
             .schnorrVerifyAsync(computedId, this.signature, this.getPubkey().asReadOnlyBuffer())
             .then(result -> {
-                this.verified = result;
+                this.verificationResult.set(result);
+                this.verificationCached.set(true);
                 return result;
             });
+    }
+
+    private void readObject(java.io.ObjectInputStream in) throws java.io.IOException, ClassNotFoundException {
+        in.defaultReadObject();
+        this.verificationCached = new SafeFlag(false);
+        this.verificationResult = new SafeFlag(false);
     }
 
     public String getIdBech32() {

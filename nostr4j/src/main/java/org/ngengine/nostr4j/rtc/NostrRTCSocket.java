@@ -56,6 +56,7 @@ import org.ngengine.platform.AsyncExecutor;
 import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEPlatform;
 import org.ngengine.platform.NGEUtils;
+import org.ngengine.platform.SafeFlag;
 import org.ngengine.platform.transport.RTCDataChannel;
 import org.ngengine.platform.transport.RTCTransport;
 import org.ngengine.platform.transport.RTCTransportIceCandidate;
@@ -107,7 +108,7 @@ public final class NostrRTCSocket {
     private volatile AsyncTask<Void> rtcConnectDeadlineTask;
     private volatile TransportPath activeTransportPath = TransportPath.NONE;
     private volatile boolean turnFallbackAllowed = false;
-    private volatile boolean forceTURN = false;
+    private final SafeFlag forceTURN = new SafeFlag(false);
     private volatile Instant lastRtcAttemptSince;
 
     private class NostrRTCListener implements RTCTransportListener {
@@ -371,7 +372,7 @@ public final class NostrRTCSocket {
     }
 
     private void ensureTurnForDownChannels(String reason) {
-        if (connected && !forceTURN) {
+        if (connected && !forceTURN.get()) {
             logger.fine("Skipping TURN fallback reset because RTC transport is still connected. reason=" + reason);
             return;
         }
@@ -424,11 +425,11 @@ public final class NostrRTCSocket {
     }
 
     void setForceTURN(boolean forceTURN) {
-        this.forceTURN = forceTURN;
+        this.forceTURN.set(forceTURN);
     }
 
     boolean isForceTURN() {
-        return forceTURN;
+        return forceTURN.get();
     }
 
     private void resurrectChannel(NostrRTCChannel channel) {
@@ -571,7 +572,7 @@ public final class NostrRTCSocket {
     }
 
     boolean shouldAttemptRtcUpgrade() {
-        if (stopped || forceTURN || activeTransportPath != TransportPath.TURN) {
+        if (stopped || forceTURN.get() || activeTransportPath != TransportPath.TURN) {
             return false;
         }
         if (transport != null || isPendingConnection()) {

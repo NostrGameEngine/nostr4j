@@ -52,6 +52,7 @@ import org.ngengine.nostr4j.proto.NostrMessage;
 import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
 import org.ngengine.nostr4j.signer.NostrSigner;
 import org.ngengine.platform.NGEUtils;
+import org.ngengine.platform.SafeFlag;
 import org.ngengine.platform.jvm.JVMAsyncPlatform;
 
 public class TestNostrEvent {
@@ -64,7 +65,12 @@ public class TestNostrEvent {
     private static void setPlatformTestFlag(String name, boolean value) throws Exception {
         Field field = JVMAsyncPlatform.class.getDeclaredField(name);
         field.setAccessible(true);
-        field.setBoolean(null, value);
+        Object current = field.get(null);
+        if (current instanceof SafeFlag) {
+            ((SafeFlag) current).set(value);
+        } else {
+            field.setBoolean(null, value);
+        }
     }
 
     @Test
@@ -293,14 +299,19 @@ public class TestNostrEvent {
         map.put("sig", "sig");
 
         SignedNostrEvent event = new SignedNostrEvent(map);
-        Field verifiedField = SignedNostrEvent.class.getDeclaredField("verified");
-        verifiedField.setAccessible(true);
+        Field cachedField = SignedNostrEvent.class.getDeclaredField("verificationCached");
+        Field resultField = SignedNostrEvent.class.getDeclaredField("verificationResult");
+        cachedField.setAccessible(true);
+        resultField.setAccessible(true);
+        SafeFlag cached = (SafeFlag) cachedField.get(event);
+        SafeFlag result = (SafeFlag) resultField.get(event);
 
-        verifiedField.set(event, Boolean.TRUE);
+        result.set(true);
+        cached.set(true);
         assertTrue(event.verify());
         assertTrue(event.verifyAsync().await());
 
-        verifiedField.set(event, Boolean.FALSE);
+        result.set(false);
         assertFalse(event.verify());
         assertFalse(event.verifyAsync().await());
     }
