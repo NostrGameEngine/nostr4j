@@ -425,6 +425,14 @@ public final class NostrRTCRoom implements Closeable {
                                     socket = null;
                                 }
 
+                                if (isBannedPeer(remotePubkey)) {
+                                    logger.fine("Skipping connection to banned peer: " + remotePubkey);
+                                    if (socket != null && connections.remove(remotePeer, socket)) {
+                                        socket.close();
+                                    }
+                                    continue;
+                                }
+
                                 if (!shouldOfferConnection(remotePubkey)) continue;
 
                                 logger.fine("Initiating connection to: " + remotePubkey);
@@ -468,6 +476,11 @@ public final class NostrRTCRoom implements Closeable {
     // Doesn't really matter the approach as long as both peers are running the same logic. \
     // Here for simplicity we just compare the hex values of the pubkeys.
     private boolean shouldOfferConnection(NostrPublicKey pubkey) {
+        if (isBannedPeer(pubkey)) {
+            logger.fine("Not offering connection to banned peer: " + pubkey);
+            return false;
+        }
+
         String localHex = localPeer.getPubkey().asHex();
         String remoteHex = pubkey.asHex();
         boolean precedence = localHex.compareTo(remoteHex) < 0;
@@ -569,13 +582,15 @@ public final class NostrRTCRoom implements Closeable {
      * @param peer the peer to ban
      */
     public void ban(NostrPublicKey peer) {
-        if (!bannedPeers.contains(peer)) {
-            logger.fine("Banning peer: " + peer);
-            bannedPeers.add(peer);
-        } else {
-            logger.fine("Peer already banned: " + peer);
+        synchronized (this) {
+            if (!bannedPeers.contains(peer)) {
+                logger.fine("Banning peer: " + peer);
+                bannedPeers.add(peer);
+            } else {
+                logger.fine("Peer already banned: " + peer);
+            }
+            kick(peer);
         }
-        kick(peer);
     }
 
     /**
@@ -583,8 +598,14 @@ public final class NostrRTCRoom implements Closeable {
      * @param peer the peer to unban
      */
     public void unban(NostrPublicKey peer) {
-        logger.fine("Unbanning peer: " + peer);
-        bannedPeers.remove(peer);
+        synchronized (this) {
+            logger.fine("Unbanning peer: " + peer);
+            bannedPeers.remove(peer);
+        }
+    }
+
+    private boolean isBannedPeer(NostrPublicKey peer) {
+        return peer != null && bannedPeers.contains(peer);
     }
 
     private void onAddAnnounce(NostrRTCConnectSignal announce) {
@@ -659,6 +680,10 @@ public final class NostrRTCRoom implements Closeable {
     private void onReceiveOffer(NostrRTCOfferSignal offer) {
         synchronized (this) {
             NostrRTCPeer remotePeer = offer.getPeer();
+            if (isBannedPeer(remotePeer.getPubkey())) {
+                logger.fine("Ignoring offer from banned peer: " + remotePeer);
+                return;
+            }
             // offer received from remote peer
             NostrRTCSocket existing = connections.get(remotePeer);
             NostrRTCSocket socket = null;
@@ -731,6 +756,11 @@ public final class NostrRTCRoom implements Closeable {
     private void onReceiveCandidates(NostrRTCRouteSignal candidate) {
         logger.fine("Received ICE candidate: " + candidate);
         NostrRTCPeer remotePeer = candidate.getPeer();
+
+        if (isBannedPeer(remotePeer.getPubkey())) {
+            logger.fine("Ignoring ICE candidate from banned peer: " + remotePeer);
+            return;
+        }
 
         // receive remote candidate, add it to the socket
         NostrRTCSocket socket = connections.get(remotePeer);
