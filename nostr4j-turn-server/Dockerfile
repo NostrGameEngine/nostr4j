@@ -1,6 +1,9 @@
-FROM alpine:3.20
+FROM alpine:3.24
 
-RUN apk add --no-cache libstdc++ gcompat
+RUN apk upgrade --no-cache && \
+    apk add --no-cache libstdc++ gcompat && \
+    addgroup -S -g 10001 nostr4j && \
+    adduser -S -D -H -u 10001 -G nostr4j nostr4j
 
 WORKDIR /app
 
@@ -10,5 +13,7 @@ RUN chmod +x /usr/local/bin/nostr4j-turn-server
 ENV NOSTR_TURN_REF_HOST=0.0.0.0
 
 EXPOSE 8081
+
+USER nostr4j
 
 ENTRYPOINT ["/usr/local/bin/nostr4j-turn-server"]
