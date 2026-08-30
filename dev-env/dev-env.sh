@@ -65,14 +65,21 @@ generate_certificates() {
     mkdir -p "$CERT_DIR"
     openssl genrsa -out "$CERT_DIR/ca.key" 3072 >/dev/null 2>&1
     openssl req -x509 -new -key "$CERT_DIR/ca.key" -sha256 -days 3650 \
-        -subj "/CN=nostr4j development CA" -out "$CERT_DIR/ca.crt"
+        -subj "/CN=nostr4j development CA" -out "$CERT_DIR/ca.crt" \
+        -addext 'basicConstraints=critical,CA:TRUE' \
+        -addext 'keyUsage=critical,keyCertSign,cRLSign' \
+        -addext 'subjectKeyIdentifier=hash'
     openssl genrsa -out "$CERT_DIR/server.key" 2048 >/dev/null 2>&1
     openssl req -new -key "$CERT_DIR/server.key" -subj "/CN=localhost" -out "$CERT_DIR/server.csr"
     openssl x509 -req -in "$CERT_DIR/server.csr" -CA "$CERT_DIR/ca.crt" -CAkey "$CERT_DIR/ca.key" \
         -CAcreateserial -out "$CERT_DIR/server.crt" -days 825 -sha256 \
         -extfile <(printf '%s\n' \
+            'basicConstraints=critical,CA:FALSE' \
+            'keyUsage=critical,digitalSignature,keyEncipherment' \
             'subjectAltName=DNS:localhost,DNS:relay1.localhost,DNS:relay2.localhost,DNS:relay3.localhost,DNS:lnbits.localhost,IP:127.0.0.1' \
-            'extendedKeyUsage=serverAuth') >/dev/null 2>&1
+            'extendedKeyUsage=serverAuth' \
+            'subjectKeyIdentifier=hash' \
+            'authorityKeyIdentifier=keyid,issuer') >/dev/null 2>&1
     rm -f "$CERT_DIR/server.csr" "$CERT_DIR/ca.srl"
     keytool -importcert -noprompt -alias nostr4j-dev-ca -file "$CERT_DIR/ca.crt" \
         -keystore "$CERT_DIR/truststore.p12" -storetype PKCS12 -storepass changeit >/dev/null

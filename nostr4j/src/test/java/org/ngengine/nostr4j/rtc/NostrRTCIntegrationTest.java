@@ -754,11 +754,10 @@ public class NostrRTCIntegrationTest {
 
         NostrTURNPool pool = new NostrTURNPool(TURN_MAX_DIFF);
         NostrTURNChannel channel = null;
-        int baseline = turnLogicalSocketCount(turnServerA);
         try {
             channel = pool.connect(local, remote, turnUrlA, roomKeyPair, "primary", true, null);
             awaitCondition(
-                () -> turnLogicalSocketCount(turnServerA) > baseline,
+                () -> turnLogicalSocketExists(turnServerA, localSession, remoteLocal.getSessionId(), "primary"),
                 5000,
                 "server did not accept half-open TURN connect"
             );
@@ -766,7 +765,7 @@ public class NostrRTCIntegrationTest {
 
             channel.close("half-open-local-close");
             awaitCondition(
-                () -> turnLogicalSocketCount(turnServerA) == baseline,
+                () -> !turnLogicalSocketExists(turnServerA, localSession, remoteLocal.getSessionId(), "primary"),
                 5000,
                 "local close during half-open connect should clean server logical socket"
             );
@@ -2208,15 +2207,39 @@ public class NostrRTCIntegrationTest {
         }
     }
 
-    private static int turnLogicalSocketCount(TurnServer server) {
+    private static boolean turnLogicalSocketExists(
+        TurnServer server,
+        String localSessionId,
+        String remoteSessionId,
+        String channelLabel
+    ) {
         if (server == null) {
-            return 0;
+            return false;
         }
         try {
             Field field = TurnServer.class.getDeclaredField("logicalSockets");
             field.setAccessible(true);
             Map<?, ?> map = (Map<?, ?>) field.get(server);
-            return map == null ? 0 : map.size();
+            if (map == null) {
+                return false;
+            }
+            for (Object identity : map.keySet()) {
+                Class<?> identityClass = identity.getClass();
+                Field localSessionField = identityClass.getDeclaredField("localSessionId");
+                Field remoteSessionField = identityClass.getDeclaredField("remoteSessionId");
+                Field channelLabelField = identityClass.getDeclaredField("channelLabel");
+                localSessionField.setAccessible(true);
+                remoteSessionField.setAccessible(true);
+                channelLabelField.setAccessible(true);
+                if (
+                    Objects.equals(localSessionId, localSessionField.get(identity)) &&
+                    Objects.equals(remoteSessionId, remoteSessionField.get(identity)) &&
+                    Objects.equals(channelLabel, channelLabelField.get(identity))
+                ) {
+                    return true;
+                }
+            }
+            return false;
         } catch (Exception e) {
             throw new RuntimeException("Unable to inspect TURN logical socket registry", e);
         }
