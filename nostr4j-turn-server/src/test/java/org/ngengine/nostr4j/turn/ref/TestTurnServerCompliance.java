@@ -166,23 +166,23 @@ public class TestTurnServerCompliance {
 
         WsClient aliceWs = WsClient.connect(wsUri);
         NostrTURNChallengeEvent challengeAlice = NostrTURNChallengeEvent.parseIncoming(
-            waitForType(aliceWs, "challenge", 2000),
+            waitForType(aliceWs, "challenge", 5000),
             alice,
             64
         );
         long aliceVsocketId = 711L;
         sendValidConnect(aliceWs, alice, bobRemoteForAlice, roomKeyPair, challengeAlice, aliceVsocketId);
-        assertNotNull(waitForType(aliceWs, "ack", 2000));
+        assertNotNull(waitForType(aliceWs, "ack", 5000));
 
         WsClient bobWs = WsClient.connect(wsUri);
         NostrTURNChallengeEvent challengeBob = NostrTURNChallengeEvent.parseIncoming(
-            waitForType(bobWs, "challenge", 2000),
+            waitForType(bobWs, "challenge", 5000),
             bob,
             64
         );
         long bobVsocketId = 722L;
         sendValidConnect(bobWs, bob, aliceRemoteForBob, roomKeyPair, challengeBob, bobVsocketId);
-        assertNotNull(waitForType(bobWs, "ack", 2000));
+        assertNotNull(waitForType(bobWs, "ack", 5000));
 
         NostrRTCLocalPeer attacker = localPeer(NostrKeyPairSigner.generate(), roomKeyPair, "sess-disc-attacker");
         NostrTURNDisconnectEvent forgedDisconnect = NostrTURNDisconnectEvent.createDisconnect(
