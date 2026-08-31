@@ -214,6 +214,9 @@
       "type": "java.util.Arrays$ArrayList"
     },
     {
+      "type": "java.util.Collections$UnmodifiableMap"
+    },
+    {
       "type": "java.util.Collections$UnmodifiableRandomAccessList"
     },
     {
