@@ -35,6 +35,8 @@ import static org.ngengine.platform.NGEUtils.safeMSats;
 
 import jakarta.annotation.Nonnull;
 import jakarta.annotation.Nullable;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -467,7 +469,13 @@ public class NWCWallet implements Wallet {
                     (Map<String, Object>) res.get("metadata")
                 );
 
-                if (paymentHash != null && !paymentHash.equals(invoiceData.paymentHash())) {
+                if (
+                    paymentHash != null &&
+                    !MessageDigest.isEqual(
+                        paymentHash.getBytes(StandardCharsets.US_ASCII),
+                        invoiceData.paymentHash().getBytes(StandardCharsets.US_ASCII)
+                    )
+                ) {
                     throw new IllegalStateException("Mismatched payment_hash");
                 }
 

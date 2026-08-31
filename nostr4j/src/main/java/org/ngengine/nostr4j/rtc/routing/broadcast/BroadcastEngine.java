@@ -222,7 +222,7 @@ public final class BroadcastEngine implements Closeable {
     }
 
     private void scheduleTrackerTimeout(PendingBroadcast tracker) {
-        tracker.timeout =
+        tracker.setTimeout(
             executor.runLater(
                 () -> {
                     Set<NodeId> missing;
@@ -245,7 +245,8 @@ public final class BroadcastEngine implements Closeable {
                 },
                 ackTimeoutMs,
                 TimeUnit.MILLISECONDS
-            );
+            )
+        );
     }
 
     @Override
@@ -275,6 +276,7 @@ public final class BroadcastEngine implements Closeable {
         private Boolean early;
         private boolean repairStarted;
         private AsyncTask<Void> timeout;
+        private boolean settled;
 
         private PendingBroadcast(CircuitId id, String logicalChannel, Set<NodeId> targets, BroadcastFrame frame) {
             this.id = id;
@@ -292,7 +294,13 @@ public final class BroadcastEngine implements Closeable {
                     });
         }
 
+        private synchronized void setTimeout(AsyncTask<Void> timeout) {
+            if (settled) timeout.cancel(); else this.timeout = timeout;
+        }
+
         private synchronized void resolve(Boolean value) {
+            if (settled) return;
+            settled = true;
             if (timeout != null) timeout.cancel();
             if (resolver != null) resolver.accept(value); else early = value;
         }

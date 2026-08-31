@@ -776,7 +776,7 @@ public final class RoutedTransportEngine implements InternalRoutedTransport, Clo
             pendingByDestination.put(key, pending);
             pendingBySetup.put(setup.getSetupId(), pending);
         }
-        pending.timeout =
+        pending.setTimeout(
             executor.runLater(
                 () -> {
                     failPendingSetup(pending, new DeliveryRouteUnavailableException("Routed circuit setup timed out"));
@@ -784,7 +784,8 @@ public final class RoutedTransportEngine implements InternalRoutedTransport, Clo
                 },
                 SETUP_TIMEOUT.toMillis(),
                 TimeUnit.MILLISECONDS
-            );
+            )
+        );
         context
             .sendToDirectNeighbor(
                 circuit.firstHop,
@@ -1084,6 +1085,10 @@ public final class RoutedTransportEngine implements InternalRoutedTransport, Clo
                             if (earlyRejection != null) reject.accept(earlyRejection);
                         }
                     });
+        }
+
+        private synchronized void setTimeout(AsyncTask<Void> timeout) {
+            if (settled) timeout.cancel(); else this.timeout = timeout;
         }
 
         private synchronized void resolve(SourceCircuit value) {

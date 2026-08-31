@@ -33,6 +33,8 @@ package org.ngengine.nostr4j.nip57;
 
 import jakarta.annotation.Nullable;
 import java.net.URISyntaxException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -263,7 +265,12 @@ public final class Nip57 {
             );
         }
         if (
-            bolt11DescriptionHash == null || bolt11DescriptionHash.isEmpty() || !descriptionHash.equals(bolt11DescriptionHash)
+            bolt11DescriptionHash == null ||
+            bolt11DescriptionHash.isEmpty() ||
+            !MessageDigest.isEqual(
+                descriptionHash.getBytes(StandardCharsets.US_ASCII),
+                bolt11DescriptionHash.getBytes(StandardCharsets.US_ASCII)
+            )
         ) {
             throw new InvalidZapException("Description hash does not match");
         }
