@@ -44,7 +44,7 @@ public class Nip39ExternalIdentities extends Nip01UserMetadata {
     private transient List<ExternalIdentity> externalIdentities;
 
     public Nip39ExternalIdentities(Nip01UserMetadata nip01) {
-        super(nip01.getSourceEvent());
+        super(nip01);
     }
 
     public Nip39ExternalIdentities(NostrEvent source) {
@@ -54,15 +54,20 @@ public class Nip39ExternalIdentities extends Nip01UserMetadata {
     public List<ExternalIdentity> getExternalIdentities() {
         if (externalIdentities == null) {
             List<ExternalIdentity> externalIdentities = new ArrayList<>();
-            Collection<TagValue> is = getSourceEvent().getTag("i");
-            for (TagValue t : is) {
-                String platformAndId[] = t.get(0).split(":", 1);
-                List<String> proofs = new ArrayList<>();
-                for (int i = 1; i < t.size(); i++) {
-                    proofs.add(t.get(i));
+            NostrEvent sourceEvent = getSourceEvent();
+            if (sourceEvent != null) {
+                Collection<TagValue> is = sourceEvent.getTag("i");
+                for (TagValue t : is) {
+                    if (t.size() == 0) continue;
+                    String platformAndId[] = t.get(0).split(":", 2);
+                    if (platformAndId.length != 2) continue;
+                    List<String> proofs = new ArrayList<>();
+                    for (int i = 1; i < t.size(); i++) {
+                        proofs.add(t.get(i));
+                    }
+                    ExternalIdentity identity = new GenericIdentity(platformAndId[0], platformAndId[1], proofs);
+                    externalIdentities.add(identity);
                 }
-                ExternalIdentity identity = new GenericIdentity(platformAndId[0], platformAndId[1], proofs);
-                externalIdentities.add(identity);
             }
             this.externalIdentities = externalIdentities;
         }
@@ -74,19 +79,13 @@ public class Nip39ExternalIdentities extends Nip01UserMetadata {
     }
 
     public void setExternalIdentity(ExternalIdentity identity) {
-        if (externalIdentities == null) {
-            externalIdentities = new ArrayList<>();
-        } else {
-            removeExternalIdentity(identity.getPlatform());
-        }
+        getExternalIdentities();
+        removeExternalIdentity(identity.getPlatform());
         externalIdentities.add(identity);
     }
 
     public void removeExternalIdentity(ExternalIdentity identity) {
-        if (externalIdentities == null) {
-            return;
-        }
-        externalIdentities.remove(identity);
+        getExternalIdentities().remove(identity);
     }
 
     public void removeExternalIdentity(String platform) {
@@ -94,10 +93,7 @@ public class Nip39ExternalIdentities extends Nip01UserMetadata {
     }
 
     public void removeExternalIdentity(String platform, String identity) {
-        if (externalIdentities == null) {
-            return;
-        }
-        Iterator<ExternalIdentity> iterator = externalIdentities.iterator();
+        Iterator<ExternalIdentity> iterator = getExternalIdentities().iterator();
         while (iterator.hasNext()) {
             ExternalIdentity i = iterator.next();
             if (i.getPlatform().equals(platform) && (identity == null || i.getIdentity().equals(identity))) {
@@ -107,10 +103,7 @@ public class Nip39ExternalIdentities extends Nip01UserMetadata {
     }
 
     public ExternalIdentity getExternalIdentity(String platform, String identity) {
-        if (externalIdentities == null) {
-            return null;
-        }
-        for (ExternalIdentity i : externalIdentities) {
+        for (ExternalIdentity i : getExternalIdentities()) {
             if (i.getPlatform().equals(platform) && (identity == null || i.getIdentity().equals(identity))) {
                 return i;
             }

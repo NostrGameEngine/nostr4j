@@ -39,6 +39,7 @@ import java.util.Collection;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import org.ngengine.lnurl.LnAddress;
 import org.ngengine.lnurl.LnUrl;
 import org.ngengine.nostr4j.event.NostrEvent;
@@ -59,7 +60,19 @@ public class Nip01UserMetadata implements Serializable {
         this.metadata = new HashMap<>();
     }
 
+    /**
+     * Creates an independent copy of existing user metadata, including metadata that has no source event.
+     *
+     * @param source metadata to copy
+     */
+    public Nip01UserMetadata(Nip01UserMetadata source) {
+        Objects.requireNonNull(source, "source");
+        this.sourceEvent = source.sourceEvent;
+        this.metadata = new HashMap<>(source.metadata);
+    }
+
     public Nip01UserMetadata(NostrEvent source) {
+        Objects.requireNonNull(source, "source");
         if (source.getKind() != 0) {
             throw new IllegalArgumentException("Invalid event kind");
         }

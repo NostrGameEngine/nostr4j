@@ -36,6 +36,7 @@ import java.util.Map;
 import org.junit.Assert;
 import org.junit.Test;
 import org.ngengine.nostr4j.event.UnsignedNostrEvent;
+import org.ngengine.nostr4j.nip01.Nip01UserMetadata;
 import org.ngengine.nostr4j.nip24.Nip24ExtraMetadata;
 import org.ngengine.platform.NGEUtils;
 
@@ -93,6 +94,14 @@ public class TestNip24Metadata {
         Assert.assertEquals(2000, cal.get(Calendar.YEAR));
         Assert.assertEquals(0, cal.get(Calendar.MONTH)); // January is 0-based
         Assert.assertEquals(15, cal.get(Calendar.DAY_OF_MONTH));
+    }
+
+    @Test
+    public void testEmptyNip01MetadataConversion() {
+        Nip24ExtraMetadata metadata = new Nip24ExtraMetadata(new Nip01UserMetadata());
+
+        Assert.assertNull(metadata.getSourceEvent());
+        Assert.assertTrue(metadata.metadata.isEmpty());
     }
 
     @Test

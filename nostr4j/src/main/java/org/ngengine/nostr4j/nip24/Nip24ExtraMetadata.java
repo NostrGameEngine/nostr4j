@@ -40,7 +40,7 @@ import org.ngengine.nostr4j.nip01.Nip01UserMetadata;
 public class Nip24ExtraMetadata extends Nip01UserMetadata {
 
     public Nip24ExtraMetadata(Nip01UserMetadata nip01) {
-        super(nip01.getSourceEvent());
+        super(nip01);
     }
 
     public Nip24ExtraMetadata(NostrEvent source) {
