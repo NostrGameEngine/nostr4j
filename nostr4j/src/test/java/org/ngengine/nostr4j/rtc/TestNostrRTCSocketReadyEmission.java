@@ -8,6 +8,7 @@ package org.ngengine.nostr4j.rtc;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import java.nio.ByteBuffer;
@@ -16,6 +17,9 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.Test;
 import org.ngengine.nostr4j.RTCSettings;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
@@ -23,6 +27,7 @@ import org.ngengine.nostr4j.rtc.listeners.NostrRTCChannelListener;
 import org.ngengine.nostr4j.rtc.listeners.NostrRTCSocketListener;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCLocalPeer;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCPeer;
+import org.ngengine.nostr4j.rtc.signal.NostrRTCRouteSignal;
 import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
 import org.ngengine.platform.AsyncExecutor;
 import org.ngengine.platform.AsyncTask;
@@ -31,6 +36,88 @@ import org.ngengine.platform.transport.RTCDataChannel;
 import org.ngengine.platform.transport.RTCTransportIceCandidate;
 
 public class TestNostrRTCSocketReadyEmission {
+
+    @Test
+    public void testRoomTurnServerIsEmittedWhenLocalPeerTurnServerIsUnset() throws Exception {
+        AsyncExecutor executor = NGEUtils.getPlatform().newAsyncExecutor("room-turn-route-emission-test");
+        NostrRTCSocket socket = null;
+        try {
+            String localTurnServer = "wss://local.turn.example/turn";
+            String remoteTurnServer = "wss://remote.turn.example/turn";
+            NostrKeyPair roomKeyPair = new NostrKeyPair();
+            NostrKeyPairSigner remoteSigner = NostrKeyPairSigner.generate();
+            NostrRTCLocalPeer localPeer = new NostrRTCLocalPeer(
+                NostrKeyPairSigner.generate(),
+                Collections.emptyList(),
+                "ready-app",
+                "ready-proto",
+                roomKeyPair,
+                null
+            );
+            NostrRTCPeer remotePeer = new NostrRTCPeer(
+                NGEUtils.awaitNoThrow(remoteSigner.getPublicKey()),
+                "ready-app",
+                "ready-proto",
+                "remote-ready-session",
+                roomKeyPair.getPublicKey(),
+                null
+            );
+            socket =
+                new NostrRTCSocket(executor, remotePeer, roomKeyPair, localPeer, RTCSettings.DEFAULT, localTurnServer, null);
+
+            assertEquals(localTurnServer, socket.resolveReceiveTurnUrl());
+            assertNull("Local TURN server must not be used as the remote send destination", socket.resolveSendTurnUrl());
+
+            NostrRTCRouteSignal remoteRoute = new NostrRTCRouteSignal(
+                remoteSigner,
+                roomKeyPair,
+                remotePeer,
+                Collections.emptyList(),
+                remoteTurnServer
+            );
+            socket.mergeRemoteRTCIceCandidate(remoteRoute);
+            assertEquals(remoteTurnServer, socket.resolveSendTurnUrl());
+            assertEquals(localTurnServer, socket.resolveReceiveTurnUrl());
+            assertTrue(socket.hasCompleteTurnConfiguration());
+
+            CountDownLatch routeEmitted = new CountDownLatch(1);
+            AtomicReference<String> advertisedTurnServer = new AtomicReference<String>();
+            socket.addListener(
+                new NostrRTCSocketListener() {
+                    @Override
+                    public void onRTCSocketRouteUpdate(
+                        NostrRTCSocket socket,
+                        java.util.Collection<RTCTransportIceCandidate> candidates,
+                        String turnServer
+                    ) {
+                        advertisedTurnServer.set(turnServer);
+                        routeEmitted.countDown();
+                    }
+
+                    @Override
+                    public void onRTCSocketClose(NostrRTCSocket socket) {}
+
+                    @Override
+                    public void onRTCChannelReady(NostrRTCChannel channel) {}
+
+                    @Override
+                    public void onRTCChannel(NostrRTCChannel channel) {}
+                }
+            );
+
+            java.lang.reflect.Method emitCandidates = NostrRTCSocket.class.getDeclaredMethod("emitCandidates");
+            emitCandidates.setAccessible(true);
+            emitCandidates.invoke(socket);
+
+            assertTrue("Route update was not emitted", routeEmitted.await(2, TimeUnit.SECONDS));
+            assertEquals(localTurnServer, advertisedTurnServer.get());
+        } finally {
+            if (socket != null) {
+                socket.close();
+            }
+            executor.close();
+        }
+    }
 
     @Test
     public void testCreateChannelEmitsSocketChannelEvent() throws Exception {
