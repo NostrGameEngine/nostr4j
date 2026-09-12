@@ -436,6 +436,9 @@ public final class NostrRTCSocket {
         if (localTurnServer != null && !localTurnServer.isEmpty()) {
             return localTurnServer;
         }
+        if (turnServerUrl != null && !turnServerUrl.isEmpty()) {
+            return turnServerUrl;
+        }
         return null;
     }
 
@@ -823,7 +826,7 @@ public final class NostrRTCSocket {
                                 listener.onRTCSocketRouteUpdate(
                                     this,
                                     new ArrayList<RTCTransportIceCandidate>(localIceCandidates),
-                                    localPeer.getTurnServer()
+                                    resolveReceiveTurnUrl()
                                 );
                             } catch (Throwable e) {
                                 logger.log(Level.SEVERE, "Exception in listener", e);
