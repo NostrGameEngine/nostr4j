@@ -1,0 +1,20 @@
+{% macro nav_entry(item) %}
+  {% if item.children %}
+    <p class="docs-nav-group">{{ item.title }}</p>
+    {% for child in item.children %}{{ nav_entry(child) }}{% endfor %}
+  {% else %}
+    <a{% if page and page.url == item.url %} class="active" aria-current="page"{% endif %} href="{{ item.url | url }}">{{ item.title }}</a>
+  {% endif %}
+{% endmacro %}
+<aside class="docs-nav" aria-label="Documentation navigation">
+  <div class="docs-nav-head">
+    <p class="docs-nav-title">Documentation</p>
+  </div>
+  {% for section in nav %}
+    {% if section.title == 'Documentation' %}
+      {% for item in section.children %}{{ nav_entry(item) }}{% endfor %}
+    {% endif %}
+  {% endfor %}
+  <div class="nav-sep"></div>
+  <a href="{{ base_url }}/demos.html">Live demos</a>
+</aside>

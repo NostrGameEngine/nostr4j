@@ -1,0 +1,93 @@
+site_name: Nostr4j
+site_description: A Java library for Nostr apps on desktop, mobile and the web.
+site_author: NostrGameEngine
+site_url: https://nostrgameengine.github.io/nostr4j/
+repo_url: https://github.com/NostrGameEngine/nostr4j
+repo_name: NostrGameEngine/nostr4j
+
+docs_dir: docs
+site_dir: _site
+use_directory_urls: false
+
+not_in_nav: |
+  examples.md
+  docs/concepts.md
+  docs/nip-07.md
+  docs/nip-46.md
+  docs/nip-47.md
+  docs/nip-49.md
+  assets/audio/CREDITS.md
+  api/legal/*.md
+
+theme:
+  name: null
+  custom_dir: theme
+
+extra_css:
+  - assets/css/style.css
+
+# Dependency versions displayed in installation snippets. CI overrides Nostr4j for tags.
+extra:
+  demo_api_base_url: !ENV [NOSTR4J_DEMO_API_BASE_URL, 'https://nostr4jdemo.ngengine.org']
+  versions:
+    nostr4j: !ENV [NOSTR4J_DOC_VERSION, '0.3.0-SNAPSHOT']
+    platforms: '0.3.0-SNAPSHOT'
+    teavm: '0.15.0'
+
+hooks:
+  - scripts/highlight_code.py
+
+markdown_extensions:
+  - admonition
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets:
+      base_path: .
+      dedent_subsections: true
+  - pymdownx.superfences
+
+nav:
+  - Home: index.md
+  - Live Demos: demos.md
+  - Documentation:
+    - Overview: docs/index.md
+    - Start:
+      - Getting started: docs/getting-started.md
+      - Platforms & setup: docs/platforms.md
+    - Foundations:
+      - Keys: docs/keys.md
+      - Signers: docs/signers.md
+      - Events: docs/events.md
+      - Filters: docs/filters.md
+      - Event stores: docs/event-stores.md
+    - Relays and feeds:
+      - Connect and publish: docs/relays.md
+      - Fetch and subscribe: docs/fetch-subscribe.md
+      - Delete and expire events: docs/delete-expire.md
+    - Profiles and identity:
+      - Read and update a profile: docs/nip-01.md
+      - Verify an internet identifier: docs/nip-05.md
+      - Extended metadata: docs/nip-24.md
+      - External identities: docs/nip-39.md
+    - Private data:
+      - Encrypt a private message: docs/nip-44.md
+      - Legacy message encryption: docs/nip-04.md
+    - Wallet and payments:
+      - Connect a wallet: docs/wallets.md
+      - Tip with zaps: docs/nip-57.md
+    - Media:
+      - Upload and retrieve with Blossom: docs/blossom.md
+    - P2P real-time connections:
+      - Simple P2P streams: docs/simple-rtc-connection.md
+      - P2P connections: docs/p2p-overview.md
+      - TURN fallback server: docs/turn-server.md
+    - Reference:
+      - Protocol index: docs/nips.md
+      - Examples: docs/examples.md
+      - Security: docs/security.md
+      - Troubleshooting: docs/troubleshooting.md
+      - Javadoc: api/index.html

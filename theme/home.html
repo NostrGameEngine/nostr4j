@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Nostr4j - Java library for Nostr apps</title>
+  <meta name="description" content="A Java library for Nostr apps on desktop, mobile and the web.">
+  <meta name="theme-color" content="#090b10">
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="{{ base_url }}/assets/css/style.css">
+</head>
+
+<body>
+  {% include "partials/site-header.html" %}
+  <main id="content">
+    <section class="home-hero" aria-label="Nostr4j introduction and runnable Java example">
+      <div class="home-intro">
+        <h1>Nostr4j</h1>
+        <p class="intro-lede">A Java library for Nostr apps on desktop, mobile and the web.</p>
+        <ul class="platform-logos" aria-label="Supported platforms">
+          <li><img src="{{ base_url }}/assets/icons/linux.svg" alt="" width="26" height="26"><span>Linux</span></li>
+          <li><img src="{{ base_url }}/assets/icons/windows.svg" alt="" width="26" height="26"><span>Windows</span></li>
+          <li><img src="{{ base_url }}/assets/icons/apple.svg" alt="" width="26" height="26"><span>Mac</span></li>
+          <li><img src="{{ base_url }}/assets/icons/android.svg" alt="" width="26" height="26"><span>Android</span></li>
+          <li><img src="{{ base_url }}/assets/icons/apple.svg" alt="" width="26" height="26"><span>iOS</span></li>
+          <li><img src="{{ base_url }}/assets/icons/html5.svg" alt="" width="26" height="26"><span>Browser</span></li>
+        </ul>
+        <button id="quickstart-run" type="button">Run Example</button>
+        <pre id="quickstart-output" class="run-output" aria-live="polite" hidden></pre>
+      </div>
+      <div id="quick-start" class="home-demo">
+        <div class="source-panel">
+          <pre><code class="language-java">NGEPlatform.set(new JVMAsyncPlatform());
+
+NostrKeyPair keys = new NostrKeyPair();
+NostrPool pool = new NostrPool();
+NostrSubscription subscription = null;
+try {
+    pool.ensureRelay("wss://relay.ngengine.org").await();
+
+    NostrFilter filter = new NostrFilter();
+    filter.withKind(1);
+    filter.withAuthor(keys.getPublicKey());
+
+    subscription = pool.subscribe(filter);
+    subscription.addEventListener((sub, event, stored) -> {
+        System.out.println("Received: " + event.getContent());
+    });
+    AsyncTask.awaitAll(subscription.open());
+
+    UnsignedNostrEvent draft = new UnsignedNostrEvent();
+    draft.withKind(1);
+    draft.withContent("Hello from Nostr4j!");
+
+    NostrKeyPairSigner signer = new NostrKeyPairSigner(keys);
+    SignedNostrEvent note = signer.sign(draft).await();
+    pool.publish(note).await();
+    System.out.println("Published: " + note.getId());
+
+    // Keep this standalone program alive briefly to receive the note.
+    Thread.sleep(5_000);
+} finally {
+    if (subscription != null) subscription.close();
+    pool.close();
+    keys.close();
+}</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <section class="capabilities" aria-label="Nostr4j capabilities">
+      <div class="capability-grid">
+        <a class="capability-card" href="{{ base_url }}/docs/relays.html">
+          <svg viewBox="0 0 40 40" aria-hidden="true">
+            <circle cx="8" cy="20" r="4" />
+            <circle cx="31" cy="8" r="4" />
+            <circle cx="31" cy="32" r="4" />
+            <path d="M12 18 27 10M12 22l15 8" />
+          </svg>
+          <h3>Managed lifecycle</h3>
+          <p>Connect to several relays through one pool. If a connection drops, the pool reconnects and reopens your subscriptions.</p>
+          <span class="card-more">Explore relay APIs →</span>
+        </a>
+        <a class="capability-card" href="{{ base_url }}/docs/index.html">
+          <svg viewBox="0 0 40 40" aria-hidden="true">
+            <path d="M20 3 34 11v18l-14 8-14-8V11zM6 11l14 8 14-8M20 19v18" />
+          </svg>
+          <h3>Efficient and secure by design</h3>
+          <p>Built from the ground up for efficient memory and resource use, with safeguards against common pitfalls and security vulnerabilities.</p>
+          <span class="card-more">Explore overview →</span>
+        </a>
+   
+         <a class="capability-card" href="{{ base_url }}/docs/fetch-subscribe.html">
+          <svg viewBox="0 0 40 40" aria-hidden="true">
+            <circle cx="20" cy="20" r="16" />
+            <path d="M20 10v11l8 5M6 29l-3 5M34 29l3 5" />
+          </svg>
+          <h3>Asynchronous</h3>
+          <p>Asynchronous and non-blocking throughout, with execution tailored to each platform.</p>
+          <span class="card-more">Explore async operations →</span>
+        </a>
+         <a class="capability-card" href="{{ base_url }}/docs/nips.html">
+          <svg viewBox="0 0 40 40" aria-hidden="true">
+            <circle cx="13" cy="15" r="7" />
+            <path d="m18 20 15 15M26 28l4-4M30 32l4-4" />
+          </svg>
+          <h3>Everything you need</h3>
+          <p>
+            Work with events, profiles and media, sign locally or through browser and remote signers, and connect Lightning wallets with NWC.
+          </p>
+          <span class="card-more">Browse protocol support →</span>
+        </a>
+
+        <a class="capability-card" href="{{ base_url }}/docs/p2p-overview.html">
+          <svg viewBox="0 0 40 40" aria-hidden="true">
+            <rect x="3" y="11" width="11" height="18" rx="2" />
+            <rect x="26" y="11" width="11" height="18" rx="2" />
+            <path d="M14 17h12M14 23h12M8 24h1M31 24h1" />
+          </svg>
+          <h3>p2p encrypted connections</h3>
+          <p>
+            Nostr4j implements an encrypted RTC protocol using Nostr for peer discovery and signaling. Automatic fallback through peer routes and optional TURN helps keep apps connected as network conditions change.
+          </p>
+          <span class="card-more">Explore RTC over Nostr →</span>
+        </a>
+        <a class="capability-card" href="{{ base_url }}/docs/p2p-overview.html#unstoppable-p2p-with-multi-hop-routing">
+          <svg viewBox="0 0 40 40" aria-hidden="true">
+            <circle cx="20" cy="20" r="3" />
+            <path d="M20 10a10 10 0 0 1 0 20M20 10a10 10 0 0 0 0 20M20 4a16 16 0 0 1 0 32M20 4a16 16 0 0 0 0 32" />
+          </svg>
+          <h3>Multi-hop routing</h3>
+          <p>
+            Nostr4j handles multi-hop routing automatically, finding paths through connected peers and forwarding encrypted messages. Send to the recipient; no routing logic is needed in your app.
+          </p>
+          <span class="card-more">See multi-hop routing →</span>
+        </a>
+        
+       
+      
+      </div>
+         <div class="capabilities-footer">
+        <a href="{{ base_url }}/docs/index.html">Browse documentation →</a>
+      </div>
+    </section>
+
+  
+
+    <section class="home-install" id="install" aria-labelledby="install-title">
+      <h2 id="install-title">Add it to a project</h2>
+      <p>See <a href="{{ base_url }}/docs/platforms.html">platform setup</a> for dependencies and initialization details.</p>
+      <div class="platform-picker" data-tabs>
+        <div class="tab-list" role="tablist" aria-label="Target platform" aria-orientation="vertical">
+          <button type="button" role="tab" id="tab-desktop" aria-controls="platform-desktop" aria-selected="true">Windows / Linux / macOS</button>
+          <button type="button" role="tab" id="tab-android" aria-controls="platform-android" aria-selected="false" tabindex="-1">Android</button>
+          <button type="button" role="tab" id="tab-ios" aria-controls="platform-ios" aria-selected="false" tabindex="-1">iOS</button>
+          <button type="button" role="tab" id="tab-browser" aria-controls="platform-browser" aria-selected="false" tabindex="-1">Browser</button>
+        </div>
+        <div role="tabpanel" id="platform-desktop" aria-labelledby="tab-desktop">
+          <p>Linux, Windows and macOS use the same Java 21+ dependencies.</p>
+          <pre><code class="language-groovy">repositories {
+    mavenCentral()
+{% if 'SNAPSHOT' in config.extra.versions.nostr4j or 'SNAPSHOT' in config.extra.versions.platforms %}    maven { url = uri('https://central.sonatype.com/repository/maven-snapshots') }
+{% endif %}}
+
+dependencies {
+    implementation 'org.ngengine:nostr4j:{{ config.extra.versions.nostr4j }}'
+    implementation 'org.ngengine:nge-platform-jvm:{{ config.extra.versions.platforms }}'
+}</code></pre>
+          <pre><code class="language-java">import org.ngengine.platform.NGEPlatform;
+import org.ngengine.platform.jvm.JVMAsyncPlatform;
+
+NGEPlatform.set(new JVMAsyncPlatform());</code></pre>
+        </div>
+        <div role="tabpanel" id="platform-android" aria-labelledby="tab-android" hidden>
+          <p>Use the Android adapter in your app module, with the Android SDK and Internet permission. Initialize it with your application context.</p>
+          <pre><code class="language-groovy">repositories {
+    mavenCentral()
+{% if 'SNAPSHOT' in config.extra.versions.nostr4j or 'SNAPSHOT' in config.extra.versions.platforms %}    maven { url = uri('https://central.sonatype.com/repository/maven-snapshots') }
+{% endif %}}
+dependencies {
+    implementation 'org.ngengine:nostr4j:{{ config.extra.versions.nostr4j }}'
+    implementation 'org.ngengine:nge-platform-android:{{ config.extra.versions.platforms }}'
+}</code></pre>
+          <pre><code class="language-java">import org.ngengine.platform.NGEPlatform;
+import org.ngengine.platform.android.AndroidThreadedPlatform;
+
+// In Application.onCreate(), before creating Nostr4j objects:
+NGEPlatform.set(new AndroidThreadedPlatform(getApplicationContext()));</code></pre>
+        </div>
+        <div role="tabpanel" id="platform-ios" aria-labelledby="tab-ios" hidden>
+          <p>Use the iOS adapter and compile your native app with the <a href="https://github.com/NostrGameEngine/libJGLIOS" target="_blank" rel="noopener">libJGLIOS toolchain</a> on macOS with Xcode.</p>
+          <pre><code class="language-groovy">repositories {
+    mavenCentral()
+{% if 'SNAPSHOT' in config.extra.versions.nostr4j or 'SNAPSHOT' in config.extra.versions.platforms %}    maven { url = uri('https://central.sonatype.com/repository/maven-snapshots') }
+{% endif %}}
+dependencies {
+    implementation 'org.ngengine:nostr4j:{{ config.extra.versions.nostr4j }}'
+    implementation 'org.ngengine:nge-platform-ios:{{ config.extra.versions.platforms }}'
+}</code></pre>
+          <pre><code class="language-java">import org.ngengine.platform.NGEPlatform;
+import org.ngengine.platform.ios.IosPlatform;
+
+NGEPlatform.set(new IosPlatform());</code></pre>
+          <p><a href="{{ base_url }}/docs/platforms.html#ios">Native iOS setup</a></p>
+        </div>
+        <div role="tabpanel" id="platform-browser" aria-labelledby="tab-browser" hidden>
+          <p>Use the browser adapter with TeaVM. This configuration selects JavaScript output; <a href="{{ base_url }}/docs/platforms.html#browser-via-teavm">WasmGC setup</a> is also available.</p>
+          <pre><code class="language-groovy">plugins { id 'org.teavm' version '{{ config.extra.versions.teavm }}' }
+repositories {
+    mavenCentral()
+{% if 'SNAPSHOT' in config.extra.versions.nostr4j or 'SNAPSHOT' in config.extra.versions.platforms %}    maven { url = uri('https://central.sonatype.com/repository/maven-snapshots') }
+{% endif %}}
+dependencies {
+    implementation 'org.ngengine:nostr4j:{{ config.extra.versions.nostr4j }}'
+    implementation 'org.ngengine:nge-platform-teavm:{{ config.extra.versions.platforms }}'
+}
+teavm.js {
+    mainClass = 'example.Main'
+    moduleType = org.teavm.gradle.api.JSModuleType.ES2015
+}</code></pre>
+          <pre><code class="language-java">import org.ngengine.platform.NGEPlatform;
+import org.ngengine.platform.teavm.TeaVMPlatform;
+
+public static void main(String[] args) {
+    NGEPlatform.set(new TeaVMPlatform());
+    // Create Nostr4j objects after platform initialization.
+}</code></pre>
+          <p>See <a href="{{ base_url }}/docs/platforms.html#browser-via-teavm">browser setup</a> for packaging and startup.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+  {% include "partials/site-footer.html" %}
+  <script type="module" src="{{ base_url }}/assets/js/home.js"></script>
+</body>
+</html>
