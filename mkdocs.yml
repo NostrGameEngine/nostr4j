@@ -1,0 +1,76 @@
+site_name: Nostr4J
+site_description: High-performance Nostr library for the JVM, transpiled to JavaScript.
+site_author: NostrGameEngine
+site_url: https://nostrgameengine.github.io/nostr4j/
+repo_url: https://github.com/NostrGameEngine/nostr4j
+repo_name: NostrGameEngine/nostr4j
+
+docs_dir: docs
+site_dir: _site
+use_directory_urls: false
+
+not_in_nav: |
+  examples.md
+  assets/audio/CREDITS.md
+  api/legal/*.md
+
+theme:
+  name: null
+  custom_dir: theme
+
+extra_css:
+  - assets/css/style.css
+
+markdown_extensions:
+  - admonition
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+
+nav:
+  - Home: index.md
+  - Live Demos: demos.md
+  - Documentation:
+    - Overview: docs/index.md
+    - Start:
+      - Getting started: docs/getting-started.md
+      - Platforms & setup: docs/platforms.md
+    - Core:
+      - Events & filters: docs/concepts.md
+      - Relays & lifecycle: docs/relays.md
+      - Fetch & subscribe: docs/fetch-subscribe.md
+      - Keys & signers: docs/signers.md
+    - Supported NIPs:
+      - Overview: docs/nips.md
+      - NIP-01: docs/nip-01.md
+      - NIP-04: docs/nip-04.md
+      - NIP-05: docs/nip-05.md
+      - NIP-07: docs/nip-07.md
+      - NIP-09: docs/nip-09.md
+      - NIP-24: docs/nip-24.md
+      - NIP-39: docs/nip-39.md
+      - NIP-40: docs/nip-40.md
+      - NIP-44: docs/nip-44.md
+      - NIP-46: docs/nip-46.md
+      - NIP-47: docs/nip-47.md
+      - NIP-49: docs/nip-49.md
+      - NIP-50: docs/nip-50.md
+      - NIP-57: docs/nip-57.md
+    - Wallet:
+      - Wallets & NWC: docs/wallets.md
+    - Media:
+      - Blossom: docs/blossom.md
+    - RTC:
+      - RTC rooms: docs/rtc-rooms.md
+      - Onion routing: docs/onion-routing.md
+      - TURN server: docs/turn-server.md
+    - Reference:
+      - Examples: docs/examples.md
+      - Security: docs/security.md
+      - Troubleshooting: docs/troubleshooting.md
+      - Javadoc: api/index.html

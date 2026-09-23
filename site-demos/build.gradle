@@ -1,0 +1,218 @@
+// site-demos: Java sources for the website live demos, compiled to JavaScript
+// with the TeaVM Gradle plugin (0.15.0) by the site.yml GitHub Action.
+// In the sandbox (no JVM network) use the CLI recipe in
+// ~/workspace/teavm-smoke/RECIPE.md to verify: PROBLEMS must be 0.
+plugins {
+    id 'java'
+    id 'org.teavm' version '0.15.0'
+}
+
+// TeaVM 0.15 and the current NGE TeaVM platform are Java 17 artifacts. The
+// core library stays Java 11-compatible, while this browser-only module opts
+// into the newer bytecode level explicitly.
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = 17
+}
+
+configurations.matching { it.name.endsWith('CompileClasspath') || it.name.endsWith('RuntimeClasspath') }.configureEach {
+    attributes.attribute(
+        org.gradle.api.attributes.java.TargetJvmVersion.TARGET_JVM_VERSION_ATTRIBUTE,
+        17
+    )
+}
+
+repositories {
+    mavenCentral()
+    maven { url = 'https://central.sonatype.com/repository/maven-snapshots/' }
+}
+
+def ngePlatformVersion = '0.3.0-SNAPSHOT'
+
+dependencies {
+    implementation project(':nostr4j')
+    implementation "org.ngengine:nge-platform-teavm:${ngePlatformVersion}"
+    implementation 'org.ngengine:bech32:1.2.1'
+    implementation 'org.ngengine:lnurl4j:0.0.5'
+    implementation 'org.ngengine:bolt11:0.0.2'
+    implementation 'jakarta.annotation:jakarta.annotation-api:2.1.1'
+    implementation 'org.slf4j:slf4j-api:2.0.16'
+}
+
+// One TeaVM JS bundle per demo. Each bundle installs window.<Global> via JsBridge.
+// The GitHub Action copies site-demos/build/teavm/<name>/* to site/assets/demos/<name>/.
+//
+// NOTE: these task/property names were verified against the published
+// teavm-gradle-plugin 0.15.0 jar (javap): the task class is
+// org.teavm.gradle.tasks.TeaVMTask with mainClass/targetFileName/outputDir;
+// the JS module type lives on the teavm extension (js.moduleType).
+def demoMains = [
+    quickstart: 'org.ngengine.site.demos.quickstart.QuickStartDemo',
+    relay: 'org.ngengine.site.demos.relay.RelayFetchDemo',
+    nwc  : 'org.ngengine.site.demos.nwc.NWCDemo',
+    rtc  : 'org.ngengine.site.demos.rtc.RTCPingDemo',
+    game : 'org.ngengine.site.demos.game.SatsSeasNet',
+]
+
+teavm {
+    js {
+        moduleType.set(org.teavm.gradle.api.JSModuleType.ES2015)
+        obfuscated.set(false)
+    }
+}
+
+demoMains.each { name, mainClassName ->
+    // TeaVMTask is an abstract base class in TeaVM 0.15.0. Gradle 9 refuses
+    // to decorate it because setupBuilder(...) is intentionally left
+    // abstract; use the concrete JavaScript task for each browser bundle.
+    tasks.register("teavmDemo_${name}", org.teavm.gradle.tasks.GenerateJavaScriptTask) {
+        group = 'build'
+        description = "Compile the '${name}' site demo to JavaScript with TeaVM"
+        mainClass.set(mainClassName)
+        targetFileName.set('demo.js')
+        outputDir.set(layout.buildDirectory.dir("teavm/${name}").map { it.asFile })
+        // Mirror the classpath assembled by TeaVM's built-in
+        // generateJavaScript task. In particular, teavmClasspath contributes
+        // TeaVM's Java class library; runtimeClasspath alone does not contain
+        // java.lang.Object from TeaVM's point of view.
+        classpath.from(
+            sourceSets.main.output,
+            configurations.teavmClasspath,
+            sourceSets.teavm.output,
+            sourceSets.teavm.runtimeClasspath
+        )
+        sourceFiles.from(sourceSets.main.allSource, sourceSets.teavm.allSource)
+        moduleType.set(org.teavm.gradle.api.JSModuleType.ES2015)
+        obfuscated.set(false)
+        doLast {
+            // NGE's TeaVM platform declares this native ES module through
+            // @JSModule. TeaVM references it but does not copy it into a
+            // custom task's output directory, so stage the pinned dependency
+            // beside each generated entry point.
+            project.copy {
+                from(
+                    configurations.runtimeClasspath
+                        .filter { it.exists() }
+                        .collect { it.isDirectory() ? it : zipTree(it) }
+                )
+                include 'org/ngengine/platform/teavm/TeaVMBinds.bundle.js'
+                include 'org/ngengine/platform/teavm/TeaVMBinds.bundle.js.LICENSE.txt'
+                into outputDir.get()
+                duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+            }
+        }
+    }
+}
+
+tasks.register('buildAllDemos') {
+    group = 'build'
+    description = 'Compile all site demos to JavaScript with TeaVM'
+    dependsOn demoMains.keySet().collect { "teavmDemo_${it}" }
+    dependsOn 'quickstartSnippet'
+}
+
+tasks.register('quickstartSnippet') {
+    def source = file('src/receiver/java/QuickStart.java')
+    def snippet = rootProject.file('site/_includes/quickstart-code.html')
+    inputs.file(source)
+    outputs.file(snippet)
+    doLast {
+        def code = source.text.split('// snippet:start')[1].split('// snippet:end')[0].stripIndent().trim()
+        snippet.text = "{% highlight java %}\n${code}\n{% endhighlight %}\n"
+    }
+}
+
+tasks.register('jvmSmokeTest', JavaExec) {
+    group = 'verification'
+    description = 'Run deterministic, platform-free checks for the Sats Seas game logic'
+    dependsOn tasks.named('classes')
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass.set('org.ngengine.site.demos.game.JvmSmokeTest')
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('jvmSmokeTest')
+}
+
+// ---------------------------------------------------------------------------
+// Receiver (demo 3): plain JVM program, run by the operator in Docker.
+// Shares protocol constants with the browser demo via sourceSets.main.output.
+// ---------------------------------------------------------------------------
+sourceSets {
+    receiver {
+        java { srcDir 'src/receiver/java' }
+        // The receiver reuses protocol constants from the main (browser) sources.
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += sourceSets.main.output
+    }
+}
+
+tasks.named('compileReceiverJava') {
+    options.release = 21
+}
+
+tasks.register('quickstartJvmSmokeTest', JavaExec) {
+    group = 'verification'
+    description = 'Run the copyable JVM quick start against the public relay'
+    dependsOn tasks.named('receiverClasses')
+    classpath = sourceSets.receiver.runtimeClasspath
+    mainClass.set('QuickStart')
+}
+
+['receiverCompileClasspath', 'receiverRuntimeClasspath'].each { configurationName ->
+    configurations.named(configurationName) {
+        attributes.attribute(
+            org.gradle.api.attributes.java.TargetJvmVersion.TARGET_JVM_VERSION_ATTRIBUTE,
+            21
+        )
+    }
+}
+
+dependencies {
+    receiverImplementation project(':nostr4j')
+    receiverImplementation "org.ngengine:nge-platform-jvm:${ngePlatformVersion}"
+    receiverImplementation 'org.ngengine:bech32:1.2.1'
+    receiverImplementation 'org.ngengine:lnurl4j:0.0.5'
+    receiverImplementation 'org.ngengine:bolt11:0.0.2'
+    receiverImplementation 'jakarta.annotation:jakarta.annotation-api:2.1.1'
+    receiverImplementation 'org.slf4j:slf4j-api:2.0.16'
+    receiverImplementation 'org.slf4j:slf4j-jdk14:2.0.16'
+}
+
+tasks.register('receiverJar', Jar) {
+    group = 'build'
+    description = 'Build the RTC ping/pong receiver runnable jar (with dependencies)'
+    dependsOn tasks.named('receiverClasses'), project(':nostr4j').tasks.named('jar')
+    archiveBaseName.set('ping-receiver')
+    from sourceSets.receiver.output
+    from sourceSets.main.output
+    from {
+        // receiver runtime classpath: project deps + external jars (zipTree'd in)
+        sourceSets.receiver.runtimeClasspath
+            .filter { it.exists() }
+            .collect { it.isDirectory() ? it : zipTree(it) }
+    }
+    // Dependency signatures are valid only for their original archives. Once
+    // classes are merged into this fat jar, retaining them makes the JVM reject
+    // the application with "Invalid signature file digest" before main starts.
+    exclude 'META-INF/*.SF', 'META-INF/*.RSA', 'META-INF/*.DSA', 'META-INF/*.EC'
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    manifest { attributes 'Main-Class': 'org.ngengine.site.demos.rtc.PingReceiver' }
+}
+
+tasks.register('backendJar', Jar) {
+    group = 'build'
+    description = 'Build the same-origin demo backend, isolated ping rooms and Sats Seas bots'
+    dependsOn tasks.named('receiverClasses'), project(':nostr4j').tasks.named('jar')
+    archiveBaseName.set('demo-backend')
+    from sourceSets.receiver.output
+    from sourceSets.main.output
+    from { sourceSets.receiver.runtimeClasspath.filter { it.exists() }.collect { it.isDirectory() ? it : zipTree(it) } }
+    exclude 'META-INF/*.SF', 'META-INF/*.RSA', 'META-INF/*.DSA', 'META-INF/*.EC'
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    manifest { attributes 'Main-Class': 'org.ngengine.site.demos.backend.DemoServer' }
+}

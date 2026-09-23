@@ -1,0 +1,25 @@
+# Build and cache directories
+.cache/
+_site/
+_lan-preview/
+.gradle/
+.dev-env-runtime/
+build/
+dist/
+reports/
+
+# Demo build artifacts
+site-demos/build/
+
+# Ignored master source if present in local working tree
+nostr4j/
+nostr4j-demo/
+nostr4j-turn-server/
+nostr4j-benchmarks/
+
+# OS and editor files
+.DS_Store
+*.swp
+*~
+.idea/
+.vscode/

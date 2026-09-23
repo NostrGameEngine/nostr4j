@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% if page and page.title %}{{ page.title }} · {% endif %}Nostr4J docs</title>
+  <meta name="description" content="{% if page and page.meta and page.meta.description %}{{ page.meta.description }}{% else %}{{ config.site_description }}{% endif %}">
+  <meta name="theme-color" content="#090b10">
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="{{ base_url }}/assets/css/style.css">
+</head>
+<body>
+  {% include "partials/site-header.html" %}
+  <main id="content">
+    <div class="docs-wrap">
+      {% include "partials/docs-nav.html" %}
+      <div class="docs-content">
+        {{ page.content }}
+      </div>
+    </div>
+  </main>
+  {% include "partials/site-footer.html" %}
+  <script>
+  document.querySelectorAll('div.docs-content pre').forEach(function(pre) {
+    var btn = document.createElement('button');
+    btn.className = 'copy-btn';
+    btn.textContent = 'copy';
+    btn.addEventListener('click', function() {
+      var code = pre.querySelector('code');
+      navigator.clipboard.writeText(code ? code.innerText : pre.innerText).then(function() {
+        btn.textContent = 'copied';
+        setTimeout(function() { btn.textContent = 'copy'; }, 1500);
+      }, function() {
+        btn.textContent = 'copy failed';
+      });
+    });
+    pre.appendChild(btn);
+  });
+  </script>
+</body>
+</html>

@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Live demos · Nostr4J</title>
+  <meta name="description" content="Read and publish Nostr notes, test a peer-to-peer ping, play a routed game and inspect a wallet.">
+  <meta name="theme-color" content="#090b10">
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="{{ base_url }}/assets/css/style.css">
+  <style>
+  #sats-seas-demo { font-family: monospace; }
+  #sats-seas-demo .sats-panel {
+    background: #0b1526; border: 3px solid #274b73; padding: 1em;
+    max-width: 700px; box-shadow: 4px 4px 0 #060b14;
+  }
+  #sats-seas-demo .sats-panel label { display: block; margin: .6em 0; color: #c7d4e6; font-size: .85em; }
+  #sats-seas-demo .sats-panel input {
+    display: block; width: 100%; margin-top: .25em; background: #060b14;
+    border: 2px solid #274b73; color: #e8f0fa; padding: .45em; font-family: monospace;
+  }
+  #sats-seas-demo .sats-panel input[type=checkbox] { display: inline-block; width: auto; margin-right: .5em; }
+  #sats-seas-demo button {
+    font-family: monospace; font-weight: bold; background: #f2c14e; color: #3a2c00;
+    border: 0; box-shadow: 3px 3px 0 #060b14; padding: .6em 1.2em; cursor: pointer; margin-top: .6em;
+  }
+  #sats-seas-demo button:hover { background: #ffd75e; }
+  #sats-seas-demo #sats-canvas { width: 100%; min-width: 0; }
+  #sats-seas-demo #sats-canvas canvas { image-rendering: pixelated; width: 100% !important; max-width: 960px; height: auto !important; aspect-ratio: 8 / 5; display: block; background: #0d2b4c; touch-action: none; cursor: crosshair; }
+  #sats-seas-demo .sats-mobile-hud { display: none; }
+  #sats-seas-demo .sats-controls-help, #sats-seas-demo .sats-help { color: #c7d4e6; line-height: 1.45; margin: .65em 0; }
+  #sats-seas-demo .sats-actions { display: flex; flex-wrap: wrap; gap: .5em; }
+  #sats-seas-demo .sats-actions button { margin-top: 0; min-height: 44px; flex: 1 1 105px; }
+  #sats-seas-demo .sats-row { display: flex; gap: .6em; align-items: center; margin-top: .5em; }
+  #sats-seas-demo .sats-row button { margin-top: 0; background: #274b73; color: #c7d4e6; }
+  #sats-seas-demo #sats-chat {
+    flex: 1; background: #060b14; border: 2px solid #274b73; color: #e8f0fa;
+    padding: .5em; font-family: monospace;
+  }
+  #sats-seas-demo .sats-dialog {
+    background: #0b1526; border: 3px solid #f2c14e; padding: .8em 1em; margin: .6em 0;
+    max-width: 420px; box-shadow: 4px 4px 0 #060b14; color: #e8f0fa;
+  }
+  #sats-seas-demo .sats-dialog button { margin-right: .5em; }
+  #sats-seas-demo #sats-topo { width: 100%; height: 220px; display: block; background: #0b1526; }
+  #sats-seas-demo details { margin-top: .6em; color: #9fb3cc; font-size: .9em; }
+  #sats-seas-demo details summary { cursor: pointer; color: #c7d4e6; }
+  @media (max-width: 600px) {
+    #sats-seas-demo .sats-actions button { flex-basis: calc(50% - .5em); }
+    #sats-seas-demo .sats-mobile-hud { display: block; color: #f2c14e; font-size: .86rem; padding: .35em 0; }
+  }
+  </style>
+</head>
+<body>
+  {% include "partials/site-header.html" %}
+  <main id="content">
+    <div style="width: min(1240px, calc(100% - 2rem)); margin: 2rem auto;">
+      <h1>Live demos</h1>
+      <p style="color: var(--muted); margin-bottom: 2rem;">Run Java examples compiled for the browser with TeaVM.</p>
+
+      <div class="demo-switcher" data-tabs>
+        <div role="tablist" aria-label="Choose a demo">
+          <button role="tab" id="demo-tab-relay" aria-controls="relay" aria-selected="true">Read public note</button>
+          <button role="tab" id="demo-tab-publish" aria-controls="publish" aria-selected="false" tabindex="-1">Publish a note</button>
+          <button role="tab" id="demo-tab-rtc" aria-controls="rtc" aria-selected="false" tabindex="-1">Peer-to-peer ping pong</button>
+          <button role="tab" id="demo-tab-game" aria-controls="game" aria-selected="false" tabindex="-1">Peer-to-peer game</button>
+          <button role="tab" id="demo-tab-wallet" aria-controls="wallet" aria-selected="false" tabindex="-1">Read wallet data</button>
+        </div>
+
+        <!-- 1. Read note demo -->
+        <section role="tabpanel" id="relay" aria-labelledby="demo-tab-relay">
+          <div class="demo-card" id="relay-demo">
+            <p>Fetch kind-1 notes from relays.</p>
+            <label>Relay URL
+              <input type="text" id="relay-url" value="wss://relay.damus.io" spellcheck="false" autocomplete="off">
+            </label>
+            <label>Authors (allowlisted)</label>
+            <div class="chip-row" id="relay-authors"></div>
+            <div>
+              <button id="relay-fetch" type="button">Fetch notes</button>
+              <span class="demo-status" id="relay-status"></span>
+            </div>
+            <ul class="note-list" id="relay-notes"></ul>
+          </div>
+          <script type="module">
+            import { main } from "{{ base_url }}/assets/demos/relay/demo.js";
+            main([]);
+          </script>
+          <script src="{{ base_url }}/assets/js/relay-card.js"></script>
+        </section>
+
+        <!-- 2. Publish note demo -->
+        <section role="tabpanel" id="publish" aria-labelledby="demo-tab-publish" hidden>
+          <div class="demo-card" id="publish-demo">
+            <p>Publish a temporary kind-1 note to <code>wss://relay.ngengine.org</code>.</p>
+            <label for="publish-content">Note text</label>
+            <textarea id="publish-content" rows="4" maxlength="500" placeholder="Write a public test note…" spellcheck="true"></textarea>
+            <button id="publish-send" type="button">Sign and publish</button>
+            <pre class="demo-output" id="publish-output" aria-live="polite">Ready. No note is sent until you press the button.</pre>
+            <p class="demo-note">Public note: do not enter secrets. Expiration does not guarantee deletion.</p>
+          </div>
+          <script type="module" src="{{ base_url }}/assets/js/publish-card.js"></script>
+        </section>
+
+        <!-- 3. RTC ping pong demo -->
+        <section role="tabpanel" id="rtc" aria-labelledby="demo-tab-rtc" hidden>
+          <div class="demo-card" id="rtc-demo">
+            <p>Peer-to-peer ping pong over RTC, with Nostr signaling.</p>
+            <button id="rtc-ping" type="button">Ping</button>
+            <pre class="demo-output" id="rtc-output" aria-live="polite">Ready.</pre>
+            <details id="rtc-diagnostics" hidden><summary>Connection details</summary><pre id="rtc-diagnostics-output" class="demo-output"></pre></details>
+          </div>
+          <script type="module" src="{{ base_url }}/assets/js/rtc-card.js"></script>
+        </section>
+
+        <!-- 4. Peer-to-peer game -->
+        <section role="tabpanel" id="game" aria-labelledby="demo-tab-game" hidden>
+          <div class="demo-card sats" id="sats-seas-demo">
+            <p>Sail a peer-to-peer world with buried treasure. Practice with two simulated captains or join other players. RTC onion routing carries messages across the room mesh.</p>
+
+            <form id="sats-join" class="sats-panel">
+              <label>Captain name<input type="text" id="sats-name" value="sailor" maxlength="24" autocomplete="off"></label>
+              <label class="check-label"><input type="checkbox" id="sats-multiplayer" checked> See other players</label>
+              <button type="submit">Set sail</button>
+            </form>
+            <p id="sats-status" role="status">Ready to set sail.</p>
+
+            <div id="sats-wrap" style="display:none">
+              <div class="sats-mobile-hud" id="sats-mobile-hud" aria-live="polite"></div>
+              <div id="sats-canvas"></div>
+              <p class="sats-controls-help">Move the pointer or drag on the sea to steer. Click or tap to fire. Use the buttons to dig, trade maps or chat.</p>
+              <div class="sats-actions" aria-label="Game actions">
+                <button id="sats-fire" type="button">Fire</button>
+                <button id="sats-dig" type="button">Dig</button>
+                <button id="sats-trade" type="button">Trade map</button>
+                <button id="sats-chat-button" type="button">Chat</button>
+              </div>
+              <div class="sats-row">
+                <button id="sats-leave" type="button">Leave</button>
+                <button id="sats-mute" type="button" title="Mute music and sounds (M)">MUS:ON</button>
+                <input type="text" id="sats-chat" style="display:none" maxlength="60"
+                       placeholder="Say something… (Enter to send)" autocomplete="off">
+              </div>
+
+              <div id="sats-offer" class="sats-dialog" style="display:none">
+                <p id="sats-offer-text"></p>
+                <button id="sats-offer-yes" type="button">Take map</button>
+                <button id="sats-offer-no" type="button">No</button>
+              </div>
+
+              <details id="sats-topo-panel">
+                <summary>Network / onion routes</summary>
+                <p>Each peer keeps at most two direct neighbors. Routed messages cross intermediate peers with layered encryption. Public lobby membership and traffic timing are not anonymous.</p>
+                <label><input type="checkbox" id="sats-hl"> Highlight my routes</label>
+                <canvas id="sats-topo"></canvas>
+              </details>
+              <p class="sats-help">Sink a ship to collect its map, follow the trail to its island, then use Dig near the treasure. A sunken captain respawns after a countdown.</p>
+            </div>
+          </div>
+          <script src="https://cdn.jsdelivr.net/npm/p5@1.9.4/lib/p5.min.js"
+                  integrity="sha384-6Twx1hAeKnwfOYJAHtYeJETRiGD5pRPkjjh0pVbG1QoesncjOpw5e75Y1kOkXeRI"
+                  crossorigin="anonymous"></script>
+          <script type="module">
+            import { main } from "{{ base_url }}/assets/demos/game/demo.js";
+            main([]);
+          </script>
+          <script src="{{ base_url }}/assets/js/sats-seas.js"></script>
+        </section>
+
+        <!-- 5. Read wallet data demo -->
+        <section role="tabpanel" id="wallet" aria-labelledby="demo-tab-wallet" hidden>
+          <div class="demo-card" id="nwc-demo">
+            <div class="warn-box">
+              <strong>Demo only &mdash; use a small, throwaway wallet connection</strong> (e.g. a dedicated,
+              low-balance connection from your Alby/LNbits wallet). Your NWC secret never leaves this
+              browser tab: it is kept in memory only, never logged, never stored anywhere.
+            </div>
+            <p>Read a wallet balance and recent transactions with Nostr Wallet Connect. No payments are made.</p>
+            <label>NWC connection string
+              <input type="password" id="nwc-uri" placeholder="nostr+walletconnect://…" autocomplete="off" spellcheck="false">
+            </label>
+            <div>
+              <button id="nwc-connect" type="button">Connect</button>
+              <button id="nwc-disconnect" type="button" disabled>Disconnect</button>
+              <span class="demo-status" id="nwc-status"></span>
+            </div>
+            <div id="nwc-info"></div>
+            <div>
+              <button id="nwc-txs" type="button" disabled>Show recent transactions</button>
+            </div>
+            <ul class="tx-list" id="nwc-txlist"></ul>
+          </div>
+          <script type="module">
+            import { main } from "{{ base_url }}/assets/demos/nwc/demo.js";
+            main([]);
+          </script>
+          <script src="{{ base_url }}/assets/js/nwc-card.js"></script>
+        </section>
+      </div>
+    </div>
+  </main>
+  {% include "partials/site-footer.html" %}
+  <script type="module" src="{{ base_url }}/assets/js/tabs.js"></script>
+</body>
+</html>

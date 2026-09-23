@@ -1,0 +1,13 @@
+<a class="skip-link" href="#content">Skip to content</a>
+<header class="site-header">
+  <nav aria-label="Primary navigation">
+    <a class="brand" href="{{ base_url }}/index.html" aria-label="Nostr4J home">
+      <span>Nostr4J</span>
+    </a>
+    <div class="nav-links">
+      <a class="navlink{% if page and page.url and (page.url.startswith('docs/') or page.url == 'docs/') %} active{% endif %}" href="{{ base_url }}/docs/index.html">Docs</a>
+      <a class="navlink{% if page and page.url == 'demos.html' %} active{% endif %}" href="{{ base_url }}/demos.html">Live demos</a>
+      <a class="navlink nav-external" href="https://github.com/NostrGameEngine/nostr4j" target="_blank" rel="noopener">GitHub<span aria-hidden="true"> ↗</span></a>
+    </div>
+  </nav>
+</header>

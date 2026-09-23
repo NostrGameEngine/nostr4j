@@ -1,0 +1,40 @@
+<aside class="docs-nav" aria-label="Documentation navigation">
+  <div class="docs-nav-head">
+    <p class="docs-nav-title">Documentation</p>
+    <span class="docs-version">0.3.x</span>
+  </div>
+
+  <p class="docs-nav-group">Start</p>
+  <a{% if page and (page.url == 'docs/index.html' or page.url == 'docs/') %} class="active" aria-current="page"{% endif %} href="{{ base_url }}/docs/index.html">Overview</a>
+  <a{% if page and page.url == 'docs/getting-started.html' %} class="active" aria-current="page"{% endif %} href="{{ base_url }}/docs/getting-started.html">Getting started</a>
+  <a{% if page and page.url == 'docs/platforms.html' %} class="active" aria-current="page"{% endif %} href="{{ base_url }}/docs/platforms.html">Platforms & setup</a>
+
+  <p class="docs-nav-group">Core</p>
+  <a{% if page and page.url == 'docs/concepts.html' %} class="active" aria-current="page"{% endif %} href="{{ base_url }}/docs/concepts.html">Events & filters</a>
+  <a{% if page and page.url == 'docs/relays.html' %} class="active" aria-current="page"{% endif %} href="{{ base_url }}/docs/relays.html">Relays & lifecycle</a>
+  <a{% if page and page.url == 'docs/fetch-subscribe.html' %} class="active" aria-current="page"{% endif %} href="{{ base_url }}/docs/fetch-subscribe.html">Fetch & subscribe</a>
+  <a{% if page and page.url == 'docs/signers.html' %} class="active" aria-current="page"{% endif %} href="{{ base_url }}/docs/signers.html">Keys & signers</a>
+
+  <p class="docs-nav-group">Supported NIPs</p>
+  <a{% if page and (page.url == 'docs/nips.html' or 'docs/nip-' in page.url) %} class="active" aria-current="page"{% endif %} href="{{ base_url }}/docs/nips.html">Supported NIPs</a>
+
+  <p class="docs-nav-group">Wallet</p>
+  <a{% if page and page.url == 'docs/wallets.html' %} class="active" aria-current="page"{% endif %} href="{{ base_url }}/docs/wallets.html">Wallets & NWC</a>
+
+  <p class="docs-nav-group">Media</p>
+  <a{% if page and page.url == 'docs/blossom.html' %} class="active" aria-current="page"{% endif %} href="{{ base_url }}/docs/blossom.html">Blossom</a>
+
+  <p class="docs-nav-group">RTC</p>
+  <a{% if page and page.url == 'docs/rtc-rooms.html' %} class="active" aria-current="page"{% endif %} href="{{ base_url }}/docs/rtc-rooms.html">RTC rooms</a>
+  <a{% if page and page.url == 'docs/onion-routing.html' %} class="active" aria-current="page"{% endif %} href="{{ base_url }}/docs/onion-routing.html">Onion routing</a>
+  <a{% if page and page.url == 'docs/turn-server.html' %} class="active" aria-current="page"{% endif %} href="{{ base_url }}/docs/turn-server.html">TURN server</a>
+
+  <p class="docs-nav-group">Reference</p>
+  <a{% if page and page.url == 'docs/examples.html' %} class="active" aria-current="page"{% endif %} href="{{ base_url }}/docs/examples.html">Examples</a>
+  <a{% if page and page.url == 'docs/security.html' %} class="active" aria-current="page"{% endif %} href="{{ base_url }}/docs/security.html">Security</a>
+  <a{% if page and page.url == 'docs/troubleshooting.html' %} class="active" aria-current="page"{% endif %} href="{{ base_url }}/docs/troubleshooting.html">Troubleshooting</a>
+  <a href="{{ base_url }}/api/index.html">Javadoc ↗</a>
+
+  <div class="nav-sep"></div>
+  <a href="{{ base_url }}/demos.html">Live demos</a>
+</aside>
