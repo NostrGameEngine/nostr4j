@@ -189,20 +189,27 @@ public final class TopologyControlPlane implements Closeable {
             .encode(snapshot, localPeer, roomKeys, createdAt)
             .then(event -> {
                 store.accept(snapshot, Instant.now());
-                for (AsyncTask<NostrMessageAck> published : pool.publish(event)) {
-                    published
-                        .then(ack -> {
-                            if (ack.getStatus() == NostrMessageAck.Status.FAILURE) {
-                                logger.warning(
-                                    "Relay rejected private topology snapshot " + event.getId() + ": " + ack.getMessage()
+                pool.publish(event)
+                    .then(promises -> {
+                        for (AsyncTask<NostrMessageAck> published : promises) {
+                            published
+                                .then(ack -> {
+                                    if (ack.getStatus() == NostrMessageAck.Status.FAILURE) {
+                                        logger.warning(
+                                            "Relay rejected private topology snapshot " + event.getId() + ": " + ack.getMessage()
+                                        );
+                                    }
+                                    return ack;
+                                })
+                                .catchException(error ->
+                                    logger.log(Level.WARNING, "Failed to publish private topology snapshot " + event.getId(), error)
                                 );
-                            }
-                            return ack;
-                        })
-                        .catchException(error ->
-                            logger.log(Level.WARNING, "Failed to publish private topology snapshot " + event.getId(), error)
-                        );
-                }
+                        }
+                        return null;
+                    })
+                    .catchException(error ->
+                        logger.log(Level.WARNING, "Failed to publish private topology snapshot " + event.getId(), error)
+                    );
                 notifyChanged();
                 return event;
             });

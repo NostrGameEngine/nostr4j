@@ -106,7 +106,7 @@ public class NostrRTCSignaling implements Closeable {
     private volatile NostrSubscription discoverySub;
     private volatile NostrSubscription signalingSub;
     private volatile String advMessage = "";
-    private volatile AsyncTask<List<AsyncTask<NostrMessageAck>>> disconnectPublishTask;
+    private volatile AsyncTask<Void> disconnectPublishTask;
 
     private final NostrSubEventListener listener = new NostrSubEventListener() {
         @Override
@@ -408,7 +408,7 @@ public class NostrRTCSignaling implements Closeable {
         );
         return signal
             .toEvent(null)
-            .then(ev -> {
+            .compose(ev -> {
                 return pool.publish(ev);
             });
     }
@@ -417,7 +417,7 @@ public class NostrRTCSignaling implements Closeable {
      * Send a connection offer to a peer
      * @param offer the offer
      * @param recipient the recipient peer
-     * @return the async task that will be completed when the message is sent
+     * @return the async task that completes when the pool acknowledgement policy succeeds
      
      */
     public AsyncTask<List<AsyncTask<NostrMessageAck>>> sendOffer(String offer, NostrPublicKey recipient) {
@@ -428,14 +428,14 @@ public class NostrRTCSignaling implements Closeable {
 
         return signal
             .toEvent(recipient)
-            .then(ev -> {
+            .compose(ev -> {
                 return pool.publish(ev);
             });
     }
 
     /**
      * Send an answer to a peer
-     * @return the async task that will be completed when the message is sent
+     * @return the async task that completes when the pool acknowledgement policy succeeds
      */
     public AsyncTask<List<AsyncTask<NostrMessageAck>>> sendAnswer(String sdp, NostrPublicKey recipient) {
         if (this.closed) throw new IllegalStateException("Already closed");
@@ -445,14 +445,14 @@ public class NostrRTCSignaling implements Closeable {
 
         return signal
             .toEvent(recipient)
-            .then(ev -> {
+            .compose(ev -> {
                 return pool.publish(ev);
             });
     }
 
     /**
      * Send a candidate to a peer
-     * @return the async task that will be completed when the message is sent
+     * @return the async task that completes when the pool acknowledgement policy succeeds
      */
     public AsyncTask<List<AsyncTask<NostrMessageAck>>> sendRoutes(
         Collection<RTCTransportIceCandidate> candidates,
@@ -472,7 +472,7 @@ public class NostrRTCSignaling implements Closeable {
 
         return signal
             .toEvent(recipient)
-            .then(ev -> {
+            .compose(ev -> {
                 return pool.publish(ev);
             });
     }
@@ -490,7 +490,7 @@ public class NostrRTCSignaling implements Closeable {
      * acknowledgements are deliberately not awaited.</p>
      */
     public void close(String message) {
-        AsyncTask<List<AsyncTask<NostrMessageAck>>> publishTask;
+        AsyncTask<Void> publishTask;
         synchronized (this) {
             if (disconnectPublishTask == null) {
                 logger.fine("Closing signaling");
@@ -501,7 +501,11 @@ public class NostrRTCSignaling implements Closeable {
                     localPeer,
                     message
                 );
-                disconnectPublishTask = signal.toEvent(null).then(pool::publish);
+                disconnectPublishTask = signal.toEvent(null).then(event -> {
+                    pool.publish(event)
+                        .catchException(error -> logger.log(Level.WARNING, "Relay rejected RTC disconnect signal", error));
+                    return null;
+                });
             }
             publishTask = disconnectPublishTask;
         }

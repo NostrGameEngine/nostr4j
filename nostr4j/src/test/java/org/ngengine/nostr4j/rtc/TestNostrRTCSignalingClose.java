@@ -120,6 +120,7 @@ public class TestNostrRTCSignalingClose {
             null
         );
         CapturingPool pool = new CapturingPool();
+        pool.publishResult = AsyncTask.create((resolve, reject) -> {});
         NostrRTCSignaling signaling = new NostrRTCSignaling(
             RTCSettings.DEFAULT,
             "close-test-app",
@@ -143,16 +144,18 @@ public class TestNostrRTCSignalingClose {
         SignedNostrEvent published = pool.published.get();
         assertNotNull("Disconnect event was not handed to the relay pool", published);
         assertEquals("disconnect", published.getFirstTagFirstValue("t"));
+        assertFalse("close() should not wait for relay acknowledgements", pool.publishResult.isDone());
     }
 
     private static final class CapturingPool extends NostrPool {
 
         private final AtomicReference<SignedNostrEvent> published = new AtomicReference<SignedNostrEvent>();
+        private AsyncTask<List<AsyncTask<NostrMessageAck>>> publishResult = AsyncTask.completed(Collections.emptyList());
 
         @Override
-        public List<AsyncTask<NostrMessageAck>> publish(SignedNostrEvent event) {
+        public AsyncTask<List<AsyncTask<NostrMessageAck>>> publish(SignedNostrEvent event) {
             published.set(event);
-            return Collections.emptyList();
+            return publishResult;
         }
     }
 

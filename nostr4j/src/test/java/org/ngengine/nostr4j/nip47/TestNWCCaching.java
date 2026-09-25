@@ -230,9 +230,9 @@ public class TestNWCCaching {
         }
 
         @Override
-        public List<AsyncTask<NostrMessageAck>> publish(SignedNostrEvent event) {
+        public AsyncTask<List<AsyncTask<NostrMessageAck>>> publish(SignedNostrEvent event) {
             publishedRequest = event;
-            return Collections.emptyList();
+            return AsyncTask.completed(Collections.emptyList());
         }
 
         @Override

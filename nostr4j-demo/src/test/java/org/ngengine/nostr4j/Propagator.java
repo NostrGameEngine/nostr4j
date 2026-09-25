@@ -70,7 +70,7 @@ public class Propagator {
                 }
                 pool = new NostrPool();
                 pool.ensureRelay(relay).await();
-                AsyncTask.all(pool.publish(event)).await();
+                AsyncTask.all(pool.publish(event).await()).await();
                 System.out.println("Published to " + relay);
                 pool.close();
             } catch (Exception e) {}

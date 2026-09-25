@@ -77,7 +77,7 @@ public class TestNip57Integration {
         metadata.setAbout("Testing NIP-57 end-to-end flow with NWC payment");
         metadata.setPaymentAddress(new LnAddress(LNADDRESS));
         SignedNostrEvent updateEvent = s2.sign(metadata.toUpdateEvent()).await();
-        AsyncTask.all(pool.publish(updateEvent)).await();
+        AsyncTask.all(pool.publish(updateEvent).await()).await();
 
         ZapInvoice invoice = AsyncTask
             .all(Nip57.getZapInvoices(pool, s1, null, p2.getPublicKey(), 2000, "Test Zap (nip57)"))
@@ -118,7 +118,7 @@ public class TestNip57Integration {
         metadata.setAbout("Testing NIP-57 end-to-end flow with NWC payment");
         metadata.setPaymentAddress(new LnAddress(LNADDRESS));
         SignedNostrEvent updateEvent = s2.sign(metadata.toUpdateEvent()).await();
-        AsyncTask.all(pool.publish(updateEvent)).await();
+        AsyncTask.all(pool.publish(updateEvent).await()).await();
 
         ZapInvoice invoice = AsyncTask
             .all(Nip57.getZapInvoices(pool, s1, null, updateEvent, 2000, "Test Zap (nip57)"))

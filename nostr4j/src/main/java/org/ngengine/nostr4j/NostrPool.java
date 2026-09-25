@@ -44,6 +44,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.logging.Level;
@@ -62,6 +63,7 @@ import org.ngengine.nostr4j.pool.fetchpolicy.NostrPoolFetchPolicy;
 import org.ngengine.nostr4j.pool.fetchpolicy.NostrWaitForEventFetchPolicy;
 import org.ngengine.nostr4j.proto.NostrMessage;
 import org.ngengine.nostr4j.proto.NostrMessageAck;
+import org.ngengine.nostr4j.proto.NostrMessageAck.Status;
 import org.ngengine.nostr4j.proto.impl.NostrClosedMessage;
 import org.ngengine.nostr4j.proto.impl.NostrEOSEMessage;
 import org.ngengine.nostr4j.proto.impl.NostrNoticeMessage;
@@ -144,12 +146,12 @@ public class NostrPool {
         return this;
     }
 
-    public List<AsyncTask<NostrMessageAck>> publish(SignedNostrEvent ev) {
-        return sendMessage(ev, NostrPoolAnyAckPolicy.get());
+    public AsyncTask<List<AsyncTask<NostrMessageAck>>> publish(SignedNostrEvent ev) {
+        return ack(sendMessage(ev), NostrPoolAnyAckPolicy.get());
     }
 
-    public List<AsyncTask<NostrMessageAck>> publish(SignedNostrEvent ev, NostrPoolAckPolicy ackPolicy) {
-        return sendMessage(ev, ackPolicy);
+    public AsyncTask<List<AsyncTask<NostrMessageAck>>> publish(SignedNostrEvent ev, NostrPoolAckPolicy ackPolicy) {
+        return ack(sendMessage(ev), ackPolicy);
     }
 
     /**
@@ -157,14 +159,42 @@ public class NostrPool {
      */
     @Deprecated
     public List<AsyncTask<NostrMessageAck>> send(SignedNostrEvent ev) {
-        return publish(ev);
+        return sendMessage(ev);
+    }
+
+    private AsyncTask<List<AsyncTask<NostrMessageAck>>> ack(List<AsyncTask<NostrMessageAck>> promises, NostrPoolAckPolicy ackPolicy) {
+        return NGEUtils.getPlatform().wrapPromise((res, rej) -> {
+            if (promises.isEmpty()) {
+                res.accept(promises);
+                return;
+            }
+
+            AtomicInteger remaining = new AtomicInteger(promises.size());
+            AtomicBoolean finished = new AtomicBoolean(false);
+            Runnable checkPolicy = () -> {
+                int left = remaining.decrementAndGet();
+                if (finished.get()) return;
+                try {
+                    if (ackPolicy.apply(promises) == Status.SUCCESS) {
+                        if (finished.compareAndSet(false, true)) res.accept(promises);
+                    } else if (left == 0 && finished.compareAndSet(false, true)) {
+                        rej.accept(new IllegalStateException("Failed to achieve required acknowledgements"));
+                    }
+                } catch (Throwable error) {
+                    if (finished.compareAndSet(false, true)) rej.accept(error);
+                }
+            };
+
+            for (AsyncTask<NostrMessageAck> promise : promises) {
+                promise.catchException(error -> checkPolicy.run()).then(ack -> {
+                    checkPolicy.run();
+                    return null;
+                });
+            }
+        });
     }
 
     protected List<AsyncTask<NostrMessageAck>> sendMessage(NostrMessage message) {
-        return sendMessage(message, NostrPoolAnyAckPolicy.get());
-    }
-
-    protected List<AsyncTask<NostrMessageAck>> sendMessage(NostrMessage message, NostrPoolAckPolicy ackPolicy) {
         List<AsyncTask<NostrMessageAck>> promises = new ArrayList<>();
         for (NostrRelay relay : relays) {
             relay.beforeSendMessage(message);

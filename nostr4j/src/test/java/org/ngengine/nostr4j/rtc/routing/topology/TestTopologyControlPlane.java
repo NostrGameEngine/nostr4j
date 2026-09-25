@@ -47,7 +47,7 @@ public class TestTopologyControlPlane {
         assertFalse("multi-letter tags are not NIP-01 relay filter keys", filter.getTags().containsKey("version"));
     }
 
-    @Test
+    @Test(timeout = 10_000)
     public void testPublisherUsesMonotonicRevisionAndCreatedAt() {
         NostrKeyPair roomKeys = new NostrKeyPair();
         NostrRTCLocalPeer local = new NostrRTCLocalPeer(
@@ -61,6 +61,7 @@ public class TestTopologyControlPlane {
         );
         RoutingScope scope = new RoutingScope(roomKeys.getPublicKey(), local.getProtocolId(), local.getApplicationId());
         CapturingPool pool = new CapturingPool();
+        pool.publishResult = AsyncTask.create((resolve, reject) -> {});
         TopologyControlPlane control = new TopologyControlPlane(
             scope,
             local,
@@ -78,6 +79,7 @@ public class TestTopologyControlPlane {
             assertEquals("2", second.getFirstTagFirstValue("revision"));
             assertTrue(second.getCreatedAt().isAfter(first.getCreatedAt()));
             assertEquals(2, pool.events.size());
+            assertFalse(pool.publishResult.isDone());
             assertEquals(1, control.getSnapshots(now).size());
         } finally {
             control.close();
@@ -205,11 +207,12 @@ public class TestTopologyControlPlane {
     private static final class CapturingPool extends NostrPool {
 
         private final List<SignedNostrEvent> events = new CopyOnWriteArrayList<SignedNostrEvent>();
+        private AsyncTask<List<AsyncTask<NostrMessageAck>>> publishResult = AsyncTask.completed(Collections.emptyList());
 
         @Override
-        public List<AsyncTask<NostrMessageAck>> publish(SignedNostrEvent event) {
+        public AsyncTask<List<AsyncTask<NostrMessageAck>>> publish(SignedNostrEvent event) {
             events.add(event);
-            return Collections.emptyList();
+            return publishResult;
         }
     }
 }
