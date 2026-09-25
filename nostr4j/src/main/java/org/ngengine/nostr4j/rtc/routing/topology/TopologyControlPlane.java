@@ -189,20 +189,28 @@ public final class TopologyControlPlane implements Closeable {
             .encode(snapshot, localPeer, roomKeys, createdAt)
             .then(event -> {
                 store.accept(snapshot, Instant.now());
-                pool.publish(event)
+                pool
+                    .publish(event)
                     .then(promises -> {
                         for (AsyncTask<NostrMessageAck> published : promises) {
                             published
                                 .then(ack -> {
                                     if (ack.getStatus() == NostrMessageAck.Status.FAILURE) {
                                         logger.warning(
-                                            "Relay rejected private topology snapshot " + event.getId() + ": " + ack.getMessage()
+                                            "Relay rejected private topology snapshot " +
+                                            event.getId() +
+                                            ": " +
+                                            ack.getMessage()
                                         );
                                     }
                                     return ack;
                                 })
                                 .catchException(error ->
-                                    logger.log(Level.WARNING, "Failed to publish private topology snapshot " + event.getId(), error)
+                                    logger.log(
+                                        Level.WARNING,
+                                        "Failed to publish private topology snapshot " + event.getId(),
+                                        error
+                                    )
                                 );
                         }
                         return null;

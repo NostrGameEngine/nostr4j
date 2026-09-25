@@ -61,16 +61,18 @@ public class TestNostrPoolAckPolicy {
         Consumer<Throwable> reject;
 
         PendingAck() {
-            task = AsyncTask.create((res, rej) -> {
-                resolve = res;
-                reject = rej;
-            });
+            task =
+                AsyncTask.create((res, rej) -> {
+                    resolve = res;
+                    reject = rej;
+                });
         }
 
         void settle(NostrMessageAck.Status status) {
             NostrMessageAck ack = NostrMessage.ack(null, "event", Instant.now(), null, null);
-            if (status == NostrMessageAck.Status.SUCCESS) ack.callSuccessCallback("ok");
-            else ack.callFailureCallback("rejected");
+            if (status == NostrMessageAck.Status.SUCCESS) ack.callSuccessCallback("ok"); else ack.callFailureCallback(
+                "rejected"
+            );
             resolve.accept(ack);
         }
     }
@@ -91,10 +93,14 @@ public class TestNostrPoolAckPolicy {
         PendingAck third = new PendingAck();
         List<AsyncTask<NostrMessageAck>> tasks = List.of(first.task, second.task, third.task);
         AtomicInteger checks = new AtomicInteger();
-        AsyncTask<List<AsyncTask<NostrMessageAck>>> result = pool(tasks).publish((SignedNostrEvent) null, acks -> {
-            checks.incrementAndGet();
-            return NostrPoolAnyAckPolicy.get().apply(acks);
-        });
+        AsyncTask<List<AsyncTask<NostrMessageAck>>> result = pool(tasks)
+            .publish(
+                (SignedNostrEvent) null,
+                acks -> {
+                    checks.incrementAndGet();
+                    return NostrPoolAnyAckPolicy.get().apply(acks);
+                }
+            );
 
         first.settle(NostrMessageAck.Status.FAILURE);
         assertFalse(result.isDone());
@@ -110,7 +116,8 @@ public class TestNostrPoolAckPolicy {
         PendingAck first = new PendingAck();
         PendingAck second = new PendingAck();
         List<AsyncTask<NostrMessageAck>> tasks = List.of(first.task, second.task);
-        AsyncTask<List<AsyncTask<NostrMessageAck>>> result = pool(tasks).publish((SignedNostrEvent) null, NostrPoolAllAckPolicy.get());
+        AsyncTask<List<AsyncTask<NostrMessageAck>>> result = pool(tasks)
+            .publish((SignedNostrEvent) null, NostrPoolAllAckPolicy.get());
 
         first.settle(NostrMessageAck.Status.SUCCESS);
         assertFalse(result.isDone());
@@ -124,7 +131,8 @@ public class TestNostrPoolAckPolicy {
         PendingAck second = new PendingAck();
         PendingAck third = new PendingAck();
         List<AsyncTask<NostrMessageAck>> tasks = List.of(first.task, second.task, third.task);
-        AsyncTask<List<AsyncTask<NostrMessageAck>>> result = pool(tasks).publish((SignedNostrEvent) null, NostrPoolQuorumAckPolicy.get());
+        AsyncTask<List<AsyncTask<NostrMessageAck>>> result = pool(tasks)
+            .publish((SignedNostrEvent) null, NostrPoolQuorumAckPolicy.get());
 
         first.reject.accept(new IllegalStateException("relay unavailable"));
         assertFalse(result.isDone());
@@ -167,15 +175,19 @@ public class TestNostrPoolAckPolicy {
         List<AsyncTask<NostrMessageAck>> tasks = List.of(first.task, second.task);
         CyclicBarrier barrier = new CyclicBarrier(2);
         AtomicInteger checks = new AtomicInteger();
-        AsyncTask<List<AsyncTask<NostrMessageAck>>> result = pool(tasks).publish((SignedNostrEvent) null, acks -> {
-            checks.incrementAndGet();
-            try {
-                barrier.await(5, TimeUnit.SECONDS);
-            } catch (Exception error) {
-                throw new IllegalStateException(error);
-            }
-            return NostrMessageAck.Status.SUCCESS;
-        });
+        AsyncTask<List<AsyncTask<NostrMessageAck>>> result = pool(tasks)
+            .publish(
+                (SignedNostrEvent) null,
+                acks -> {
+                    checks.incrementAndGet();
+                    try {
+                        barrier.await(5, TimeUnit.SECONDS);
+                    } catch (Exception error) {
+                        throw new IllegalStateException(error);
+                    }
+                    return NostrMessageAck.Status.SUCCESS;
+                }
+            );
 
         Thread a = new Thread(() -> first.settle(NostrMessageAck.Status.SUCCESS));
         Thread b = new Thread(() -> second.settle(NostrMessageAck.Status.SUCCESS));

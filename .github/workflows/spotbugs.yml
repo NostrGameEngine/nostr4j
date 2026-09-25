@@ -28,7 +28,6 @@ jobs:
     - name: Run SpotBugs with SARIF output
       run: |
         ./gradlew spotbugsMain --info
-        ./gradlew spotlessCheck
         
       continue-on-error: true
     

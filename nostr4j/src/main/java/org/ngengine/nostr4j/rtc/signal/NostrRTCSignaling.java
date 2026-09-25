@@ -501,11 +501,17 @@ public class NostrRTCSignaling implements Closeable {
                     localPeer,
                     message
                 );
-                disconnectPublishTask = signal.toEvent(null).then(event -> {
-                    pool.publish(event)
-                        .catchException(error -> logger.log(Level.WARNING, "Relay rejected RTC disconnect signal", error));
-                    return null;
-                });
+                disconnectPublishTask =
+                    signal
+                        .toEvent(null)
+                        .then(event -> {
+                            pool
+                                .publish(event)
+                                .catchException(error ->
+                                    logger.log(Level.WARNING, "Relay rejected RTC disconnect signal", error)
+                                );
+                            return null;
+                        });
             }
             publishTask = disconnectPublishTask;
         }

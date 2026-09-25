@@ -360,7 +360,7 @@ public final class TopologyEventCodec {
 
     private static long parsePositiveLong(String value, String field) {
         try {
-            long parsed = Long.parseLong(value); 
+            long parsed = Long.parseLong(value);
             if (parsed <= 0L) {
                 throw new NumberFormatException("not positive");
             }

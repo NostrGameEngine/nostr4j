@@ -162,36 +162,43 @@ public class NostrPool {
         return sendMessage(ev);
     }
 
-    private AsyncTask<List<AsyncTask<NostrMessageAck>>> ack(List<AsyncTask<NostrMessageAck>> promises, NostrPoolAckPolicy ackPolicy) {
-        return NGEUtils.getPlatform().wrapPromise((res, rej) -> {
-            if (promises.isEmpty()) {
-                res.accept(promises);
-                return;
-            }
-
-            AtomicInteger remaining = new AtomicInteger(promises.size());
-            AtomicBoolean finished = new AtomicBoolean(false);
-            Runnable checkPolicy = () -> {
-                int left = remaining.decrementAndGet();
-                if (finished.get()) return;
-                try {
-                    if (ackPolicy.apply(promises) == Status.SUCCESS) {
-                        if (finished.compareAndSet(false, true)) res.accept(promises);
-                    } else if (left == 0 && finished.compareAndSet(false, true)) {
-                        rej.accept(new IllegalStateException("Failed to achieve required acknowledgements"));
-                    }
-                } catch (Throwable error) {
-                    if (finished.compareAndSet(false, true)) rej.accept(error);
+    private AsyncTask<List<AsyncTask<NostrMessageAck>>> ack(
+        List<AsyncTask<NostrMessageAck>> promises,
+        NostrPoolAckPolicy ackPolicy
+    ) {
+        return NGEUtils
+            .getPlatform()
+            .wrapPromise((res, rej) -> {
+                if (promises.isEmpty()) {
+                    res.accept(promises);
+                    return;
                 }
-            };
 
-            for (AsyncTask<NostrMessageAck> promise : promises) {
-                promise.catchException(error -> checkPolicy.run()).then(ack -> {
-                    checkPolicy.run();
-                    return null;
-                });
-            }
-        });
+                AtomicInteger remaining = new AtomicInteger(promises.size());
+                AtomicBoolean finished = new AtomicBoolean(false);
+                Runnable checkPolicy = () -> {
+                    int left = remaining.decrementAndGet();
+                    if (finished.get()) return;
+                    try {
+                        if (ackPolicy.apply(promises) == Status.SUCCESS) {
+                            if (finished.compareAndSet(false, true)) res.accept(promises);
+                        } else if (left == 0 && finished.compareAndSet(false, true)) {
+                            rej.accept(new IllegalStateException("Failed to achieve required acknowledgements"));
+                        }
+                    } catch (Throwable error) {
+                        if (finished.compareAndSet(false, true)) rej.accept(error);
+                    }
+                };
+
+                for (AsyncTask<NostrMessageAck> promise : promises) {
+                    promise
+                        .catchException(error -> checkPolicy.run())
+                        .then(ack -> {
+                            checkPolicy.run();
+                            return null;
+                        });
+                }
+            });
     }
 
     protected List<AsyncTask<NostrMessageAck>> sendMessage(NostrMessage message) {
