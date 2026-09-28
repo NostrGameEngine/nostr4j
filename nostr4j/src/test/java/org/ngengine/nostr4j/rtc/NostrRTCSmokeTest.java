@@ -31,6 +31,8 @@
 
 package org.ngengine.nostr4j.rtc;
 
+import org.ngengine.nostr4j.RTCSettings;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -285,10 +287,8 @@ public class NostrRTCSmokeTest {
 
     private static NostrRTCLocalPeer peer(String id, String sessionId, NostrKeyPair room, String turnServer) {
         return new NostrRTCLocalPeer(
+            RTCSettings.getDefault(APP_ID, PROTOCOL_ID).withStunServers(Collections.emptyList()),
             NostrKeyPairSigner.generate(),
-            Collections.emptyList(),
-            APP_ID,
-            PROTOCOL_ID,
             sessionId,
             room,
             turnServer

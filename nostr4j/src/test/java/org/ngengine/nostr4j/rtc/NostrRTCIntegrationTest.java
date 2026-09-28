@@ -118,10 +118,8 @@ public class NostrRTCIntegrationTest {
 
     private static NostrRTCLocalPeer localPeer(NostrKeyPairSigner signer, NostrKeyPair roomKeyPair, String sessionId) {
         return new NostrRTCLocalPeer(
+            RTCSettings.getDefault(APP_ID, PROTOCOL_ID).withStunServers(Collections.emptyList()),
             signer,
-            Collections.emptyList(),
-            APP_ID,
-            PROTOCOL_ID,
             sessionId,
             roomKeyPair,
             "wss://turn.example"
@@ -280,19 +278,15 @@ public class NostrRTCIntegrationTest {
         NostrKeyPairSigner bobSigner = NostrKeyPairSigner.generate();
 
         NostrRTCLocalPeer aliceLocal = new NostrRTCLocalPeer(
+            RTCSettings.getDefault(APP_ID, PROTOCOL_ID).withStunServers(Collections.emptyList()),
             aliceSigner,
-            Collections.emptyList(),
-            APP_ID,
-            PROTOCOL_ID,
             "alice-signal-wire",
             roomKeyPair,
             turnUrlA
         );
         NostrRTCLocalPeer bobLocal = new NostrRTCLocalPeer(
+            RTCSettings.getDefault(APP_ID, PROTOCOL_ID).withStunServers(Collections.emptyList()),
             bobSigner,
-            Collections.emptyList(),
-            APP_ID,
-            PROTOCOL_ID,
             "bob-signal-wire",
             roomKeyPair,
             turnUrlB
@@ -726,19 +720,15 @@ public class NostrRTCIntegrationTest {
 
         NostrKeyPair roomKeyPair = new NostrKeyPair();
         NostrRTCLocalPeer local = new NostrRTCLocalPeer(
+            RTCSettings.getDefault(APP_ID, PROTOCOL_ID).withStunServers(Collections.emptyList()),
             NostrKeyPairSigner.generate(),
-            Collections.emptyList(),
-            APP_ID,
-            PROTOCOL_ID,
             localSession,
             roomKeyPair,
             turnUrlA
         );
         NostrRTCLocalPeer remoteLocal = new NostrRTCLocalPeer(
+            RTCSettings.getDefault(APP_ID, PROTOCOL_ID).withStunServers(Collections.emptyList()),
             NostrKeyPairSigner.generate(),
-            Collections.emptyList(),
-            APP_ID,
-            PROTOCOL_ID,
             "half-open-close-remote",
             roomKeyPair,
             turnUrlA
@@ -1301,7 +1291,13 @@ public class NostrRTCIntegrationTest {
         Collection<String> stuns
     ) {
         NostrKeyPairSigner signer = NostrKeyPairSigner.generate();
-        return new NostrRTCLocalPeer(signer, stuns, APP_ID, PROTOCOL_ID, sessionId, roomKeyPair, turnServer);
+        return new NostrRTCLocalPeer(
+            RTCSettings.getDefault(APP_ID, PROTOCOL_ID).withStunServers(stuns),
+            signer,
+            sessionId,
+            roomKeyPair,
+            turnServer
+        );
     }
 
     private static void connect(SocketContext a, SocketContext b) throws Exception {
@@ -1313,8 +1309,7 @@ public class NostrRTCIntegrationTest {
                 socketRemotePeerFromLocal(b.localPeer, a.roomKeyPair),
                 a.roomKeyPair,
                 a.localPeer,
-                RTCSettings.DEFAULT,
-                null,
+                RTCSettings.getDefault(APP_ID, PROTOCOL_ID),
                 a.turnPool
             );
         b.socket =
@@ -1323,8 +1318,7 @@ public class NostrRTCIntegrationTest {
                 socketRemotePeerFromLocal(a.localPeer, b.roomKeyPair),
                 b.roomKeyPair,
                 b.localPeer,
-                RTCSettings.DEFAULT,
-                null,
+                RTCSettings.getDefault(APP_ID, PROTOCOL_ID),
                 b.turnPool
             );
 
@@ -1346,8 +1340,8 @@ public class NostrRTCIntegrationTest {
             String sharedRelay = waitForSharedConnectedRelay(poolA, poolB, 20_000);
             assertNotNull("No shared connected relay for peer A/B", sharedRelay);
 
-            signalingA = new NostrRTCSignaling(RTCSettings.DEFAULT, APP_ID, PROTOCOL_ID, a.localPeer, a.roomKeyPair, poolA);
-            signalingB = new NostrRTCSignaling(RTCSettings.DEFAULT, APP_ID, PROTOCOL_ID, b.localPeer, b.roomKeyPair, poolB);
+            signalingA = new NostrRTCSignaling(RTCSettings.getDefault(APP_ID, PROTOCOL_ID), APP_ID, PROTOCOL_ID, a.localPeer, a.roomKeyPair, poolA);
+            signalingB = new NostrRTCSignaling(RTCSettings.getDefault(APP_ID, PROTOCOL_ID), APP_ID, PROTOCOL_ID, b.localPeer, b.roomKeyPair, poolB);
 
             final NostrRTCSignaling signalingAFinal = signalingA;
             final NostrRTCSignaling signalingBFinal = signalingB;

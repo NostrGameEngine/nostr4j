@@ -72,21 +72,14 @@ public class TestRTCSettings {
 
     @Test
     public void defaultP2pAttemptAllowsIceChecksToComplete() {
-        assertEquals(Duration.ofSeconds(30), RTCSettings.DEFAULT.getP2pAttemptTimeout());
-        assertEquals(Duration.ofMinutes(2), RTCSettings.DEFAULT.getP2pGiveupTimeout());
+        assertEquals(Duration.ofSeconds(30), RTCSettings.getDefault("test.app", "test.protocol").getP2pAttemptTimeout());
+        assertEquals(Duration.ofMinutes(2), RTCSettings.getDefault("test.app", "test.protocol").getP2pGiveupTimeout());
     }
 
     @Test
     public void signalingAnnouncementExpirationIsConfigurableSeparately() {
-        RTCSettings settings = new RTCSettings(
-            Duration.ofSeconds(5),
-            Duration.ofMinutes(5),
-            Duration.ofMillis(100),
-            Duration.ofSeconds(1),
-            Duration.ofSeconds(30),
-            Duration.ofSeconds(30),
-            Duration.ofSeconds(25)
-        );
+        RTCSettings settings = RTCSettings.getDefault("test.app", "test.protocol")
+            .withSignalingAnnounceExpiration(Duration.ofSeconds(25));
 
         assertEquals(Duration.ofSeconds(25), settings.getSignalingAnnounceExpiration());
         assertEquals(Duration.ofMinutes(5), settings.getPeerExpiration());

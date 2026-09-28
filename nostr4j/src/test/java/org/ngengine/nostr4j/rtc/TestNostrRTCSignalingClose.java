@@ -62,24 +62,15 @@ public class TestNostrRTCSignalingClose {
     public void announceUsesConfiguredSignalingExpiration() throws Exception {
         NostrKeyPair roomKeyPair = new NostrKeyPair();
         NostrRTCLocalPeer localPeer = new NostrRTCLocalPeer(
+            RTCSettings.getDefault("expiration-test-app", "expiration-test-protocol").withStunServers(Collections.emptyList()),
             new NostrKeyPairSigner(new NostrKeyPair()),
-            Collections.emptyList(),
-            "expiration-test-app",
-            "expiration-test-protocol",
             "expiration-test-session",
             roomKeyPair,
             null
         );
         CapturingPool pool = new CapturingPool();
-        RTCSettings settings = new RTCSettings(
-            RTCSettings.SIGNALING_LOOP_INTERVAL,
-            RTCSettings.PEER_EXPIRATION,
-            RTCSettings.DELAYED_CANDIDATES_INTERVAL,
-            RTCSettings.ROOM_LOOP_INTERVAL,
-            RTCSettings.P2P_TIMEOUT,
-            RTCSettings.QUEUED_SEND_TIMEOUT,
-            Duration.ofSeconds(25)
-        );
+        RTCSettings settings = RTCSettings.getDefault("expiration-test-app", "expiration-test-protocol")
+            .withSignalingAnnounceExpiration(Duration.ofSeconds(25));
         NostrRTCSignaling signaling = new NostrRTCSignaling(
             settings,
             "expiration-test-app",
@@ -111,10 +102,8 @@ public class TestNostrRTCSignalingClose {
         DelayedSigner signer = new DelayedSigner(new NostrKeyPair(), signStarted, allowSign);
         NostrKeyPair roomKeyPair = new NostrKeyPair();
         NostrRTCLocalPeer localPeer = new NostrRTCLocalPeer(
+            RTCSettings.getDefault("close-test-app", "close-test-protocol").withStunServers(Collections.emptyList()),
             signer,
-            Collections.emptyList(),
-            "close-test-app",
-            "close-test-protocol",
             "close-test-session",
             roomKeyPair,
             null
@@ -122,7 +111,7 @@ public class TestNostrRTCSignalingClose {
         CapturingPool pool = new CapturingPool();
         pool.publishResult = AsyncTask.create((resolve, reject) -> {});
         NostrRTCSignaling signaling = new NostrRTCSignaling(
-            RTCSettings.DEFAULT,
+            RTCSettings.getDefault("close-test-app", "close-test-protocol"),
             "close-test-app",
             "close-test-protocol",
             localPeer,

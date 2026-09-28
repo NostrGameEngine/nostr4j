@@ -5,6 +5,8 @@
  */
 package org.ngengine.nostr4j.rtc;
 
+import org.ngengine.nostr4j.RTCSettings;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -72,19 +74,15 @@ public class TestNostrTURNPoolFailures {
         try {
             NostrKeyPair room = new NostrKeyPair();
             NostrRTCLocalPeer local = new NostrRTCLocalPeer(
+                RTCSettings.getDefault(APP_ID, PROTOCOL_ID).withStunServers(Collections.emptyList()),
                 NostrKeyPairSigner.generate(),
-                Collections.emptyList(),
-                APP_ID,
-                PROTOCOL_ID,
                 "turn-failure-local",
                 room,
                 TURN_URL
             );
             NostrRTCLocalPeer remoteLocal = new NostrRTCLocalPeer(
+                RTCSettings.getDefault(APP_ID, PROTOCOL_ID).withStunServers(Collections.emptyList()),
                 NostrKeyPairSigner.generate(),
-                Collections.emptyList(),
-                APP_ID,
-                PROTOCOL_ID,
                 "turn-failure-remote",
                 room,
                 TURN_URL
@@ -503,10 +501,8 @@ public class TestNostrTURNPoolFailures {
 
     private NostrRTCLocalPeer localPeer(String sessionId, NostrKeyPair room) {
         return new NostrRTCLocalPeer(
+            RTCSettings.getDefault(APP_ID, PROTOCOL_ID).withStunServers(Collections.emptyList()),
             NostrKeyPairSigner.generate(),
-            Collections.emptyList(),
-            APP_ID,
-            PROTOCOL_ID,
             sessionId,
             room,
             TURN_URL

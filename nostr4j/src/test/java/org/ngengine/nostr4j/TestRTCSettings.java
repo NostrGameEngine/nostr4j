@@ -10,48 +10,34 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.fail;
 
-import java.time.Duration;
 import org.junit.Test;
 
 public class TestRTCSettings {
 
     @Test
-    public void testLegacyConstructorsUseDefaultMaxDirectPeers() {
-        RTCSettings fiveArguments = new RTCSettings(
-            Duration.ofSeconds(1),
-            Duration.ofSeconds(2),
-            Duration.ofSeconds(3),
-            Duration.ofSeconds(4),
-            Duration.ofSeconds(5)
-        );
-        RTCSettings sixArguments = new RTCSettings(
-            Duration.ofSeconds(1),
-            Duration.ofSeconds(2),
-            Duration.ofSeconds(3),
-            Duration.ofSeconds(4),
-            Duration.ofSeconds(5),
-            Duration.ofSeconds(6)
-        );
-        RTCSettings sevenArguments = new RTCSettings(
-            Duration.ofSeconds(1),
-            Duration.ofSeconds(2),
-            Duration.ofSeconds(3),
-            Duration.ofSeconds(4),
-            Duration.ofSeconds(5),
-            Duration.ofSeconds(6),
-            Duration.ofSeconds(7)
-        );
-
+    public void testFactoryRequiresBothIdsAndUsesDefaultMaxDirectPeers() {
         assertEquals(16, RTCSettings.DEFAULT_MAX_DIRECT_PEERS);
-        assertEquals(16, RTCSettings.DEFAULT.getMaxDirectPeers());
-        assertEquals(16, fiveArguments.getMaxDirectPeers());
-        assertEquals(16, sixArguments.getMaxDirectPeers());
-        assertEquals(16, sevenArguments.getMaxDirectPeers());
+        RTCSettings settings = RTCSettings.getDefault("test.app", "test.protocol");
+        assertEquals(16, settings.getMaxDirectPeers());
+        assertEquals("test.app", settings.getApplicationId());
+        assertEquals("test.protocol", settings.getProtocolId());
+        try {
+            RTCSettings.getDefault(null, "test.protocol");
+            fail("Null applicationId must be rejected");
+        } catch (NullPointerException expected) {
+            // Expected.
+        }
+        try {
+            RTCSettings.getDefault("test.app", " ");
+            fail("Blank protocolId must be rejected");
+        } catch (IllegalArgumentException expected) {
+            // Expected.
+        }
     }
 
     @Test
     public void testWithMaxDirectPeersReturnsIndependentImmutableValue() {
-        RTCSettings original = RTCSettings.DEFAULT;
+        RTCSettings original = RTCSettings.getDefault("test.app", "test.protocol");
         RTCSettings changed = original.withMaxDirectPeers(7);
 
         assertNotSame(original, changed);
@@ -63,9 +49,9 @@ public class TestRTCSettings {
 
     @Test
     public void testMaxDirectPeersMinimumIsTwo() {
-        assertEquals(2, RTCSettings.DEFAULT.withMaxDirectPeers(2).getMaxDirectPeers());
+        assertEquals(2, RTCSettings.getDefault("test.app", "test.protocol").withMaxDirectPeers(2).getMaxDirectPeers());
         try {
-            RTCSettings.DEFAULT.withMaxDirectPeers(1);
+            RTCSettings.getDefault("test.app", "test.protocol").withMaxDirectPeers(1);
             fail("maxDirectPeers below two must be rejected");
         } catch (IllegalArgumentException expected) {
             assertEquals("maxDirectPeers must be at least 2", expected.getMessage());
@@ -74,9 +60,9 @@ public class TestRTCSettings {
 
     @Test
     public void testMaxDirectPeersMaximumIsSixtyFour() {
-        assertEquals(64, RTCSettings.DEFAULT.withMaxDirectPeers(64).getMaxDirectPeers());
+        assertEquals(64, RTCSettings.getDefault("test.app", "test.protocol").withMaxDirectPeers(64).getMaxDirectPeers());
         try {
-            RTCSettings.DEFAULT.withMaxDirectPeers(65);
+            RTCSettings.getDefault("test.app", "test.protocol").withMaxDirectPeers(65);
             fail("maxDirectPeers above sixty-four must be rejected");
         } catch (IllegalArgumentException expected) {
             assertEquals("maxDirectPeers must not exceed 64", expected.getMessage());

@@ -49,6 +49,10 @@ public class TestNostrRTC {
     private static final Logger logger = TestLogger.getRoot(Level.INFO);
     private static final String APPLICATION_ID = "nostr4j-rtc-test";
     private static final String PROTOCOL_ID = "test-protocol";
+    private static final RTCSettings RTC_SETTINGS = RTCSettings.getDefault(APPLICATION_ID, PROTOCOL_ID)
+        .withSignalingRelays(java.util.List.of(
+            "wss://nostr.rblb.it", "wss://relay.ngengine.org", "wss://relay2.ngengine.org"
+        ));
 
     private static void newPeer(
         NostrPool pool,
@@ -73,10 +77,15 @@ public class TestNostrRTC {
         NostrKeyPairSigner signer = new NostrKeyPairSigner(localKeyPair);
 
         // local rtc peer, this will be used to identify us
-        NostrRTCLocalPeer localPeer = new NostrRTCLocalPeer(signer, stun, APPLICATION_ID, PROTOCOL_ID, roomKeyPair, turn);
+        NostrRTCLocalPeer localPeer = new NostrRTCLocalPeer(
+            RTC_SETTINGS.withStunServers(stun),
+            signer,
+            roomKeyPair,
+            turn
+        );
 
         // room
-        NostrRTCRoom room = new NostrRTCRoom(RTCSettings.DEFAULT, localPeer, roomKeyPair, pool, turn, turnPool);
+        NostrRTCRoom room = new NostrRTCRoom(RTC_SETTINGS, localPeer, roomKeyPair, pool, turnPool);
 
         room.addPeerSocketAvailableListener((peerKey, socket) -> {
             System.out.println(name + " peer connected: " + peerKey);

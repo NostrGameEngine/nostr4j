@@ -120,10 +120,8 @@ public class TestNostrRTCRoomModeration {
             NostrKeyPairSigner localSigner = new NostrKeyPairSigner(localKeyPair);
             this.remoteSigner = new NostrKeyPairSigner(remoteKeyPair);
             NostrRTCLocalPeer localPeer = new NostrRTCLocalPeer(
+                RTCSettings.getDefault("moderation-test-app", "moderation-test-protocol").withSignalingRelays(java.util.List.of()).withStunServers(Collections.emptyList()),
                 localSigner,
-                Collections.emptyList(),
-                "moderation-test-app",
-                "moderation-test-protocol",
                 "local-session",
                 roomKeyPair,
                 null
@@ -137,7 +135,7 @@ public class TestNostrRTCRoomModeration {
                     roomKeyPair.getPublicKey(),
                     null
                 );
-            this.room = new NostrRTCRoom(RTCSettings.DEFAULT, localPeer, roomKeyPair, new NostrPool(), null, null);
+            this.room = new NostrRTCRoom(RTCSettings.getDefault("moderation-test-app", "moderation-test-protocol").withSignalingRelays(java.util.List.of()), localPeer, roomKeyPair, new NostrPool(), null);
         }
     }
 }

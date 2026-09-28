@@ -47,10 +47,8 @@ public class TestNostrRTCSocketReadyEmission {
             NostrKeyPair roomKeyPair = new NostrKeyPair();
             NostrKeyPairSigner remoteSigner = NostrKeyPairSigner.generate();
             NostrRTCLocalPeer localPeer = new NostrRTCLocalPeer(
+                RTCSettings.getDefault("ready-app", "ready-proto").withStunServers(Collections.emptyList()),
                 NostrKeyPairSigner.generate(),
-                Collections.emptyList(),
-                "ready-app",
-                "ready-proto",
                 roomKeyPair,
                 null
             );
@@ -63,7 +61,7 @@ public class TestNostrRTCSocketReadyEmission {
                 null
             );
             socket =
-                new NostrRTCSocket(executor, remotePeer, roomKeyPair, localPeer, RTCSettings.DEFAULT, localTurnServer, null);
+                new NostrRTCSocket(executor, remotePeer, roomKeyPair, localPeer, RTCSettings.getDefault("ready-app", "ready-proto"), null);
 
             assertEquals(localTurnServer, socket.resolveReceiveTurnUrl());
             assertNull("Local TURN server must not be used as the remote send destination", socket.resolveSendTurnUrl());
@@ -505,10 +503,8 @@ public class TestNostrRTCSocketReadyEmission {
         throws Exception {
         NostrKeyPair roomKeyPair = new NostrKeyPair();
         NostrRTCLocalPeer localPeer = new NostrRTCLocalPeer(
+            RTCSettings.getDefault("ready-app", "ready-proto").withStunServers(Collections.emptyList()),
             NostrKeyPairSigner.generate(),
-            Collections.emptyList(),
-            "ready-app",
-            "ready-proto",
             roomKeyPair,
             turnServer
         );
@@ -520,7 +516,7 @@ public class TestNostrRTCSocketReadyEmission {
             roomKeyPair.getPublicKey(),
             turnServer
         );
-        return new NostrRTCSocket(executor, remotePeer, roomKeyPair, localPeer, RTCSettings.DEFAULT, turnServer, turnPool);
+        return new NostrRTCSocket(executor, remotePeer, roomKeyPair, localPeer, RTCSettings.getDefault("ready-app", "ready-proto"), turnPool);
     }
 
     private static int turnPoolChannelCount(NostrTURNPool turnPool) {

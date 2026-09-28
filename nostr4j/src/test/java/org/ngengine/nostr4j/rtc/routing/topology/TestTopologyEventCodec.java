@@ -5,6 +5,8 @@
  */
 package org.ngengine.nostr4j.rtc.routing.topology;
 
+import org.ngengine.nostr4j.RTCSettings;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
@@ -140,19 +142,15 @@ public class TestTopologyEventCodec {
         private final NostrKeyPair routingKeys = new NostrKeyPair();
         private final RoutingScope scope = new RoutingScope(roomKeys.getPublicKey(), "topology-protocol", "topology-app");
         private final NostrRTCLocalPeer local = new NostrRTCLocalPeer(
+            RTCSettings.getDefault(scope.getApplicationId(), scope.getProtocolId()).withStunServers(List.of()),
             NostrKeyPairSigner.generate(),
-            List.of(),
-            scope.getApplicationId(),
-            scope.getProtocolId(),
             "local-session",
             roomKeys,
             null
         );
         private final NostrRTCLocalPeer neighbor = new NostrRTCLocalPeer(
+            RTCSettings.getDefault(scope.getApplicationId(), scope.getProtocolId()).withStunServers(List.of()),
             NostrKeyPairSigner.generate(),
-            List.of(),
-            scope.getApplicationId(),
-            scope.getProtocolId(),
             "neighbor-session",
             roomKeys,
             null

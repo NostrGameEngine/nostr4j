@@ -101,8 +101,7 @@ public final class NostrRTCSocket {
     private final NostrTURNPool turnPool;
     private final Map<String, NostrRTCChannel> channels = new ConcurrentHashMap<>();
 
-    @Nullable
-    private final String turnServerUrl;
+
 
     private volatile RTCTransport transport;
     private final NostrRTCPeer remotePeer;
@@ -304,7 +303,6 @@ public final class NostrRTCSocket {
         NostrKeyPair roomKeyPair,
         NostrRTCLocalPeer localPeer,
         RTCSettings settings,
-        @Nullable String turnServerUrl,
         NostrTURNPool turnPool
     ) {
         this.executor = Objects.requireNonNull(executor, "Executor cannot be null");
@@ -313,7 +311,6 @@ public final class NostrRTCSocket {
         this.roomKeyPair = Objects.requireNonNull(roomKeyPair, "Room Key Pair cannot be null");
         this.remotePeer = Objects.requireNonNull(remotePeer, "Remote Peer cannot be null");
         this.turnPool = turnPool;
-        this.turnServerUrl = turnServerUrl;
     }
 
     // private NostrRTCChannel getOrCreateLogicalChannel(
@@ -435,9 +432,6 @@ public final class NostrRTCSocket {
         String localTurnServer = localPeer.getTurnServer();
         if (localTurnServer != null && !localTurnServer.isEmpty()) {
             return localTurnServer;
-        }
-        if (turnServerUrl != null && !turnServerUrl.isEmpty()) {
-            return turnServerUrl;
         }
         return null;
     }

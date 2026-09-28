@@ -31,6 +31,8 @@
 
 package org.ngengine.nostr4j.turn.ref;
 
+import org.ngengine.nostr4j.RTCSettings;
+
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -586,7 +588,13 @@ public class TestTurnServerCompliance {
     }
 
     private static NostrRTCLocalPeer localPeer(NostrKeyPairSigner signer, NostrKeyPair roomKeyPair, String sessionId) {
-        return new NostrRTCLocalPeer(signer, Collections.emptyList(), APP_ID, PROTOCOL_ID, sessionId, roomKeyPair, null);
+        return new NostrRTCLocalPeer(
+            RTCSettings.getDefault(APP_ID, PROTOCOL_ID).withStunServers(Collections.emptyList()),
+            signer,
+            sessionId,
+            roomKeyPair,
+            null
+        );
     }
 
     private static NostrRTCPeer remotePeer(NostrKeyPairSigner signer, NostrKeyPair roomKeyPair, String sessionId) {

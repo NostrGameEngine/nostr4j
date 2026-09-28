@@ -39,10 +39,8 @@ public class TestRoutedQueueRetry {
     public void testRetryableCircuitFailureKeepsSamePreparedPacketAndPacketId() throws Exception {
         NostrKeyPair roomKeys = new NostrKeyPair();
         NostrRTCLocalPeer local = new NostrRTCLocalPeer(
+            RTCSettings.getDefault("queue-route-app", "queue-route-protocol").withStunServers(Collections.emptyList()),
             NostrKeyPairSigner.generate(),
-            Collections.emptyList(),
-            "queue-route-app",
-            "queue-route-protocol",
             "queue-route-local",
             roomKeys,
             null
@@ -56,7 +54,7 @@ public class TestRoutedQueueRetry {
             null
         );
         AsyncExecutor executor = NGEPlatform.get().newAsyncExecutor("routed-queue-retry");
-        NostrRTCSocket socket = new NostrRTCSocket(executor, remote, roomKeys, local, RTCSettings.DEFAULT, null, null);
+        NostrRTCSocket socket = new NostrRTCSocket(executor, remote, roomKeys, local, RTCSettings.getDefault("queue-route-app", "queue-route-protocol"), null);
         RetryOnceRoutedTransport routed = new RetryOnceRoutedTransport();
         socket.setRoutedTransport(routed);
         socket.setPhysicalLinkEnabled(false);

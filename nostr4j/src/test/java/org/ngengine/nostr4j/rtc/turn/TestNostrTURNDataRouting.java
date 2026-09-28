@@ -31,6 +31,8 @@
 
 package org.ngengine.nostr4j.rtc.turn;
 
+import org.ngengine.nostr4j.RTCSettings;
+
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -304,10 +306,8 @@ public class TestNostrTURNDataRouting {
 
     private static NostrRTCLocalPeer localPeer(NostrKeyPairSigner signer, NostrKeyPair room, String session, int version) {
         NostrRTCLocalPeer peer = new NostrRTCLocalPeer(
+            RTCSettings.getDefault(APPLICATION, PROTOCOL).withStunServers(Collections.emptyList()),
             signer,
-            Collections.emptyList(),
-            APPLICATION,
-            PROTOCOL,
             session,
             room,
             null

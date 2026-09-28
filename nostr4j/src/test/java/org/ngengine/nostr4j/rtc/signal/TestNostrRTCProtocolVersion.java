@@ -31,6 +31,8 @@
 
 package org.ngengine.nostr4j.rtc.signal;
 
+import org.ngengine.nostr4j.RTCSettings;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.fail;
@@ -125,6 +127,12 @@ public class TestNostrRTCProtocolVersion {
     }
 
     private static NostrRTCLocalPeer localPeer(NostrKeyPairSigner signer, NostrKeyPair room, String session) {
-        return new NostrRTCLocalPeer(signer, Collections.emptyList(), "application", "protocol", session, room, null);
+        return new NostrRTCLocalPeer(
+            RTCSettings.getDefault("application", "protocol").withStunServers(Collections.emptyList()),
+            signer,
+            session,
+            room,
+            null
+        );
     }
 }

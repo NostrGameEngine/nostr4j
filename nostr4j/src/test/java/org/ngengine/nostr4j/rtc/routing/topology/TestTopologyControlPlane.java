@@ -5,6 +5,8 @@
  */
 package org.ngengine.nostr4j.rtc.routing.topology;
 
+import org.ngengine.nostr4j.RTCSettings;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -51,10 +53,8 @@ public class TestTopologyControlPlane {
     public void testPublisherUsesMonotonicRevisionAndCreatedAt() {
         NostrKeyPair roomKeys = new NostrKeyPair();
         NostrRTCLocalPeer local = new NostrRTCLocalPeer(
+            RTCSettings.getDefault("control-app", "control-proto").withStunServers(Collections.emptyList()),
             new NostrKeyPairSigner(new NostrKeyPair()),
-            Collections.emptyList(),
-            "control-app",
-            "control-proto",
             "control-session",
             roomKeys,
             null
@@ -90,10 +90,8 @@ public class TestTopologyControlPlane {
     public void testUnchangedNeighborsDoNotTriggerPublishFeedbackLoop() throws Exception {
         NostrKeyPair roomKeys = new NostrKeyPair();
         NostrRTCLocalPeer local = new NostrRTCLocalPeer(
+            RTCSettings.getDefault("feedback-app", "feedback-proto").withStunServers(Collections.emptyList()),
             new NostrKeyPairSigner(new NostrKeyPair()),
-            Collections.emptyList(),
-            "feedback-app",
-            "feedback-proto",
             "feedback-session",
             roomKeys,
             null
@@ -128,10 +126,8 @@ public class TestTopologyControlPlane {
     public void testDebouncedPublishDoesNothingAfterClose() {
         NostrKeyPair roomKeys = new NostrKeyPair();
         NostrRTCLocalPeer local = new NostrRTCLocalPeer(
+            RTCSettings.getDefault("close-app", "close-proto").withStunServers(Collections.emptyList()),
             new NostrKeyPairSigner(new NostrKeyPair()),
-            Collections.emptyList(),
-            "close-app",
-            "close-proto",
             "close-session",
             roomKeys,
             null

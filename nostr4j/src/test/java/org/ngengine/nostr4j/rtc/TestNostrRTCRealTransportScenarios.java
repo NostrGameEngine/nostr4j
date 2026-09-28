@@ -267,10 +267,8 @@ public class TestNostrRTCRealTransportScenarios {
             this.roomKeys = roomKeys;
             this.local =
                 new NostrRTCLocalPeer(
+                    RTCSettings.getDefault(APPLICATION_ID, PROTOCOL_ID).withStunServers(Collections.emptyList()),
                     NostrKeyPairSigner.generate(),
-                    Collections.emptyList(),
-                    APPLICATION_ID,
-                    PROTOCOL_ID,
                     sessionId,
                     roomKeys,
                     turnUrl
@@ -298,7 +296,6 @@ public class TestNostrRTCRealTransportScenarios {
                     roomKeys,
                     left.local,
                     settings,
-                    left.local.getTurnServer(),
                     left.turnPool
                 );
             this.rightSocket =
@@ -308,7 +305,6 @@ public class TestNostrRTCRealTransportScenarios {
                     roomKeys,
                     right.local,
                     settings,
-                    right.local.getTurnServer(),
                     right.turnPool
                 );
         }
@@ -613,7 +609,7 @@ public class TestNostrRTCRealTransportScenarios {
                         network.roomKeys,
                         network.turnUrl
                     );
-                this.physical = new RealLink(physicalLeft, physicalRight, RTCSettings.DEFAULT);
+                this.physical = new RealLink(physicalLeft, physicalRight, RTCSettings.getDefault(APPLICATION_ID, PROTOCOL_ID));
                 this.wireChannel = physical.prepareChannel("routewire");
             }
         }

@@ -33,10 +33,8 @@ public class TestNostrRTCDirectFastPath {
         NostrKeyPair roomKeys = new NostrKeyPair();
         NostrKeyPairSigner localSigner = NostrKeyPairSigner.generate();
         NostrRTCLocalPeer local = new NostrRTCLocalPeer(
+            RTCSettings.getDefault("fast-app", "fast-protocol").withStunServers(Collections.emptyList()),
             localSigner,
-            Collections.emptyList(),
-            "fast-app",
-            "fast-protocol",
             "fast-local",
             roomKeys,
             null
@@ -50,7 +48,7 @@ public class TestNostrRTCDirectFastPath {
             null
         );
         AsyncExecutor executor = NGEPlatform.get().newAsyncExecutor("direct-fast-path");
-        NostrRTCSocket socket = new NostrRTCSocket(executor, remote, roomKeys, local, RTCSettings.DEFAULT, null, null);
+        NostrRTCSocket socket = new NostrRTCSocket(executor, remote, roomKeys, local, RTCSettings.getDefault("fast-app", "fast-protocol"), null);
         CountingRoutedTransport routed = new CountingRoutedTransport();
         CapturingRTCDataChannel direct = new CapturingRTCDataChannel();
         try {

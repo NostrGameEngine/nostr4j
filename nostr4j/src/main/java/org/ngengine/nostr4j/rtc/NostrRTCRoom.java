@@ -106,7 +106,6 @@ public final class NostrRTCRoom implements Closeable {
     private final RTCSettings settings;
     private final AsyncExecutor executor;
     private final NostrKeyPair roomKeyPair;
-    private final String turnServerUrl;
     private final NostrTURNPool turnPool;
     private final SafeFlag forceTURN = new SafeFlag(false);
     private final RoutingScope routingScope;
@@ -308,24 +307,41 @@ public final class NostrRTCRoom implements Closeable {
         }
     };
 
+    /**
+     * Creates a room using the supplied signaling pool and RTC configuration.
+     *
+     * <p>The constructor calls {@link NostrPool#ensureRelay(String)} for every
+     * URL in {@link RTCSettings#getSignalingRelays()}. </p>
+     *
+     * <p>The caller owns {@code signalingPool}. To reuse its relay connections,
+     * pass the same pool to rooms with the same signaling relay list, and close
+     * it after those rooms have closed.</p>
+     *
+     * @param settings RTC and signaling configuration for this room
+     * @param localPeer local identity and session for this room
+     * @param roomKeyPair key pair identifying the room
+     * @param signalingPool caller-owned pool used for signaling
+     * @param turnPool optional TURN pool, or {@code null} if TURN is unavailable
+     * @throws NullPointerException if {@code settings}, {@code localPeer},
+     *         {@code roomKeyPair}, or {@code signalingPool} is null
+     */
     public NostrRTCRoom(
         RTCSettings settings,
         NostrRTCLocalPeer localPeer,
         NostrKeyPair roomKeyPair,
         NostrPool signalingPool,
-        String turnServerUrl,
         NostrTURNPool turnPool
     ) {
         this.roomKeyPair = Objects.requireNonNull(roomKeyPair, "Room key pair cannot be null");
         this.settings = Objects.requireNonNull(settings, "Settings cannot be null");
         this.localPeer = Objects.requireNonNull(localPeer, "Local peer cannot be null");
-        this.turnServerUrl = turnServerUrl;
         this.turnPool = turnPool;
+        NostrPool checkedPool = Objects.requireNonNull(signalingPool, "Signaling pool cannot be null");
+        for (String relay : settings.getSignalingRelays()) checkedPool.ensureRelay(relay);
         this.routingScope =
             new RoutingScope(roomKeyPair.getPublicKey(), localPeer.getProtocolId(), localPeer.getApplicationId());
         this.localNodeId = NodeId.derive(routingScope, localPeer.getPubkey(), localPeer.getSessionId());
         this.routingKeyPair = new NostrKeyPair();
-        NostrPool checkedPool = Objects.requireNonNull(signalingPool, "Signaling pool cannot be null");
         this.signaling =
             new NostrRTCSignaling(
                 settings,
@@ -466,7 +482,6 @@ public final class NostrRTCRoom implements Closeable {
             roomKeyPair,
             localPeer,
             settings,
-            turnServerUrl,
             turnPool
         );
         socket.setForceTURN(forceTURN.get());
@@ -1083,8 +1098,7 @@ public final class NostrRTCRoom implements Closeable {
         NostrRTCSocket socket = connections.get(remotePeer);
         if (socket != null) {
             socket.close();
-            connections.remove(remotePeer, socket);
-            refreshDirectNeighbors();
+            onRTCSocketClose(socket);
         }
     }
 
@@ -1330,6 +1344,15 @@ public final class NostrRTCRoom implements Closeable {
             logger.warning("No socket found for peer: " + peer);
             throw new IllegalStateException("No socket found for peer: " + peer);
         }
+    }
+
+     public NostrRTCChannel createChannel(
+        NostrRTCPeer peer,
+        String channel,
+        boolean ordered,
+        boolean reliable
+    ) {
+        return createChannel(peer, channel, ordered, reliable, null, null);
     }
 
     public NostrRTCChannel createChannel(

@@ -581,7 +581,9 @@ public final class OnionTopologyDemo extends JFrame {
                 : new NostrKeyPair(NostrPrivateKey.fromHex(options.roomPrivateKey));
         routingScope = new RoutingScope(roomKeys.getPublicKey(), PROTOCOL_ID, APPLICATION_ID);
         turnPool = new NostrTURNPool();
-        RTCSettings settings = RTCSettings.DEFAULT.withMaxDirectPeers(maxDirectPeers);
+        RTCSettings settings = RTCSettings.getDefault(APPLICATION_ID, PROTOCOL_ID)
+            .withMaxDirectPeers(maxDirectPeers)
+            .withSignalingRelays(List.of(options.relay));
         long generation = networkSequence.incrementAndGet();
 
         for (int index = 0; index < peerCount; index++) {
@@ -657,17 +659,14 @@ public final class OnionTopologyDemo extends JFrame {
 
     private void createPeer(int index, long generation, RTCSettings settings) {
         NostrKeyPair identity = new NostrKeyPair();
-        NostrRTCLocalPeer local = new NostrRTCLocalPeer(
-            new NostrKeyPairSigner(identity),
-            options.stunServers,
-            APPLICATION_ID,
-            PROTOCOL_ID,
-            "onion-" + roomKeys.getPublicKey().asHex().substring(0, 10) + "-" + generation + "-" + index,
-            roomKeys,
-            null
-        );
+        RTCSettings peerSettings = settings
+            .withStunServers(options.stunServers)
+            .withApplicationId(APPLICATION_ID)
+            .withProtocolId(PROTOCOL_ID);
+        String sessionId = "onion-" + roomKeys.getPublicKey().asHex().substring(0, 10) + "-" + generation + "-" + index;
+        NostrRTCLocalPeer local = new NostrRTCLocalPeer(peerSettings, new NostrKeyPairSigner(identity), sessionId, roomKeys, null);
         NostrPool peerPool = signalingPools.get(relayPoolIndexForPeer(index));
-        NostrRTCRoom room = new NostrRTCRoom(settings, local, roomKeys, peerPool, null, turnPool);
+        NostrRTCRoom room = new NostrRTCRoom(peerSettings, local, roomKeys, peerPool, turnPool);
         DemoPeer demoPeer = new DemoPeer(index, "P" + (index + 1), local, room);
         peers.add(demoPeer);
         peersByIdentity.put(identityKey(local), demoPeer);

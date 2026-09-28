@@ -318,15 +318,13 @@ public class TestRtcPendingSendRecovery {
         try {
             NostrKeyPair roomKeys = new NostrKeyPair();
             NostrRTCLocalPeer local = new NostrRTCLocalPeer(
+                RTCSettings.getDefault(APP_ID, PROTOCOL_ID).withSignalingRelays(java.util.List.of()).withStunServers(Collections.emptyList()),
                 NostrKeyPairSigner.generate(),
-                Collections.emptyList(),
-                APP_ID,
-                PROTOCOL_ID,
                 "room-queue-hang-local",
                 roomKeys,
                 null
             );
-            room = new NostrRTCRoom(RTCSettings.DEFAULT, local, roomKeys, new NostrPool(), null, turnPool);
+            room = new NostrRTCRoom(RTCSettings.getDefault(APP_ID, PROTOCOL_ID).withSignalingRelays(java.util.List.of()), local, roomKeys, new NostrPool(), turnPool);
 
             NostrRTCPeer remote = new NostrRTCPeer(
                 org.ngengine.platform.NGEUtils.awaitNoThrow(NostrKeyPairSigner.generate().getPublicKey()),
@@ -379,15 +377,13 @@ public class TestRtcPendingSendRecovery {
         try {
             NostrKeyPair roomKeys = new NostrKeyPair();
             NostrRTCLocalPeer local = new NostrRTCLocalPeer(
+                RTCSettings.getDefault(APP_ID, PROTOCOL_ID).withSignalingRelays(java.util.List.of()).withStunServers(Collections.emptyList()),
                 NostrKeyPairSigner.generate(),
-                Collections.emptyList(),
-                APP_ID,
-                PROTOCOL_ID,
                 "room-broadcast-local",
                 roomKeys,
                 null
             );
-            room = new NostrRTCRoom(RTCSettings.DEFAULT, local, roomKeys, new NostrPool(), null, turnPool);
+            room = new NostrRTCRoom(RTCSettings.getDefault(APP_ID, PROTOCOL_ID).withSignalingRelays(java.util.List.of()), local, roomKeys, new NostrPool(), turnPool);
 
             NostrRTCPeer readyPeer = new NostrRTCPeer(
                 org.ngengine.platform.NGEUtils.awaitNoThrow(NostrKeyPairSigner.generate().getPublicKey()),

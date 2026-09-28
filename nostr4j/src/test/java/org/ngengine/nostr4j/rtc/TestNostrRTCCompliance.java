@@ -31,6 +31,8 @@
 
 package org.ngengine.nostr4j.rtc;
 
+import org.ngengine.nostr4j.RTCSettings;
+
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -72,7 +74,13 @@ public class TestNostrRTCCompliance {
         String sessionId,
         String turn
     ) {
-        return new NostrRTCLocalPeer(signer, Collections.emptyList(), APP_ID, PROTOCOL_ID, sessionId, roomKeyPair, turn);
+        return new NostrRTCLocalPeer(
+            RTCSettings.getDefault(APP_ID, PROTOCOL_ID).withStunServers(Collections.emptyList()),
+            signer,
+            sessionId,
+            roomKeyPair,
+            turn
+        );
     }
 
     private static NostrRTCPeer remotePeer(NostrRTCLocalPeer peer, NostrPublicKey roomPubkey, String turn) {

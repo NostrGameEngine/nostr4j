@@ -34,6 +34,8 @@ import jakarta.annotation.Nullable;
 import java.util.Collection;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
+
+import org.ngengine.nostr4j.RTCSettings;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
 import org.ngengine.nostr4j.signer.NostrSigner;
 import org.ngengine.platform.NGEPlatform;
@@ -49,7 +51,7 @@ public final class NostrRTCLocalPeer extends NostrRTCPeer {
     private final Collection<String> stunServers;
     private static final AtomicLong sessionIdCounter = new AtomicLong(0);
 
-    private static String newSessionId() {
+    public static String newSessionId() {
         String sessionId = "nostr4j";
         sessionId += System.currentTimeMillis();
         sessionId += "-" + sessionIdCounter.incrementAndGet();
@@ -58,37 +60,38 @@ public final class NostrRTCLocalPeer extends NostrRTCPeer {
     }
 
     public NostrRTCLocalPeer(
+        RTCSettings settings,
         NostrSigner signer,
-        Collection<String> stunServers,
-        String applicationId,
-        String protocolId,
-        NostrKeyPair roomKeyPair,
-        @Nullable String turnServer
-    ) {
-        this(signer, stunServers, applicationId, protocolId, newSessionId(), roomKeyPair, turnServer);
-    }
-
-    public NostrRTCLocalPeer(
-        NostrSigner signer,
-        Collection<String> stunServers,
-        String applicationId,
-        String protocolId,
         String sessionId,
         NostrKeyPair roomKeyPair,
-        @Nullable String turnServer
+        @Nullable String turnServerUrl
     ) {
         super(
             NGEUtils.awaitNoThrow(signer.getPublicKey()),
-            applicationId,
-            protocolId,
-            sessionId,
+            Objects.requireNonNull(settings.getApplicationId(), "RTC applicationId is required"),
+            Objects.requireNonNull(settings.getProtocolId(), "RTC protocolId is required"),
+            requireNonBlank(sessionId, "sessionId"),
             roomKeyPair.getPublicKey(),
-            turnServer
+            turnServerUrl == null ? null : requireNonBlank(turnServerUrl, "turnServerUrl")
         );
-        Objects.requireNonNull(signer);
-        Objects.requireNonNull(stunServers);
-        this.signer = signer;
-        this.stunServers = stunServers;
+        this.signer = Objects.requireNonNull(signer, "signer");
+        this.stunServers = settings.getStunServers();
+    }
+
+    private static String requireNonBlank(String value, String name) {
+        Objects.requireNonNull(value, name);
+        if (value.isBlank()) throw new IllegalArgumentException(name + " must not be blank");
+        return value;
+    }
+
+
+    public NostrRTCLocalPeer(
+        RTCSettings settings,
+        NostrSigner signer,
+        NostrKeyPair roomKeyPair,
+        @Nullable String turnServerUrl
+    ) {
+        this(settings, signer, newSessionId(), roomKeyPair, turnServerUrl);
     }
 
     public NostrSigner getSigner() {

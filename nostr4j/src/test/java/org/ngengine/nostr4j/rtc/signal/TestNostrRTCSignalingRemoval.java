@@ -125,15 +125,9 @@ public class TestNostrRTCSignalingRemoval {
         private final NostrRTCSignaling signaling;
 
         private Fixture() {
-            RTCSettings settings = new RTCSettings(
-                Duration.ofMillis(25),
-                RTCSettings.PEER_EXPIRATION,
-                RTCSettings.DELAYED_CANDIDATES_INTERVAL,
-                RTCSettings.ROOM_LOOP_INTERVAL,
-                RTCSettings.P2P_TIMEOUT,
-                RTCSettings.QUEUED_SEND_TIMEOUT,
-                Duration.ofSeconds(25)
-            );
+            RTCSettings settings = RTCSettings.getDefault("removal-test-app", "removal-test-protocol")
+                .withSignalingLoopInterval(Duration.ofMillis(25))
+                .withSignalingAnnounceExpiration(Duration.ofSeconds(25));
             signaling =
                 new NostrRTCSignaling(
                     settings,
@@ -148,10 +142,8 @@ public class TestNostrRTCSignalingRemoval {
 
         private NostrRTCLocalPeer peer(NostrKeyPairSigner signer, String session) {
             return new NostrRTCLocalPeer(
+                RTCSettings.getDefault("removal-test-app", "removal-test-protocol").withStunServers(Collections.emptyList()),
                 signer,
-                Collections.emptyList(),
-                "removal-test-app",
-                "removal-test-protocol",
                 session,
                 roomKeys,
                 null

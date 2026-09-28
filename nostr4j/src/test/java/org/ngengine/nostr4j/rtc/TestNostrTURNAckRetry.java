@@ -86,8 +86,7 @@ public class TestNostrTURNAckRetry {
             bobRemote,
             roomKeyPair,
             alice,
-            RTCSettings.DEFAULT,
-            null,
+            RTCSettings.getDefault(APPLICATION_ID, PROTOCOL_ID),
             null
         );
         NostrRTCSocket bobSocket = new NostrRTCSocket(
@@ -95,8 +94,7 @@ public class TestNostrTURNAckRetry {
             aliceRemote,
             roomKeyPair,
             bob,
-            RTCSettings.DEFAULT,
-            null,
+            RTCSettings.getDefault(APPLICATION_ID, PROTOCOL_ID),
             null
         );
         NostrRTCChannel aliceLogical = new NostrRTCChannel(CHANNEL, aliceSocket, true, true, Integer.valueOf(0), null);
@@ -243,10 +241,8 @@ public class TestNostrTURNAckRetry {
 
     private static NostrRTCLocalPeer localPeer(String sessionId, NostrKeyPair roomKeyPair) {
         return new NostrRTCLocalPeer(
+            RTCSettings.getDefault(APPLICATION_ID, PROTOCOL_ID).withStunServers(Collections.emptyList()),
             NostrKeyPairSigner.generate(),
-            Collections.emptyList(),
-            APPLICATION_ID,
-            PROTOCOL_ID,
             sessionId,
             roomKeyPair,
             "ws://linked.test/turn"
