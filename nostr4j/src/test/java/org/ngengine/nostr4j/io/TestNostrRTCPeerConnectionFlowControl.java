@@ -17,9 +17,9 @@ import org.junit.Test;
 import org.ngengine.nostr4j.RTCSettings;
 import org.ngengine.platform.AsyncTask;
 
-public class TestNostrPeerConnectionFlowControl {
+public class TestNostrRTCPeerConnectionFlowControl {
 
-    private static final class Loopback extends NostrPeerConnection {
+    private static final class Loopback extends NostrRTCPeerConnection {
         Loopback peer;
         final List<Byte> controls = new ArrayList<>();
         final CountDownLatch paused = new CountDownLatch(1);

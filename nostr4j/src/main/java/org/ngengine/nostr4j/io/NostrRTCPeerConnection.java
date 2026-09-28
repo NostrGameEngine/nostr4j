@@ -62,8 +62,8 @@ import jakarta.annotation.Nullable;
  * if the peer keeps sending past the hard limit. With the default chunk size,
  * the low, high, and hard watermarks are 24, 32, and 512 MiB respectively.</p>
  */
-public class NostrPeerConnection implements Closeable {
-    private final static Logger LOGGER = Logger.getLogger(NostrPeerConnection.class.getName());
+public class NostrRTCPeerConnection implements Closeable {
+    private final static Logger LOGGER = Logger.getLogger(NostrRTCPeerConnection.class.getName());
 
 
     private static final String CHANNEL = "peer-stream-v3";
@@ -114,12 +114,12 @@ public class NostrPeerConnection implements Closeable {
 
 
 
-    public NostrPeerConnection(String connectionId) {
+    public NostrRTCPeerConnection(String connectionId) {
         this(RTCSettings.getDefault("org.ngengine.nostr4j.peer-stream", "byte-stream-v3"), connectionId, null, 1024, 16);
     }
 
 
-    public NostrPeerConnection(
+    public NostrRTCPeerConnection(
             RTCSettings rtcSettings,
             String connectionId,
             int chunkSize,
@@ -129,7 +129,7 @@ public class NostrPeerConnection implements Closeable {
     }
 
 
-    public NostrPeerConnection(
+    public NostrRTCPeerConnection(
             RTCSettings rtcSettings,
             String connectionId,
             @Nullable String turnServerUrl,
@@ -142,7 +142,7 @@ public class NostrPeerConnection implements Closeable {
             chunkSize > 0 ? HARD_BYTES / chunkSize : 0);
     }
 
-    NostrPeerConnection(
+    NostrRTCPeerConnection(
             RTCSettings rtcSettings,
             String connectionId,
             @Nullable String turnServerUrl,

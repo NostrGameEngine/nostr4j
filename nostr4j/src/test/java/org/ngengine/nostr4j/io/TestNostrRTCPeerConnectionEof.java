@@ -19,9 +19,9 @@ import org.ngengine.nostr4j.RTCSettings;
 import org.ngengine.nostr4j.rtc.NostrTURNPool;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCPeer;
 
-public class TestNostrPeerConnectionEof {
+public class TestNostrRTCPeerConnectionEof {
 
-    private static final class Loopback extends NostrPeerConnection {
+    private static final class Loopback extends NostrRTCPeerConnection {
         private Loopback peer;
         private final List<byte[]> sent = new ArrayList<>();
         private CountDownLatch dataEntered;
@@ -419,8 +419,8 @@ public class TestNostrPeerConnectionEof {
         CountDownLatch sendingEof = new CountDownLatch(1);
         ExecutorService workers = Executors.newSingleThreadExecutor();
         try (
-            NostrPeerConnection receiver = new NostrPeerConnection(settings, "waiting-eof", 2, 2);
-            NostrPeerConnection sender = new NostrPeerConnection(settings, "waiting-eof", 2, 2) {
+            NostrRTCPeerConnection receiver = new NostrRTCPeerConnection(settings, "waiting-eof", 2, 2);
+            NostrRTCPeerConnection sender = new NostrRTCPeerConnection(settings, "waiting-eof", 2, 2) {
                 @Override
                 void sendFrame(ByteBuffer frame) throws IOException {
                     if (!frame.hasRemaining()) sendingEof.countDown();
@@ -498,12 +498,12 @@ public class TestNostrPeerConnectionEof {
     }
 
     private static void setRemoteIdentity(Loopback receiver, Loopback sender) throws Exception {
-        java.lang.reflect.Field field = NostrPeerConnection.class.getDeclaredField("remotePeerId");
+        java.lang.reflect.Field field = NostrRTCPeerConnection.class.getDeclaredField("remotePeerId");
         field.setAccessible(true);
         field.set(receiver, sender.getPeerId());
     }
 
-    private static NostrRTCPeer remoteSession(NostrPeerConnection sender, String sessionId) {
+    private static NostrRTCPeer remoteSession(NostrRTCPeerConnection sender, String sessionId) {
         return new NostrRTCPeer(
             sender.getPeerId(), "org.ngengine.nostr4j.peer-stream", "byte-stream-v3",
             sessionId, sender.getPeerId(), null
@@ -514,7 +514,7 @@ public class TestNostrPeerConnectionEof {
     public void turnPoolIsClosedWithItsConnection() throws Exception {
         RTCSettings settings = RTCSettings.getDefault("org.ngengine.nostr4j.peer-stream", "byte-stream-v3")
             .withStunServers(List.of()).withSignalingRelays(List.of());
-        NostrPeerConnection connection = new NostrPeerConnection(
+        NostrRTCPeerConnection connection = new NostrRTCPeerConnection(
             settings, "turn-test", "wss://turn.example.invalid", 2, 2
         );
         NostrTURNPool pool = turnPool(connection);
@@ -522,8 +522,8 @@ public class TestNostrPeerConnectionEof {
         assertTrue(turnPoolClosed(pool));
     }
 
-    private static NostrTURNPool turnPool(NostrPeerConnection connection) throws ReflectiveOperationException {
-        java.lang.reflect.Field field = NostrPeerConnection.class.getDeclaredField("turnPool");
+    private static NostrTURNPool turnPool(NostrRTCPeerConnection connection) throws ReflectiveOperationException {
+        java.lang.reflect.Field field = NostrRTCPeerConnection.class.getDeclaredField("turnPool");
         field.setAccessible(true);
         return (NostrTURNPool) field.get(connection);
     }

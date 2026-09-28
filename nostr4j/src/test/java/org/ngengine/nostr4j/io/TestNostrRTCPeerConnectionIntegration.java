@@ -14,7 +14,7 @@ import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
 import org.ngengine.nostr4j.turn.ref.TurnServer;
 
 /** Exercises real relay signaling, WebRTC, room derivation and stream framing together. */
-public class TestNostrPeerConnectionIntegration {
+public class TestNostrRTCPeerConnectionIntegration {
 
     @Test(timeout = 90000)
     public void connectsUsingOnlyPeerIdsAndExchangesStreams() throws Exception {
@@ -45,10 +45,10 @@ public class TestNostrPeerConnectionIntegration {
     private static void exchange(RTCSettings settings, String turnUrl) throws Exception {
         ExecutorService workers = Executors.newCachedThreadPool();
         try (
-            NostrPeerConnection a = new NostrPeerConnection(
+            NostrRTCPeerConnection a = new NostrRTCPeerConnection(
                 settings, "integration-stream", turnUrl, 1024, 16
             );
-            NostrPeerConnection b = new NostrPeerConnection(
+            NostrRTCPeerConnection b = new NostrRTCPeerConnection(
                 settings, "integration-stream", turnUrl, 1024, 16
             )
         ) {

@@ -38,8 +38,8 @@ import org.ngengine.platform.transport.RTCTransportIceCandidate;
 public class TestNostrRTCSocketReadyEmission {
 
     @Test
-    public void testRoomTurnServerIsEmittedWhenLocalPeerTurnServerIsUnset() throws Exception {
-        AsyncExecutor executor = NGEUtils.getPlatform().newAsyncExecutor("room-turn-route-emission-test");
+    public void testLocalPeerTurnServerIsEmitted() throws Exception {
+        AsyncExecutor executor = NGEUtils.getPlatform().newAsyncExecutor("local-turn-route-emission-test");
         NostrRTCSocket socket = null;
         try {
             String localTurnServer = "wss://local.turn.example/turn";
@@ -50,7 +50,7 @@ public class TestNostrRTCSocketReadyEmission {
                 RTCSettings.getDefault("ready-app", "ready-proto").withStunServers(Collections.emptyList()),
                 NostrKeyPairSigner.generate(),
                 roomKeyPair,
-                null
+                localTurnServer
             );
             NostrRTCPeer remotePeer = new NostrRTCPeer(
                 NGEUtils.awaitNoThrow(remoteSigner.getPublicKey()),

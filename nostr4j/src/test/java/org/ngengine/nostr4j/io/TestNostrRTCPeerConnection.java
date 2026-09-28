@@ -14,7 +14,7 @@ import org.ngengine.nostr4j.keypair.NostrPrivateKey;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.nip44.Nip44;
 
-public class TestNostrPeerConnection {
+public class TestNostrRTCPeerConnection {
 
     @Test
     public void roomKeyMatchesAtBothEndpointsAndSeparatesConnectionIds() throws Exception {
@@ -41,11 +41,11 @@ public class TestNostrPeerConnection {
         RTCSettings settings = RTCSettings.getDefault("test.app", "test.protocol")
             .withStunServers(List.of()).withSignalingRelays(List.of());
         try (
-            NostrPeerConnection a = new NostrPeerConnection(settings, "shared-id", 1024, 2);
-            NostrPeerConnection b = new NostrPeerConnection(settings, "shared-id", 1024, 2)
+            NostrRTCPeerConnection a = new NostrRTCPeerConnection(settings, "shared-id", 1024, 2);
+            NostrRTCPeerConnection b = new NostrRTCPeerConnection(settings, "shared-id", 1024, 2)
         ) {
             assertNotEquals(a.getPeerId(), b.getPeerId());
-            Field field = NostrPeerConnection.class.getDeclaredField("rtcSettings");
+            Field field = NostrRTCPeerConnection.class.getDeclaredField("rtcSettings");
             field.setAccessible(true);
             assertSame(settings, field.get(a));
             assertSame(settings, field.get(b));
@@ -55,13 +55,13 @@ public class TestNostrPeerConnection {
 
     @Test
     public void connectionIdMustNotBeNullOrBlank() {
-        assertThrows(NullPointerException.class, () -> new NostrPeerConnection((String) null));
-        assertThrows(IllegalArgumentException.class, () -> new NostrPeerConnection(" "));
+        assertThrows(NullPointerException.class, () -> new NostrRTCPeerConnection((String) null));
+        assertThrows(IllegalArgumentException.class, () -> new NostrRTCPeerConnection(" "));
     }
 
     private static NostrKeyPair deriveRoomKey(String connectionId, NostrKeyPair local, NostrPublicKey remote)
         throws Exception {
-        Method method = NostrPeerConnection.class.getDeclaredMethod(
+        Method method = NostrRTCPeerConnection.class.getDeclaredMethod(
             "generateRoomKey", String.class, NostrPrivateKey.class, NostrPublicKey.class
         );
         method.setAccessible(true);
