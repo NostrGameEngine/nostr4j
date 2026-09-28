@@ -54,6 +54,29 @@ public class TestNostrRTCPeerConnection {
     }
 
     @Test
+    public void suppliedIdentityIsUsedAndRemainsOwnedByCaller() throws Exception {
+        RTCSettings settings = RTCSettings.getDefault("test.app", "test.protocol")
+            .withStunServers(List.of()).withSignalingRelays(List.of());
+        try (NostrPrivateKey privateKey = NostrPrivateKey.fromHex(
+                 "0000000000000000000000000000000000000000000000000000000000000001")) {
+            NostrPublicKey peerId = privateKey.getPublicKey();
+            try (NostrRTCPeerConnection simple = new NostrRTCPeerConnection(privateKey, "known-peer");
+                 NostrRTCPeerConnection configured = new NostrRTCPeerConnection(
+                     privateKey, settings, "known-peer", null, 1024, 2)) {
+                assertEquals(peerId, simple.getPeerId());
+                assertEquals(peerId, configured.getPeerId());
+                Field field = NostrRTCPeerConnection.class.getDeclaredField("localKeypair");
+                field.setAccessible(true);
+                assertNotSame(privateKey, ((NostrKeyPair) field.get(configured)).getPrivateKey());
+            }
+            assertFalse(privateKey.isDestroyed());
+            assertEquals(peerId, privateKey.getPublicKey());
+        }
+        assertThrows(NullPointerException.class,
+            () -> new NostrRTCPeerConnection((NostrPrivateKey) null, "known-peer"));
+    }
+
+    @Test
     public void connectionIdMustNotBeNullOrBlank() {
         assertThrows(NullPointerException.class, () -> new NostrRTCPeerConnection((String) null));
         assertThrows(IllegalArgumentException.class, () -> new NostrRTCPeerConnection(" "));

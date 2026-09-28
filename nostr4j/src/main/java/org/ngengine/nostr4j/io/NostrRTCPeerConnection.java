@@ -41,7 +41,7 @@ import org.ngengine.platform.NGEUtils;
 import jakarta.annotation.Nullable;
 
 /**
- * A blocking, bidirectional byte stream between two ephemeral Nostr identities.
+ * A blocking, bidirectional byte stream between two Nostr identities.
  *
  * <p>
  * Exchange
@@ -50,17 +50,6 @@ import jakarta.annotation.Nullable;
  * signaling
  * relay.
  * </p>
- *
- * <p>The first remote session is used for the lifetime of the stream. An EOF
- * ends the connection after buffered input is consumed. If that session
- * disconnects without EOF, reads fail with an {@link IOException} after
- * buffered input is consumed.</p>
- *
- * <p>The stream uses a second reliable, ordered channel for PAUSE/RESUME
- * messages. Writes pause when the remote unread queue reaches its high
- * watermark. A receiver closes the connection with an {@link IOException}
- * if the peer keeps sending past the hard limit. With the default chunk size,
- * the low, high, and hard watermarks are 24, 32, and 512 MiB respectively.</p>
  */
 public class NostrRTCPeerConnection implements Closeable {
     private final static Logger LOGGER = Logger.getLogger(NostrRTCPeerConnection.class.getName());
@@ -118,6 +107,11 @@ public class NostrRTCPeerConnection implements Closeable {
         this(RTCSettings.getDefault("org.ngengine.nostr4j.peer-stream", "byte-stream-v3"), connectionId, null, 1024, 16);
     }
 
+    public NostrRTCPeerConnection(NostrPrivateKey localPrivateKey, String connectionId) {
+        this(localPrivateKey, RTCSettings.getDefault("org.ngengine.nostr4j.peer-stream", "byte-stream-v3"),
+            connectionId, null, 1024, 16);
+    }
+
 
     public NostrRTCPeerConnection(
             RTCSettings rtcSettings,
@@ -142,7 +136,22 @@ public class NostrRTCPeerConnection implements Closeable {
             chunkSize > 0 ? HARD_BYTES / chunkSize : 0);
     }
 
-    NostrRTCPeerConnection(
+    /** Uses a known Nostr identity without taking ownership of the supplied key. */
+    public NostrRTCPeerConnection(
+            NostrPrivateKey localPrivateKey,
+            RTCSettings rtcSettings,
+            String connectionId,
+            @Nullable String turnServerUrl,
+            int chunkSize,
+            int maxFreedChunks
+    ) {
+        this(localPrivateKey, rtcSettings, connectionId, turnServerUrl, chunkSize, maxFreedChunks,
+            chunkSize > 0 ? Math.max(1, SOFT_LOW_BYTES / chunkSize) : 0,
+            chunkSize > 0 ? Math.max(2, SOFT_HIGH_BYTES / chunkSize) : 0,
+            chunkSize > 0 ? HARD_BYTES / chunkSize : 0);
+    }
+
+    public NostrRTCPeerConnection(
             RTCSettings rtcSettings,
             String connectionId,
             @Nullable String turnServerUrl,
@@ -151,6 +160,37 @@ public class NostrRTCPeerConnection implements Closeable {
             int softLowChunks,
             int softHighChunks,
             int hardMaxChunks
+    ) {
+        this(rtcSettings, connectionId, turnServerUrl, chunkSize, maxFreedChunks,
+            softLowChunks, softHighChunks, hardMaxChunks, null);
+    }
+
+    public NostrRTCPeerConnection(
+            NostrPrivateKey localPrivateKey,
+            RTCSettings rtcSettings,
+            String connectionId,
+            @Nullable String turnServerUrl,
+            int chunkSize,
+            int maxFreedChunks,
+            int softLowChunks,
+            int softHighChunks,
+            int hardMaxChunks
+    ) {
+        this(rtcSettings, connectionId, turnServerUrl, chunkSize, maxFreedChunks,
+            softLowChunks, softHighChunks, hardMaxChunks,
+            Objects.requireNonNull(localPrivateKey, "localPrivateKey"));
+    }
+
+    private NostrRTCPeerConnection(
+            RTCSettings rtcSettings,
+            String connectionId,
+            @Nullable String turnServerUrl,
+            int chunkSize,
+            int maxFreedChunks,
+            int softLowChunks,
+            int softHighChunks,
+            int hardMaxChunks,
+            @Nullable NostrPrivateKey localPrivateKey
     ) {
         if (chunkSize <= 0)
             throw new IllegalArgumentException("chunkSize must be positive");
@@ -168,7 +208,9 @@ public class NostrRTCPeerConnection implements Closeable {
 
         this.signalingPool = new NostrPool();
 
-        this.localKeypair = new NostrKeyPair();
+        this.localKeypair = localPrivateKey == null
+            ? new NostrKeyPair()
+            : new NostrKeyPair(localPrivateKey.clone());
         this.sessionId = NostrRTCLocalPeer.newSessionId();
 
         this.chunkSize = chunkSize;

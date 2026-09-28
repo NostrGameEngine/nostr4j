@@ -10,6 +10,7 @@ import org.junit.Test;
 import org.ngengine.nostr4j.RTCSettings;
 import org.ngengine.nostr4j.TestEnvironment;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
+import org.ngengine.nostr4j.keypair.NostrPrivateKey;
 import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
 import org.ngengine.nostr4j.turn.ref.TurnServer;
 
@@ -21,6 +22,13 @@ public class TestNostrRTCPeerConnectionIntegration {
         RTCSettings settings = RTCSettings.getDefault("org.ngengine.nostr4j.peer-stream", "byte-stream-v3")
             .withStunServers(List.of()).withSignalingRelays(List.of(TestEnvironment.relayUrl()));
         exchange(settings, null);
+    }
+
+    @Test(timeout = 90000)
+    public void connectsWithKnownNostrIdentities() throws Exception {
+        RTCSettings settings = RTCSettings.getDefault("org.ngengine.nostr4j.peer-stream", "byte-stream-v3")
+            .withStunServers(List.of()).withSignalingRelays(List.of(TestEnvironment.relayUrl()));
+        exchange(settings, null, true);
     }
 
     @Test(timeout = 90000)
@@ -43,15 +51,27 @@ public class TestNostrRTCPeerConnectionIntegration {
     }
 
     private static void exchange(RTCSettings settings, String turnUrl) throws Exception {
+        exchange(settings, turnUrl, false);
+    }
+
+    private static void exchange(RTCSettings settings, String turnUrl, boolean knownIdentities) throws Exception {
         ExecutorService workers = Executors.newCachedThreadPool();
         try (
-            NostrRTCPeerConnection a = new NostrRTCPeerConnection(
-                settings, "integration-stream", turnUrl, 1024, 16
-            );
-            NostrRTCPeerConnection b = new NostrRTCPeerConnection(
-                settings, "integration-stream", turnUrl, 1024, 16
-            )
+            NostrPrivateKey aKey = knownIdentities ? NostrPrivateKey.fromHex(
+                "0000000000000000000000000000000000000000000000000000000000000001") : null;
+            NostrPrivateKey bKey = knownIdentities ? NostrPrivateKey.fromHex(
+                "0000000000000000000000000000000000000000000000000000000000000002") : null;
+            NostrRTCPeerConnection a = knownIdentities
+                ? new NostrRTCPeerConnection(aKey, settings, "integration-stream", turnUrl, 1024, 16)
+                : new NostrRTCPeerConnection(settings, "integration-stream", turnUrl, 1024, 16);
+            NostrRTCPeerConnection b = knownIdentities
+                ? new NostrRTCPeerConnection(bKey, settings, "integration-stream", turnUrl, 1024, 16)
+                : new NostrRTCPeerConnection(settings, "integration-stream", turnUrl, 1024, 16)
         ) {
+            if (knownIdentities) {
+                assertEquals(aKey.getPublicKey(), a.getPeerId());
+                assertEquals(bKey.getPublicKey(), b.getPeerId());
+            }
             Future<?> connectA = workers.submit(() -> {
                 a.connect(b.getPeerId());
                 return null;
