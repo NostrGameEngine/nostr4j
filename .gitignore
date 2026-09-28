@@ -15,3 +15,6 @@ reports
 .settings
 .project
 .classpath
+/_site/
+/scripts/
+/site/
