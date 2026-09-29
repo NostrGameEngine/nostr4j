@@ -53,6 +53,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.regex.Pattern;
 import org.ngengine.platform.NGEPlatform;
 import org.ngengine.platform.jvm.JVMAsyncPlatform;
 import org.ngengine.site.demos.rtc.PingProtocol;
@@ -62,6 +63,9 @@ public final class DemoServer implements AutoCloseable {
 
     private static final long TTL = Duration.ofSeconds(90).toNanos();
     private static final long GAME_TTL = Duration.ofMinutes(3).toNanos();
+    private static final String DEFAULT_ORIGINS =
+        "https://nostrgameengine.github.io,https://*.rblb.it,https://*.ngengine.org," +
+        "https://*.nostrverse.org,https://*.*.workers.dev";
     private static final List<String> GAME_RELAYS = List.of(
         "wss://relay.ngengine.org",
         "wss://relay2.ngengine.org",
@@ -84,6 +88,7 @@ public final class DemoServer implements AutoCloseable {
     );
     private final Set<String> hosts;
     private final Set<String> origins;
+    private final List<Pattern> originPatterns;
     private final Path root;
     private final boolean apiOnly;
     private final List<String> relays;
@@ -110,6 +115,7 @@ public final class DemoServer implements AutoCloseable {
         this.apiOnly = apiOnly;
         this.hosts = Set.copyOf(hosts);
         this.origins = Set.copyOf(origins);
+        this.originPatterns = this.origins.stream().filter(origin -> origin.contains("*")).map(DemoServer::originPattern).toList();
         this.relays = List.copyOf(relays);
         this.turnUri = turnUri;
         for (String relay : relays) requireWss(relay);
@@ -143,9 +149,10 @@ public final class DemoServer implements AutoCloseable {
             int authorityStart = separator + 3;
             int pathStart = candidate.indexOf('/', authorityStart);
             int authorityEnd = pathStart < 0 ? candidate.length() : pathStart;
-            int wildcard = candidate.indexOf('*');
-            if (wildcard >= 0 && (candidate.indexOf('*', wildcard + 1) >= 0 || wildcard < authorityStart || wildcard >= authorityEnd)) {
-                throw new IllegalArgumentException("DEMO_ORIGINS supports one wildcard inside the host only");
+            for (int wildcard = candidate.indexOf('*'); wildcard >= 0; wildcard = candidate.indexOf('*', wildcard + 1)) {
+                if (wildcard < authorityStart || wildcard >= authorityEnd) {
+                    throw new IllegalArgumentException("DEMO_ORIGINS wildcards must be inside the host");
+                }
             }
             String authority = candidate.substring(authorityStart, authorityEnd).toLowerCase(java.util.Locale.ROOT);
             result.add(scheme.toLowerCase(java.util.Locale.ROOT) + "://" + authority);
@@ -154,19 +161,20 @@ public final class DemoServer implements AutoCloseable {
     }
 
     private boolean isAllowedOrigin(String origin) {
-        for (String allowed : origins) {
-            int wildcard = allowed.indexOf('*');
-            if (wildcard < 0) {
-                if (allowed.equals(origin)) return true;
-                continue;
-            }
-            String prefix = allowed.substring(0, wildcard);
-            String suffix = allowed.substring(wildcard + 1);
-            if (!origin.startsWith(prefix) || !origin.endsWith(suffix)) continue;
-            String matched = origin.substring(prefix.length(), origin.length() - suffix.length());
-            if (!matched.isEmpty() && !matched.contains(".")) return true;
-        }
+        if (origins.contains(origin)) return true;
+        for (Pattern pattern : originPatterns) if (pattern.matcher(origin).matches()) return true;
         return false;
+    }
+
+    private static Pattern originPattern(String origin) {
+        StringBuilder regex = new StringBuilder("^");
+        int start = 0;
+        for (int wildcard = origin.indexOf('*'); wildcard >= 0; wildcard = origin.indexOf('*', start)) {
+            regex.append(Pattern.quote(origin.substring(start, wildcard))).append("[^.]+");
+            start = wildcard + 1;
+        }
+        regex.append(Pattern.quote(origin.substring(start))).append('$');
+        return Pattern.compile(regex.toString());
     }
 
     private static Set<String> parseHosts(String value) {
@@ -243,6 +251,10 @@ public final class DemoServer implements AutoCloseable {
             exchange.getResponseHeaders().set("X-Content-Type-Options", "nosniff");
             exchange.getResponseHeaders().set("Referrer-Policy", "no-referrer");
             exchange.getResponseHeaders().set("X-Frame-Options", "DENY");
+            String origin = exchange.getRequestHeaders().getFirst("Origin");
+            boolean allowedOrigin = origin != null && isAllowedOrigin(origin);
+            if (origin != null) exchange.getResponseHeaders().set("Vary", "Origin");
+            if (allowedOrigin) exchange.getResponseHeaders().set("Access-Control-Allow-Origin", origin);
             String host = exchange.getRequestHeaders().getFirst("Host");
             if (host == null || !isAllowedHost(host)) {
                 json(exchange, 403, Map.of("error", "Unrecognized host"));
@@ -256,11 +268,7 @@ public final class DemoServer implements AutoCloseable {
             }
             exchange.getResponseHeaders().set("Cache-Control", "no-store");
             String method = exchange.getRequestMethod();
-            String origin = exchange.getRequestHeaders().getFirst("Origin");
             boolean sameOrigin = ("http://" + host).equals(origin) || ("https://" + host).equals(origin);
-            boolean allowedOrigin = origin != null && isAllowedOrigin(origin);
-            if (origin != null) exchange.getResponseHeaders().set("Vary", "Origin");
-            if (allowedOrigin) exchange.getResponseHeaders().set("Access-Control-Allow-Origin", origin);
             if ("OPTIONS".equals(method)) {
                 String requestedMethod = exchange.getRequestHeaders().getFirst("Access-Control-Request-Method");
                 String requestedHeaders = exchange.getRequestHeaders().getFirst("Access-Control-Request-Headers");
@@ -600,12 +608,7 @@ public final class DemoServer implements AutoCloseable {
                 "localhost:" + port + ",127.0.0.1:" + port + ",*.ngengine.org,*.nostrverse.org,*.rblb.it,*.workers.dev"
             )
         );
-        Set<String> origins = parseOrigins(
-            System.getenv().getOrDefault(
-                "DEMO_ORIGINS",
-                "https://nostrgameengine.github.io,https://nostr4j-preview-*.temporary-account.workers.dev"
-            )
-        );
+        Set<String> origins = parseOrigins(System.getenv().getOrDefault("DEMO_ORIGINS", DEFAULT_ORIGINS));
         boolean apiOnly = Boolean.parseBoolean(System.getenv().getOrDefault("DEMO_API_ONLY", "false"));
         DemoServer server = new DemoServer(
             Path.of(System.getenv().getOrDefault("DEMO_ROOT", "_lan-preview")),
