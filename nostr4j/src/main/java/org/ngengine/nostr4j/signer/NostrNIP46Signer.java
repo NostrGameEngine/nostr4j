@@ -248,7 +248,9 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
                 logger.fine("Closing signer: " + this);
                 closed = true;
                 if (this.pool != null) {
-                    this.pool.close();
+                    for (org.ngengine.nostr4j.NostrRelay relay : this.pool.clean()) {
+                        relay.disconnect("NIP-46 signer closed");
+                    }
                 }
                 if (this.subscription != null) {
                     this.subscription.close();

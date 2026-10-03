@@ -125,7 +125,9 @@ public class NWCWallet implements Wallet {
                     .registerFinalizer(
                         this,
                         () -> {
-                            newPool.close();
+                            for (org.ngengine.nostr4j.NostrRelay relay : newPool.clean()) {
+                                relay.disconnect("NWC wallet closed");
+                            }
                         }
                     );
             this.pool = newPool;

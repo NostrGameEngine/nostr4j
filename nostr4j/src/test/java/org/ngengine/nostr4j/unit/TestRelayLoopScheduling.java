@@ -75,6 +75,51 @@ public class TestRelayLoopScheduling {
     }
 
     @Test
+    public void walletShutdownDisconnectsOwnedRelaysAndPreservesSharedPool() throws Exception {
+        org.ngengine.wallets.nip47.NWCUri uri = new org.ngengine.wallets.nip47.NWCUri(
+            new org.ngengine.nostr4j.keypair.NostrKeyPair().getPublicKey(),
+            java.util.Collections.emptyList(),
+            "1".repeat(64),
+            null
+        );
+        for (boolean ownsPool : new boolean[] { true, false }) {
+            org.ngengine.nostr4j.NostrPool shared = ownsPool ? null : new org.ngengine.nostr4j.NostrPool();
+            org.ngengine.wallets.nip47.NWCWallet wallet = new org.ngengine.wallets.nip47.NWCWallet(shared, uri);
+            Field poolField = org.ngengine.wallets.nip47.NWCWallet.class.getDeclaredField("pool");
+            poolField.setAccessible(true);
+            org.ngengine.nostr4j.NostrPool pool = (org.ngengine.nostr4j.NostrPool) poolField.get(wallet);
+            NostrRelay relay = new NostrRelay(TEST_RELAY_URL);
+            pool.addRelay(relay).await();
+            try {
+                wallet.close();
+                if (ownsPool) awaitCondition(
+                    () -> relay.getStatus() == NostrRelay.Status.DISCONNECTED,
+                    2000,
+                    "owned relay survived wallet shutdown"
+                ); else assertTrue(relay.getStatus() == NostrRelay.Status.CONNECTED);
+            } finally {
+                for (NostrRelay detached : pool.clean()) detached.disconnect("test-cleanup");
+                wallet.close();
+            }
+        }
+    }
+
+    @Test
+    public void signerShutdownDisconnectsItsOwnedRelayPool() throws Exception {
+        org.ngengine.nostr4j.NostrPool pool = new org.ngengine.nostr4j.NostrPool();
+        NostrRelay relay = new NostrRelay(TEST_RELAY_URL);
+        pool.addRelay(relay).await();
+        org.ngengine.nostr4j.signer.NostrNIP46Signer signer = new org.ngengine.nostr4j.signer.NostrNIP46Signer(
+            null,
+            new org.ngengine.nostr4j.keypair.NostrKeyPair()
+        );
+        setField(signer, "pool", pool);
+        signer.close().await();
+        awaitCondition(() -> relay.getStatus() == NostrRelay.Status.DISCONNECTED, 2000, "owned relay survived signer shutdown");
+        assertTrue(pool.getRelays().isEmpty());
+    }
+
+    @Test
     public void testLifecycleManagerSchedulesDisconnectWithoutRelayLoop() throws Exception {
         NostrRelay relay = new NostrRelay(TEST_RELAY_URL);
         NostrRelayLifecycleManager lifecycle = new NostrRelayLifecycleManager();
