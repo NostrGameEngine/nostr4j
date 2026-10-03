@@ -229,15 +229,19 @@ public interface NostrEvent extends Cloneable, Serializable {
 
     // nip40 expiration
     default Instant getExpiration() {
-        String expirationTag = getFirstTagFirstValue("expiration");
-        if (expirationTag == null || expirationTag.isEmpty()) {
+        if (!hasTag("expiration")) {
             return Instant.now().plusSeconds(60L * 60L * 24L * 365L * 2100L);
         }
-        long expires = NGEUtils.safeLong(expirationTag);
-        if (expires <= 0L) {
-            return Instant.now().plusSeconds(60L * 60L * 24L * 365L * 2100L);
+        String value = getFirstTagFirstValue("expiration");
+        if (value == null || value.isEmpty() || value.length() > 19) return Instant.EPOCH;
+        for (int i = 0; i < value.length(); i++) {
+            if (value.charAt(i) < '0' || value.charAt(i) > '9') return Instant.EPOCH;
         }
-        return Instant.ofEpochSecond(expires);
+        try {
+            return Instant.ofEpochSecond(Long.parseLong(value));
+        } catch (RuntimeException invalid) {
+            return Instant.EPOCH;
+        }
     }
 
     default boolean isExpired() {

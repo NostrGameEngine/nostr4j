@@ -358,18 +358,7 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
     // nip40 expiration: override with cache
     @Override
     public Instant getExpiration() {
-        if (expiresAt != null) return expiresAt;
-        String expirationTag = getFirstTagFirstValue("expiration");
-        if (expirationTag == null || expirationTag.isEmpty()) {
-            expiresAt = Instant.now().plusSeconds(60L * 60L * 24L * 365L * 2100L);
-            return expiresAt;
-        }
-        long expires = NGEUtils.safeLong(expirationTag);
-        if (expires <= 0L) {
-            expiresAt = Instant.now().plusSeconds(60L * 60L * 24L * 365L * 2100L);
-            return expiresAt;
-        }
-        expiresAt = Instant.ofEpochSecond(expires);
+        if (expiresAt == null) expiresAt = NostrEvent.super.getExpiration();
         return expiresAt;
     }
 
