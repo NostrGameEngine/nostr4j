@@ -163,6 +163,27 @@ public class TestRelayLoopScheduling {
         throw new AssertionError(message);
     }
 
+    @Test
+    public void testConnectionVetoOrExceptionNeverFlushesQueuedMessages() throws Exception {
+        for (boolean throwsError : new boolean[] { false, true }) {
+            NostrRelay relay = new NostrRelay(TEST_RELAY_URL);
+            relay.addComponent(
+                new NostrRelayLifecycleManager() {
+                    @Override
+                    public boolean onRelayConnect(NostrRelay ignored) {
+                        if (throwsError) throw new SecurityException("veto");
+                        return false;
+                    }
+                }
+            );
+            relay.sendMessage(new NostrNoticeMessage("private queued payload"));
+            AsyncTask<?> connected = relay.connect();
+            awaitCondition(() -> relay.getStatus() == NostrRelay.Status.DISCONNECTED, 2000, "veto did not close relay");
+            assertTrue(testPlatform.getLastTransport().sentMessages.isEmpty());
+            org.junit.Assert.assertThrows(Exception.class, () -> connected.await());
+        }
+    }
+
     private static final class ProbeWatchdog extends NostrRelayWatchdog {
 
         private final AtomicInteger invocations = new AtomicInteger();

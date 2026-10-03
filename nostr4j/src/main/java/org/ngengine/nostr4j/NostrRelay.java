@@ -687,6 +687,24 @@ public final class NostrRelay {
         });
     }
 
+    private void rejectOpenedConnection(Throwable error) {
+        reconnect = false;
+        updateStatus(Status.DISCONNECTED);
+        try {
+            connector.close("Relay connection rejected by component");
+        } catch (Throwable closeError) {
+            logger.log(Level.FINE, "Failed to close rejected relay connection", closeError);
+        }
+        ConnectionCallback callback;
+        while ((callback = connectCallbacks.poll()) != null) {
+            try {
+                callback.call(error);
+            } catch (Throwable callbackError) {
+                logger.log(Level.FINE, "Failed rejected connection callback", callbackError);
+            }
+        }
+    }
+
     private void onConnectionOpen() {
         runInRelayExecutor(
             (res, rej) -> {
@@ -695,11 +713,12 @@ public final class NostrRelay {
                     for (NostrRelayComponent listener : this.listeners) {
                         try {
                             if (!listener.onRelayConnect(this)) {
-                                logger.finer("Connection ignored by component: " + this.url);
-                                break;
+                                rejectOpenedConnection(new SecurityException("Relay connection vetoed by component"));
+                                return;
                             }
                         } catch (Throwable e) {
-                            logger.finer("Connection cancelled by component: " + e.getMessage());
+                            rejectOpenedConnection(e);
+                            return;
                         }
                     }
 
