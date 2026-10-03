@@ -165,7 +165,9 @@ This matters because the same logical packet may be retried after reconnection, 
 
 ### 3.3 Timeout
 
-Receivers **MAY** discard incomplete payload state after a reasonable timeout from the first fragment received.
+Receivers **MUST** bound the number of pending packets, fragment count and aggregate retained fragment bytes per channel. Conflicting fragment counts must not reset a pending packet's lifetime. Rejected fragments **MUST NOT** be acknowledged as accepted routed fragments.
+
+nostr4j accepts at most 1024 fragments per packet, 64 pending packets and 16 MiB of aggregate retained payload bytes per channel. Outgoing logical packets are limited to 16 MiB as well. Incomplete state expires 30 seconds after its first fragment, with scheduled cleanup even when traffic stops; closing the channel releases all retained state.
 
 ### 3.4 Retransmission
 

@@ -364,6 +364,17 @@ public final class NostrRTCSocket {
         }
     }
 
+    AsyncTask<Void> scheduleChannelMaintenance(Runnable task, long delayMs) {
+        return executor.runLater(
+            () -> {
+                task.run();
+                return null;
+            },
+            delayMs,
+            TimeUnit.MILLISECONDS
+        );
+    }
+
     private void scheduleRtcConnectTimeout(String reason) {
         cancelRtcConnectTimeout();
         if (stopped) return;
