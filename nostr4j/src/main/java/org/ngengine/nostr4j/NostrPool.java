@@ -412,7 +412,7 @@ public class NostrPool {
         NGEPlatform platform = NGEUtils.getPlatform();
         NostrSubscription sub = subscribe(filters, eventTracker);
         return platform.wrapPromise((res, rej) -> {
-            List<SignedNostrEvent> events = new CopyOnWriteArrayList<>();
+            List<SignedNostrEvent> events = Collections.synchronizedList(new ArrayList<>());
 
             assert dbg(() -> {
                 logger.fine("Initialize fetch of " + filters + " for subscription " + sub.getId());
@@ -422,7 +422,10 @@ public class NostrPool {
 
             Consumer<List<SignedNostrEvent>> done = evs -> {
                 if (!ended.getAndSet(true)) {
-                    ArrayList<SignedNostrEvent> safeEvs = new ArrayList<>(evs);
+                    ArrayList<SignedNostrEvent> safeEvs;
+                    synchronized (evs) {
+                        safeEvs = new ArrayList<>(evs);
+                    }
                     // sort newest to oldest
                     safeEvs.sort((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()));
                     assert dbg(() -> {
