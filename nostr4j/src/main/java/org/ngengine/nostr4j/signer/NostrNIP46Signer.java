@@ -291,7 +291,7 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
         for (String relay : bunker.relays) {
             this.relays.add(relay);
         }
-        logger.fine("Connecting to bunker: " + bunker + " relays: " + this.relays);
+        logger.fine("Connecting to bunker");
         this.signerPubkey = bunker.pubkey;
         List<String> params = new ArrayList<>();
         params.add(this.signerPubkey.asHex());
@@ -302,7 +302,7 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
         connectUrl = new NostrconnectUrl(this.transportPubkey, bunker.relays, bunker.secret, this.metadata);
         return sendRPC("connect", params, requestsTimeout)
             .then(r -> {
-                logger.fine("Connected to bunker: " + bunker + " relays: " + this.relays);
+                logger.fine("Connected to bunker");
                 connected = true;
                 // cancel every other remaining connect attempt
                 Iterator<Entry<String, ResponseListener>> it = listeners.entrySet().iterator();
@@ -340,7 +340,7 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
         connectUrl = new NostrconnectUrl(this.transportPubkey, relays, secret, this.metadata);
 
         onUrl.accept(connectUrl);
-        logger.fine("Listening for nostrconnect: " + connectUrl + " relays: " + this.relays);
+        logger.fine("Listening for nostrconnect");
 
         AsyncTask<NostrNIP46Signer> out = check()
             .compose(r -> {
@@ -349,15 +349,13 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
                     "nostrconnect",
                     payload -> {
                         boolean v = payload.equals(secret); // nostr connect requires the payload to be == secret
-                        assert dbg(() ->
-                            logger.fine("Received nostrconnect payload: " + payload + " secret: " + secret + " valid: " + v)
-                        );
+                        assert dbg(() -> logger.fine("Received nostrconnect response, valid: " + v));
                         return v;
                     },
                     timeout
                 )
                     .then(s -> {
-                        logger.fine("Received nostrconnect payload: " + s + " relays: " + this.relays);
+                        logger.fine("Received nostrconnect response");
                         connected = true;
                         // cancel every other remaining connect attempt
                         Iterator<Entry<String, ResponseListener>> it = listeners.entrySet().iterator();
@@ -546,7 +544,7 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
             );
             String decryptedContent = Nip44.decryptSync(content, conversationKey);
 
-            assert dbg(() -> logger.finer("Received response: " + decryptedContent));
+            assert dbg(() -> logger.finer("Received signer response"));
             // parse content
             Map<String, Object> response = NGEUtils.getPlatform().fromJSON(decryptedContent, Map.class);
 
