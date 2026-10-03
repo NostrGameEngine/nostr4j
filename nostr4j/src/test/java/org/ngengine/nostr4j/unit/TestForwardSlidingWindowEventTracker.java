@@ -139,6 +139,39 @@ public class TestForwardSlidingWindowEventTracker {
         currentTimeSeconds = System.currentTimeMillis() / 1000;
     }
 
+    @Test
+    public void futureFloodCannotAdvanceCutoffOrSuppressCurrentEvents() {
+        tracker = new TestableEventTracker(3, 0);
+        tracker.setMockTime(currentTimeSeconds * 1000);
+        for (int i = 0; i < 100; i++) {
+            assertTrue(tracker.seen(createEvent(currentTimeSeconds + 31 + i, "future" + i)));
+        }
+        assertEquals(0, tracker.count());
+        assertEquals(0, tracker.getCutOffTimestampS());
+        for (int i = 0; i < 10; i++) {
+            assertFalse(tracker.seen(createEvent(currentTimeSeconds + 30, "skew" + i)));
+        }
+        assertTrue(tracker.getCutOffTimestampS() <= currentTimeSeconds);
+        assertFalse(tracker.seen(createEvent(currentTimeSeconds, "current")));
+        assertTrue(tracker.indexMatchesWindow());
+    }
+
+    @Test
+    public void expiredEventsAreRejectedWithoutChangingTrackerState() {
+        SignedNostrEvent expired = new SignedNostrEvent(
+            "expired",
+            NostrPrivateKey.generate().getPublicKey(),
+            1,
+            "",
+            Instant.ofEpochSecond(currentTimeSeconds),
+            "",
+            List.of(List.of("expiration", Long.toString(currentTimeSeconds - 1)))
+        );
+        assertTrue(tracker.seen(expired));
+        assertEquals(0, tracker.count());
+        assertEquals(0, tracker.getCutOffTimestampS());
+    }
+
     // ------ Basic Event Tracking Tests ------
 
     @Test
@@ -197,7 +230,7 @@ public class TestForwardSlidingWindowEventTracker {
     public void testShouldEnforceMaximumLimit() {
         // Add MAX_EVENTS + 10 events
         for (int i = 0; i < MAX_EVENTS + 10; i++) {
-            SignedNostrEvent event = createEvent(currentTimeSeconds + i, "event" + i);
+            SignedNostrEvent event = createEvent(currentTimeSeconds + i / 2, "event" + i);
             tracker.seen(event);
         }
 
@@ -206,9 +239,9 @@ public class TestForwardSlidingWindowEventTracker {
         assertFalse("Evicted ID should be removed from the hash index", tracker.isIndexed("event0"));
         assertTrue("Retained ID should remain in the hash index", tracker.isIndexed("event59"));
 
-        // Verify the oldest events were removed
+        // Eviction must not move the cutoff into the future and suppress current events.
         SignedNostrEvent oldestEvent = createEvent(currentTimeSeconds, "event0");
-        assertTrue("Oldest event should be marked as seen (trimmed)", tracker.seen(oldestEvent));
+        assertFalse("Evicted current event must not be suppressed by a future cutoff", tracker.seen(oldestEvent));
     }
 
     // ------ Time Window Behavior Tests ------
@@ -334,13 +367,13 @@ public class TestForwardSlidingWindowEventTracker {
 
         // Add many events
         for (int i = 0; i < LARGE_COUNT; i++) {
-            SignedNostrEvent event = createEvent(currentTimeSeconds + i, "event" + i);
+            SignedNostrEvent event = createEvent(currentTimeSeconds + i / 200, "event" + i);
             largeTracker.seen(event);
         }
 
         // Look up each event
         for (int i = 0; i < LARGE_COUNT; i++) {
-            SignedNostrEvent event = createEvent(currentTimeSeconds + i, "event" + i);
+            SignedNostrEvent event = createEvent(currentTimeSeconds + i / 200, "event" + i);
             assertTrue("Event should be recognized", largeTracker.seen(event));
         }
 
@@ -355,7 +388,7 @@ public class TestForwardSlidingWindowEventTracker {
         // Create events with out-of-order timestamps
         SignedNostrEvent oldEvent = createEvent(currentTimeSeconds - 100, "old");
         SignedNostrEvent midEvent = createEvent(currentTimeSeconds, "mid");
-        SignedNostrEvent newEvent = createEvent(currentTimeSeconds + 100, "new");
+        SignedNostrEvent newEvent = createEvent(currentTimeSeconds + 10, "new");
 
         // Add them out of order
         tracker.seen(midEvent);
@@ -402,7 +435,7 @@ public class TestForwardSlidingWindowEventTracker {
     public void testMultipleTimeWindowUpdates() {
         // Add initial events
         for (int i = 0; i < MIN_EVENTS; i++) {
-            tracker.seen(createEvent(currentTimeSeconds + i, "event" + i));
+            tracker.seen(createEvent(currentTimeSeconds + i / 2, "event" + i));
         }
 
         // First time advance
@@ -472,7 +505,7 @@ public class TestForwardSlidingWindowEventTracker {
     public void testMultipleUpdateCallsWithoutChanges() {
         // Add events
         for (int i = 0; i < 20; i++) {
-            tracker.seen(createEvent(currentTimeSeconds + i, "event" + i));
+            tracker.seen(createEvent(currentTimeSeconds + i / 2, "event" + i));
         }
 
         // Get current state
@@ -493,7 +526,7 @@ public class TestForwardSlidingWindowEventTracker {
     public void testEventsJustBeforeMaximumLimit() {
         // Add MAX_EVENTS - 1 events
         for (int i = 0; i < MAX_EVENTS - 1; i++) {
-            tracker.seen(createEvent(currentTimeSeconds + i, "event" + i));
+            tracker.seen(createEvent(currentTimeSeconds + i / 2, "event" + i));
         }
 
         // Should not trigger any removals
@@ -509,8 +542,9 @@ public class TestForwardSlidingWindowEventTracker {
 
         assertEquals("Should still have MAX_EVENTS after exceeding limit", MAX_EVENTS, tracker.count());
 
-        // The oldest event should be gone
-        SignedNostrEvent oldestEvent = createEvent(currentTimeSeconds, "event0");
-        assertTrue("Oldest event should be marked as seen (removed)", tracker.seen(oldestEvent));
+        // One of the two IDs at the oldest timestamp was evicted, without making that timestamp invalid.
+        assertFalse(tracker.isIndexed("event1"));
+        SignedNostrEvent oldestEvent = createEvent(currentTimeSeconds, "event1");
+        assertFalse("An evicted current event must remain temporally acceptable", tracker.seen(oldestEvent));
     }
 }

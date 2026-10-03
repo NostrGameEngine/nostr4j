@@ -30,6 +30,7 @@
  */
 package org.ngengine.nostr4j.event.tracker;
 
+import java.time.Instant;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
@@ -41,6 +42,10 @@ import org.ngengine.nostr4j.NostrFilter;
 import org.ngengine.nostr4j.NostrSubscription;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 
+/**
+ * Tracks current events in a bounded forward window. Expired events and events
+ * more than 30 seconds in the future are treated as seen without changing the window.
+ */
 public class ForwardSlidingWindowEventTracker implements EventTracker {
 
     protected final LinkedList<SignedNostrEvent.Identifier> seenEvents = new LinkedList<SignedNostrEvent.Identifier>();
@@ -73,6 +78,7 @@ public class ForwardSlidingWindowEventTracker implements EventTracker {
     @Override
     public boolean seen(SignedNostrEvent event) {
         synchronized (seenEvents) {
+            if (!event.isCurrent(Instant.ofEpochSecond(currentTimeSeconds()))) return true;
             if (event.getCreatedAt().getEpochSecond() < cutOffS) {
                 return true;
             }
@@ -164,10 +170,10 @@ public class ForwardSlidingWindowEventTracker implements EventTracker {
             }
 
             // if we removed some events, we need to update the cut off time
-            // to the last event in the list, unless the cut off time is already set
-            // to a newer timestamp
+            // to the last event in the list, but never beyond the current clock.
+            // Accepted clock skew must not suppress events created now.
             if (toRemove > 0 && seenEvents.size() > 0) {
-                cutOffS = Math.max(cutOffS, seenEvents.getLast().createdAt);
+                cutOffS = Math.max(cutOffS, Math.min(currentTimeSeconds(), seenEvents.getLast().createdAt));
             }
             assert cutOffS <= currentTimeSeconds() || cutOffS >= seenEvents.getLast().createdAt : "Cut off time is invalid";
 
