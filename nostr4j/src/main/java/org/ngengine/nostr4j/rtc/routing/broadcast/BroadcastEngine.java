@@ -19,11 +19,13 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import org.ngengine.nostr4j.keypair.NostrKeyPair;
 import org.ngengine.nostr4j.rtc.routing.CircuitId;
 import org.ngengine.nostr4j.rtc.routing.NeighborTrafficLimiter;
 import org.ngengine.nostr4j.rtc.routing.NodeId;
 import org.ngengine.nostr4j.rtc.routing.RouteTransportProfile;
 import org.ngengine.nostr4j.rtc.routing.RoutingLimits;
+import org.ngengine.nostr4j.rtc.routing.RoutingScope;
 import org.ngengine.nostr4j.rtc.routing.topology.TopologyGraph;
 import org.ngengine.platform.AsyncExecutor;
 import org.ngengine.platform.AsyncTask;
@@ -37,6 +39,7 @@ public final class BroadcastEngine implements Closeable {
 
     private final NodeId localNode;
     private final BroadcastContext context;
+    private final BroadcastAuthenticator authenticator;
     private final BroadcastTreeBuilder trees = new BroadcastTreeBuilder();
     private final BroadcastDedupCache dedup = new BroadcastDedupCache();
     private final NeighborTrafficLimiter trafficLimiter;
@@ -45,20 +48,28 @@ public final class BroadcastEngine implements Closeable {
     private final Map<CircuitId, PendingBroadcast> pending = new HashMap<CircuitId, PendingBroadcast>();
     private volatile boolean closed;
 
-    public BroadcastEngine(NodeId localNode, BroadcastContext context) {
-        this(localNode, context, DEFAULT_ACK_TIMEOUT_MS, new NeighborTrafficLimiter());
+    public BroadcastEngine(NodeId localNode, NostrKeyPair keys, RoutingScope scope, BroadcastContext context) {
+        this(localNode, keys, scope, context, DEFAULT_ACK_TIMEOUT_MS, new NeighborTrafficLimiter());
     }
 
-    public BroadcastEngine(NodeId localNode, BroadcastContext context, NeighborTrafficLimiter trafficLimiter) {
-        this(localNode, context, DEFAULT_ACK_TIMEOUT_MS, trafficLimiter);
+    public BroadcastEngine(
+        NodeId localNode,
+        NostrKeyPair keys,
+        RoutingScope scope,
+        BroadcastContext context,
+        NeighborTrafficLimiter trafficLimiter
+    ) {
+        this(localNode, keys, scope, context, DEFAULT_ACK_TIMEOUT_MS, trafficLimiter);
     }
 
-    BroadcastEngine(NodeId localNode, BroadcastContext context, long ackTimeoutMs) {
-        this(localNode, context, ackTimeoutMs, new NeighborTrafficLimiter());
+    BroadcastEngine(NodeId localNode, NostrKeyPair keys, RoutingScope scope, BroadcastContext context, long ackTimeoutMs) {
+        this(localNode, keys, scope, context, ackTimeoutMs, new NeighborTrafficLimiter());
     }
 
     private BroadcastEngine(
         NodeId localNode,
+        NostrKeyPair keys,
+        RoutingScope scope,
         BroadcastContext context,
         long ackTimeoutMs,
         NeighborTrafficLimiter trafficLimiter
@@ -66,6 +77,7 @@ public final class BroadcastEngine implements Closeable {
         if (ackTimeoutMs <= 0) throw new IllegalArgumentException("Broadcast ACK timeout must be positive");
         this.localNode = localNode;
         this.context = context;
+        this.authenticator = new BroadcastAuthenticator(keys, scope);
         this.trafficLimiter = Objects.requireNonNull(trafficLimiter, "trafficLimiter");
         this.ackTimeoutMs = ackTimeoutMs;
         this.executor = NGEUtils.getPlatform().newAsyncExecutor(BroadcastEngine.class);
@@ -88,6 +100,14 @@ public final class BroadcastEngine implements Closeable {
             now.plus(DEFAULT_LIFETIME),
             payload
         );
+        return authenticator.sign(frame, now).compose(signed -> sendBroadcast(tree, signed, now));
+    }
+
+    private AsyncTask<Boolean> sendBroadcast(BroadcastTree tree, BroadcastFrame frame, Instant now) {
+        if (closed) return AsyncTask.failed(new IllegalStateException("Broadcast engine is closed"));
+        CircuitId id = frame.getBroadcastId();
+        String logicalChannel = frame.getLogicalChannel();
+        RouteTransportProfile profile = frame.getProfile();
         dedup.markIfNew(localNode, id, logicalChannel, frame.getExpiresAt(), now);
         PendingBroadcast tracker = null;
         if (profile.requiresDestinationAck()) {
@@ -133,6 +153,10 @@ public final class BroadcastEngine implements Closeable {
             }
             int depth = tree.getDepth(localNode);
             if (depth < 1 || depth > frame.getHopLimit()) return AsyncTask.completed(Boolean.FALSE);
+            if (!authenticator.verify(frame, context.routingPublicKey(frame.getOrigin(), now), now)) {
+                trafficLimiter.recordMalformed(previousDirectPeer, receivedAtMs);
+                return AsyncTask.completed(Boolean.FALSE);
+            }
         } catch (Throwable error) {
             trafficLimiter.recordMalformed(previousDirectPeer, receivedAtMs);
             return AsyncTask.completed(Boolean.FALSE);
@@ -161,12 +185,19 @@ public final class BroadcastEngine implements Closeable {
         return settle(tasks);
     }
 
-    public AsyncTask<Boolean> onRepairFrame(ByteBuffer encoded, Instant now) {
+    public AsyncTask<Boolean> onRepairFrame(NodeId circuitSource, ByteBuffer encoded, Instant now) {
         if (closed) return AsyncTask.completed(Boolean.FALSE);
         final BroadcastFrame frame;
         try {
             frame = BroadcastFrame.decode(encoded, now);
-            if (context.graphBySnapshotId(frame.getGraphSnapshotId()) == null) {
+            TopologyGraph graph = context.graphBySnapshotId(frame.getGraphSnapshotId());
+            if (
+                !frame.getOrigin().equals(circuitSource) ||
+                graph == null ||
+                !graph.getNodes().contains(frame.getOrigin()) ||
+                !graph.getNodes().contains(localNode) ||
+                !authenticator.verify(frame, context.routingPublicKey(frame.getOrigin(), now), now)
+            ) {
                 return AsyncTask.completed(Boolean.FALSE);
             }
         } catch (Throwable error) {
@@ -260,6 +291,7 @@ public final class BroadcastEngine implements Closeable {
         }
         for (PendingBroadcast tracker : trackers) tracker.resolve(Boolean.FALSE);
         dedup.clear();
+        authenticator.clear();
         trafficLimiter.close();
         executor.close();
     }

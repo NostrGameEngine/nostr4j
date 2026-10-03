@@ -20,6 +20,7 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.Test;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
+import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.rtc.routing.EdgeId;
 import org.ngengine.nostr4j.rtc.routing.NodeId;
 import org.ngengine.nostr4j.rtc.routing.RouteTransportProfile;
@@ -80,7 +81,7 @@ public class TestBroadcastEngine {
 
     @Test
     public void testReliableBroadcastCollectsAcksAndRepairsOnlyMissingPeers() throws Exception {
-        TestNetwork network = new TestNetwork(10, 40L);
+        TestNetwork network = new TestNetwork(10, 1000L);
         try {
             NodeId root = network.nodes.get(0);
             BroadcastTree tree = new BroadcastTreeBuilder().build(network.current, root);
@@ -108,7 +109,7 @@ public class TestBroadcastEngine {
     }
 
     @Test
-    public void testPreviousGraphSnapshotRemainsUsable() {
+    public void testPreviousGraphSnapshotRemainsUsable() throws Exception {
         TestNetwork network = new TestNetwork(5, 50L);
         try {
             NodeId root = network.nodes.get(0);
@@ -128,7 +129,16 @@ public class TestBroadcastEngine {
             BroadcastTree tree = new BroadcastTreeBuilder().build(prior, root);
             NodeId child = tree.getChildren(root).get(0);
             Boolean accepted = NGEUtils.awaitNoThrow(
-                network.engines.get(child).onTreeFrame(root, previous.encode(), Instant.now())
+                network.engines
+                    .get(child)
+                    .onTreeFrame(
+                        root,
+                        new BroadcastAuthenticator(network.keys.get(root), network.scope)
+                            .sign(previous, Instant.now())
+                            .await()
+                            .encode(),
+                        Instant.now()
+                    )
             );
             assertTrue(accepted.booleanValue());
             assertEquals(1, network.deliveries.get(child).get());
@@ -140,12 +150,21 @@ public class TestBroadcastEngine {
     @Test
     public void testReliableSingleNodeBroadcastCompletesWithoutAckTimeout() {
         NodeId root = node(1);
+        NostrKeyPair keys = new NostrKeyPair();
+        RoutingScope scope = new RoutingScope(keys.getPublicKey(), "solo", "solo");
         TopologyGraph graph = new TopologyGraph(Set.of(root), Set.of());
         AtomicInteger sends = new AtomicInteger();
         AtomicInteger repairs = new AtomicInteger();
         BroadcastEngine engine = new BroadcastEngine(
             root,
+            keys,
+            scope,
             new BroadcastContext() {
+                @Override
+                public NostrPublicKey routingPublicKey(NodeId origin, Instant now) {
+                    return root.equals(origin) ? keys.getPublicKey() : null;
+                }
+
                 @Override
                 public TopologyGraph currentGraph() {
                     return graph;
@@ -198,6 +217,117 @@ public class TestBroadcastEngine {
         }
     }
 
+    @Test
+    public void testForgedTreeAndRepairCannotPoisonDedupOrGenerateAcks() throws Exception {
+        TestNetwork network = new TestNetwork(8, 100L);
+        try {
+            NodeId victim = network.nodes.get(0);
+            BroadcastTree tree = new BroadcastTreeBuilder().build(network.current, victim);
+            NodeId target = network.nodes.stream().filter(node -> tree.getDepth(node) >= 2).findFirst().orElseThrow();
+            NodeId attacker = tree.getParent(target);
+            BroadcastFrame unsigned = new BroadcastFrame(
+                victim,
+                org.ngengine.nostr4j.rtc.routing.CircuitId.random(),
+                network.current.getSnapshotId(),
+                "game",
+                RouteTransportProfile.RELIABLE_ORDERED,
+                5,
+                Instant.now().plusSeconds(30),
+                ByteBuffer.wrap(new byte[] { 1, 2, 3 })
+            );
+            BroadcastFrame forged = new BroadcastAuthenticator(network.keys.get(attacker), network.scope)
+                .sign(unsigned, Instant.now())
+                .await();
+            assertFalse(network.engines.get(target).onTreeFrame(attacker, forged.encode(), Instant.now()).await());
+            assertFalse(network.engines.get(target).onRepairFrame(attacker, forged.encode(), Instant.now()).await());
+            // Even a relay injecting on a victim circuit must supply the victim signature.
+            assertFalse(network.engines.get(target).onRepairFrame(victim, forged.encode(), Instant.now()).await());
+            assertEquals(0, network.deliveries.get(target).get());
+            assertEquals(0, network.ackCount.get());
+            assertEquals(0, network.payloadForwards.get());
+            BroadcastFrame genuine = new BroadcastAuthenticator(network.keys.get(victim), network.scope)
+                .sign(unsigned, Instant.now())
+                .await();
+            assertTrue(network.engines.get(target).onRepairFrame(victim, genuine.encode(), Instant.now()).await());
+            assertEquals(1, network.deliveries.get(target).get());
+            assertTrue(network.engines.get(target).onRepairFrame(victim, genuine.encode(), Instant.now()).await());
+            assertEquals(1, network.deliveries.get(target).get());
+            int acks = network.ackCount.get();
+            byte[] changed = new byte[genuine.encode().remaining()];
+            genuine.encode().get(changed);
+            changed[changed.length - 65] ^= 1;
+            assertFalse(network.engines.get(target).onRepairFrame(victim, ByteBuffer.wrap(changed), Instant.now()).await());
+            assertEquals(acks, network.ackCount.get());
+            assertFalse(network.engines.get(target).onRepairFrame(attacker, genuine.encode(), Instant.now()).await());
+        } finally {
+            network.close();
+        }
+    }
+
+    @Test
+    public void testSignatureBindsScopeKeyAndEveryWireField() throws Exception {
+        NostrKeyPair keys = new NostrKeyPair();
+        RoutingScope scope = new RoutingScope(keys.getPublicKey(), "protocol", "app");
+        BroadcastAuthenticator authenticator = new BroadcastAuthenticator(keys, scope);
+        Instant now = Instant.now();
+        byte[] payload = new byte[] { 1, 2, 3 };
+        BroadcastFrame unsigned = new BroadcastFrame(
+            node(1),
+            org.ngengine.nostr4j.rtc.routing.CircuitId.random(),
+            NGEUtils.bytesToHex(new byte[32]),
+            "game",
+            RouteTransportProfile.RELIABLE_ORDERED,
+            3,
+            now.plusSeconds(20),
+            ByteBuffer.wrap(payload)
+        );
+        BroadcastFrame signed = authenticator.sign(unsigned, now).await();
+        payload[0] = 99;
+        assertEquals(1, signed.getPayload().get());
+        assertTrue(authenticator.verify(signed, keys.getPublicKey(), now));
+        assertFalse(authenticator.verify(signed, new NostrKeyPair().getPublicKey(), now));
+        assertFalse(authenticator.verify(signed, null, now));
+        assertFalse(authenticator.verify(signed, keys.getPublicKey(), now.plusSeconds(21)));
+        BroadcastAuthenticator otherRoom = new BroadcastAuthenticator(
+            keys,
+            new RoutingScope(new NostrKeyPair().getPublicKey(), "protocol", "app")
+        );
+        assertFalse(otherRoom.verify(signed, keys.getPublicKey(), now));
+        BroadcastAuthenticator otherApp = new BroadcastAuthenticator(
+            keys,
+            new RoutingScope(keys.getPublicKey(), "protocol", "other")
+        );
+        assertFalse(otherApp.verify(signed, keys.getPublicKey(), now));
+        byte[] encoded = new byte[signed.encode().remaining()];
+        signed.encode().get(encoded);
+        // Flags, hop limit, reliability, expiry, origin, ID, graph, channel, payload, signature.
+        for (int offset : new int[] { 5, 6, 11, 27, 28, 60, 76, 114, 118, encoded.length - 1 }) {
+            byte[] changed = encoded.clone();
+            changed[offset] ^= 1;
+            try {
+                BroadcastFrame decoded = BroadcastFrame.decode(ByteBuffer.wrap(changed), now);
+                assertFalse("Accepted altered offset " + offset, authenticator.verify(decoded, keys.getPublicKey(), now));
+            } catch (IllegalArgumentException rejected) {
+                // Structural rejection also prevents unauthenticated delivery.
+            }
+        }
+        byte[] legacy = encoded.clone();
+        legacy[4] = 1;
+        org.junit.Assert.assertThrows(
+            IllegalArgumentException.class,
+            () -> BroadcastFrame.decode(ByteBuffer.wrap(legacy), now)
+        );
+        org.junit.Assert.assertThrows(
+            IllegalArgumentException.class,
+            () -> BroadcastFrame.decode(ByteBuffer.wrap(java.util.Arrays.copyOf(encoded, encoded.length - 64)), now)
+        );
+        // Decoder owns bytes even if the receive buffer is reused after verification.
+        BroadcastFrame decoded = BroadcastFrame.decode(ByteBuffer.wrap(encoded), now);
+        encoded[118] = 99;
+        assertTrue(authenticator.verify(decoded, keys.getPublicKey(), now));
+        assertEquals(1, decoded.getPayload().get());
+    }
+
     private static final class TestNetwork {
 
         private final RoutingScope scope = new RoutingScope(
@@ -206,6 +336,7 @@ public class TestBroadcastEngine {
             "broadcast-app"
         );
         private final List<NodeId> nodes = new ArrayList<NodeId>();
+        private final Map<NodeId, NostrKeyPair> keys = new HashMap<NodeId, NostrKeyPair>();
         private final Map<NodeId, BroadcastEngine> engines = new HashMap<NodeId, BroadcastEngine>();
         private final Map<NodeId, AtomicInteger> deliveries = new HashMap<NodeId, AtomicInteger>();
         private final AtomicInteger payloadForwards = new AtomicInteger();
@@ -220,8 +351,9 @@ public class TestBroadcastEngine {
             for (int index = 0; index < size; index++) nodes.add(node(index + 1));
             current = graph(nodes, false);
             for (NodeId node : nodes) {
+                keys.put(node, new NostrKeyPair());
                 deliveries.put(node, new AtomicInteger());
-                engines.put(node, new BroadcastEngine(node, new Context(node), ackTimeoutMs));
+                engines.put(node, new BroadcastEngine(node, keys.get(node), scope, new Context(node), ackTimeoutMs));
             }
         }
 
@@ -260,6 +392,12 @@ public class TestBroadcastEngine {
             }
 
             @Override
+            public NostrPublicKey routingPublicKey(NodeId origin, Instant now) {
+                NostrKeyPair key = keys.get(origin);
+                return key == null ? null : key.getPublicKey();
+            }
+
+            @Override
             public TopologyGraph currentGraph() {
                 return current;
             }
@@ -288,13 +426,14 @@ public class TestBroadcastEngine {
             @Override
             public AsyncTask<Boolean> sendAck(BroadcastAck ack) {
                 ackCount.incrementAndGet();
-                return AsyncTask.completed(Boolean.valueOf(engines.get(ack.getOrigin()).onAck(ack)));
+                engines.get(ack.getOrigin()).onAck(ack);
+                return AsyncTask.completed(Boolean.TRUE);
             }
 
             @Override
             public AsyncTask<Boolean> repairUnicast(NodeId target, ByteBuffer encodedFrame) {
                 repairCount.incrementAndGet();
-                return engines.get(target).onRepairFrame(encodedFrame, Instant.now());
+                return engines.get(target).onRepairFrame(local, encodedFrame, Instant.now());
             }
         }
     }

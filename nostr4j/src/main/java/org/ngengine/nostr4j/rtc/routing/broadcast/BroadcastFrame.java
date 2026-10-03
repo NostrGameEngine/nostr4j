@@ -21,10 +21,11 @@ import org.ngengine.platform.NGEUtils;
 public final class BroadcastFrame {
 
     private static final int MAGIC = 0x44433442;
-    private static final byte VERSION = 1;
+    private static final byte VERSION = 2;
     private static final int SNAPSHOT_ID_BYTES = 32;
     private static final int FIXED_BYTES =
         4 + 1 + 1 + 1 + 1 + 4 + 8 + 8 + NodeId.SIZE + CircuitId.SIZE + SNAPSHOT_ID_BYTES + 2 + 4;
+    static final int SIGNATURE_BYTES = 64;
     private static final int MAX_CHANNEL_BYTES = 1024;
 
     private final NodeId origin;
@@ -118,7 +119,7 @@ public final class BroadcastFrame {
             throw new IllegalArgumentException("Invalid broadcast hop limit");
         }
         if (payload == null || !payload.hasRemaining()) throw new IllegalArgumentException("Empty broadcast payload");
-        if (FIXED_BYTES + channel.length + payload.remaining() > RoutingLimits.MAX_ROUTED_FRAME_BYTES) {
+        if (FIXED_BYTES + SIGNATURE_BYTES + channel.length + payload.remaining() > RoutingLimits.MAX_ROUTED_FRAME_BYTES) {
             throw new IllegalArgumentException("Broadcast frame exceeds size limit");
         }
         if (NGEUtils.hexToBytes(graphSnapshotId).remaining() != SNAPSHOT_ID_BYTES) {
@@ -183,6 +184,16 @@ public final class BroadcastFrame {
     }
 
     public ByteBuffer encode() {
+        if (wireView == null) throw new IllegalStateException("Broadcast must be signed before encoding");
+        return wireView.asReadOnlyBuffer();
+    }
+
+    ByteBuffer signingBytes() {
+        if (wireView != null) {
+            ByteBuffer unsigned = wireView.asReadOnlyBuffer();
+            unsigned.limit(unsigned.limit() - SIGNATURE_BYTES);
+            return unsigned;
+        }
         byte[] channel = RoutingWire.encodeUtf8(logicalChannel, "broadcast channel");
         ByteBuffer content = payload.asReadOnlyBuffer();
         ByteBuffer out = ByteBuffer.allocate(FIXED_BYTES + channel.length + content.remaining()).order(ByteOrder.BIG_ENDIAN);
@@ -206,12 +217,50 @@ public final class BroadcastFrame {
         return out.asReadOnlyBuffer();
     }
 
+    public BroadcastFrame withSignature(String signature) {
+        ByteBuffer unsigned = signingBytes();
+        ByteBuffer sig = NGEUtils.hexToBytes(signature);
+        if (sig.remaining() != SIGNATURE_BYTES) throw new IllegalArgumentException("Invalid broadcast signature length");
+        ByteBuffer signed = ByteBuffer.allocate(unsigned.remaining() + SIGNATURE_BYTES);
+        signed.put(unsigned).put(sig).flip();
+        ByteBuffer frozenPayload = signed.asReadOnlyBuffer();
+        frozenPayload.position(signed.limit() - SIGNATURE_BYTES - payload.remaining());
+        frozenPayload.limit(signed.limit() - SIGNATURE_BYTES);
+        return new BroadcastFrame(
+            origin,
+            broadcastId,
+            graphSnapshotId,
+            logicalChannel,
+            reliable,
+            ordered,
+            maxRetransmits,
+            maxPacketLifeTime,
+            hopLimit,
+            expiresAt,
+            frozenPayload.slice(),
+            signed
+        );
+    }
+
+    String signature() {
+        if (wireView == null) throw new IllegalStateException("Unsigned broadcast");
+        ByteBuffer sig = wireView.asReadOnlyBuffer();
+        sig.position(sig.limit() - SIGNATURE_BYTES);
+        return NGEUtils.bytesToHex(sig.slice());
+    }
+
     public static BroadcastFrame decode(ByteBuffer input, Instant now) {
-        ByteBuffer full = input.slice().order(ByteOrder.BIG_ENDIAN);
-        if (full.remaining() < FIXED_BYTES || full.remaining() > RoutingLimits.MAX_ROUTED_FRAME_BYTES) {
+        if (input.remaining() < FIXED_BYTES + SIGNATURE_BYTES || input.remaining() > RoutingLimits.MAX_ROUTED_FRAME_BYTES) {
+            throw new IllegalArgumentException("Invalid broadcast frame length");
+        }
+        // Own the authenticated bytes: callers may reuse or mutate their receive buffers.
+        ByteBuffer full = ByteBuffer.allocate(input.remaining()).order(ByteOrder.BIG_ENDIAN);
+        full.put(input.asReadOnlyBuffer()).flip();
+        if (full.remaining() < FIXED_BYTES + SIGNATURE_BYTES || full.remaining() > RoutingLimits.MAX_ROUTED_FRAME_BYTES) {
             throw new IllegalArgumentException("Invalid broadcast frame length");
         }
         ByteBuffer data = full.duplicate().order(ByteOrder.BIG_ENDIAN);
+        data.limit(data.limit() - SIGNATURE_BYTES);
         if (data.getInt() != MAGIC) throw new IllegalArgumentException("Invalid broadcast magic");
         if (data.get() != VERSION) throw new IllegalArgumentException("Invalid broadcast version");
         int flags = data.get() & 0xff;

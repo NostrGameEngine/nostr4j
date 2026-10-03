@@ -17,8 +17,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
-import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
@@ -86,7 +86,7 @@ public final class RoutedTransportEngine implements InternalRoutedTransport, Clo
     private final AtomicLong completedDeliveryAcks = new AtomicLong();
     private volatile boolean closed;
     private volatile Consumer<BroadcastAck> broadcastAckHandler;
-    private volatile Function<ByteBuffer, AsyncTask<Boolean>> broadcastRepairHandler;
+    private volatile BiFunction<NodeId, ByteBuffer, AsyncTask<Boolean>> broadcastRepairHandler;
 
     public RoutedTransportEngine(NodeId localNode, NostrKeyPair localRoutingKeys, RoutedTransportContext context) {
         this(localNode, localRoutingKeys, context, DELIVERY_ACK_TIMEOUT_MS, new NeighborTrafficLimiter());
@@ -283,7 +283,7 @@ public final class RoutedTransportEngine implements InternalRoutedTransport, Clo
         DestinationCircuitTable.Entry destination = destinationCircuits.find(previousDirectPeer, frame.getCircuitId(), now);
         if (destination == null || frame.getType() != RoutedFrameType.DATA) {
             if (destination != null && frame.getType() == RoutedFrameType.BROADCAST && broadcastRepairHandler != null) {
-                return broadcastRepairHandler.apply(frame.getCiphertext());
+                return broadcastRepairHandler.apply(destination.getSource(), frame.getCiphertext());
             }
             return AsyncTask.completed(Boolean.FALSE);
         }
@@ -424,7 +424,7 @@ public final class RoutedTransportEngine implements InternalRoutedTransport, Clo
 
     public void setBroadcastHandlers(
         Consumer<BroadcastAck> ackHandler,
-        Function<ByteBuffer, AsyncTask<Boolean>> repairHandler
+        BiFunction<NodeId, ByteBuffer, AsyncTask<Boolean>> repairHandler
     ) {
         this.broadcastAckHandler = ackHandler;
         this.broadcastRepairHandler = repairHandler;
@@ -841,7 +841,7 @@ public final class RoutedTransportEngine implements InternalRoutedTransport, Clo
         return true;
     }
 
-    private NostrPublicKey routingPublicKey(NodeId node, Instant now) {
+    public NostrPublicKey routingPublicKey(NodeId node, Instant now) {
         return routingPublicKeys(now).get(node);
     }
 

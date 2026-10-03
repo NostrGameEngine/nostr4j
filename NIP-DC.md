@@ -1323,7 +1323,7 @@ The broadcast frame is:
 
 ```text
 MAGIC              uint32 = 0x44433442 ("DC4B")
-VERSION            uint8  = 1
+VERSION            uint8  = 2
 FLAGS              uint8
 HOP_LIMIT          uint8
 RESERVED           uint8 = 0
@@ -1337,9 +1337,11 @@ CHANNEL_LENGTH     uint16
 PAYLOAD_LENGTH     uint32
 CHANNEL_UTF8       uint8[CHANNEL_LENGTH]
 PAYLOAD            uint8[PAYLOAD_LENGTH]
+ORIGIN_SIGNATURE   uint8[64]
 ```
 
-The fixed header is 114 bytes. `FLAGS bit 0` is reliable and bit 1 is ordered.
+The fixed header is 114 bytes, followed by the channel, payload, and 64-byte
+signature. `FLAGS bit 0` is reliable and bit 1 is ordered.
 Hop limit is 1–16, channel length is 1–1,024 bytes, both channel and payload
 are non-empty, reserved routing labels are forbidden, and total size is at
 most 1,048,576 bytes. Expiry is at most 120 seconds in the future.
@@ -1348,6 +1350,43 @@ Broadcast recipients are all authorized room members, so broadcast does not
 add per-destination payload encryption. It relies on the encrypted direct
 links and room authorization and therefore does not hide broadcast content
 from intermediating room members.
+
+Every broadcast **MUST** be signed by its origin's per-session routing private
+key using the existing BIP-340 Schnorr primitive (also used by NIP-01).
+NIP-44 remains the encryption/authentication format for routed unicast data and
+end-to-end controls; it is not a publicly verifiable broadcast signature.
+
+The signature signs this 32-byte SHA-256 digest:
+
+```text
+SHA256(UTF8("nip-dc-broadcast-v2") ||
+       SHA256(RoutingScope.canonicalBytes()) ||
+       frame_bytes_without_ORIGIN_SIGNATURE)
+```
+
+Scope serialization uses big-endian uint32 length prefixes for the room public
+key bytes, protocol UTF-8 bytes, and application UTF-8 bytes, in that order.
+The signed bytes include every wire field from MAGIC through PAYLOAD, including
+the origin/session NodeId, ID, graph snapshot, channel, reliability, hop limit,
+expiry, and payload. Recipients **MUST** resolve the origin key from authenticated,
+unexpired topology for the expected room/session and verify before deduplication,
+delivery, forwarding, or ACK generation. Unknown keys and unsigned version-1
+frames **MUST** be rejected, with no fallback to the legacy format. Deployments
+must upgrade broadcast peers together.
+
+The origin signs and serializes once. Tree forwarding and repair reuse exactly
+the same immutable bytes and signature; intermediaries do not re-sign. Stable
+propagation therefore still uses N - 1 payload transmissions. A bounded
+verification cache may skip Schnorr verification only for an exact previously
+verified frame digest/signature and the same current origin key, until expiry;
+an ID-only cache is insufficient. Parsing, scope/key, expiry, and path checks
+still apply to duplicates.
+
+Repair dispatch **MUST** retain the installed circuit source and require it to
+match the signed broadcast origin. This is an additional check, not a substitute
+for verifying the signature: a forwarding peer is not the original sender.
+Direct WebRTC links use transport security; routed unicast still requires
+end-to-end NIP-44 protection across intermediating room peers.
 
 An unreliable broadcast forwards/delivers once and has no ACK. For a reliable
 broadcast, the origin freezes target membership at send time. Each recipient

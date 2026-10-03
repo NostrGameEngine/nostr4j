@@ -183,7 +183,7 @@ public class TestRoutingPacketValidation {
             NOW.plusSeconds(RoutingLimits.MAX_CIRCUIT_LIFETIME_SECONDS + 1L),
             ByteBuffer.wrap(new byte[] { 1 })
         );
-        assertThrows(IllegalArgumentException.class, () -> BroadcastFrame.decode(future.encode(), NOW));
+        assertThrows(IllegalArgumentException.class, () -> BroadcastFrame.decode(broadcastBytes(future), NOW));
 
         BroadcastFrame valid = new BroadcastFrame(
             origin,
@@ -195,9 +195,13 @@ public class TestRoutingPacketValidation {
             NOW.plusSeconds(30),
             ByteBuffer.wrap(new byte[] { 1 })
         );
-        byte[] malformedUtf8 = bytes(valid.encode());
+        byte[] malformedUtf8 = bytes(broadcastBytes(valid));
         malformedUtf8[114] = (byte) 0x80;
         assertThrows(IllegalArgumentException.class, () -> BroadcastFrame.decode(ByteBuffer.wrap(malformedUtf8), NOW));
+    }
+
+    private static ByteBuffer broadcastBytes(BroadcastFrame frame) {
+        return frame.withSignature("00".repeat(64)).encode();
     }
 
     private static byte[] bytes(ByteBuffer input) {

@@ -6,6 +6,8 @@
 package org.ngengine.nostr4j.rtc.routing.broadcast;
 
 import java.nio.ByteBuffer;
+import java.time.Instant;
+import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.rtc.routing.NodeId;
 import org.ngengine.nostr4j.rtc.routing.RouteTransportProfile;
 import org.ngengine.nostr4j.rtc.routing.topology.TopologyGraph;
@@ -13,6 +15,9 @@ import org.ngengine.platform.AsyncTask;
 
 public interface BroadcastContext {
     TopologyGraph currentGraph();
+
+    /** Resolve only current keys from authenticated, unexpired peer topology. */
+    NostrPublicKey routingPublicKey(NodeId origin, Instant now);
 
     TopologyGraph graphBySnapshotId(String snapshotId);
 

@@ -19,6 +19,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.Test;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
+import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.rtc.NostrRTCChannel;
 import org.ngengine.nostr4j.rtc.routing.broadcast.BroadcastAck;
 import org.ngengine.nostr4j.rtc.routing.broadcast.BroadcastContext;
@@ -170,7 +171,7 @@ public class TestRoutedTransport64Peers {
                 routed.put(node, new RoutedTransportEngine(node, keys.get(node), new RouteContext(node)));
             }
             for (NodeId node : nodes) {
-                broadcast.put(node, new BroadcastEngine(node, new TreeContext(node)));
+                broadcast.put(node, new BroadcastEngine(node, keys.get(node), scope, new TreeContext(node)));
             }
         }
 
@@ -250,6 +251,11 @@ public class TestRoutedTransport64Peers {
             }
 
             @Override
+            public NostrPublicKey routingPublicKey(NodeId origin, Instant now) {
+                return keys.containsKey(origin) ? keys.get(origin).getPublicKey() : null;
+            }
+
+            @Override
             public TopologyGraph currentGraph() {
                 return graph;
             }
@@ -279,7 +285,7 @@ public class TestRoutedTransport64Peers {
 
             @Override
             public AsyncTask<Boolean> repairUnicast(NodeId target, ByteBuffer encodedFrame) {
-                return broadcast.get(target).onRepairFrame(encodedFrame, Instant.now());
+                return broadcast.get(target).onRepairFrame(local, encodedFrame, Instant.now());
             }
         }
     }

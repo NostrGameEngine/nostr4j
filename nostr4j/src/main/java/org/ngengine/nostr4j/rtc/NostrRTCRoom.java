@@ -425,7 +425,14 @@ public final class NostrRTCRoom implements Closeable {
         this.broadcastEngine =
             new BroadcastEngine(
                 localNodeId,
+                routingKeyPair,
+                routingScope,
                 new BroadcastContext() {
+                    @Override
+                    public NostrPublicKey routingPublicKey(NodeId origin, Instant now) {
+                        return routingEngine.routingPublicKey(origin, now);
+                    }
+
                     @Override
                     public TopologyGraph currentGraph() {
                         return routingGraph;
@@ -471,19 +478,12 @@ public final class NostrRTCRoom implements Closeable {
             );
         this.routingEngine.setBroadcastHandlers(
                 broadcastEngine::onAck,
-                frame -> broadcastEngine.onRepairFrame(frame, Instant.now())
+                (source, frame) -> broadcastEngine.onRepairFrame(source, frame, Instant.now())
             );
     }
 
     private NostrRTCSocket newSocket(NostrRTCPeer remotePeer) {
-        NostrRTCSocket socket = new NostrRTCSocket(
-            executor,
-            remotePeer,
-            roomKeyPair,
-            localPeer,
-            settings,
-            turnPool
-        );
+        NostrRTCSocket socket = new NostrRTCSocket(executor, remotePeer, roomKeyPair, localPeer, settings, turnPool);
         socket.setForceTURN(forceTURN.get());
         socket.setRoutedTransport(routingEngine);
         return socket;
@@ -1346,12 +1346,7 @@ public final class NostrRTCRoom implements Closeable {
         }
     }
 
-     public NostrRTCChannel createChannel(
-        NostrRTCPeer peer,
-        String channel,
-        boolean ordered,
-        boolean reliable
-    ) {
+    public NostrRTCChannel createChannel(NostrRTCPeer peer, String channel, boolean ordered, boolean reliable) {
         return createChannel(peer, channel, ordered, reliable, null, null);
     }
 
