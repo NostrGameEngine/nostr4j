@@ -190,10 +190,10 @@ public final class TopologyEventCodec {
             throw new IllegalArgumentException("Topology author does not match room presence");
         }
         if (
-            event.isExpired() ||
+            !event.isCurrent(now) ||
             !Instant.ofEpochSecond(parsePositiveLong(event.getFirstTagFirstValue("expiration"), "expiration")).isAfter(now)
         ) {
-            throw new IllegalArgumentException("Topology event is expired");
+            throw new IllegalArgumentException("Topology event is expired or too far in the future");
         }
     }
 

@@ -36,10 +36,15 @@ import jakarta.annotation.Nullable;
 import java.io.Closeable;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
@@ -51,6 +56,7 @@ import org.ngengine.nostr4j.RTCSettings;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
+import org.ngengine.nostr4j.listeners.sub.NostrSubEoseListener;
 import org.ngengine.nostr4j.listeners.sub.NostrSubEventListener;
 import org.ngengine.nostr4j.proto.NostrMessageAck;
 import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
@@ -90,6 +96,36 @@ public class NostrRTCSignaling implements Closeable {
     private static final int MAX_QUEUED_SIGNALS = 64;
     private final java.util.concurrent.atomic.AtomicInteger pendingSignals = new java.util.concurrent.atomic.AtomicInteger();
     private final NostrPool pool;
+    private final Object presenceLock = new Object();
+    private final Map<NostrRTCPeer, PresenceState> latestPresence = new LinkedHashMap<>();
+    private volatile boolean storedPresenceReady;
+
+    private static final class PresenceState {
+
+        final Instant createdAt;
+        final Instant expiresAt;
+        final String id;
+        final NostrRTCSignal signal;
+        boolean pending;
+
+        PresenceState(SignedNostrEvent event, NostrRTCSignal signal, boolean pending) {
+            this.createdAt = event.getCreatedAt();
+            this.expiresAt = event.getExpiration();
+            this.id = event.getId();
+            this.signal = signal;
+            this.pending = pending;
+        }
+
+        boolean supersedes(PresenceState previous) {
+            int time = createdAt.compareTo(previous.createdAt);
+            if (time != 0) return time > 0;
+            // Disconnect wins a same-second tie so a replay cannot resurrect a closed session.
+            boolean disconnect = signal instanceof NostrRTCDisconnectSignal;
+            boolean previousDisconnect = previous.signal instanceof NostrRTCDisconnectSignal;
+            if (disconnect != previousDisconnect) return disconnect;
+            return id.compareTo(previous.id) < 0;
+        }
+    }
 
     private final NostrRTCLocalPeer localPeer;
     private final List<NostrRTCConnectSignal> seenAnnounces = new CopyOnWriteArrayList<>();
@@ -156,6 +192,9 @@ public class NostrRTCSignaling implements Closeable {
 
     protected void onSubEvent(SignedNostrEvent event, boolean stored) {
         if (closed) return;
+        String eventType = event.getFirstTagFirstValue("t");
+        if (stored && !"connect".equals(eventType) && !"disconnect".equals(eventType)) return;
+        if (!event.isCurrent()) return;
         if (event.getPubkey().equals(this.localPeer.getPubkey())) return;
         if (pendingSignals.incrementAndGet() > MAX_QUEUED_SIGNALS) {
             pendingSignals.decrementAndGet();
@@ -163,7 +202,7 @@ public class NostrRTCSignaling implements Closeable {
         }
         this.executor.run(() -> {
                 try {
-                    if (closed || !matchesScope(event)) {
+                    if (closed || !event.isCurrent() || !matchesScope(event)) {
                         return null;
                     }
                     String type = event.getFirstTagFirstValue("t");
@@ -171,81 +210,12 @@ public class NostrRTCSignaling implements Closeable {
                         return null;
                     }
 
-                    // handle connection and disconnection events
-                    switch (type) {
-                        case "connect":
-                            {
-                                // parse event
-                                NostrRTCConnectSignal receivedSignal = new NostrRTCConnectSignal(
-                                    localPeer.getSigner(),
-                                    roomKeyPair,
-                                    event
-                                );
-
-                                // check if we already have an announce for this peer
-                                NostrRTCConnectSignal ann = seenAnnounces
-                                    .stream()
-                                    .filter(a -> a.getPeer().equals(receivedSignal.getPeer()))
-                                    .findFirst()
-                                    .orElse(null);
-
-                                if (ann == null) {
-                                    if (seenAnnounces.size() >= MAX_PRESENCE_PEERS) return null;
-                                    // we don't have one -> create
-                                    // Publish the state before notifying listeners. A listener is
-                                    // allowed to query getAnnounces() from its callback and must
-                                    // observe the announcement that triggered it.
-                                    seenAnnounces.add(receivedSignal);
-                                    for (Listener listener : listeners) {
-                                        try {
-                                            listener.onAddAnnounce(receivedSignal);
-                                        } catch (Throwable e) {
-                                            logger.log(Level.WARNING, "Error in onAddAnnounce", e);
-                                        }
-                                    }
-                                } else {
-                                    // we have one -> update
-                                    assert dbg(() -> logger.finest("Update announce: " + receivedSignal));
-                                    ann.updateExpireAt(receivedSignal.getExpireAt());
-                                    ann.getPeer().mergeAuthenticatedAnnouncement(receivedSignal.getPeer());
-                                    for (Listener listener : listeners) {
-                                        try {
-                                            listener.onUpdateAnnounce(ann);
-                                        } catch (Throwable e) {
-                                            logger.log(Level.WARNING, "Error in onUpdateAnnounce", e);
-                                        }
-                                    }
-                                }
-                                return null;
-                            }
-                        case "disconnect":
-                            {
-                                logger.finest("Received disconnect event: " + event.getPubkey());
-
-                                // parse event
-                                NostrRTCDisconnectSignal receivedSignal = new NostrRTCDisconnectSignal(
-                                    localPeer.getSigner(),
-                                    roomKeyPair,
-                                    event
-                                );
-
-                                // remove peer from the announce list
-                                for (NostrRTCConnectSignal announce : seenAnnounces) {
-                                    if (!announce.getPeer().equals(receivedSignal.getPeer())) continue;
-
-                                    seenAnnounces.remove(announce);
-                                    logger.finest("Remove announce: " + announce);
-
-                                    for (Listener listener : listeners) {
-                                        try {
-                                            listener.onRemoveAnnounce(announce, Listener.RemoveReason.DISCONNECTED);
-                                        } catch (Throwable e) {
-                                            logger.log(Level.WARNING, "Error in onRemoveAnnounce", e);
-                                        }
-                                    }
-                                }
-                                return null;
-                            }
+                    if ("connect".equals(type) || "disconnect".equals(type)) {
+                        NostrRTCSignal presence = "connect".equals(type)
+                            ? new NostrRTCConnectSignal(localPeer.getSigner(), roomKeyPair, event)
+                            : new NostrRTCDisconnectSignal(localPeer.getSigner(), roomKeyPair, event);
+                        acceptPresence(event, presence, stored);
+                        return null;
                     }
 
                     // handle offers and routes
@@ -306,10 +276,99 @@ public class NostrRTCSignaling implements Closeable {
                     }
                     return null;
                 } finally {
-                    pendingSignals.decrementAndGet();
+                    if (pendingSignals.decrementAndGet() == 0 && storedPresenceReady) flushStoredPresence();
                 }
             })
             .catchException(error -> logger.fine("Ignoring invalid RTC signaling event"));
+    }
+
+    private void acceptPresence(SignedNostrEvent event, NostrRTCSignal signal, boolean stored) {
+        synchronized (presenceLock) {
+            if (closed || !event.isCurrent()) return;
+            NostrRTCPeer peer = signal.getPeer();
+            PresenceState next = new PresenceState(event, signal, stored);
+            PresenceState previous = latestPresence.get(peer);
+            if (previous != null && !next.supersedes(previous)) return;
+            if (previous == null && latestPresence.size() >= MAX_PRESENCE_PEERS) {
+                // Evict an inactive watermark rather than retaining unbounded session history.
+                Set<NostrRTCPeer> active = new HashSet<>();
+                for (NostrRTCConnectSignal announce : seenAnnounces) active.add(announce.getPeer());
+                NostrRTCPeer inactive = latestPresence
+                    .keySet()
+                    .stream()
+                    .filter(candidate -> !latestPresence.get(candidate).pending)
+                    .filter(candidate -> !active.contains(candidate))
+                    .findFirst()
+                    .orElse(null);
+                if (inactive == null) return;
+                latestPresence.remove(inactive);
+            }
+            latestPresence.put(peer, next);
+            if (!stored) {
+                next.pending = false;
+                applyPresence(signal);
+            }
+        }
+    }
+
+    /** Finish a stored discovery batch; subsequent relay batches still cannot roll state backwards. */
+    protected void onDiscoveryEose() {
+        storedPresenceReady = true;
+        flushStoredPresence();
+    }
+
+    private void flushStoredPresence() {
+        synchronized (presenceLock) {
+            if (closed || pendingSignals.get() != 0) return;
+            Instant now = Instant.now();
+            for (PresenceState state : new ArrayList<>(latestPresence.values())) {
+                if (!state.pending) continue;
+                state.pending = false;
+                if (state.expiresAt.isBefore(now)) continue;
+                applyPresence(state.signal);
+            }
+        }
+    }
+
+    private void applyPresence(NostrRTCSignal signal) {
+        NostrRTCConnectSignal current = seenAnnounces
+            .stream()
+            .filter(a -> a.getPeer().equals(signal.getPeer()))
+            .findFirst()
+            .orElse(null);
+        if (signal instanceof NostrRTCConnectSignal) {
+            NostrRTCConnectSignal received = (NostrRTCConnectSignal) signal;
+            if (current == null) {
+                if (seenAnnounces.size() >= MAX_PRESENCE_PEERS) return;
+                seenAnnounces.add(received);
+                for (Listener listener : listeners) {
+                    try {
+                        listener.onAddAnnounce(received);
+                    } catch (Throwable error) {
+                        logger.log(Level.WARNING, "Error in onAddAnnounce", error);
+                    }
+                }
+            } else {
+                current.updateExpireAt(received.getExpireAt());
+                current.getPeer().mergeAuthenticatedAnnouncement(received.getPeer());
+                for (Listener listener : listeners) {
+                    try {
+                        listener.onUpdateAnnounce(current);
+                    } catch (Throwable error) {
+                        logger.log(Level.WARNING, "Error in onUpdateAnnounce", error);
+                    }
+                }
+            }
+        } else if (current != null) {
+            seenAnnounces.remove(current);
+            for (Listener listener : listeners) {
+                try {
+                    listener.onRemoveAnnounce(current, Listener.RemoveReason.DISCONNECTED);
+                } catch (Throwable error) {
+                    logger.log(Level.WARNING, "Error in onRemoveAnnounce", error);
+                }
+            }
+        }
     }
 
     private void mergeAdvertisedVersion(NostrRTCSignal signal) {
@@ -337,14 +396,14 @@ public class NostrRTCSignaling implements Closeable {
                 .withKind(25050)
                 .withTag("t", "connect", "disconnect")
                 .withTag("P", this.roomKeyPair.getPublicKey().asHex())
-                .since(Instant.now().minus(1, ChronoUnit.SECONDS)) // only listen for new events
-                .limit(1);
+                .limit(MAX_PRESENCE_PEERS);
             if (!this.strfryLimitWorkaround) {
                 discoveryFilter = discoveryFilter.withTag("i", this.protocolId).withTag("y", this.appId);
             }
             this.discoverySub = // listen for connect and disconnect events directed to the room
                 this.pool.subscribe(discoveryFilter);
             this.discoverySub.addEventListener(listener);
+            this.discoverySub.addListener((NostrSubEoseListener) (sub, relay, everywhere) -> onDiscoveryEose());
             this.discoverySub.open();
         }
 
@@ -391,16 +450,18 @@ public class NostrRTCSignaling implements Closeable {
                         logger.log(Level.WARNING, "Error in loop", e);
                     }
 
-                    // remove all expired announce
-                    Instant now = Instant.now();
-                    for (NostrRTCConnectSignal announce : seenAnnounces) {
-                        if (announce.getExpireAt().isBefore(now)) {
-                            seenAnnounces.remove(announce);
-                            for (Listener listener : listeners) {
-                                try {
-                                    listener.onRemoveAnnounce(announce, Listener.RemoveReason.EXPIRED);
-                                } catch (Throwable e) {
-                                    logger.log(Level.WARNING, "Error in onRemoveAnnounce", e);
+                    synchronized (presenceLock) {
+                        // remove all expired announce
+                        Instant now = Instant.now();
+                        for (NostrRTCConnectSignal announce : seenAnnounces) {
+                            if (announce.getExpireAt().isBefore(now)) {
+                                seenAnnounces.remove(announce);
+                                for (Listener listener : listeners) {
+                                    try {
+                                        listener.onRemoveAnnounce(announce, Listener.RemoveReason.EXPIRED);
+                                    } catch (Throwable e) {
+                                        logger.log(Level.WARNING, "Error in onRemoveAnnounce", e);
+                                    }
                                 }
                             }
                         }
@@ -552,6 +613,9 @@ public class NostrRTCSignaling implements Closeable {
         closeResourcesClosed = true;
         if (isDiscoveryStarted()) this.discoverySub.close();
         if (isSignalingStarted()) this.signalingSub.close();
+        synchronized (presenceLock) {
+            latestPresence.clear();
+        }
         this.executor.close();
     }
 

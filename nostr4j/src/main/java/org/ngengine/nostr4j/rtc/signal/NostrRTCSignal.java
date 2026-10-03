@@ -92,7 +92,7 @@ public abstract class NostrRTCSignal implements Serializable {
         if (!roomPubkey.equals(roomKeyPair.getPublicKey())) throw new IllegalArgumentException(
             "Event room pubkey does not match the provided room"
         );
-        if (event.isExpired()) throw new IllegalArgumentException("Event is expired");
+        if (!event.isCurrent()) throw new IllegalArgumentException("Event is expired or too far in the future");
         if ("connect".equals(type)) NostrRTCProtocolVersion.parse(event.getFirstTagFirstValue("version"));
         if (requiresRoomProof(type) && !verifyRoomProof(roomPubkey, event)) {
             throw new IllegalArgumentException("Invalid roomproof");

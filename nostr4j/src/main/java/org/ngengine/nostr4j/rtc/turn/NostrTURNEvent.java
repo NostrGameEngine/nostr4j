@@ -146,8 +146,8 @@ public abstract class NostrTURNEvent {
             throw new IllegalArgumentException("Event channel label does not match the provided channel label");
         }
 
-        if (event.isExpired()) {
-            throw new IllegalArgumentException("Event is expired");
+        if (!event.isCurrent()) {
+            throw new IllegalArgumentException("Event is expired or too far in the future");
         }
 
         if (event.getKind() != KIND) {

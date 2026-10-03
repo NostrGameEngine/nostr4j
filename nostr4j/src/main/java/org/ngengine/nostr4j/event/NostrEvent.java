@@ -248,6 +248,19 @@ public interface NostrEvent extends Cloneable, Serializable {
         return getExpiration().isBefore(Instant.now());
     }
 
+    /**
+     * Checks temporal validity, allowing up to 30 seconds of clock skew into the future.
+     * This does not verify the signature or authorize the event.
+     */
+    default boolean isCurrent() {
+        return isCurrent(Instant.now());
+    }
+
+    /** Checks temporal validity against the supplied clock instant. */
+    default boolean isCurrent(Instant now) {
+        return !getExpiration().isBefore(now) && !getCreatedAt().isAfter(now.plusSeconds(30));
+    }
+
     default boolean isReplaceable() {
         return isReplaceable(this);
     }

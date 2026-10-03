@@ -259,6 +259,10 @@ A peer **SHOULD** refresh presence before `expiration`.
 
 After expiration, other peers **MAY** consider that peer offline and **MAY** close connections.
 
+Clients may use current stored presence to discover peers without waiting for their next announcement. For each peer identity (including its session), retain only the newest authenticated `connect` or `disconnect` event by `created_at`; a disconnect wins a same-second tie, followed by the lowest event ID for ties of the same type. Apply stored discovery state at EOSE and do not let older events from another relay overwrite newer live state. Bound both the initial query and retained peer history. A filter's `limit` applies to the entire query, not separately to each peer; nostr4j requests up to 2048 discovery events and retains at most 2048 peer watermarks.
+
+Before using an event for current RTC state, reject expired events and events whose `created_at` is more than 30 seconds in the future. nostr4j exposes this temporal check as `NostrEvent.isCurrent()`; it does not replace signature or room-proof verification. Stored offers, answers and routes are not replayed into a new negotiation.
+
 ### 5.2 Disconnection event (`t=disconnect`)
 
 When a peer leaves the room, it broadcasts:
