@@ -201,7 +201,7 @@ public final class NostrRTCChannel {
             if (bufferedAmountThreshold > 0) chan.setBufferedAmountLowThreshold(bufferedAmountThreshold);
             emitChannelReady();
             disposeTurn();
-        } else if (socket.isTurnFallbackAllowed()) {
+        } else if (socket.isTurnFallbackAllowed() || socket.isForceTURN()) {
             ensureTurn();
         }
     }
