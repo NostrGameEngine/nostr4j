@@ -122,13 +122,13 @@ public class Nip49 {
         throws Nip49FailedException {
         try {
             NGEPlatform platform = NGEPlatform.get();
-            if (!ncryptsec.startsWith("ncryptsec")) {
+            if (ncryptsec == null || ncryptsec.length() != 162 || !ncryptsec.startsWith("ncryptsec1")) {
                 throw new IllegalArgumentException("Invalid ncryptsec prefix");
             }
             byte normalizedPassword[] = platform.nfkc(password).getBytes(StandardCharsets.UTF_8);
 
             ByteBuffer decoded = Bech32.bech32Decode(ncryptsec);
-            if (decoded.remaining() < 1) {
+            if (decoded.remaining() != 91) {
                 throw new IllegalArgumentException("Invalid ncryptsec");
             }
             byte versionNumber = decoded.get();

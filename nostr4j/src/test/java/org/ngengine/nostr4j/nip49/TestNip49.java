@@ -123,4 +123,20 @@ public class TestNip49 {
             assertEquals("Unsupported NIP-49 logn: " + logn, failure.getCause().getMessage());
         }
     }
+
+    @Test
+    public void rejectsWrongSizedEncryptedKeysBeforeKdf() throws Exception {
+        assertThrows(Nip49FailedException.class, () -> Nip49.decryptSync(null, "nostr"));
+        assertThrows(Nip49FailedException.class, () -> Nip49.decryptSync(OFFICIAL_NCRYPTSEC + "q".repeat(100000), "nostr"));
+        ByteBuffer decoded = Bech32.bech32Decode(OFFICIAL_NCRYPTSEC);
+        byte[] payload = new byte[decoded.remaining()];
+        decoded.get(payload);
+        for (int size : new int[] { 0, 1, 42, 90, 92, 10000 }) {
+            String encoded = Bech32.bech32Encode(
+                "ncryptsec".getBytes(StandardCharsets.UTF_8),
+                ByteBuffer.wrap(java.util.Arrays.copyOf(payload, size))
+            );
+            assertThrows(Nip49FailedException.class, () -> Nip49.decryptSync(encoded, "nostr"));
+        }
+    }
 }
