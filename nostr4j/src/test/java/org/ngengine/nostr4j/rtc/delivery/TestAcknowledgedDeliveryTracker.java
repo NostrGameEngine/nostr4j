@@ -24,6 +24,30 @@ import org.ngengine.platform.NGEPlatform;
 public class TestAcknowledgedDeliveryTracker {
 
     @Test
+    public void authenticatedCompletionRejectsReplayedOrUnboundReceipts() {
+        AsyncExecutor executor = NGEPlatform.get().newAsyncExecutor("delivery-receipts");
+        AcknowledgedDeliveryTracker tracker = new AcknowledgedDeliveryTracker("TURN", 5000L, 4, executor, null);
+        AtomicInteger resolutions = new AtomicInteger();
+        try {
+            tracker.register(1L, null, ignored -> resolutions.incrementAndGet(), ignored -> {});
+            tracker.register(2L, null, ignored -> resolutions.incrementAndGet(), ignored -> {});
+            assertTrue(tracker.completeAuthenticated(1L, "old") == null);
+            assertTrue(tracker.setExpectedReceipt(1L, "first-frame"));
+            assertTrue(tracker.setExpectedReceipt(2L, "second-frame"));
+            assertTrue(tracker.completeAuthenticated(2L, "first-frame") == null);
+            assertEquals(2, tracker.size());
+            assertTrue(tracker.completeAuthenticated(1L, "first-frame") != null);
+            assertTrue(tracker.completeAuthenticated(1L, "first-frame") == null);
+            assertEquals(1, resolutions.get());
+            assertTrue(tracker.completeAuthenticated(2L, "second-frame") != null);
+            assertEquals(2, resolutions.get());
+        } finally {
+            tracker.close();
+            executor.close();
+        }
+    }
+
+    @Test
     public void testCompletionCancelsTimeoutAndResolvesAttempt() throws Exception {
         AsyncExecutor executor = NGEPlatform.get().newAsyncExecutor("delivery-tracker-complete");
         AcknowledgedDeliveryTracker tracker = new AcknowledgedDeliveryTracker("TEST", 1000L, 4, executor, null);

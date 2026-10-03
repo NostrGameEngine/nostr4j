@@ -838,12 +838,20 @@ Acknowledges delivery of a specific `data` message identified by `MESSAGE_ID`.
 
 #### Payload
 
-No payloads.
+Exactly one NIP-44 v2 binary payload encrypted with the per-direction DATA encryption key already shared in the authenticated DATA header. Its plaintext is the 32-byte digest:
+
+```text
+SHA256(UTF8("nip-dc-turn-delivery-v1") || DATA_FRAME_BYTES[9:])
+```
+
+`DATA_FRAME_BYTES[9:]` starts at the big-endian `MESSAGE_ID` and includes the header length, exact signed header bytes, payload count, lengths and encrypted payload bytes. Only the version byte and relay-rewritten `VSOCKET_ID` are excluded. The receiver calculates this digest from the successfully delivered frame. The sender stores the digest of its outgoing frame and **MUST** authenticate/decrypt the receipt and compare it to that pending write before completing it. Changing the ACK or DATA message ID, ciphertext, header, channel or direction cannot complete a different pending write. Empty legacy ACKs **MUST NOT** complete writes.
+
+This retains signed-header reuse and adds symmetric NIP-44 work per receipt, without a Schnorr signature or ECDH operation per ACK. Both endpoints must implement authenticated receipts; legacy empty receipts are incompatible.
 
 #### Delivery semantics
 
 * the receiver **MUST** emit `delivery_ack` only after the corresponding `data` payload has been fully delivered to the receiver-side application or channel API
-* the sender **MAY** treat receipt of `delivery_ack` as write completion for that `MESSAGE_ID`
+* the sender **MAY** treat a matching authenticated `delivery_ack` receipt as write completion for that `MESSAGE_ID`
 * if `delivery_ack` is not received before a sender-defined timeout, the sender **SHOULD** fail the pending write for that `MESSAGE_ID`
 * the server **MUST** route `delivery_ack` using reciprocal socket matching
 * the server **MUST** rewrite only `VSOCKET_ID`

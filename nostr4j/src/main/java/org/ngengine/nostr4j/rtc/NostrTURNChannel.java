@@ -318,6 +318,12 @@ public final class NostrTURNChannel {
                     if (activeTransport == null || activeTransport != currentTransport || !activeTransport.isConnected()) {
                         return AsyncTask.completed(Boolean.FALSE);
                     }
+                    if (
+                        requiresDeliveryAck &&
+                        !deliveryTracker.setExpectedReceipt(messageId, NostrTURNDataEvent.deliveryReceiptHash(bbf))
+                    ) {
+                        return AsyncTask.completed(Boolean.FALSE);
+                    }
                     return activeTransport.getTransport().sendBinary(bbf).then(v -> Boolean.TRUE);
                 })
                 .then(sent -> {
@@ -519,19 +525,20 @@ public final class NostrTURNChannel {
         }
 
         long envelopeVsocketId = NostrTURNCodec.extractVsocketId(msg);
-        incomingDataEvent =
-            NostrTURNDataEvent.parseIncoming(
-                header,
-                localPeer,
-                remotePeer,
-                roomKeyPair,
-                channelLabel,
-                envelopeVsocketId,
-                incomingRoutingHash == null ? null : incomingRoutingHash.asReadOnlyBuffer()
-            );
+        final NostrTURNDataEvent receivedData = NostrTURNDataEvent.parseIncoming(
+            header,
+            localPeer,
+            remotePeer,
+            roomKeyPair,
+            channelLabel,
+            envelopeVsocketId,
+            incomingRoutingHash == null ? null : incomingRoutingHash.asReadOnlyBuffer()
+        );
 
-        incomingDataEvent
-            .decodeFramePayloads(msg)
+        incomingDataEvent = receivedData;
+        ByteBuffer receivedFrame = copyPayload(msg);
+        receivedData
+            .decodeFramePayloads(receivedFrame)
             .compose(ps -> {
                 List<Long> packetIds = new ArrayList<Long>();
                 List<AsyncTask<Void>> dispatches = new ArrayList<AsyncTask<Void>>();
@@ -546,7 +553,7 @@ public final class NostrTURNChannel {
                     .all(dispatches)
                     .then(ignored -> {
                         if (requiresDeliveryAck) {
-                            sendDeliveryAck(messageId);
+                            sendDeliveryAck(messageId, receivedData, receivedFrame);
                         }
                         logger.fine(() ->
                             "TURN data delivered to channel listeners " +
@@ -648,7 +655,17 @@ public final class NostrTURNChannel {
                         envelopeVsocketId,
                         envelopeMessageId
                     );
-                    completePendingWrite(envelopeMessageId);
+                    List<ByteBuffer> receipts = new ArrayList<>();
+                    NostrTURNCodec.decodePayloadBuffers(msg, receipts);
+                    NostrTURNDataEvent sentData = outgoingDataEvent;
+                    if (receipts.size() != 1 || sentData == null) return;
+                    sentData
+                        .decodeDeliveryReceipt(receipts.get(0))
+                        .then(receipt -> {
+                            completePendingWrite(envelopeMessageId, receipt);
+                            return null;
+                        })
+                        .catchException(error -> logger.fine("Ignoring invalid TURN delivery receipt"));
                     break;
                 }
             case "challenge":
@@ -775,8 +792,8 @@ public final class NostrTURNChannel {
         return id;
     }
 
-    private void completePendingWrite(int messageId) {
-        PendingDelivery pending = deliveryTracker.complete(messageId);
+    private void completePendingWrite(int messageId, String receipt) {
+        PendingDelivery pending = deliveryTracker.completeAuthenticated(messageId, receipt);
         if (pending != null) {
             logger.fine(() -> "TURN delivery_ack received " + describePendingWrite(pending));
         } else {
@@ -790,7 +807,7 @@ public final class NostrTURNChannel {
         deliveryTracker.failAll(error == null ? new RuntimeException("TURN write failed") : error);
     }
 
-    private void sendDeliveryAck(int messageId) {
+    private void sendDeliveryAck(int messageId, NostrTURNDataEvent receivedData, ByteBuffer frame) {
         if (messageId == 0 || state != 2) {
             return;
         }
@@ -802,8 +819,10 @@ public final class NostrTURNChannel {
             outgoingDeliveryAckEvent =
                 NostrTURNDeliveryAckEvent.createOutgoing(localPeer, remotePeer, roomKeyPair, channelLabel, vSocketId);
         }
-        outgoingDeliveryAckEvent
-            .encodeToFrame(null, messageId)
+        final NostrTURNDeliveryAckEvent ackEvent = outgoingDeliveryAckEvent;
+        receivedData
+            .createDeliveryReceipt(frame)
+            .compose(receipt -> ackEvent.encodeToFrame(List.of(receipt), messageId))
             .compose(bbf -> {
                 TURNTransport activeTransport = this.transport;
                 if (activeTransport == null || activeTransport != currentTransport || !activeTransport.isConnected()) {

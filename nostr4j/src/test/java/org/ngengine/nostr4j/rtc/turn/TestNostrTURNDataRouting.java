@@ -31,8 +31,6 @@
 
 package org.ngengine.nostr4j.rtc.turn;
 
-import org.ngengine.nostr4j.RTCSettings;
-
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -45,6 +43,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import org.junit.Test;
+import org.ngengine.nostr4j.RTCSettings;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
@@ -59,6 +58,39 @@ public class TestNostrTURNDataRouting {
 
     private static final String APPLICATION = "turn-routing-test";
     private static final String PROTOCOL = "routing-v1";
+
+    @Test
+    public void deliveryReceiptBindsMessageIdCiphertextAndDirectionButAllowsSocketRewrite() throws Exception {
+        Fixture fixture = fixture(NostrRTCProtocolVersion.CURRENT_NIP_DC_VERSION);
+        NostrTURNDataEvent outgoing = fixture.outgoing("default", key());
+        ByteBuffer frame = outgoing.encodeToFrame(List.of(buffer("receipt payload")), 71).await();
+        NostrTURNDataEvent incoming = NostrTURNDataEvent.parseIncoming(
+            NostrTURNCodec.decodeHeader(frame),
+            fixture.bob,
+            fixture.aliceRemote,
+            fixture.room,
+            "default",
+            NostrTURNCodec.extractVsocketId(frame)
+        );
+        incoming.decodeFramePayloads(frame).await();
+        ByteBuffer receipt = incoming.createDeliveryReceipt(frame).await();
+        String expected = NostrTURNDataEvent.deliveryReceiptHash(frame);
+        assertEquals(expected, outgoing.decodeDeliveryReceipt(receipt).await());
+        assertEquals(expected, NostrTURNDataEvent.deliveryReceiptHash(NostrTURNCodec.withVsocketId(frame, 999L)));
+        org.junit.Assert.assertNotEquals(
+            expected,
+            NostrTURNDataEvent.deliveryReceiptHash(NostrTURNCodec.withVsocketIdAndMessageId(frame, 999L, 72))
+        );
+        ByteBuffer modified = ByteBuffer.allocate(frame.remaining());
+        modified.put(frame.duplicate()).flip();
+        modified.put(modified.limit() - 1, (byte) (modified.get(modified.limit() - 1) ^ 1));
+        org.junit.Assert.assertNotEquals(expected, NostrTURNDataEvent.deliveryReceiptHash(modified));
+        ByteBuffer badKey = ByteBuffer.wrap(new byte[32]);
+        try {
+            fixture.outgoing("default", badKey).decodeDeliveryReceipt(receipt).await();
+            fail("Another direction key must not authenticate a receipt");
+        } catch (Exception expectedFailure) {}
+    }
 
     @Test
     public void testDc4RoundTripMultiplePayloadsAndInputImmutability() {

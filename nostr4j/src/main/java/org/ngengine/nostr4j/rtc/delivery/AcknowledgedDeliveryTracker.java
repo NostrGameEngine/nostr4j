@@ -28,6 +28,7 @@ public final class AcknowledgedDeliveryTracker implements AutoCloseable {
         private final Consumer<Boolean> resolve;
         private final Consumer<Throwable> reject;
         private volatile AsyncTask<Void> timeoutTask;
+        private String expectedReceipt;
 
         private PendingDelivery(long attemptId, Long packetId, Consumer<Boolean> resolve, Consumer<Throwable> reject) {
             this.attemptId = attemptId;
@@ -125,6 +126,26 @@ public final class AcknowledgedDeliveryTracker implements AutoCloseable {
             }
             return removed;
         }
+    }
+
+    public boolean setExpectedReceipt(long attemptId, String receipt) {
+        synchronized (pendingLock) {
+            PendingDelivery delivery = pending.get(Long.valueOf(attemptId));
+            if (delivery == null) return false;
+            delivery.expectedReceipt = java.util.Objects.requireNonNull(receipt);
+            return true;
+        }
+    }
+
+    public PendingDelivery completeAuthenticated(long attemptId, String receipt) {
+        PendingDelivery delivery;
+        synchronized (pendingLock) {
+            delivery = pending.get(Long.valueOf(attemptId));
+            if (delivery == null || delivery.expectedReceipt == null || !delivery.expectedReceipt.equals(receipt)) return null;
+            remove(attemptId);
+        }
+        delivery.resolve.accept(Boolean.TRUE);
+        return delivery;
     }
 
     public PendingDelivery complete(long attemptId) {

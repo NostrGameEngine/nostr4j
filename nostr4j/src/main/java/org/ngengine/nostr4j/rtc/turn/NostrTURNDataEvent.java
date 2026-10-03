@@ -325,6 +325,32 @@ public final class NostrTURNDataEvent extends NostrTURNEvent {
         });
     }
 
+    /** Digest the exact DATA frame except the relay-rewritten version/socket prefix. */
+    public static String deliveryReceiptHash(ByteBuffer frame) {
+        NostrTURNCodec.extractVsocketId(frame);
+        ByteBuffer source = frame.slice();
+        source.position(1 + Long.BYTES);
+        byte[] domain = "nip-dc-turn-delivery-v1".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        byte[] bytes = new byte[domain.length + source.remaining()];
+        System.arraycopy(domain, 0, bytes, 0, domain.length);
+        source.get(bytes, domain.length, source.remaining());
+        return NGEUtils.bytesToHex(NGEPlatform.get().sha256(bytes));
+    }
+
+    public AsyncTask<ByteBuffer> createDeliveryReceipt(ByteBuffer frame) {
+        ByteBuffer digest = ByteBuffer.wrap(NGEUtils.hexToByteArray(deliveryReceiptHash(frame)));
+        return encryptionKey.compose(key -> Nip44.encryptBinary(digest, key.asReadOnlyBuffer()));
+    }
+
+    public AsyncTask<String> decodeDeliveryReceipt(ByteBuffer payload) {
+        return encryptionKey
+            .compose(key -> Nip44.decryptBinary(payload, key.asReadOnlyBuffer()))
+            .then(digest -> {
+                if (digest.remaining() != 32) throw new IllegalArgumentException("Invalid delivery receipt length");
+                return NGEUtils.bytesToHex(digest.slice());
+            });
+    }
+
     private ByteBuffer addRoutingHash(ByteBuffer payload) {
         if (routingHash == null) {
             return payload;

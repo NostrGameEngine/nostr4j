@@ -18,7 +18,7 @@ import org.ngengine.platform.AsyncTask;
  * TURN delivery ack event (`t=delivery_ack`).
  *
  * The signed header can be reused across frames. The acknowledged packet id
- * is encoded in the frame envelope MESSAGE_ID.
+ * is authenticated by a NIP-44 receipt payload bound to the exact DATA frame.
  */
 public final class NostrTURNDeliveryAckEvent extends NostrTURNEvent {
 
@@ -129,7 +129,12 @@ public final class NostrTURNDeliveryAckEvent extends NostrTURNEvent {
         }
         return toEncodedHeader()
             .then(header -> {
-                return NostrTURNCodec.encodeFrame(header, getEnvelopeVsocketId(), ackMessageId, null);
+                return NostrTURNCodec.encodeFrameBuffers(
+                    header,
+                    getEnvelopeVsocketId(),
+                    ackMessageId,
+                    payloads == null ? null : new java.util.ArrayList<>(payloads)
+                );
             });
     }
 }

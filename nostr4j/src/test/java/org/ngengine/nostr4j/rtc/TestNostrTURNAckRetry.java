@@ -72,6 +72,69 @@ public class TestNostrTURNAckRetry {
     private static final String PROTOCOL_ID = "turn-ack-retry-proto";
     private static final String CHANNEL = "primary";
 
+    @Test(timeout = 10000L)
+    public void replayedAckCannotCompleteAnotherPendingWrite() throws Exception {
+        NostrKeyPair room = new NostrKeyPair();
+        NostrRTCLocalPeer alice = localPeer("receipt-alice", room);
+        NostrRTCLocalPeer bob = localPeer("receipt-bob", room);
+        NostrTURNChannel sender = new NostrTURNChannel(
+            alice,
+            remotePeer(bob, room),
+            "ws://linked.test/turn",
+            room,
+            CHANNEL,
+            true,
+            32
+        );
+        NostrTURNChannel receiver = new NostrTURNChannel(
+            bob,
+            remotePeer(alice, room),
+            "ws://linked.test/turn",
+            room,
+            CHANNEL,
+            true,
+            32
+        );
+        LinkedWebsocketTransport out = new LinkedWebsocketTransport();
+        LinkedWebsocketTransport back = new LinkedWebsocketTransport();
+        try {
+            setLongField(receiver, "vSocketId", sender.getRoutingVsocketId());
+            out.target = receiver;
+            back.target = sender;
+            sender.setTransport(new TURNTransport(out));
+            receiver.setTransport(new TURNTransport(back));
+            setIntField(sender, "state", 2);
+            setIntField(receiver, "state", 2);
+            assertTrue(sender.write(ByteBuffer.wrap(new byte[] { 1 })).await());
+            ByteBuffer oldAck = back.lastAckFrame;
+            out.blockData.set(true);
+            CountDownLatch completed = new CountDownLatch(1);
+            sender
+                .write(ByteBuffer.wrap(new byte[] { 2 }))
+                .then(done -> {
+                    completed.countDown();
+                    return null;
+                });
+            long deadline = System.currentTimeMillis() + 3000;
+            while (out.dataFrames.get() < 2 && System.currentTimeMillis() < deadline) Thread.sleep(10);
+            assertEquals(2, out.dataFrames.get());
+            ByteBuffer pendingFrame = out.lastDataFrame;
+            int id = NostrTURNCodec.extractMessageId(pendingFrame);
+            sender.onBinaryMessage(NostrTURNCodec.withVsocketIdAndMessageId(oldAck, sender.getRoutingVsocketId(), id));
+            org.junit.Assert.assertFalse(
+                "Replayed ACK must not complete the pending write",
+                completed.await(250, TimeUnit.MILLISECONDS)
+            );
+            receiver.onBinaryMessage(pendingFrame);
+            assertTrue("Genuine authenticated receipt must complete", completed.await(3, TimeUnit.SECONDS));
+        } finally {
+            out.connected.set(false);
+            back.connected.set(false);
+            sender.close("test-cleanup");
+            receiver.close("test-cleanup");
+        }
+    }
+
     @Test(timeout = 25_000L)
     public void testLostDeliveryAckRetriesSamePacketAndRegeneratesAckWithoutDuplicateDelivery() throws Exception {
         NostrKeyPair roomKeyPair = new NostrKeyPair();
@@ -301,6 +364,9 @@ public class TestNostrTURNAckRetry {
         private final AtomicInteger dataFrames = new AtomicInteger();
         private final AtomicInteger deliveryAckFrames = new AtomicInteger();
         private volatile NostrTURNChannel target;
+        private final AtomicBoolean blockData = new AtomicBoolean();
+        private volatile ByteBuffer lastDataFrame;
+        private volatile ByteBuffer lastAckFrame;
 
         @Override
         public AsyncTask<Void> close(String reason) {
@@ -324,8 +390,11 @@ public class TestNostrTURNAckRetry {
             ByteBuffer frame = copy(payload);
             String type = frameType(frame);
             if ("data".equals(type)) {
+                lastDataFrame = frame;
                 dataFrames.incrementAndGet();
+                if (blockData.get()) return AsyncTask.completed(null);
             } else if ("delivery_ack".equals(type)) {
+                lastAckFrame = frame;
                 deliveryAckFrames.incrementAndGet();
                 if (deliveryAcksToDrop.getAndUpdate(current -> Math.max(0, current - 1)) > 0) {
                     return AsyncTask.completed(null);
