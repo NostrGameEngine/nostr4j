@@ -35,6 +35,7 @@ import java.io.Serializable;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
+import org.ngengine.nostr4j.event.NostrEvent;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.event.UnsignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
@@ -42,7 +43,6 @@ import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.signer.NostrSigner;
 import org.ngengine.nostr4j.utils.NostrRoomProof;
 import org.ngengine.platform.AsyncTask;
-import org.ngengine.platform.NGEPlatform;
 import org.ngengine.platform.NGEUtils;
 
 /**
@@ -93,6 +93,7 @@ public abstract class NostrRTCSignal implements Serializable {
             "Event room pubkey does not match the provided room"
         );
         if (event.isExpired()) throw new IllegalArgumentException("Event is expired");
+        if ("connect".equals(type)) NostrRTCProtocolVersion.parse(event.getFirstTagFirstValue("version"));
         if (requiresRoomProof(type) && !verifyRoomProof(roomPubkey, event)) {
             throw new IllegalArgumentException("Invalid roomproof");
         }
@@ -164,21 +165,13 @@ public abstract class NostrRTCSignal implements Serializable {
     }
 
     protected AsyncTask<SignedNostrEvent> signForRoom(UnsignedNostrEvent event) {
-        // we don't sign presence events for plausble deniability
-        if (!requiresRoomProof(type)) {
-            return localSigner.sign(event);
+        if (!requiresRoomProof(type)) return localSigner.sign(event);
+        String challenge;
+        try {
+            challenge = computeRoomProofChallenge(event);
+        } catch (IllegalArgumentException error) {
+            return AsyncTask.failed(error);
         }
-        NostrPublicKey receiver = null;
-        if (event.getFirstTag("p") != null && event.getFirstTag("p").get(0) != null) {
-            receiver = NostrPublicKey.fromHex(event.getFirstTag("p").get(0));
-        }
-        if (receiver == null) {
-            return NGEPlatform
-                .get()
-                .wrapPromise((res, rej) -> rej.accept(new IllegalStateException("Missing receiver pubkey for roomproof")));
-        }
-        String content = NGEUtils.safeString(event.getContent());
-        String challenge = NGEUtils.getPlatform().toJSON(List.of(receiver.asHex(), content));
         return localSigner
             .getPublicKey()
             .compose(senderPubkey -> {
@@ -200,18 +193,16 @@ public abstract class NostrRTCSignal implements Serializable {
     }
 
     protected boolean verifyRoomProof(NostrPublicKey roomPubkey, SignedNostrEvent event) {
-        if (!requiresRoomProof(type)) {
+        if (!requiresRoomProof(event.getFirstTagFirstValue("t"))) {
             return true;
         }
-        if (event.getFirstTag("p") == null || event.getFirstTag("p").get(0) == null) {
+        if (event.getFirstTag("roomproof") == null || event.getFirstTag("roomproof").size() < 2) return false;
+        String challenge;
+        try {
+            challenge = computeRoomProofChallenge(event);
+        } catch (IllegalArgumentException error) {
             return false;
         }
-        if (event.getFirstTag("roomproof") == null || event.getFirstTag("roomproof").size() < 2) {
-            return false;
-        }
-        String receiver = event.getFirstTag("p").get(0);
-        String content = NGEUtils.safeString(event.getContent());
-        String challenge = NGEUtils.getPlatform().toJSON(List.of(receiver, content));
         String proofId = event.getFirstTag("roomproof").get(0);
         String proofSig = event.getFirstTag("roomproof").get(1);
         return NostrRoomProof.verify(
@@ -225,8 +216,39 @@ public abstract class NostrRTCSignal implements Serializable {
         );
     }
 
+    public static String computeRoomProofChallenge(NostrEvent event) {
+        String type = NGEUtils.safeString(event.getFirstTagFirstValue("t"));
+        String content = NGEUtils.safeString(event.getContent());
+        if ("connect".equals(type) || "disconnect".equals(type)) {
+            return NGEUtils
+                .getPlatform()
+                .toJSON(
+                    List.of(
+                        "nip-dc-presence-v1",
+                        type,
+                        NGEUtils.safeString(event.getFirstTagFirstValue("P")),
+                        NGEUtils.safeString(event.getFirstTagFirstValue("d")),
+                        NGEUtils.safeString(event.getFirstTagFirstValue("i")),
+                        NGEUtils.safeString(event.getFirstTagFirstValue("y")),
+                        NGEUtils.safeString(event.getFirstTagFirstValue("version")),
+                        NGEUtils.safeString(event.getFirstTagFirstValue("expiration")),
+                        content
+                    )
+                );
+        }
+        String receiver = event.getFirstTagFirstValue("p");
+        if (receiver == null || receiver.isEmpty()) throw new IllegalArgumentException("Missing receiver pubkey for roomproof");
+        return NGEUtils.getPlatform().toJSON(List.of(receiver, content));
+    }
+
     protected boolean requiresRoomProof(String type) {
-        return "offer".equals(type) || "answer".equals(type) || "route".equals(type);
+        return (
+            "connect".equals(type) ||
+            "disconnect".equals(type) ||
+            "offer".equals(type) ||
+            "answer".equals(type) ||
+            "route".equals(type)
+        );
     }
 
     protected abstract boolean requireRoomSignature();

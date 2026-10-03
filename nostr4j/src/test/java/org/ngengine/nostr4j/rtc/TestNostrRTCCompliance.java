@@ -31,8 +31,6 @@
 
 package org.ngengine.nostr4j.rtc;
 
-import org.ngengine.nostr4j.RTCSettings;
-
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -47,6 +45,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import org.junit.Test;
+import org.ngengine.nostr4j.RTCSettings;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.event.UnsignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
@@ -180,6 +179,24 @@ public class TestNostrRTCCompliance {
     }
 
     @Test
+    public void missingOrInvalidRoomProofCannotAuthorizeDirectedSignals() {
+        NostrKeyPair room = new NostrKeyPair();
+        NostrKeyPairSigner alice = NostrKeyPairSigner.generate();
+        NostrKeyPairSigner bob = NostrKeyPairSigner.generate();
+        NostrRTCLocalPeer peer = localPeer(alice, room, "proof-sender", null);
+        SignedNostrEvent valid = NGEUtils.awaitNoThrow(
+            new NostrRTCOfferSignal(alice, room, peer, "offer").toEvent(NGEUtils.awaitNoThrow(bob.getPublicKey()))
+        );
+        UnsignedNostrEvent missing = new UnsignedNostrEvent(valid.toMap()).clearTags("roomproof");
+        SignedNostrEvent unsignedRoom = NGEUtils.awaitNoThrow(alice.sign(missing));
+        org.junit.Assert.assertThrows(IllegalArgumentException.class, () -> new NostrRTCOfferSignal(bob, room, unsignedRoom));
+        UnsignedNostrEvent invalid = new UnsignedNostrEvent(valid.toMap())
+            .replaceTag("roomproof", "0".repeat(64), "0".repeat(128));
+        SignedNostrEvent invalidRoom = NGEUtils.awaitNoThrow(alice.sign(invalid));
+        org.junit.Assert.assertThrows(IllegalArgumentException.class, () -> new NostrRTCOfferSignal(bob, room, invalidRoom));
+    }
+
+    @Test
     public void testRtcOfferAndRouteAreSingleEncryptedAndRoundTrip() {
         NostrKeyPair roomKeyPair = new NostrKeyPair();
         NostrKeyPairSigner aliceSigner = NostrKeyPairSigner.generate();
@@ -279,6 +296,19 @@ public class TestNostrRTCCompliance {
             .withTag("version", NostrRTCConnectSignal.LEGACY_PROTOCOL_VERSION)
             .withTag("expiration", String.valueOf(expiry.getEpochSecond()))
             .withContent("legacy");
+        String challenge = org.ngengine.nostr4j.rtc.signal.NostrRTCSignal.computeRoomProofChallenge(unsigned);
+        NostrPublicKey sender = NGEUtils.awaitNoThrow(signer.getPublicKey());
+        String proofId = org.ngengine.nostr4j.utils.NostrRoomProof.computeId(
+            roomKeyPair.getPublicKey(),
+            unsigned.getCreatedAt(),
+            25050,
+            sender,
+            challenge
+        );
+        String proof = NGEUtils.awaitNoThrow(
+            org.ngengine.nostr4j.utils.NostrRoomProof.sign(roomKeyPair, unsigned.getCreatedAt(), 25050, sender, challenge)
+        );
+        unsigned.withTag("roomproof", proofId, proof);
         SignedNostrEvent event = NGEUtils.awaitNoThrow(signer.sign(unsigned));
 
         NostrRTCConnectSignal parsed = new NostrRTCConnectSignal(signer, roomKeyPair, event);

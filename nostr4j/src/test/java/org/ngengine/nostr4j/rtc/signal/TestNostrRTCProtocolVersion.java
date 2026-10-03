@@ -31,22 +31,48 @@
 
 package org.ngengine.nostr4j.rtc.signal;
 
-import org.ngengine.nostr4j.RTCSettings;
-
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import java.time.Instant;
 import java.util.Collections;
 import org.junit.Test;
+import org.ngengine.nostr4j.RTCSettings;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.event.UnsignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
+import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
 import org.ngengine.platform.NGEUtils;
 
 public class TestNostrRTCProtocolVersion {
+
+    @Test
+    public void publicRoomKeyAndReusedProofCannotAuthorizeAnotherPresence() {
+        NostrKeyPair room = new NostrKeyPair();
+        NostrKeyPairSigner member = NostrKeyPairSigner.generate();
+        SignedNostrEvent valid = connectEvent(member, room, "dc4");
+        UnsignedNostrEvent unsigned = new UnsignedNostrEvent(valid.toMap());
+        unsigned.clearTags("roomproof");
+        rejectPresence(member, room, NGEUtils.awaitNoThrow(member.sign(unsigned)));
+        UnsignedNostrEvent changed = new UnsignedNostrEvent(valid.toMap());
+        changed.clearTags("d");
+        changed.withTag("d", "another-session");
+        rejectPresence(member, room, NGEUtils.awaitNoThrow(member.sign(changed)));
+        NostrKeyPairSigner outsider = NostrKeyPairSigner.generate();
+        rejectPresence(outsider, room, NGEUtils.awaitNoThrow(outsider.sign(new UnsignedNostrEvent(valid.toMap()))));
+    }
+
+    private static void rejectPresence(NostrKeyPairSigner signer, NostrKeyPair room, SignedNostrEvent event) {
+        try {
+            new NostrRTCConnectSignal(signer, room, event);
+            fail("Unauthorized presence must fail");
+        } catch (IllegalArgumentException expected) {
+            assertTrue(expected.getMessage().contains("roomproof"));
+        }
+    }
 
     @Test
     public void testCurrentVersionAdvertisedAndParsed() {
@@ -123,6 +149,19 @@ public class TestNostrRTCProtocolVersion {
             .withTag("y", "application")
             .withTag("expiration", String.valueOf(Instant.now().plusSeconds(60).getEpochSecond()))
             .withContent("");
+        String challenge = org.ngengine.nostr4j.rtc.signal.NostrRTCSignal.computeRoomProofChallenge(event);
+        NostrPublicKey sender = NGEUtils.awaitNoThrow(signer.getPublicKey());
+        String proofId = org.ngengine.nostr4j.utils.NostrRoomProof.computeId(
+            room.getPublicKey(),
+            event.getCreatedAt(),
+            25050,
+            sender,
+            challenge
+        );
+        String proof = NGEUtils.awaitNoThrow(
+            org.ngengine.nostr4j.utils.NostrRoomProof.sign(room, event.getCreatedAt(), 25050, sender, challenge)
+        );
+        event.withTag("roomproof", proofId, proof);
         return NGEUtils.awaitNoThrow(signer.sign(event));
     }
 

@@ -247,7 +247,8 @@ Peers periodically broadcast presence so other peers can discover them.
     ["i", "<protocol identifier>"],
     ["version", "dc4"],
     ["y", "<application id>"],
-    ["expiration", "<unix timestamp seconds>"]
+    ["expiration", "<unix timestamp seconds>"],
+    ["roomproof", "<id>", "<sig>"]
   ]
 }
 ```
@@ -271,12 +272,21 @@ When a peer leaves the room, it broadcasts:
     ["P", "<room hex pubkey>"],
     ["d", "<session id>"],
     ["i", "<protocol identifier>"],
-    ["y", "<app id>"]
+    ["y", "<app id>"],
+    ["roomproof", "<id>", "<sig>"]
   ]
 }
 ```
 
 ---
+
+Presence and disconnect events **MUST** carry a valid room proof before they can create, refresh or remove peer state. For both types the challenge is the JSON serialization of:
+
+```text
+["nip-dc-presence-v1", t, P, d, i, y, version, expiration, content]
+```
+
+Tag values are strings; absent optional `version` or `expiration` values are empty strings. The existing room-proof preimage additionally binds the timestamp, kind and sender public key. Knowing only a room public key is insufficient to announce membership. This requirement also applies to accepted direct-only legacy version announcements; clients without a room proof must upgrade. Implementations **SHOULD** bound announcement state and queued signaling work.
 
 ## 6. WebRTC signaling
 

@@ -86,6 +86,9 @@ public class NostrRTCSignaling implements Closeable {
     }
 
     private static final Logger logger = Logger.getLogger(NostrRTCSignaling.class.getName());
+    private static final int MAX_PRESENCE_PEERS = 2048;
+    private static final int MAX_QUEUED_SIGNALS = 64;
+    private final java.util.concurrent.atomic.AtomicInteger pendingSignals = new java.util.concurrent.atomic.AtomicInteger();
     private final NostrPool pool;
 
     private final NostrRTCLocalPeer localPeer;
@@ -154,145 +157,159 @@ public class NostrRTCSignaling implements Closeable {
     protected void onSubEvent(SignedNostrEvent event, boolean stored) {
         if (closed) return;
         if (event.getPubkey().equals(this.localPeer.getPubkey())) return;
+        if (pendingSignals.incrementAndGet() > MAX_QUEUED_SIGNALS) {
+            pendingSignals.decrementAndGet();
+            return;
+        }
         this.executor.run(() -> {
-                if (!matchesScope(event)) {
+                try {
+                    if (closed || !matchesScope(event)) {
+                        return null;
+                    }
+                    String type = event.getFirstTagFirstValue("t");
+                    if (type == null || type.isEmpty()) {
+                        return null;
+                    }
+
+                    // handle connection and disconnection events
+                    switch (type) {
+                        case "connect":
+                            {
+                                // parse event
+                                NostrRTCConnectSignal receivedSignal = new NostrRTCConnectSignal(
+                                    localPeer.getSigner(),
+                                    roomKeyPair,
+                                    event
+                                );
+
+                                // check if we already have an announce for this peer
+                                NostrRTCConnectSignal ann = seenAnnounces
+                                    .stream()
+                                    .filter(a -> a.getPeer().equals(receivedSignal.getPeer()))
+                                    .findFirst()
+                                    .orElse(null);
+
+                                if (ann == null) {
+                                    if (seenAnnounces.size() >= MAX_PRESENCE_PEERS) return null;
+                                    // we don't have one -> create
+                                    // Publish the state before notifying listeners. A listener is
+                                    // allowed to query getAnnounces() from its callback and must
+                                    // observe the announcement that triggered it.
+                                    seenAnnounces.add(receivedSignal);
+                                    for (Listener listener : listeners) {
+                                        try {
+                                            listener.onAddAnnounce(receivedSignal);
+                                        } catch (Throwable e) {
+                                            logger.log(Level.WARNING, "Error in onAddAnnounce", e);
+                                        }
+                                    }
+                                } else {
+                                    // we have one -> update
+                                    assert dbg(() -> logger.finest("Update announce: " + receivedSignal));
+                                    ann.updateExpireAt(receivedSignal.getExpireAt());
+                                    ann.getPeer().mergeAuthenticatedAnnouncement(receivedSignal.getPeer());
+                                    for (Listener listener : listeners) {
+                                        try {
+                                            listener.onUpdateAnnounce(ann);
+                                        } catch (Throwable e) {
+                                            logger.log(Level.WARNING, "Error in onUpdateAnnounce", e);
+                                        }
+                                    }
+                                }
+                                return null;
+                            }
+                        case "disconnect":
+                            {
+                                logger.finest("Received disconnect event: " + event.getPubkey());
+
+                                // parse event
+                                NostrRTCDisconnectSignal receivedSignal = new NostrRTCDisconnectSignal(
+                                    localPeer.getSigner(),
+                                    roomKeyPair,
+                                    event
+                                );
+
+                                // remove peer from the announce list
+                                for (NostrRTCConnectSignal announce : seenAnnounces) {
+                                    if (!announce.getPeer().equals(receivedSignal.getPeer())) continue;
+
+                                    seenAnnounces.remove(announce);
+                                    logger.finest("Remove announce: " + announce);
+
+                                    for (Listener listener : listeners) {
+                                        try {
+                                            listener.onRemoveAnnounce(announce, Listener.RemoveReason.DISCONNECTED);
+                                        } catch (Throwable e) {
+                                            logger.log(Level.WARNING, "Error in onRemoveAnnounce", e);
+                                        }
+                                    }
+                                }
+                                return null;
+                            }
+                    }
+
+                    // handle offers and routes
+                    NGEPlatform platform = NGEUtils.getPlatform();
+                    switch (type) {
+                        case "offer":
+                            {
+                                if (!isDirectedToLocalPeer(event)) return null;
+                                logger.finest("Received offer from: " + event.getPubkey());
+                                NostrRTCOfferSignal offer = new NostrRTCOfferSignal(localPeer.getSigner(), roomKeyPair, event);
+                                offer.await();
+                                mergeAdvertisedVersion(offer);
+                                for (Listener listener : listeners) {
+                                    try {
+                                        listener.onReceiveOffer(offer);
+                                    } catch (Throwable e) {
+                                        logger.log(Level.WARNING, "Error in onReceiveOffer", e);
+                                    }
+                                }
+                                return null;
+                            }
+                        case "answer":
+                            {
+                                if (!isDirectedToLocalPeer(event)) return null;
+                                logger.finest("Received answer from: " + event.getPubkey());
+                                NostrRTCAnswerSignal answer = new NostrRTCAnswerSignal(
+                                    localPeer.getSigner(),
+                                    roomKeyPair,
+                                    event
+                                );
+                                answer.await();
+                                mergeAdvertisedVersion(answer);
+                                for (Listener listener : listeners) {
+                                    try {
+                                        listener.onReceiveAnswer(answer);
+                                    } catch (Throwable e) {
+                                        logger.log(Level.WARNING, "Error in onReceiveAnswer", e);
+                                    }
+                                }
+                                return null;
+                            }
+                        case "route":
+                            {
+                                if (!isDirectedToLocalPeer(event)) return null;
+                                assert dbg(() -> logger.finest("Received candidate event from: " + event.getPubkey()));
+                                NostrRTCRouteSignal route = new NostrRTCRouteSignal(localPeer.getSigner(), roomKeyPair, event);
+                                route.await();
+                                mergeAdvertisedVersion(route);
+                                for (Listener listener : listeners) {
+                                    try {
+                                        listener.onReceiveCandidates(route);
+                                    } catch (Throwable e) {
+                                        logger.log(Level.WARNING, "Error in onReceiveCandidates", e);
+                                    }
+                                }
+                                return null;
+                            }
+                    }
                     return null;
+                } finally {
+                    pendingSignals.decrementAndGet();
                 }
-                String type = event.getFirstTagFirstValue("t");
-                if (type == null || type.isEmpty()) {
-                    return null;
-                }
-
-                // handle connection and disconnection events
-                switch (type) {
-                    case "connect":
-                        {
-                            // parse event
-                            NostrRTCConnectSignal receivedSignal = new NostrRTCConnectSignal(
-                                localPeer.getSigner(),
-                                roomKeyPair,
-                                event
-                            );
-
-                            // check if we already have an announce for this peer
-                            NostrRTCConnectSignal ann = seenAnnounces
-                                .stream()
-                                .filter(a -> a.getPeer().equals(receivedSignal.getPeer()))
-                                .findFirst()
-                                .orElse(null);
-
-                            if (ann == null) {
-                                // we don't have one -> create
-                                // Publish the state before notifying listeners. A listener is
-                                // allowed to query getAnnounces() from its callback and must
-                                // observe the announcement that triggered it.
-                                seenAnnounces.add(receivedSignal);
-                                for (Listener listener : listeners) {
-                                    try {
-                                        listener.onAddAnnounce(receivedSignal);
-                                    } catch (Throwable e) {
-                                        logger.log(Level.WARNING, "Error in onAddAnnounce", e);
-                                    }
-                                }
-                            } else {
-                                // we have one -> update
-                                assert dbg(() -> logger.finest("Update announce: " + receivedSignal));
-                                ann.updateExpireAt(receivedSignal.getExpireAt());
-                                ann.getPeer().mergeAuthenticatedAnnouncement(receivedSignal.getPeer());
-                                for (Listener listener : listeners) {
-                                    try {
-                                        listener.onUpdateAnnounce(ann);
-                                    } catch (Throwable e) {
-                                        logger.log(Level.WARNING, "Error in onUpdateAnnounce", e);
-                                    }
-                                }
-                            }
-                            return null;
-                        }
-                    case "disconnect":
-                        {
-                            logger.finest("Received disconnect event: " + event.getPubkey());
-
-                            // parse event
-                            NostrRTCDisconnectSignal receivedSignal = new NostrRTCDisconnectSignal(
-                                localPeer.getSigner(),
-                                roomKeyPair,
-                                event
-                            );
-
-                            // remove peer from the announce list
-                            for (NostrRTCConnectSignal announce : seenAnnounces) {
-                                if (!announce.getPeer().equals(receivedSignal.getPeer())) continue;
-
-                                seenAnnounces.remove(announce);
-                                logger.finest("Remove announce: " + announce);
-
-                                for (Listener listener : listeners) {
-                                    try {
-                                        listener.onRemoveAnnounce(announce, Listener.RemoveReason.DISCONNECTED);
-                                    } catch (Throwable e) {
-                                        logger.log(Level.WARNING, "Error in onRemoveAnnounce", e);
-                                    }
-                                }
-                            }
-                            return null;
-                        }
-                }
-
-                // handle offers and routes
-                NGEPlatform platform = NGEUtils.getPlatform();
-                switch (type) {
-                    case "offer":
-                        {
-                            if (!isDirectedToLocalPeer(event)) return null;
-                            logger.finest("Received offer from: " + event.getPubkey());
-                            NostrRTCOfferSignal offer = new NostrRTCOfferSignal(localPeer.getSigner(), roomKeyPair, event);
-                            offer.await();
-                            mergeAdvertisedVersion(offer);
-                            for (Listener listener : listeners) {
-                                try {
-                                    listener.onReceiveOffer(offer);
-                                } catch (Throwable e) {
-                                    logger.log(Level.WARNING, "Error in onReceiveOffer", e);
-                                }
-                            }
-                            return null;
-                        }
-                    case "answer":
-                        {
-                            if (!isDirectedToLocalPeer(event)) return null;
-                            logger.finest("Received answer from: " + event.getPubkey());
-                            NostrRTCAnswerSignal answer = new NostrRTCAnswerSignal(localPeer.getSigner(), roomKeyPair, event);
-                            answer.await();
-                            mergeAdvertisedVersion(answer);
-                            for (Listener listener : listeners) {
-                                try {
-                                    listener.onReceiveAnswer(answer);
-                                } catch (Throwable e) {
-                                    logger.log(Level.WARNING, "Error in onReceiveAnswer", e);
-                                }
-                            }
-                            return null;
-                        }
-                    case "route":
-                        {
-                            if (!isDirectedToLocalPeer(event)) return null;
-                            assert dbg(() -> logger.finest("Received candidate event from: " + event.getPubkey()));
-                            NostrRTCRouteSignal route = new NostrRTCRouteSignal(localPeer.getSigner(), roomKeyPair, event);
-                            route.await();
-                            mergeAdvertisedVersion(route);
-                            for (Listener listener : listeners) {
-                                try {
-                                    listener.onReceiveCandidates(route);
-                                } catch (Throwable e) {
-                                    logger.log(Level.WARNING, "Error in onReceiveCandidates", e);
-                                }
-                            }
-                            return null;
-                        }
-                }
-                return null;
-            });
+            })
+            .catchException(error -> logger.fine("Ignoring invalid RTC signaling event"));
     }
 
     private void mergeAdvertisedVersion(NostrRTCSignal signal) {
