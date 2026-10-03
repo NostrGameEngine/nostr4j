@@ -41,6 +41,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -54,7 +55,6 @@ import org.ngengine.nostr4j.event.SignedNostrEvent.ReceivedSignedNostrEvent;
 import org.ngengine.nostr4j.event.tracker.EventTracker;
 import org.ngengine.nostr4j.event.tracker.ForwardSlidingWindowEventTracker;
 import org.ngengine.nostr4j.event.tracker.NaiveEventTracker;
-import org.ngengine.nostr4j.event.tracker.PassthroughEventTracker;
 import org.ngengine.nostr4j.listeners.NostrNoticeListener;
 import org.ngengine.nostr4j.listeners.NostrRelayComponent;
 import org.ngengine.nostr4j.pool.ackpolicy.NostrPoolAckPolicy;
@@ -307,10 +307,9 @@ public class NostrPool {
         String subId = UniqueId.getNext();
         EventTracker tracker;
         try {
-            tracker = eventTracker.get();
+            tracker = Objects.requireNonNull(eventTracker.get(), "Event tracker cannot be null");
         } catch (Exception e) {
-            logger.log(Level.WARNING, "Error creating event tracker fallback to PassthroughEventTracker", e);
-            tracker = new PassthroughEventTracker();
+            throw new IllegalStateException("Cannot create subscription event tracker", e);
         }
 
         assert dbg(() -> {
