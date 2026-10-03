@@ -87,6 +87,7 @@ public class NostrRelayInfo implements Cloneable, Serializable {
 
         AsyncTask<String> task = platform.httpGet(httpUrl, Duration.ofSeconds(30), headers);
         return task.then(data -> {
+            ImmutableSnapshot.validateJsonBounds(data);
             Map<String, Object> map = platform.fromJSON(data, Map.class);
             return new NostrRelayInfo(relayUrl, map);
         });

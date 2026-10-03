@@ -33,6 +33,7 @@ package org.ngengine.nostr4j.utils;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -47,29 +48,66 @@ public final class ImmutableSnapshot {
         return snapshotMap(source, true);
     }
 
+    private static final int MAX_DEPTH = 64;
+    private static final int MAX_VALUES = 100_000;
+
+    private static final class Budget {
+
+        int values;
+        final IdentityHashMap<Object, Boolean> active = new IdentityHashMap<Object, Boolean>();
+    }
+
     @SuppressWarnings("unchecked")
     public static <K, V> Map<K, V> snapshotMap(Map<? extends K, ? extends V> source, boolean deep) {
+        if (deep) return (Map<K, V>) copy(source == null ? Collections.emptyMap() : source, new Budget(), 0);
         Map<K, V> out = new LinkedHashMap<>();
-        if (source != null) {
-            for (Map.Entry<? extends K, ? extends V> entry : source.entrySet()) {
-                out.put(entry.getKey(), deep ? snapshotValue(entry.getValue()) : entry.getValue());
-            }
-        }
+        if (source != null) out.putAll(source);
         return Collections.unmodifiableMap(out);
     }
 
     @SuppressWarnings("unchecked")
     public static <T> T snapshotValue(T value) {
-        if (value instanceof Map<?, ?>) {
-            return (T) snapshotMap((Map<?, ?>) value, true);
+        return (T) copy(value, new Budget(), 0);
+    }
+
+    private static Object copy(Object value, Budget budget, int depth) {
+        if (depth > MAX_DEPTH || ++budget.values > MAX_VALUES) {
+            throw new IllegalArgumentException("Metadata snapshot exceeds depth or value budget");
         }
-        if (value instanceof List<?>) {
-            return (T) snapshotCollection((List<?>) value);
+        if (!(value instanceof Map<?, ?>) && !(value instanceof Collection<?>)) return value;
+        if (budget.active.put(value, Boolean.TRUE) != null) {
+            throw new IllegalArgumentException("Cyclic metadata snapshot");
         }
-        if (value instanceof Collection<?>) {
-            return (T) snapshotCollection((Collection<?>) value);
+        try {
+            if (value instanceof Map<?, ?>) {
+                Map<Object, Object> out = new LinkedHashMap<>();
+                for (Map.Entry<?, ?> entry : ((Map<?, ?>) value).entrySet()) {
+                    out.put(entry.getKey(), copy(entry.getValue(), budget, depth + 1));
+                }
+                return Collections.unmodifiableMap(out);
+            }
+            List<Object> out = new ArrayList<>();
+            for (Object item : (Collection<?>) value) out.add(copy(item, budget, depth + 1));
+            return Collections.unmodifiableList(out);
+        } finally {
+            budget.active.remove(value);
         }
-        return value;
+    }
+
+    /** Bound untrusted relay JSON before invoking a recursive JSON parser. */
+    public static void validateJsonBounds(String json) {
+        if (json == null || json.length() > 1_048_576) throw new IllegalArgumentException("Relay metadata exceeds size budget");
+        int depth = 0;
+        boolean quoted = false;
+        boolean escaped = false;
+        for (int i = 0; i < json.length(); i++) {
+            char c = json.charAt(i);
+            if (quoted) {
+                if (escaped) escaped = false; else if (c == '\\') escaped = true; else if (c == '"') quoted = false;
+            } else if (c == '"') quoted = true; else if (c == '[' || c == '{') {
+                if (++depth > MAX_DEPTH) throw new IllegalArgumentException("Relay metadata exceeds nesting budget");
+            } else if (c == ']' || c == '}') depth--;
+        }
     }
 
     public static List<String> snapshotStringList(Collection<?> source) {
@@ -84,14 +122,6 @@ public final class ImmutableSnapshot {
         List<T> out = new ArrayList<>();
         for (S item : source) {
             out.add(mapper.apply(item));
-        }
-        return Collections.unmodifiableList(out);
-    }
-
-    private static List<Object> snapshotCollection(Collection<?> source) {
-        List<Object> out = new ArrayList<>();
-        for (Object item : source) {
-            out.add(snapshotValue(item));
         }
         return Collections.unmodifiableList(out);
     }
