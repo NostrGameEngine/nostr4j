@@ -184,9 +184,9 @@ public final class BlockingPacketQueue<T> implements AutoCloseable {
                     inFlightSince = 0;
                     if (Boolean.TRUE.equals(processed)) {
                         pausedForRetry = false;
-                        popHead();
+                        boolean removed = queue.remove(enqueued);
                         resolve.accept(null);
-                        if (enqueued.resolve != null) {
+                        if (removed && enqueued.resolve != null) {
                             enqueued.resolve.accept(null);
                         }
                     } else {

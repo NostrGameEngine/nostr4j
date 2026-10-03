@@ -288,14 +288,7 @@ final class TurnVirtualSocket implements AutoCloseable {
                 new BlockingPacketQueue.PacketHandler<TurnVirtualSocket.QueuedOutgoingFrame>() {
                     @Override
                     public AsyncTask<Boolean> handle(TurnVirtualSocket.QueuedOutgoingFrame frame) {
-                        return processQueuedFrame
-                            .apply(TurnVirtualSocket.this, frame)
-                            .then(processed -> {
-                                if (Boolean.TRUE.equals(processed)) {
-                                    frame.releaseBudget();
-                                }
-                                return processed;
-                            });
+                        return processQueuedFrame.apply(TurnVirtualSocket.this, frame);
                     }
 
                     @Override
@@ -314,14 +307,7 @@ final class TurnVirtualSocket implements AutoCloseable {
                 new BlockingPacketQueue.PacketHandler<TurnVirtualSocket.QueuedOutgoingFrame>() {
                     @Override
                     public AsyncTask<Boolean> handle(TurnVirtualSocket.QueuedOutgoingFrame frame) {
-                        return processQueuedFrame
-                            .apply(TurnVirtualSocket.this, frame)
-                            .then(processed -> {
-                                if (Boolean.TRUE.equals(processed)) {
-                                    frame.releaseBudget();
-                                }
-                                return processed;
-                            });
+                        return processQueuedFrame.apply(TurnVirtualSocket.this, frame);
                     }
 
                     @Override
@@ -404,7 +390,7 @@ final class TurnVirtualSocket implements AutoCloseable {
         QueuedOutgoingFrame queuedFrame = budgetReserved
             ? new QueuedOutgoingFrame(frameBytes, this.queueBudget)
             : new QueuedOutgoingFrame(frameBytes);
-        queue.enqueue(queuedFrame, null, error -> queuedFrame.releaseBudget());
+        queue.enqueue(queuedFrame, ignored -> queuedFrame.releaseBudget(), error -> queuedFrame.releaseBudget());
         return true;
     }
 

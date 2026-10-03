@@ -32,6 +32,51 @@ import org.ngengine.platform.NGEUtils;
 public class TestTurnServerInternalRegression {
 
     @Test
+    public void staleQueueCompletionRetainsBudgetUntilCommittedDequeue() throws Exception {
+        ByteBuffer frame = encodedFrame("data", 651L, 451);
+        AtomicLong bytes = new AtomicLong();
+        java.util.concurrent.atomic.AtomicReference<java.util.function.Consumer<Boolean>> completion =
+            new java.util.concurrent.atomic.AtomicReference<>();
+        TurnVirtualSocket sender = new TurnVirtualSocket(
+            651L,
+            new NostrKeyPair().getPublicKey(),
+            new NostrKeyPair().getPublicKey(),
+            new NostrKeyPair().getPublicKey(),
+            "budget-a",
+            "budget-b",
+            "proto",
+            "app",
+            "default",
+            (socket, queued) -> AsyncTask.create((resolve, reject) -> completion.set(resolve)),
+            socket -> true,
+            boundedBudget(bytes, frame.remaining()),
+            0L
+        );
+        sender.markAckSent();
+        try {
+            assertTrue(sender.out(frame, 16, false));
+            waitUntil(() -> completion.get() != null, 1000, "handler must start");
+            Field field = TurnVirtualSocket.class.getDeclaredField("queuedOutgoingFrames");
+            field.setAccessible(true);
+            org.ngengine.nostr4j.rtc.BlockingPacketQueue<?> queue = (org.ngengine.nostr4j.rtc.BlockingPacketQueue<?>) field.get(
+                sender
+            );
+            queue.stop();
+            completion.getAndSet(null).accept(true);
+            Thread.sleep(50);
+            org.junit.Assert.assertEquals(frame.remaining(), bytes.get());
+            org.junit.Assert.assertEquals(1, queue.size());
+            assertFalse(sender.out(encodedFrame("data", 651L, 452), 16, false));
+            queue.restart();
+            waitUntil(() -> completion.get() != null, 1000, "retry must start");
+            completion.get().accept(true);
+            waitUntil(() -> bytes.get() == 0L && queue.size() == 0, 1000, "committed dequeue releases budget");
+        } finally {
+            sender.close();
+        }
+    }
+
+    @Test
     public void testQueuedFrameNotDeliveredWhenSendFails() throws Exception {
         TurnServer server = new TurnServer(12345, NostrKeyPairSigner.generate(), 8, 5, 32);
 
