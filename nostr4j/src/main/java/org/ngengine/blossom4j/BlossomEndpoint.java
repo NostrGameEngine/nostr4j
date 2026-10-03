@@ -84,8 +84,8 @@ public class BlossomEndpoint {
             sha256OrPath +
             ", byteRange: " +
             (byteRange != null ? "[" + byteRange[0] + ", " + byteRange[1] + "]" : "full range") +
-            ", authEvent: " +
-            authEvent
+            ", authenticated: " +
+            (authEvent != null)
         );
         String endpoint = sha256OrPath;
         Map<String, String> headers = new HashMap<>();
@@ -124,7 +124,7 @@ public class BlossomEndpoint {
      * @return an AsyncTask that returns true if the blob exists, false if it does not
      */
     public AsyncTask<Boolean> exists(String sha256OrPath, @Nullable SignedNostrEvent authEvent) {
-        logger.finer("Checking if blob exists: " + sha256OrPath + ", authEvent: " + authEvent);
+        logger.finer("Checking if blob exists: " + sha256OrPath + ", authenticated: " + (authEvent != null));
         String endpoint = sha256OrPath;
         return httpRequest(endpoint, "HEAD", null, authEvent)
             .then(res -> {
@@ -141,7 +141,9 @@ public class BlossomEndpoint {
      * @return an AsyncTask that returns a BlossomResponse containing the BlobDescriptor and the HTTP response
      */
     public AsyncTask<BlossomResponse> upload(byte[] data, @Nullable String mimeType, @Nullable SignedNostrEvent authEvent) {
-        logger.finer("Uploading blob, size: " + data.length + ", mimeType: " + mimeType + ", authEvent: " + authEvent);
+        logger.finer(
+            "Uploading blob, size: " + data.length + ", mimeType: " + mimeType + ", authenticated: " + (authEvent != null)
+        );
         Map<String, String> headers = new HashMap<>();
         headers.put("Content-Type", mimeType != null ? mimeType : "application/octet-stream");
         headers.put("Content-Length", String.valueOf(data.length));
@@ -157,7 +159,9 @@ public class BlossomEndpoint {
 
     public AsyncTask<BlossomResponse> upload(ByteBuffer data, @Nullable String mimeType, @Nullable SignedNostrEvent authEvent) {
         ByteBuffer body = data.slice();
-        logger.finer("Uploading blob, size: " + body.remaining() + ", mimeType: " + mimeType + ", authEvent: " + authEvent);
+        logger.finer(
+            "Uploading blob, size: " + body.remaining() + ", mimeType: " + mimeType + ", authenticated: " + (authEvent != null)
+        );
         Map<String, String> headers = new HashMap<>();
         headers.put("Content-Type", mimeType != null ? mimeType : "application/octet-stream");
         headers.put("Content-Length", String.valueOf(body.remaining()));
@@ -193,8 +197,8 @@ public class BlossomEndpoint {
             since +
             ", until: " +
             until +
-            ", authEvent: " +
-            authEvent
+            ", authenticated: " +
+            (authEvent != null)
         );
         String endpoint = "list/" + pubkey.asHex();
         StringBuilder query = new StringBuilder();
@@ -238,7 +242,7 @@ public class BlossomEndpoint {
      * @return
      */
     public AsyncTask<BlossomResponse> delete(String sha256, @Nullable SignedNostrEvent authEvent) {
-        logger.finer("Deleting blob with SHA256: " + sha256 + ", authEvent: " + authEvent);
+        logger.finer("Deleting blob with SHA256: " + sha256 + ", authenticated: " + (authEvent != null));
         String endpoint = sha256;
         return httpRequest(endpoint, "DELETE", null, authEvent)
             .then(response -> {
@@ -293,7 +297,7 @@ public class BlossomEndpoint {
             String authJson = NGEPlatform.get().toJSON(authEvent.toMap());
             String authBase64 = NGEPlatform.get().base64encode(authJson.getBytes(StandardCharsets.UTF_8));
             headers.put("Authorization", "Nostr " + authBase64);
-            logger.finer("Using Authorization header: " + headers.get("Authorization"));
+            logger.finer("Using Blossom authorization");
         }
 
         URI url = NGEUtils.safeURI(fullUrl);
@@ -316,7 +320,7 @@ public class BlossomEndpoint {
             String authJson = NGEPlatform.get().toJSON(authEvent.toMap());
             String authBase64 = NGEPlatform.get().base64encode(authJson.getBytes(StandardCharsets.UTF_8));
             headers.put("Authorization", "Nostr " + authBase64);
-            logger.finer("Using Authorization header: " + headers.get("Authorization"));
+            logger.finer("Using Blossom authorization");
         }
 
         URI url = NGEUtils.safeURI(fullUrl);
