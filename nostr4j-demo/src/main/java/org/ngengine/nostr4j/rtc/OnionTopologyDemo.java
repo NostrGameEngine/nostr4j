@@ -542,6 +542,11 @@ public final class OnionTopologyDemo extends JFrame {
             int poolNumber = index + 1;
             newPool.addNoticeListener((source, notice, error) -> {
                 String detail = notice != null ? notice : error != null ? rootMessage(error) : "Unknown relay notice";
+                detail = detail.substring(0, Math.min(detail.length(), 2048));
+                long now = System.nanoTime();
+                long previous = lastNoticeAt.get();
+                if (previous != 0L && now - previous < TimeUnit.SECONDS.toNanos(1)) return;
+                if (!lastNoticeAt.compareAndSet(previous, now)) return;
                 if (isRelayRequestLimitNotice(detail)) {
                     relayRequestLimitErrors.incrementAndGet();
                     lastResult = "Relay request limit: " + detail;
@@ -581,7 +586,8 @@ public final class OnionTopologyDemo extends JFrame {
                 : new NostrKeyPair(NostrPrivateKey.fromHex(options.roomPrivateKey));
         routingScope = new RoutingScope(roomKeys.getPublicKey(), PROTOCOL_ID, APPLICATION_ID);
         turnPool = new NostrTURNPool();
-        RTCSettings settings = RTCSettings.getDefault(APPLICATION_ID, PROTOCOL_ID)
+        RTCSettings settings = RTCSettings
+            .getDefault(APPLICATION_ID, PROTOCOL_ID)
             .withMaxDirectPeers(maxDirectPeers)
             .withSignalingRelays(List.of(options.relay));
         long generation = networkSequence.incrementAndGet();
@@ -664,7 +670,13 @@ public final class OnionTopologyDemo extends JFrame {
             .withApplicationId(APPLICATION_ID)
             .withProtocolId(PROTOCOL_ID);
         String sessionId = "onion-" + roomKeys.getPublicKey().asHex().substring(0, 10) + "-" + generation + "-" + index;
-        NostrRTCLocalPeer local = new NostrRTCLocalPeer(peerSettings, new NostrKeyPairSigner(identity), sessionId, roomKeys, null);
+        NostrRTCLocalPeer local = new NostrRTCLocalPeer(
+            peerSettings,
+            new NostrKeyPairSigner(identity),
+            sessionId,
+            roomKeys,
+            null
+        );
         NostrPool peerPool = signalingPools.get(relayPoolIndexForPeer(index));
         NostrRTCRoom room = new NostrRTCRoom(peerSettings, local, roomKeys, peerPool, turnPool);
         DemoPeer demoPeer = new DemoPeer(index, "P" + (index + 1), local, room);
@@ -1220,14 +1232,40 @@ public final class OnionTopologyDemo extends JFrame {
         SwingUtilities.invokeLater(topologyPanel::repaint);
     }
 
+    private final java.util.ArrayDeque<String> pendingLogLines = new java.util.ArrayDeque<>();
+    private boolean logFlushScheduled;
+    private final java.util.concurrent.atomic.AtomicLong lastNoticeAt = new java.util.concurrent.atomic.AtomicLong();
+
     private void log(String message) {
-        String line = String.format(Locale.ROOT, "%1$tH:%1$tM:%1$tS  %2$s%n", new java.util.Date(), message);
-        System.out.print(line);
-        System.out.flush();
-        SwingUtilities.invokeLater(() -> {
-            eventLog.append(line);
-            eventLog.setCaretPosition(eventLog.getDocument().getLength());
-        });
+        String bounded = message == null ? "" : message.substring(0, Math.min(message.length(), 2048));
+        String line = String.format(Locale.ROOT, "%1$tH:%1$tM:%1$tS  %2$s%n", new java.util.Date(), bounded);
+        synchronized (pendingLogLines) {
+            if (pendingLogLines.size() >= 128) pendingLogLines.removeFirst();
+            pendingLogLines.addLast(line);
+            if (logFlushScheduled) return;
+            logFlushScheduled = true;
+        }
+        SwingUtilities.invokeLater(this::flushLog);
+    }
+
+    private void flushLog() {
+        StringBuilder batch = new StringBuilder();
+        synchronized (pendingLogLines) {
+            while (!pendingLogLines.isEmpty()) batch.append(pendingLogLines.removeFirst());
+            logFlushScheduled = false;
+        }
+        String text = batch.toString();
+        System.out.print(text);
+        eventLog.append(text);
+        int excess = eventLog.getDocument().getLength() - 65536;
+        if (excess > 0) {
+            try {
+                eventLog.getDocument().remove(0, excess);
+            } catch (javax.swing.text.BadLocationException error) {
+                throw new IllegalStateException(error);
+            }
+        }
+        eventLog.setCaretPosition(eventLog.getDocument().getLength());
     }
 
     private void shutdown(int exitCode) {
