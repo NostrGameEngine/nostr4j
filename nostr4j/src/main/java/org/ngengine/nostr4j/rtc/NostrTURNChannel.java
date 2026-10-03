@@ -95,6 +95,8 @@ public final class NostrTURNChannel {
     private volatile NostrTURNDeliveryAckEvent outgoingDeliveryAckEvent;
     private final long vSocketId;
     private volatile int state = 0;
+    // Guarded by this; invalidates delayed encoding, send completions and ACK timers.
+    private long connectAttempt = 0L;
     private volatile boolean resurrecting = false;
     private volatile boolean closed = false;
     private volatile long nextResurrectionAttemptAtMs = 0L;
@@ -187,6 +189,14 @@ public final class NostrTURNChannel {
         return resurrecting;
     }
 
+    synchronized boolean beginResurrection(long nowMs) {
+        if (closed || isConnected() || isConnectPending() || resurrecting || !canAttemptResurrection(nowMs)) {
+            return false;
+        }
+        resurrecting = true;
+        return true;
+    }
+
     boolean canAttemptResurrection(long nowMs) {
         return nowMs >= nextResurrectionAttemptAtMs;
     }
@@ -199,7 +209,7 @@ public final class NostrTURNChannel {
         nextResurrectionAttemptAtMs = nowMs + backoffMs;
     }
 
-    private void disconnect() {
+    private synchronized void disconnect() {
         cancelConnectAckTimeout();
         this.outgoingDataEvent = null;
         this.incomingDataEvent = null;
@@ -215,8 +225,7 @@ public final class NostrTURNChannel {
         disconnect();
     }
 
-    void setTransport(TURNTransport transport) {
-        this.resurrecting = false;
+    synchronized void setTransport(TURNTransport transport) {
         TURNTransport previous = this.transport;
         if (previous == transport) {
             return;
@@ -242,11 +251,16 @@ public final class NostrTURNChannel {
         return state == 2 && this.transport != null && this.transport.isConnected();
     }
 
+    synchronized boolean isConnectPending() {
+        return !closed && state == 1 && transport != null && transport.isConnected();
+    }
+
     boolean isConnected() {
         return state == 2 && this.transport != null && this.transport.isConnected();
     }
 
-    private void cancelConnectAckTimeout() {
+    private synchronized void cancelConnectAckTimeout() {
+        connectAttempt++;
         AsyncTask<Void> task = connectAckDeadlineTask;
         if (task != null) {
             task.cancel();
@@ -254,27 +268,27 @@ public final class NostrTURNChannel {
         }
     }
 
-    private void scheduleConnectAckTimeout() {
+    private synchronized void scheduleConnectAckTimeout() {
         cancelConnectAckTimeout();
         if (closed || state != 1) {
             return;
         }
         TURNTransport expectedTransport = this.transport;
+        long expectedAttempt = connectAttempt;
         connectAckDeadlineTask =
             ackTimeoutExecutor.runLater(
                 () -> {
-                    connectAckDeadlineTask = null;
-                    if (closed || state != 1) {
-                        return null;
-                    }
-                    if (transport != expectedTransport) {
+                    synchronized (NostrTURNChannel.this) {
+                        if (closed || state != 1 || connectAttempt != expectedAttempt || transport != expectedTransport) {
+                            return null;
+                        }
+                        connectAckDeadlineTask = null;
+                        connectAttempt++;
+                        logger.fine("TURN connect ack timed out; resetting half-open state");
                         state = 0;
+                        openConnectionMaybe();
                         return null;
                     }
-                    logger.fine("TURN connect ack timed out; resetting half-open state");
-                    state = 0;
-                    openConnectionMaybe();
-                    return null;
                 },
                 CONNECT_ACK_TIMEOUT_MS,
                 TimeUnit.MILLISECONDS
@@ -466,7 +480,7 @@ public final class NostrTURNChannel {
         }
     }
 
-    private void handleChallengeEvent(NostrTURNChallengeEvent challengeEvent) {
+    private synchronized void handleChallengeEvent(NostrTURNChallengeEvent challengeEvent) {
         if (challengeEvent == null || state != 0) {
             return;
         }
@@ -695,13 +709,15 @@ public final class NostrTURNChannel {
                     if (envelopeVsocketId != vSocketId) {
                         return;
                     }
-                    if (state != 1) {
-                        logger.warning("TURN: Received ack in invalid state " + state);
-                        return;
+                    synchronized (this) {
+                        if (closed || state != 1) {
+                            logger.warning("TURN: Received ack in invalid state " + state);
+                            return;
+                        }
+                        NostrTURNAckEvent.parseIncoming(header, envelopeVsocketId);
+                        cancelConnectAckTimeout();
+                        state = 2;
                     }
-                    NostrTURNAckEvent.parseIncoming(header, envelopeVsocketId);
-                    cancelConnectAckTimeout();
-                    state = 2;
 
                     // notify listeners
                     for (NostrTURNChannelListener l : listeners) {
@@ -759,7 +775,7 @@ public final class NostrTURNChannel {
         return vSocketId;
     }
 
-    private void sendControlEvent(NostrTURNEvent event) {
+    private synchronized void sendControlEvent(NostrTURNEvent event) {
         TURNTransport currentTransport = this.transport;
         if (currentTransport == null || !currentTransport.isConnected()) {
             logger.fine("TURN channel has no active transport, cannot send control event");
@@ -769,17 +785,35 @@ public final class NostrTURNChannel {
             }
             return;
         }
+        final long expectedAttempt = connectAttempt;
+        final boolean connecting = event instanceof NostrTURNConnectEvent;
         event
             .encodeToFrame(null)
             .compose(bbf -> {
-                return currentTransport.getTransport().sendBinary(bbf);
+                synchronized (NostrTURNChannel.this) {
+                    if (
+                        connecting &&
+                        (closed || state != 1 || connectAttempt != expectedAttempt || transport != currentTransport)
+                    ) {
+                        return AsyncTask.completed(null);
+                    }
+                    return currentTransport.getTransport().sendBinary(bbf);
+                }
             })
             .catchException(ex -> {
                 logger.log(Level.FINE, "Failed to send TURN event: {0}", ex);
-                if (event instanceof NostrTURNConnectEvent) {
-                    cancelConnectAckTimeout();
-                    state = 0;
-                    setTransport(null);
+                synchronized (NostrTURNChannel.this) {
+                    if (
+                        connecting &&
+                        !closed &&
+                        state == 1 &&
+                        connectAttempt == expectedAttempt &&
+                        transport == currentTransport
+                    ) {
+                        cancelConnectAckTimeout();
+                        state = 0;
+                        setTransport(null);
+                    }
                 }
             });
     }

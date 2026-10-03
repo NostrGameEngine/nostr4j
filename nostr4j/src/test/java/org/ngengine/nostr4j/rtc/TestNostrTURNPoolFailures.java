@@ -5,8 +5,6 @@
  */
 package org.ngengine.nostr4j.rtc;
 
-import org.ngengine.nostr4j.RTCSettings;
-
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -28,6 +26,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.ngengine.nostr4j.RTCSettings;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.event.UnsignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
@@ -65,6 +64,53 @@ public class TestNostrTURNPoolFailures {
     public void tearDown() throws Exception {
         if (previousPlatform != null) {
             installPlatform(previousPlatform);
+        }
+    }
+
+    @Test
+    public void testLateConnectSendFailureCannotDisconnectAcknowledgedChannel() throws Exception {
+        assertLateConnectFailureIsIgnored(false);
+    }
+
+    @Test
+    public void testLateConnectSendFailureCannotResetNewerPendingAttempt() throws Exception {
+        assertLateConnectFailureIsIgnored(true);
+    }
+
+    private void assertLateConnectFailureIsIgnored(boolean waitForRetry) throws Exception {
+        NostrRTCLocalPeer local = localPeer("late-connect");
+        DelayedConnectPlatform platform = new DelayedConnectPlatform(local);
+        installPlatform(platform);
+        NostrTURNPool pool = new NostrTURNPool(24);
+        try {
+            NostrTURNChannel channel = pool.connect(local, remotePeer("late-remote"), TURN_URL, room(), "primary", true, null);
+            long socketId = channel.getRoutingVsocketId();
+            waitUntil(() -> platform.firstFailures.containsKey(socketId), 3000L, "first CONNECT send must remain pending");
+            if (waitForRetry) {
+                waitUntil(() -> platform.connectFrames.get(socketId).get() >= 2, 10000L, "bounded ACK deadline must retry");
+                assertTrue(channel.isConnectPending());
+            } else {
+                ByteBuffer ack = NGEUtils.awaitNoThrow(
+                    org.ngengine.nostr4j.rtc.turn.NostrTURNAckEvent
+                        .createAck(local, null, null, null, channel.getRoutingVsocketId())
+                        .encodeToFrame(Collections.emptyList())
+                );
+                channel.onBinaryMessage(ack);
+                assertTrue(channel.isConnected());
+            }
+            Field transportField = NostrTURNChannel.class.getDeclaredField("transport");
+            transportField.setAccessible(true);
+            Object transportBeforeFailure = transportField.get(channel);
+            platform.firstFailures.get(socketId).accept(new IllegalStateException("obsolete send completion"));
+            Thread.sleep(120L);
+            assertTrue(waitForRetry ? channel.isConnectPending() : channel.isConnected());
+            org.junit.Assert.assertSame(
+                "obsolete completion must not replace the active transport",
+                transportBeforeFailure,
+                transportField.get(channel)
+            );
+        } finally {
+            pool.close();
         }
     }
 
@@ -187,13 +233,24 @@ public class TestNostrTURNPoolFailures {
             NostrTURNChannel channel = pool.connect(local, remote, TURN_URL, room, "primary", true, null);
             assertFalse(channel.isReady());
             waitUntil(
-                () -> halfOpen.getConnectFrameCount() >= 2,
+                () -> halfOpen.getConnectFrameCount(channel.getRoutingVsocketId()) >= 1,
+                3000L,
+                "initial CONNECT must be sent"
+            );
+            Thread.sleep(300L);
+            assertEquals(
+                "cached and live challenge must share one pending CONNECT",
+                1,
+                halfOpen.getConnectFrameCount(channel.getRoutingVsocketId())
+            );
+            waitUntil(
+                () -> halfOpen.getConnectFrameCount(channel.getRoutingVsocketId()) >= 2,
                 13000,
                 "connect handshake should retry after half-open timeout"
             );
             assertTrue(
                 "expected at least two TURN connect attempts after timeout recovery",
-                halfOpen.getConnectFrameCount() >= 2
+                halfOpen.getConnectFrameCount(channel.getRoutingVsocketId()) >= 2
             );
             assertFalse("half-open channel must not report connected/ready", channel.isConnected());
         } finally {
@@ -682,10 +739,48 @@ public class TestNostrTURNPoolFailures {
         }
     }
 
+    private static final class DelayedConnectPlatform extends JVMAsyncPlatform {
+
+        private final NostrRTCLocalPeer local;
+        private final java.util.concurrent.ConcurrentHashMap<Long, AtomicInteger> connectFrames =
+            new java.util.concurrent.ConcurrentHashMap<>();
+        private final java.util.concurrent.ConcurrentHashMap<Long, java.util.function.Consumer<Throwable>> firstFailures =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+        private DelayedConnectPlatform(NostrRTCLocalPeer local) {
+            this.local = local;
+        }
+
+        @Override
+        public WebsocketTransport newTransport() {
+            return new TestWebsocketTransport(true) {
+                @Override
+                public AsyncTask<Void> sendBinary(ByteBuffer payload) {
+                    long socketId = NostrTURNCodec.extractVsocketId(payload);
+                    if (
+                        "connect".equals(frameType(payload)) &&
+                        connectFrames.computeIfAbsent(socketId, ignored -> new AtomicInteger()).incrementAndGet() == 1
+                    ) {
+                        return AsyncTask.create((resolve, reject) -> firstFailures.put(socketId, reject));
+                    }
+                    return AsyncTask.completed(null);
+                }
+
+                @Override
+                protected ByteBuffer challengeFrame() {
+                    return NGEUtils.awaitNoThrow(
+                        NostrTURNChallengeEvent.createChallenge(local, 8, "").encodeToFrame(Collections.emptyList())
+                    );
+                }
+            };
+        }
+    }
+
     private static final class HalfOpenPlatform extends JVMAsyncPlatform {
 
         private final NostrRTCLocalPeer challengeSignerPeer;
-        private final AtomicInteger connectFrames = new AtomicInteger();
+        private final java.util.concurrent.ConcurrentHashMap<Long, AtomicInteger> connectFrames =
+            new java.util.concurrent.ConcurrentHashMap<>();
 
         private HalfOpenPlatform(NostrRTCLocalPeer challengeSignerPeer) {
             this.challengeSignerPeer = challengeSignerPeer;
@@ -698,7 +793,9 @@ public class TestNostrTURNPoolFailures {
                 protected void onSendBinary(ByteBuffer payload) {
                     String type = frameType(payload);
                     if ("connect".equals(type)) {
-                        connectFrames.incrementAndGet();
+                        connectFrames
+                            .computeIfAbsent(NostrTURNCodec.extractVsocketId(payload), ignored -> new AtomicInteger())
+                            .incrementAndGet();
                     }
                 }
 
@@ -710,8 +807,9 @@ public class TestNostrTURNPoolFailures {
             };
         }
 
-        int getConnectFrameCount() {
-            return connectFrames.get();
+        int getConnectFrameCount(long socketId) {
+            AtomicInteger count = connectFrames.get(socketId);
+            return count == null ? 0 : count.get();
         }
     }
 
