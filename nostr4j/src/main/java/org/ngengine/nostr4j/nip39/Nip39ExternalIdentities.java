@@ -57,10 +57,10 @@ public class Nip39ExternalIdentities extends Nip01UserMetadata {
             NostrEvent sourceEvent = getSourceEvent();
             if (sourceEvent != null) {
                 Collection<TagValue> is = sourceEvent.getTag("i");
-                for (TagValue t : is) {
+                for (TagValue t : is == null ? java.util.Collections.<TagValue>emptyList() : is) {
                     if (t.size() == 0) continue;
                     String platformAndId[] = t.get(0).split(":", 2);
-                    if (platformAndId.length != 2) continue;
+                    if (platformAndId.length != 2 || platformAndId[0].isEmpty() || platformAndId[1].isEmpty()) continue;
                     List<String> proofs = new ArrayList<>();
                     for (int i = 1; i < t.size(); i++) {
                         proofs.add(t.get(i));

@@ -38,4 +38,17 @@ public class TestNip39ExternalIdentities {
         Assert.assertEquals("example", identity.getIdentity());
         Assert.assertEquals(List.of("proof"), identity.getProof());
     }
+
+    @Test
+    public void testAbsentAndMalformedIdentityTagsAreIgnored() {
+        UnsignedNostrEvent event = new UnsignedNostrEvent().withKind(0).withContent("{}");
+        Assert.assertTrue(new Nip39ExternalIdentities(event).getExternalIdentities().isEmpty());
+        event.withTag("i", List.of("broken"));
+        event.withTag("i", List.of(":empty"));
+        event.withTag("i", List.of("github:"));
+        event.withTag("i", List.of("github:alice:extra", "proof"));
+        List<ExternalIdentity> identities = new Nip39ExternalIdentities(event).getExternalIdentities();
+        Assert.assertEquals(1, identities.size());
+        Assert.assertEquals("alice:extra", identities.get(0).getIdentity());
+    }
 }
