@@ -36,7 +36,6 @@ import java.awt.datatransfer.StringSelection;
 import java.awt.event.*;
 import java.awt.geom.Rectangle2D;
 import java.io.ByteArrayInputStream;
-import java.net.URL;
 import java.text.SimpleDateFormat;
 import java.time.Instant;
 import java.util.Arrays;
@@ -46,7 +45,6 @@ import java.util.TimeZone;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import java.util.regex.Pattern;
 import javax.sound.sampled.*;
 import javax.swing.*;
 import javax.swing.border.*;
@@ -1109,40 +1107,6 @@ public class NostrClient extends JFrame {
             );
         contentMainPanel.add(contentScroll);
 
-        // Check for image URLs in content
-        String content = event.getContent();
-        Pattern pattern = Pattern.compile("(https?://\\S+\\.(jpg|jpeg|png|gif|bmp))", Pattern.CASE_INSENSITIVE);
-        java.util.regex.Matcher matcher = pattern.matcher(content);
-
-        // If image URLs are found, create an image panel
-        if (matcher.find()) {
-            matcher.reset();
-            while (matcher.find()) {
-                String imageUrl = matcher.group(1);
-
-                // Loading indicator with 90s cyber style
-                JPanel imageContainer = new JPanel(new BorderLayout());
-                imageContainer.setOpaque(false);
-                imageContainer.setBorder(BorderFactory.createEmptyBorder(5, 0, 0, 0));
-
-                JPanel loadingPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
-                loadingPanel.setOpaque(false);
-
-                JLabel loadingLabel = new JLabel(
-                    "LOADING IMAGE: [" + imageUrl.substring(0, Math.min(imageUrl.length(), 30)) + "...]"
-                );
-                loadingLabel.setFont(new Font("Courier New", Font.ITALIC, 11));
-                loadingLabel.setForeground(ELECTRIC_BLUE);
-
-                loadingPanel.add(loadingLabel);
-                imageContainer.add(loadingPanel, BorderLayout.CENTER);
-                contentMainPanel.add(imageContainer);
-
-                // Load the image asynchronously
-                loadImageAsync(imageUrl, imageContainer);
-            }
-        }
-
         // Add all components
         panel.add(headerPanel, BorderLayout.NORTH);
         panel.add(contentMainPanel, BorderLayout.CENTER);
@@ -1151,73 +1115,6 @@ public class NostrClient extends JFrame {
         fetchMetadata(event.getPubkey(), authorLabel);
 
         return panel;
-    }
-
-    private void loadImageAsync(String imageUrl, JPanel container) {
-        SwingWorker<ImageIcon, Void> worker = new SwingWorker<>() {
-            @Override
-            protected ImageIcon doInBackground() throws Exception {
-                try {
-                    URL url = new URL(imageUrl);
-                    return new ImageIcon(url);
-                } catch (Exception e) {
-                    System.out.println("Error loading image: " + e.getMessage());
-                    return null;
-                }
-            }
-
-            @Override
-            protected void done() {
-                try {
-                    ImageIcon icon = get();
-                    if (icon != null) {
-                        // Remove loading message
-                        container.removeAll();
-
-                        // Scale down large images
-                        Image img = icon.getImage();
-                        int maxWidth = 400;
-
-                        if (icon.getIconWidth() > maxWidth) {
-                            double ratio = (double) maxWidth / icon.getIconWidth();
-                            int newHeight = (int) (icon.getIconHeight() * ratio);
-                            img = img.getScaledInstance(maxWidth, newHeight, Image.SCALE_SMOOTH);
-                            icon = new ImageIcon(img);
-                        }
-
-                        // Create a panel with cyber border
-                        JPanel imageWrapper = new JPanel(new BorderLayout());
-                        imageWrapper.setBorder(
-                            BorderFactory.createCompoundBorder(
-                                BorderFactory.createLineBorder(ELECTRIC_BLUE, 1),
-                                BorderFactory.createEmptyBorder(1, 1, 1, 1)
-                            )
-                        );
-                        imageWrapper.setOpaque(false);
-
-                        JLabel imageLabel = new JLabel(icon);
-                        imageWrapper.add(imageLabel, BorderLayout.CENTER);
-
-                        container.add(imageWrapper, BorderLayout.CENTER);
-                        container.revalidate();
-                        container.repaint();
-                    } else {
-                        container.removeAll();
-                        JLabel errorLabel = new JLabel(">> IMAGE LOAD FAILED <<");
-                        errorLabel.setFont(new Font("Courier New", Font.BOLD, 11));
-                        errorLabel.setForeground(NEON_PINK);
-                        errorLabel.setHorizontalAlignment(JLabel.CENTER);
-                        container.add(errorLabel, BorderLayout.CENTER);
-                        container.revalidate();
-                        container.repaint();
-                    }
-                } catch (Exception e) {
-                    System.out.println("Error displaying image: " + e.getMessage());
-                }
-            }
-        };
-
-        worker.execute();
     }
 
     private void fetchMetadata(NostrPublicKey pubkey, JLabel authorLabel) {
