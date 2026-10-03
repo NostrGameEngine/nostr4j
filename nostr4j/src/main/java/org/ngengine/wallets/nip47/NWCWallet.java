@@ -148,7 +148,7 @@ public class NWCWallet implements Wallet {
     }
 
     private AsyncTask<WalletCapabilities> getCapabilities() {
-        logger.finest("Fetching supported methods for wallet: " + uri);
+        logger.finest("Fetching supported wallet methods");
         if (capabilities == null) {
             synchronized (this) {
                 if (capabilities == null) {
@@ -240,7 +240,7 @@ public class NWCWallet implements Wallet {
                 return signer
                     .decrypt(content, uri.getPubkey(), encryptionAlgorithm)
                     .then(decryptedContent -> {
-                        logger.finest("Receiving response: " + decryptedContent);
+                        logger.finest("Received wallet response");
                         Map<String, Object> data = NGEPlatform.get().fromJSON(decryptedContent, Map.class);
                         String resultType = (String) data.get("result_type");
                         if (!resultType.equals(method)) throw new IllegalStateException(
@@ -288,7 +288,7 @@ public class NWCWallet implements Wallet {
                 if (expiresAt != null) {
                     req.withExpiration(expiresAt);
                 }
-                logger.finest("Making request: " + req.toString());
+                logger.finest("Making wallet request");
                 return signer
                     .encrypt(json, uri.getPubkey(), info.encryptionAlgorithm)
                     .compose(encryptedJson -> {
@@ -352,7 +352,7 @@ public class NWCWallet implements Wallet {
             expireRequestAt
         )
             .then(res -> {
-                logger.finest("Pay request sent, got response: " + res);
+                logger.finest("Pay request completed");
                 return mapPayResponses(res, false);
             });
     }
