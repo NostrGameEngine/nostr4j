@@ -141,35 +141,29 @@ public class BlossomEndpoint {
      * @return an AsyncTask that returns a BlossomResponse containing the BlobDescriptor and the HTTP response
      */
     public AsyncTask<BlossomResponse> upload(byte[] data, @Nullable String mimeType, @Nullable SignedNostrEvent authEvent) {
-        logger.finer(
-            "Uploading blob, size: " + data.length + ", mimeType: " + mimeType + ", authenticated: " + (authEvent != null)
-        );
-        Map<String, String> headers = new HashMap<>();
-        headers.put("Content-Type", mimeType != null ? mimeType : "application/octet-stream");
-        headers.put("Content-Length", String.valueOf(data.length));
-        return httpRequest("upload", "PUT", headers, data, authEvent)
-            .then(response -> {
-                handleError(response);
-                // Parse the response body as a BlobDescriptor
-                Map<String, Object> responseMap = NGEPlatform.get().fromJSON(NGEUtils.safeString(response.body()), Map.class);
-                BlobDescriptor descriptor = new BlobDescriptor(responseMap);
-                return new BlossomResponse(List.of(descriptor), response);
-            });
+        return uploadOwned(data.clone(), mimeType, authEvent);
     }
 
     public AsyncTask<BlossomResponse> upload(ByteBuffer data, @Nullable String mimeType, @Nullable SignedNostrEvent authEvent) {
-        ByteBuffer body = data.slice();
-        logger.finer(
-            "Uploading blob, size: " + body.remaining() + ", mimeType: " + mimeType + ", authenticated: " + (authEvent != null)
-        );
+        byte[] body = new byte[data.remaining()];
+        data.duplicate().get(body);
+        return uploadOwned(body, mimeType, authEvent);
+    }
+
+    private AsyncTask<BlossomResponse> uploadOwned(byte[] body, String mimeType, SignedNostrEvent authEvent) {
+        boolean verify = verifyBlobs.get();
+        String expectedHash = verify ? NGEUtils.bytesToHex(NGEPlatform.get().sha256(body)) : null;
         Map<String, String> headers = new HashMap<>();
         headers.put("Content-Type", mimeType != null ? mimeType : "application/octet-stream");
-        headers.put("Content-Length", String.valueOf(body.remaining()));
+        headers.put("Content-Length", String.valueOf(body.length));
         return httpRequest("upload", "PUT", headers, body, authEvent)
             .then(response -> {
                 handleError(response);
                 Map<String, Object> responseMap = NGEPlatform.get().fromJSON(NGEUtils.safeString(response.body()), Map.class);
                 BlobDescriptor descriptor = new BlobDescriptor(responseMap);
+                if (verify && (!expectedHash.equalsIgnoreCase(descriptor.getSha256()) || descriptor.getSize() != body.length)) {
+                    throw new IOException("Uploaded blob descriptor does not match submitted bytes");
+                }
                 return new BlossomResponse(List.of(descriptor), response);
             });
     }
