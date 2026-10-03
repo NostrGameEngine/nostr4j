@@ -110,7 +110,7 @@ public final class Nip57 {
      *
      * @param zapReceiptEvent the zap receipt event to parse and validate. This event must be already signed and the signature is verified in this method as part of the validation process.
      * @param expectedInvoice  if the caller has access to the original zap invoice that was paid, it can be passed in this argument for additional validation.
-     * @param expectedProviderPublickey if the caller has access to the expected provider public key, it can be passed in this argument for additional validation.
+     * @param expectedProviderPublickey trusted provider key; required unless supplied by expectedInvoice.
      * @param expectedZapRequestEvent if the caller has access to the original zap request event, it can be passed in this argument for additional validation.
      * @param expectedZapPreimage if the caller has access to the expected preimage of the zap, it can be passed in this argument for additional validation.
      * @param expectedLnUrl if the caller has access to the expected LNURL of the zap recipient, it can be passed in this argument for additional validation.
@@ -127,6 +127,9 @@ public final class Nip57 {
         @Nullable NostrPublicKey expectedSender
     ) {
         Objects.requireNonNull(zapReceiptEvent, "zapReceiptEvent");
+        if (expectedProviderPublickey == null && (expectedInvoice == null || expectedInvoice.getProviderPubkey() == null)) {
+            return AsyncTask.failed(new InvalidZapException("Trusted zap provider public key is required"));
+        }
         return zapReceiptEvent
             .verifyAsync()
             .then(valid -> {
