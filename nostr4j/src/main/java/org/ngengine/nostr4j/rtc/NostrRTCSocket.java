@@ -101,8 +101,6 @@ public final class NostrRTCSocket {
     private final NostrTURNPool turnPool;
     private final Map<String, NostrRTCChannel> channels = new ConcurrentHashMap<>();
 
-
-
     private volatile RTCTransport transport;
     private final NostrRTCPeer remotePeer;
     private volatile boolean connected = false, stopped = false;
@@ -129,7 +127,7 @@ public final class NostrRTCSocket {
             if (!physicalLinkEnabled) {
                 return;
             }
-            logger.fine("Received local ICE candidate: " + candidateString);
+            logger.fine("Received local ICE candidate");
             localIceCandidates.addIfAbsent(candidateString);
             emitCandidates();
         }
@@ -813,7 +811,7 @@ public final class NostrRTCSocket {
         delayedCandidateEmission =
             this.executor.runLater(
                     () -> {
-                        logger.fine("Emitting ICE candidates " + localIceCandidates);
+                        logger.fine("Emitting ICE candidates");
 
                         for (NostrRTCSocketListener listener : listeners) {
                             try {
@@ -860,16 +858,14 @@ public final class NostrRTCSocket {
 
             return this.transport.listen()
                 .then(offerString -> {
-                    logger.fine(
-                        "Use offer string: " + offerString + " to connect with connection ID: " + localPeer.getSessionId()
-                    );
+                    logger.fine("Created RTC offer");
                     NostrRTCOfferSignal offer = new NostrRTCOfferSignal(
                         localPeer.getSigner(),
                         roomKeyPair,
                         localPeer,
                         offerString
                     );
-                    logger.fine("Ready to send offer " + offer + " to connection ID: " + localPeer.getSessionId());
+                    logger.fine("Ready to send RTC offer");
 
                     return offer;
                 })
@@ -896,7 +892,7 @@ public final class NostrRTCSocket {
         if (!physicalLinkEnabled) {
             return AsyncTask.failed(new IllegalStateException("Physical peer link is disabled"));
         }
-        logger.fine("Connecting to RTC socket " + offerOrAnswer);
+        logger.fine("Connecting to RTC socket");
         this.lastRtcAttemptSince = Instant.now();
         this.pendingConnectionSince = Instant.now();
         scheduleRtcConnectTimeout("connect");
@@ -932,7 +928,7 @@ public final class NostrRTCSocket {
                     logger.fine("Connected to RTC socket");
                     return null;
                 }
-                logger.fine("Connected to RTC socket, received answer " + answerString);
+                logger.fine("Received RTC answer");
                 NostrRTCAnswerSignal answer = new NostrRTCAnswerSignal(
                     localPeer.getSigner(),
                     roomKeyPair,
