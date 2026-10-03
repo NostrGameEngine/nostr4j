@@ -61,7 +61,6 @@ public class NostrRelayWatchdog implements NostrRelayComponent {
             .fetch(new NostrFilter().limit(1).withKind(0), 1, Duration.ofMinutes(5))
             .then(evs -> {
                 pool.clean();
-                relay.disconnect("watchdog", false);
                 return null;
             })
             .catchException(ex -> {
