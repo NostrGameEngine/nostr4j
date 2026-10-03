@@ -390,14 +390,9 @@ public final class NostrTURNPool implements AutoCloseable {
      * @param channel
      */
     private void resurrectChannel(NostrTURNChannel channel) {
-        if (channel.isClosed() || channel.isConnected() || channel.isResurrecting()) {
+        if (!channel.beginResurrection(System.currentTimeMillis())) {
             return;
         }
-        long now = System.currentTimeMillis();
-        if (!channel.canAttemptResurrection(now)) {
-            return;
-        }
-        channel.setResurrecting(true);
         useWebsocketTransport(channel)
             .then(transport -> {
                 channel.clearResurrectionBackoff();
