@@ -14,7 +14,6 @@ dependencies {
     testImplementation "org.ngengine:nge-platform-jvm:${ngePlatformVersion}"
     testImplementation libs.gson
     implementation libs.jakarta.annotation.api
-    implementation libs.slf4j.jdk14
 
     api "org.ngengine:bech32:${bech32Version}"
     api "org.ngengine:lnurl4j:${lnurlVersion}"

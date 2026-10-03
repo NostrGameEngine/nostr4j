@@ -15,6 +15,7 @@ tasks.named('compileJava') {
 }
 
 dependencies {
+    runtimeOnly libs.slf4j.jdk14
     def ngePlatformVersion = project.version.endsWith('-SNAPSHOT') ? libs.versions.ngePlatformSnapshot.get() : libs.versions.ngePlatform.get()
 
     testImplementation libs.junit4
