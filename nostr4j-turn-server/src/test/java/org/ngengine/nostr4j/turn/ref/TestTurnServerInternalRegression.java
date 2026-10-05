@@ -8,6 +8,7 @@ package org.ngengine.nostr4j.turn.ref;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+import java.io.IOException;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -17,6 +18,12 @@ import java.time.Instant;
 import java.util.Collections;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.logging.Handler;
+import java.util.logging.Level;
+import java.util.logging.LogRecord;
+import org.eclipse.jetty.io.EofException;
+import org.eclipse.jetty.util.StaticException;
 import org.eclipse.jetty.websocket.api.Callback;
 import org.eclipse.jetty.websocket.api.Session;
 import org.junit.Test;
@@ -30,6 +37,56 @@ import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEUtils;
 
 public class TestTurnServerInternalRegression {
+
+    @Test
+    public void testTransportEofClosesConnectionWithoutWarning() throws Exception {
+        assertSocketErrorLevel(new EofException(new IOException("Broken pipe")), Level.FINE);
+        assertSocketErrorLevel(new RuntimeException("wrapped", new EofException()), Level.FINE);
+        assertSocketErrorLevel(new StaticException("Closed"), Level.FINE);
+    }
+
+    @Test
+    public void testUnexpectedSocketErrorsStillWarnAndCloseConnection() throws Exception {
+        assertSocketErrorLevel(new IOException("unexpected transport failure"), Level.WARNING);
+        assertSocketErrorLevel(new StaticException("unexpected failure"), Level.WARNING);
+    }
+
+    private static void assertSocketErrorLevel(Throwable cause, Level expectedLevel) throws Exception {
+        TurnServer server = new TurnServer(12345, NostrKeyPairSigner.generate(), 8, 5, 32);
+        AtomicReference<LogRecord> recorded = new AtomicReference<>();
+        Handler logHandler = new Handler() {
+            @Override
+            public void publish(LogRecord record) {
+                if (record.getThrown() == cause) {
+                    recorded.set(record);
+                }
+            }
+
+            @Override
+            public void flush() {}
+
+            @Override
+            public void close() {}
+        };
+        Level previousLevel = TurnServer.logger.getLevel();
+        logHandler.setLevel(Level.ALL);
+        TurnServer.logger.addHandler(logHandler);
+        TurnServer.logger.setLevel(Level.FINE);
+        try {
+            Session session = sessionProxy(SendBehavior.SUCCEED);
+            TurnServer.TurnHandler handler = server.new TurnHandler(server);
+            handler.onWebSocketOpen(session);
+            assertTrue(server.clients.containsKey(session));
+            handler.onWebSocketError(cause);
+            assertFalse("socket errors must evict the connection at either log level", server.clients.containsKey(session));
+            org.junit.Assert.assertNotNull("socket error must be logged", recorded.get());
+            org.junit.Assert.assertEquals(expectedLevel, recorded.get().getLevel());
+        } finally {
+            TurnServer.logger.removeHandler(logHandler);
+            TurnServer.logger.setLevel(previousLevel);
+            server.stop();
+        }
+    }
 
     @Test
     public void staleQueueCompletionRetainsBudgetUntilCommittedDequeue() throws Exception {

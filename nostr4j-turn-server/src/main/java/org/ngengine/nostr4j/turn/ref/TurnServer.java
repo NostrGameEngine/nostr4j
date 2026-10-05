@@ -46,8 +46,10 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.eclipse.jetty.ee10.servlet.ServletContextHandler;
 import org.eclipse.jetty.ee10.websocket.server.config.JettyWebSocketServletContainerInitializer;
+import org.eclipse.jetty.io.EofException;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.ServerConnector;
+import org.eclipse.jetty.util.StaticException;
 import org.eclipse.jetty.websocket.api.Callback;
 import org.eclipse.jetty.websocket.api.Session;
 import org.eclipse.jetty.websocket.api.StatusCode;
@@ -234,7 +236,10 @@ public final class TurnServer {
     private static boolean isExpectedSocketClosure(Throwable cause) {
         Throwable current = cause;
         while (current != null) {
-            if (current instanceof ClosedChannelException) {
+            if (current instanceof ClosedChannelException || current instanceof EofException) {
+                return true;
+            }
+            if (current instanceof StaticException && "Closed".equals(current.getMessage())) {
                 return true;
             }
             if (current instanceof WebSocketTimeoutException) {
