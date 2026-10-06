@@ -32,6 +32,7 @@ package org.ngengine.nostr4j.unit;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 import java.time.Instant;
 import java.util.Arrays;
@@ -39,6 +40,7 @@ import java.util.List;
 import java.util.Map;
 import org.junit.Test;
 import org.ngengine.nostr4j.NostrFilter;
+import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.platform.NGEPlatform;
 import org.ngengine.platform.NGEUtils;
@@ -143,6 +145,35 @@ public class TestNostrFilter {
         assertFalse(original.getTags().containsKey("x"));
         assertEquals(List.of("alpha", "beta"), original.getTagValues("p"));
     }
+
+    @Test
+    public void testTagMatchingPreservesSingletonMultipleAndAnyValueSemantics() {
+        SignedNostrEvent event = new SignedNostrEvent(
+            "0".repeat(64),
+            NostrPublicKey.fromHex("f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9"),
+            1,
+            "content",
+            Instant.ofEpochSecond(1700000000),
+            "0".repeat(128),
+            List.of(
+                List.of("t", "first", "second"),
+                List.of("u", "ok"),
+                List.of("empty"),
+                List.of("duplicate", "alpha"),
+                List.of("duplicate", "beta")
+            )
+        );
+        assertTrue(new NostrFilter().withTag("t", "first").matches(event));
+        assertFalse(new NostrFilter().withTag("t", "second").matches(event));
+        assertTrue(new NostrFilter().withTag("t", "second").matches(event, true));
+        assertTrue(new NostrFilter().withTag("t", "wrong", "first").matches(event));
+        assertTrue(new NostrFilter().withTag("duplicate", "beta").matches(event));
+        assertFalse(new NostrFilter().withTag("missing", "value").matches(event));
+        assertFalse(new NostrFilter().withTag("empty", "value").matches(event));
+        assertTrue(new NostrFilter().withTag("t", "first").withTag("u", "ok").matches(event));
+        assertFalse(new NostrFilter().withTag("t", "first").withTag("u", "wrong").matches(event));
+    }
+
     @Test
     public void testTagMatchingKeepsHasTagGuardForNullKeys() {
         SignedNostrEvent event = new SignedNostrEvent(
