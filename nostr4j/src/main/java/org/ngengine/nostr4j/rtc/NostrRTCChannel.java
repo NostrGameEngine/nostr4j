@@ -40,6 +40,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BooleanSupplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.rtc.listeners.NostrRTCChannelListener;
@@ -65,7 +66,7 @@ public final class NostrRTCChannel {
     private int pendingFragmentBytes;
     private AsyncTask<Void> fragmentCleanupTask;
     private static final long FRAGMENT_REASSEMBLY_TIMEOUT_MS = 30_000L;
-    private RTCDataChannel channel;
+    private volatile RTCDataChannel channel;
     private final NostrRTCSocket socket;
     private final String name;
     private final boolean ordered;
@@ -73,7 +74,7 @@ public final class NostrRTCChannel {
     private final Number maxRetransmits;
     private final Duration maxPacketLifeTime;
     private int bufferedAmountThreshold = -1;
-    private boolean closed = false;
+    private volatile boolean closed = false;
     private final CopyOnWriteArrayList<NostrRTCChannelListener> listeners = new CopyOnWriteArrayList<>();
 
     private volatile NostrTURNChannel turnReceive;
@@ -195,15 +196,47 @@ public final class NostrRTCChannel {
     }
 
     void setChannel(RTCDataChannel chan) {
+        synchronized (socket) {
+            updateNativeChannelState(chan);
+        }
+        finishNativeChannelChange(chan, () -> true);
+    }
+
+    boolean isUsingNativeChannel(RTCDataChannel expected) {
+        return channel == expected;
+    }
+
+    /** State-only part, called under the owning socket monitor. */
+    void updateNativeChannelState(RTCDataChannel chan) {
         this.channel = chan;
         this.resurrecting = false;
-        if (chan != null && !socket.isForceTURN()) {
-            if (bufferedAmountThreshold > 0) chan.setBufferedAmountLowThreshold(bufferedAmountThreshold);
-            emitChannelReady();
-            disposeTurn();
-        } else if (socket.isTurnFallbackAllowed() || socket.isForceTURN()) {
-            ensureTurn();
+    }
+
+    /** Native/application calls run after releasing the owning socket monitor. */
+    void finishNativeChannelChange(RTCDataChannel chan, BooleanSupplier ownerActive) {
+        // TURN/native connectivity checks can call provider code, so obtain this snapshot outside the socket monitor.
+        boolean turnReady = isTurnReady();
+        Runnable cleanup = () -> {};
+        Runnable ready = () -> {};
+        boolean bootstrapTurn = false;
+        int threshold = -1;
+        synchronized (socket) {
+            if (closed || this.channel != chan || !ownerActive.getAsBoolean()) return;
+            if (chan != null && !socket.isForceTURN()) {
+                threshold = bufferedAmountThreshold;
+                cleanup = detachTurn();
+                ready = socket.prepareChannelReadyNotification(this, turnReady, ownerActive);
+            } else {
+                bootstrapTurn = socket.isTurnFallbackAllowed() || socket.isForceTURN();
+            }
         }
+        try {
+            if (chan != null && threshold > 0) chan.setBufferedAmountLowThreshold(threshold);
+            ready.run();
+        } finally {
+            cleanup.run();
+        }
+        if (bootstrapTurn && ownerActive.getAsBoolean()) ensureTurn();
     }
 
     PreparedPacket prepareOutgoingPacket(ByteBuffer data) {
@@ -693,29 +726,55 @@ public final class NostrRTCChannel {
     }
 
     void disablePhysicalTransports() {
-        RTCDataChannel currentChannel = channel;
-        channel = null;
-        if (currentChannel != null) {
-            try {
-                currentChannel.close();
+        Runnable cleanup;
+        synchronized (socket) {
+            cleanup = detachPhysicalTransports();
+        }
+        cleanup.run();
+    }
+
+    /** State-only detach under the socket monitor; the returned action closes captured handles only. */
+    Runnable detachPhysicalTransports() {
+        RTCDataChannel previousChannel = channel;
+        updateNativeChannelState(null);
+        Runnable turnCleanup = detachTurn();
+        return () -> {
+            if (previousChannel != null) try {
+                previousChannel.close();
             } catch (Throwable error) {
                 logger.log(Level.FINE, "Failed to close disabled RTC data channel", error);
             }
-        }
-        disposeTurn();
+            turnCleanup.run();
+        };
     }
 
     private void disposeTurn() {
+        Runnable cleanup;
+        synchronized (socket) {
+            cleanup = detachTurn();
+        }
+        cleanup.run();
+    }
+
+    private void disposeTurnIfOwned(NostrTURNChannel expected) {
+        Runnable cleanup;
+        synchronized (socket) {
+            if (turnReceive != expected && turnSend != expected) return;
+            cleanup = detachTurn();
+        }
+        cleanup.run();
+    }
+
+    /** Caller holds the socket monitor. No provider or application code runs here. */
+    private Runnable detachTurn() {
         NostrTURNChannel receive = turnReceive;
         NostrTURNChannel send = turnSend;
         turnReceive = null;
         turnSend = null;
-        if (receive != null) {
-            receive.close("rtc-p2p-established");
-        }
-        if (send != null && send != receive) {
-            send.close("rtc-p2p-established");
-        }
+        return () -> {
+            if (receive != null) receive.close("rtc-p2p-established");
+            if (send != null && send != receive) send.close("rtc-p2p-established");
+        };
     }
 
     private void ensureTurn() {
@@ -772,7 +831,7 @@ public final class NostrRTCChannel {
 
                             @Override
                             public void onTurnChannelClosed(NostrTURNChannel channel, String reason) {
-                                disposeTurn();
+                                disposeTurnIfOwned(channel);
                             }
 
                             @Override
@@ -838,7 +897,7 @@ public final class NostrRTCChannel {
 
                         @Override
                         public void onTurnChannelClosed(NostrTURNChannel channel, String reason) {
-                            disposeTurn();
+                            disposeTurnIfOwned(channel);
                         }
 
                         @Override
