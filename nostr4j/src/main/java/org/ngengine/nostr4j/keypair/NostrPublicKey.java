@@ -141,7 +141,9 @@ public final class NostrPublicKey implements NostrKey {
      * @return a new NostrPublicKey instance
      */
     public static NostrPublicKey fromHex(String hex, boolean verify) {
-        return fromBytes(NGEUtils.hexToBytes(hex), verify);
+        // The decoder already owns a fresh buffer. Public key bytes do not
+        // need a second copy into guarded native storage for secret material.
+        return new NostrPublicKey(NGEUtils.hexToBytes(hex), verify);
     }
 
     /**

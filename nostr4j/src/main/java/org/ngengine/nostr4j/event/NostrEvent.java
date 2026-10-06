@@ -202,19 +202,7 @@ public interface NostrEvent extends Cloneable, Serializable {
 
     static String computeEventId(String pubkey, NostrEvent event) {
         try {
-            Collection<Object> serial = Arrays.asList(
-                0,
-                pubkey,
-                event.getCreatedAt().getEpochSecond(),
-                event.getKind(),
-                event.getTagRows(),
-                event.getContent()
-            );
-            assert dbg(() -> {
-                Logger logger = Logger.getLogger(NostrEvent.class.getName());
-                logger.finest("Serializing event: " + serial);
-            });
-            String json = NGEUtils.getPlatform().toJSON(serial);
+            String json = NostrEventJson.canonical(pubkey, event);
             assert dbg(() -> {
                 Logger logger = Logger.getLogger(NostrEvent.class.getName());
                 logger.finest("Serialized event: " + json);

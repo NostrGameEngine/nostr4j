@@ -33,6 +33,7 @@ package org.ngengine.nostr4j.unit;
 import static org.junit.Assert.*;
 
 import java.lang.reflect.Field;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collection;
@@ -56,6 +57,119 @@ import org.ngengine.platform.SafeFlag;
 import org.ngengine.platform.jvm.JVMAsyncPlatform;
 
 public class TestNostrEvent {
+
+    @Test
+    public void testIndependentCanonicalUnicodeAndControlCharacterVectors() throws Exception {
+        String fixture;
+        try (java.io.InputStream input = getClass().getResourceAsStream("/canonical-event-vectors.json")) {
+            assertNotNull(input);
+            fixture = new String(input.readAllBytes(), StandardCharsets.UTF_8);
+        }
+        List<Map<String, Object>> vectors = NGEUtils.getPlatform().fromJSON(fixture, List.class);
+        assertEquals(6, vectors.size());
+        for (Map<String, Object> map : vectors) {
+            SignedNostrEvent event = new SignedNostrEvent(map);
+            assertEquals(event.getId(), NostrEvent.computeEventId(event.getPubkey().asHex(), event));
+            assertTrue(event.verify());
+        }
+        UnsignedNostrEvent mutable = new UnsignedNostrEvent(vectors.get(0));
+        String first = NostrEvent.computeEventId((String) vectors.get(0).get("pubkey"), mutable);
+        mutable.withContent("changed after first hash");
+        assertNotEquals(first, NostrEvent.computeEventId((String) vectors.get(0).get("pubkey"), mutable));
+    }
+
+    @Test
+    public void testTypedTagSnapshotAndIndexCannotBeMutated() {
+        List<String> sourceRow = new java.util.ArrayList<>(Arrays.asList("t", "first", "second"));
+        List<List<String>> sourceRows = new java.util.ArrayList<>(List.of(sourceRow));
+        SignedNostrEvent event = new SignedNostrEvent(
+            "0".repeat(64),
+            new NostrKeyPair().getPublicKey(),
+            1,
+            "content",
+            Instant.ofEpochSecond(1700000000),
+            "0".repeat(128),
+            sourceRows
+        );
+        sourceRow.set(1, "changed");
+        sourceRows.clear();
+        assertEquals("first", event.getFirstTagFirstValue("t"));
+        assertEquals("first", event.getTagRows().get(0).get(1));
+        assertThrows(UnsupportedOperationException.class, () -> event.getFirstTag("t").getAll().set(0, "changed"));
+        assertThrows(UnsupportedOperationException.class, () -> event.getTagRows().get(0).set(1, "changed"));
+        assertThrows(UnsupportedOperationException.class, () -> event.getTag("t").clear());
+    }
+
+    @Test
+    public void testLazyTagIndexIsPublishedOnceToConcurrentReaders() throws Exception {
+        SignedNostrEvent event = new SignedNostrEvent(
+            "0".repeat(64),
+            new NostrKeyPair().getPublicKey(),
+            1,
+            "content",
+            Instant.ofEpochSecond(1700000000),
+            "0".repeat(128),
+            List.of(List.of("t", "first"), List.of("t", "second"), List.of("other", "value"))
+        );
+        java.util.concurrent.ExecutorService executor = java.util.concurrent.Executors.newFixedThreadPool(8);
+        java.util.concurrent.CountDownLatch start = new java.util.concurrent.CountDownLatch(1);
+        try {
+            List<java.util.concurrent.Future<List<NostrEvent.TagValue>>> readers = new java.util.ArrayList<>();
+            for (int i = 0; i < 32; i++) {
+                readers.add(
+                    executor.submit(() -> {
+                        start.await();
+                        return event.getTag("t");
+                    })
+                );
+            }
+            start.countDown();
+            List<NostrEvent.TagValue> index = readers.get(0).get();
+            assertEquals("first", index.get(0).get(0));
+            assertEquals("second", index.get(1).get(0));
+            for (java.util.concurrent.Future<List<NostrEvent.TagValue>> reader : readers) assertSame(index, reader.get());
+            assertEquals(List.of("t", "other"), new java.util.ArrayList<>(event.listTagKeys()));
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
+    public void testLazyIndexSurvivesJavaSerializationAndReadsPreviousSnapshot() throws Exception {
+        try (
+            java.io.ObjectInputStream input = new java.io.ObjectInputStream(
+                getClass().getResourceAsStream("/serialized-event-round1.bin")
+            )
+        ) {
+            SignedNostrEvent legacy = (SignedNostrEvent) input.readObject();
+            assertEquals("Serialization compatibility fixture", legacy.getContent());
+            assertTrue(legacy.verify());
+            assertTrue(legacy.listTagKeys().isEmpty());
+        }
+        String fixture;
+        try (java.io.InputStream input = getClass().getResourceAsStream("/canonical-event-vectors.json")) {
+            fixture = new String(input.readAllBytes(), StandardCharsets.UTF_8);
+        }
+        List<Map<String, Object>> vectors = NGEUtils.getPlatform().fromJSON(fixture, List.class);
+        SignedNostrEvent original = new SignedNostrEvent(vectors.get(0));
+        original.getTag("t");
+        assertTrue(original.verify());
+        java.io.ByteArrayOutputStream bytes = new java.io.ByteArrayOutputStream();
+        try (java.io.ObjectOutputStream output = new java.io.ObjectOutputStream(bytes)) {
+            output.writeObject(original);
+        }
+        try (
+            java.io.ObjectInputStream input = new java.io.ObjectInputStream(
+                new java.io.ByteArrayInputStream(bytes.toByteArray())
+            )
+        ) {
+            SignedNostrEvent restored = (SignedNostrEvent) input.readObject();
+            assertEquals(original.getTagRows(), restored.getTagRows());
+            assertEquals(original.getFirstTag("t").getAll(), restored.getFirstTag("t").getAll());
+            assertTrue(restored.verify());
+            assertThrows(UnsupportedOperationException.class, () -> restored.getFirstTag("t").getAll().clear());
+        }
+    }
 
     private static void setPlatformTestFlags(boolean noAuxRandom) throws Exception {
         setPlatformTestFlag("_NO_AUX_RANDOM", noAuxRandom);

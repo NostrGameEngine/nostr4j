@@ -56,6 +56,8 @@ import org.ngengine.platform.SafeFlag;
 
 public class SignedNostrEvent extends NostrMessage implements NostrEvent {
 
+    private static final long serialVersionUID = 2541630848810678482L;
+
     private static final byte[] BECH32_PREVIX = "note".getBytes(StandardCharsets.UTF_8);
 
     public static class Identifier implements Serializable {
@@ -87,7 +89,7 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
 
     private final int kind;
     private final String content;
-    private Map<String, List<TagValue>> tags;
+    private transient volatile Map<String, List<TagValue>> tags;
     private final List<List<String>> tagRows;
     private final String signature;
     private final String pubkey;
@@ -115,25 +117,13 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
         this.parsedPublicKey = pubkey;
         this.identifier = new Identifier(id, created_at);
 
-        Map<String, List<TagValue>> tagsMap = new LinkedHashMap<>();
-        ArrayList<List<String>> tagRows = new ArrayList<>();
+        ArrayList<List<String>> tagRows = new ArrayList<>(tags.size());
 
         for (List<String> tag : tags) {
             if (tag.isEmpty()) continue;
-            ArrayList<String> values = new ArrayList<>();
-            for (int i = 1; i < tag.size(); i++) {
-                values.add(tag.get(i));
-            }
-            TagValue tagValue = new TagValue(values);
-            List<TagValue> tagValues = tagsMap.computeIfAbsent(tag.get(0), k -> new ArrayList<>());
-            tagValues.add(tagValue);
-            tagRows.add(Collections.unmodifiableList(new ArrayList<>(tag)));
+            List<String> row = Collections.unmodifiableList(new ArrayList<>(tag));
+            tagRows.add(row);
         }
-
-        for (Entry<String, List<TagValue>> entry : tagsMap.entrySet()) {
-            entry.setValue(Collections.unmodifiableList(new ArrayList<>(entry.getValue())));
-        }
-        this.tags = Collections.unmodifiableMap(tagsMap);
         this.tagRows = Collections.unmodifiableList(tagRows);
     }
 
@@ -151,26 +141,35 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
             map.getOrDefault("tags", new ArrayList<Collection<String>>())
         );
 
-        Map<String, List<TagValue>> tagsMap = new LinkedHashMap<>();
-        ArrayList<List<String>> tagRows = new ArrayList<>();
+        ArrayList<List<String>> tagRows = new ArrayList<>(tags.size());
 
         for (String tag[] : tags) {
             if (tag.length == 0) continue;
-            ArrayList<String> values = new ArrayList<>();
-            for (int i = 1; i < tag.length; i++) {
-                values.add(tag[i]);
-            }
-            TagValue tagValue = new TagValue(values);
-            List<TagValue> tagValues = tagsMap.computeIfAbsent(tag[0], k -> new ArrayList<>());
-            tagValues.add(tagValue);
-            tagRows.add(Collections.unmodifiableList(new ArrayList<>(Arrays.asList(tag))));
+            // safeCollectionOfStringArray already owns and validates this array.
+            // The immutable row and index can share it without another copy.
+            List<String> row = Collections.unmodifiableList(Arrays.asList(tag));
+            tagRows.add(row);
         }
-
-        for (Entry<String, List<TagValue>> entry : tagsMap.entrySet()) {
-            entry.setValue(Collections.unmodifiableList(new ArrayList<>(entry.getValue())));
-        }
-        this.tags = Collections.unmodifiableMap(tagsMap);
         this.tagRows = Collections.unmodifiableList(tagRows);
+    }
+
+    private Map<String, List<TagValue>> getTagsIndex() {
+        Map<String, List<TagValue>> index = this.tags;
+        if (index != null) return index;
+        synchronized (this) {
+            if (this.tags != null) return this.tags;
+            Map<String, List<TagValue>> tagsMap = new LinkedHashMap<>();
+            for (List<String> row : tagRows) {
+                TagValue value = new TagValue(row.subList(1, row.size()));
+                tagsMap.computeIfAbsent(row.get(0), key -> new ArrayList<>()).add(value);
+            }
+            for (Entry<String, List<TagValue>> entry : tagsMap.entrySet()) {
+                entry.setValue(Collections.unmodifiableList(entry.getValue()));
+            }
+            index = Collections.unmodifiableMap(tagsMap);
+            this.tags = index;
+            return index;
+        }
     }
 
     @Override
@@ -365,12 +364,12 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
     @Override
     public boolean hasTag(String tag) {
         if (tag == null) return false;
-        return tags.get(tag) != null;
+        return getTagsIndex().get(tag) != null;
     }
 
     @Override
     public List<TagValue> getTag(String key) {
-        List<TagValue> values = tags.get(key);
+        List<TagValue> values = getTagsIndex().get(key);
         if (values != null && values.isEmpty()) {
             return null;
         }
@@ -379,7 +378,7 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
 
     @Override
     public TagValue getFirstTag(String key) {
-        List<TagValue> values = tags.get(key);
+        List<TagValue> values = getTagsIndex().get(key);
         if (values == null || values.isEmpty()) {
             return null;
         }
@@ -388,7 +387,7 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
 
     @Override
     public Set<String> listTagKeys() {
-        return tags.keySet();
+        return getTagsIndex().keySet();
     }
 
     @Override
