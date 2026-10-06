@@ -75,6 +75,7 @@ public final class NostrRTCChannel {
     private final Duration maxPacketLifeTime;
     private int bufferedAmountThreshold = -1;
     private volatile boolean closed = false;
+    private final AtomicLong writeGeneration = new AtomicLong();
     private final CopyOnWriteArrayList<NostrRTCChannelListener> listeners = new CopyOnWriteArrayList<>();
 
     private volatile NostrTURNChannel turnReceive;
@@ -208,7 +209,9 @@ public final class NostrRTCChannel {
 
     /** State-only part, called under the owning socket monitor. */
     void updateNativeChannelState(RTCDataChannel chan) {
+        boolean replaced = this.channel != chan;
         this.channel = chan;
+        if (replaced) writeGeneration.incrementAndGet();
         this.resurrecting = false;
     }
 
@@ -276,6 +279,14 @@ public final class NostrRTCChannel {
     }
 
     AsyncTask<Boolean> write(PreparedPacket packet) {
+        return write(packet, () -> true);
+    }
+
+    long getWriteGeneration() {
+        return writeGeneration.get();
+    }
+
+    AsyncTask<Boolean> write(PreparedPacket packet, BooleanSupplier attemptActive) {
         int payloadChunkSize = MAX_APPLICATION_FRAGMENT_SIZE;
         InternalRoutedTransport routed = socket.getRoutedTransport();
         if (!socket.isRTCConnected() && routed != null && routed.shouldUseRoute(this)) {
@@ -289,7 +300,7 @@ public final class NostrRTCChannel {
             final ByteBuffer framePayload = frame.asReadOnlyBuffer();
             chain =
                 chain.compose(ok -> {
-                    if (!Boolean.TRUE.equals(ok)) {
+                    if (!Boolean.TRUE.equals(ok) || closed || socket.isClosed() || !attemptActive.getAsBoolean()) {
                         return AsyncTask.completed(Boolean.FALSE);
                     }
                     return writeSingleFragment(framePayload);
@@ -398,6 +409,7 @@ public final class NostrRTCChannel {
     void close() {
         if (closed) return;
         closed = true;
+        writeGeneration.incrementAndGet();
         synchronized (receivedPacketIdsLock) {
             if (fragmentCleanupTask != null) fragmentCleanupTask.cancel();
             fragmentCleanupTask = null;
