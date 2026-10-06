@@ -30,10 +30,7 @@
  */
 package org.ngengine.nostr4j.event;
 
-import java.util.Arrays;
 import java.util.List;
-import org.ngengine.platform.NGEPlatform;
-import org.ngengine.platform.NGEUtils;
 
 /** Serializes the fixed NIP-01 hashing structure without a generic object tree. */
 final class NostrEventJson {
@@ -46,12 +43,6 @@ final class NostrEventJson {
         String content = event.getContent();
         List<List<String>> tags = event.getTagRows();
         long createdAt = event.getCreatedAt().getEpochSecond();
-        NGEPlatform platform = NGEUtils.getPlatform();
-        if (platform.supportsMinimalJSONEscaping() && createdAt >= -9007199254740991L && createdAt <= 9007199254740991L) {
-            // Native JSON.stringify is substantially faster than a compiled
-            // Java character loop on TeaVM, with the same NIP-01 escaping.
-            return platform.toJSON(Arrays.asList(0, pubkey, createdAt, event.getKind(), tags, content));
-        }
         int capacity = Math.addExact(80, (content == null ? 4 : content.length()) + (pubkey == null ? 4 : pubkey.length()));
         for (List<String> row : tags) {
             capacity = Math.addExact(capacity, 3);

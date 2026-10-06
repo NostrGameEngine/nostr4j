@@ -202,6 +202,22 @@ public interface NostrEvent extends Cloneable, Serializable {
 
     static String computeEventId(String pubkey, NostrEvent event) {
         try {
+            NGEPlatform platform = NGEUtils.getPlatform();
+            long createdAt = event.getCreatedAt().getEpochSecond();
+            if (platform.supportsMinimalJSONEscaping() && createdAt >= -9007199254740991L && createdAt <= 9007199254740991L) {
+                List<Object> payload = Arrays.asList(
+                    0,
+                    pubkey,
+                    createdAt,
+                    event.getKind(),
+                    event.getTagRows(),
+                    event.getContent()
+                );
+                assert dbg(() ->
+                    Logger.getLogger(NostrEvent.class.getName()).finest("Serialized event: " + platform.toJSON(payload))
+                );
+                return platform.sha256JSON(payload);
+            }
             String json = NostrEventJson.canonical(pubkey, event);
             assert dbg(() -> {
                 Logger logger = Logger.getLogger(NostrEvent.class.getName());
