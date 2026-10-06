@@ -6,7 +6,6 @@ package org.ngengine.nostr4j.rtc;
 
 import java.nio.ByteBuffer;
 import java.util.Collection;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -14,6 +13,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
@@ -53,7 +53,10 @@ public final class NostrTURNPool implements AutoCloseable {
 
     private final List<NostrTURNChannel> channels = new CopyOnWriteArrayList<>();
     private final Map<String, AsyncTask<TURNTransport>> transports = new ConcurrentHashMap<>();
-    private final Map<String, TURNTransport> connectingTransports = new ConcurrentHashMap<String, TURNTransport>();
+    private final Map<AsyncTask<TURNTransport>, TURNTransport> connectingTransports =
+        new ConcurrentHashMap<AsyncTask<TURNTransport>, TURNTransport>();
+    // Channels sharing a failed URL share its retry delay as well as its connection.
+    private final Map<String, Long> failedTransportRetryAtMs = new ConcurrentHashMap<String, Long>();
     private final int maxAcceptedDiff;
     private volatile long failedResurrectionBackoffMs = DEFAULT_FAILED_RESURRECTION_BACKOFF_MS;
 
@@ -94,6 +97,7 @@ public final class NostrTURNPool implements AutoCloseable {
         boolean reliable,
         NostrTURNChannelListener listener
     ) {
+        if (closed) throw new IllegalStateException("TURN pool is closed");
         NostrTURNChannel channel = new NostrTURNChannel(
             localPeer,
             remotePeer,
@@ -123,12 +127,17 @@ public final class NostrTURNPool implements AutoCloseable {
         );
 
         this.channels.add(channel);
-        resurrectChannel(channel);
+        if (closed) {
+            channel.close("TURN pool is closed");
+        } else {
+            resurrectChannel(channel);
+        }
         return channel;
     }
 
     @Override
     public void close() {
+        if (closed) return;
         closed = true;
         for (NostrTURNChannel channel : channels) {
             channel.close("closed by pool");
@@ -150,6 +159,8 @@ public final class NostrTURNPool implements AutoCloseable {
             });
         }
         transports.clear();
+        failedTransportRetryAtMs.clear();
+        executor.close();
     }
 
     /**
@@ -161,158 +172,217 @@ public final class NostrTURNPool implements AutoCloseable {
      */
     private AsyncTask<TURNTransport> useWebsocketTransport(NostrTURNChannel channel) {
         String turnServerUrl = channel.getServerUrl();
-
-        // try to reuse existing transports
-        AsyncTask<TURNTransport> wsP = transports.compute(
-            turnServerUrl,
-            (url, tr) -> {
-                boolean shouldCreate = tr == null || tr.isFailed();
-                if (!shouldCreate && tr.isDone()) {
-                    TURNTransport existing = NGEUtils.awaitNoThrow(tr);
-                    shouldCreate = existing == null || !existing.isConnected();
-                }
-                if (shouldCreate) {
-                    return createTransportTask(url, channel);
-                }
-                return tr;
+        AsyncTask<TURNTransport> wsP;
+        while (true) {
+            if (closed || channel.isClosed()) {
+                return AsyncTask.failed(new IllegalStateException("TURN pool or channel is closed"));
             }
-        );
+            AsyncTask<TURNTransport> current = transports.get(turnServerUrl);
+            TURNTransport existing = null;
+            boolean shouldCreate = current == null || current.isFailed();
+            if (!shouldCreate && current.isDone()) {
+                existing = NGEUtils.awaitNoThrow(current);
+                shouldCreate = existing == null || !existing.isConnected();
+            }
+            if (!shouldCreate) {
+                wsP = current;
+                break;
+            }
+            if (!canCreateTransport(turnServerUrl, System.currentTimeMillis())) {
+                return AsyncTask.failed(new IllegalStateException("TURN websocket retry is backed off for: " + turnServerUrl));
+            }
+
+            // Publish the promise before starting any transport callbacks. No socket is
+            // allocated for a contender that loses the conditional map update.
+            AtomicReference<Consumer<AsyncTask<TURNTransport>>> start =
+                new AtomicReference<Consumer<AsyncTask<TURNTransport>>>();
+            AsyncTask<TURNTransport> candidate = createTransportTask(turnServerUrl, channel, start::set);
+            boolean installed = current == null
+                ? transports.putIfAbsent(turnServerUrl, candidate) == null
+                : transports.replace(turnServerUrl, current, candidate);
+            if (!installed) {
+                continue;
+            }
+            candidate.catchException(error -> {
+                TURNTransport connecting = connectingTransports.remove(candidate);
+                if (connecting != null) connecting.close("TURN websocket connect task failed or cancelled");
+                transports.remove(turnServerUrl, candidate);
+            });
+            if (existing != null) {
+                existing.close("TURN websocket transport replaced");
+            }
+            start.get().accept(candidate);
+            wsP = candidate;
+            break;
+        }
 
         return wsP
             .then(ws -> {
-                if (ws.transport.isConnected()) {
+                synchronized (channel) {
+                    if (closed || channel.isClosed() || !turnServerUrl.equals(channel.getServerUrl())) {
+                        throw new IllegalStateException("TURN transport request is no longer current");
+                    }
+                    if (!ws.isConnected()) {
+                        channel.detachTransport(ws);
+                        throw new IllegalStateException("Websocket transport is not connected for URL: " + turnServerUrl);
+                    }
                     channel.setTransport(ws);
-                    channel.openConnectionMaybe();
-                    return ws;
-                } else {
-                    logger.warning(
-                        "Websocket transport is not connected for URL: " +
-                        turnServerUrl +
-                        " - this should not happen, failing channel connection"
-                    );
-                    channel.setTransport(null);
-                    throw new RuntimeException("Websocket transport is not connected for URL: " + turnServerUrl);
+                    if (!channel.isUsingTransport(ws)) {
+                        throw new IllegalStateException("TURN transport closed during installation");
+                    }
                 }
+                channel.openConnectionMaybe(ws);
+                return ws;
             })
             .catchException(e -> {
                 logger.warning(
                     "Failed to establish websocket transport for TURN server: " + turnServerUrl + " - " + e.getMessage()
                 );
-                channel.setTransport(null);
                 throw new RuntimeException(e);
             });
     }
 
-    @SuppressWarnings("unchecked")
-    private AsyncTask<TURNTransport> createTransportTask(String url, NostrTURNChannel channel) {
-        final AsyncTask<TURNTransport>[] taskRef = (AsyncTask<TURNTransport>[]) new AsyncTask<?>[1];
-        AsyncTask<TURNTransport> task = NGEPlatform
+    private boolean canCreateTransport(String url, long nowMs) {
+        Long retryAt = failedTransportRetryAtMs.get(url);
+        if (retryAt == null) return true;
+        if (nowMs < retryAt.longValue()) return false;
+        failedTransportRetryAtMs.remove(url, retryAt);
+        return true;
+    }
+
+    private AsyncTask<TURNTransport> createTransportTask(
+        String url,
+        NostrTURNChannel channel,
+        Consumer<Consumer<AsyncTask<TURNTransport>>> deferStart
+    ) {
+        return NGEPlatform
             .get()
-            .wrapPromise((res2, rej2) -> {
-                WebsocketTransport transport = NGEPlatform.get().newTransport();
+            .wrapPromise((res2, rej2) -> deferStart.accept(ownerTask -> {
+                if (closed || channel.isClosed()) {
+                    rej2.accept(new IllegalStateException("TURN pool or channel is closed"));
+                    return;
+                }
+                if (!canCreateTransport(url, System.currentTimeMillis())) {
+                    rej2.accept(new IllegalStateException("TURN websocket retry is backed off for: " + url));
+                    return;
+                }
+                final WebsocketTransport transport;
+                try {
+                    transport = NGEPlatform.get().newTransport();
+                } catch (Throwable error) {
+                    if (!closed && transports.get(url) == ownerTask) {
+                        failedTransportRetryAtMs.put(url, System.currentTimeMillis() + failedResurrectionBackoffMs);
+                    }
+                    rej2.accept(error);
+                    return;
+                }
                 TURNTransport wss = new TURNTransport(transport);
-                channel.setTransport(wss);
-                connectingTransports.put(url, wss);
+                connectingTransports.put(ownerTask, wss);
                 AtomicBoolean settled = new AtomicBoolean(false);
 
                 Consumer<Throwable> failOnce = cause -> {
                     if (!settled.compareAndSet(false, true)) {
                         return;
                     }
-                    connectingTransports.remove(url, wss);
+                    if (!closed && transports.get(url) == ownerTask) {
+                        failedTransportRetryAtMs.put(url, System.currentTimeMillis() + failedResurrectionBackoffMs);
+                    }
+                    connectingTransports.remove(ownerTask, wss);
                     wss.clearPendingConnectFailure();
                     wss.clearConnectTimeoutTask();
-                    for (NostrTURNChannel user : wss.getUsers()) {
-                        user.setTransport(null);
-                    }
-                    transports.remove(url, taskRef[0]);
+                    wss.close("turn-websocket-connect-failed");
                     rej2.accept(cause == null ? new RuntimeException("TURN websocket connect failed") : cause);
                 };
                 Runnable succeedOnce = () -> {
                     if (!settled.compareAndSet(false, true)) {
                         return;
                     }
-                    connectingTransports.remove(url, wss);
+                    if (transports.get(url) == ownerTask) failedTransportRetryAtMs.remove(url);
+                    connectingTransports.remove(ownerTask, wss);
                     wss.clearPendingConnectFailure();
                     wss.clearConnectTimeoutTask();
                     res2.accept(wss);
                 };
 
                 wss.setPendingConnectFailure(failOnce);
-                wss.transport.addListener(
-                    new WebsocketTransportListener() {
-                        @Override
-                        public void onConnectionClosedByServer(String reason) {
-                            for (NostrTURNChannel user : wss.getUsers()) {
-                                user.setTransport(null);
+                try {
+                    wss.setConnectionListener(
+                        new WebsocketTransportListener() {
+                            @Override
+                            public void onConnectionClosedByServer(String reason) {
+                                failOnce.accept(new RuntimeException("Websocket closed by server: " + reason));
+                                wss.close("TURN websocket closed by server");
                             }
-                            failOnce.accept(new RuntimeException("Websocket closed by server: " + reason));
-                        }
 
-                        @Override
-                        public void onConnectionOpen() {
-                            for (NostrTURNChannel user : wss.getUsers()) {
-                                user.setTransport(wss);
-                                user.openConnectionMaybe();
+                            @Override
+                            public void onConnectionOpen() {
+                                if (closed || wss.isClosed()) {
+                                    failOnce.accept(new IllegalStateException("TURN websocket opened after close"));
+                                    return;
+                                }
+                                succeedOnce.run();
                             }
-                            succeedOnce.run();
-                        }
 
-                        @Override
-                        public void onConnectionMessage(String msg) {
-                            for (NostrTURNChannel user : wss.getUsers()) {
-                                user.onConnectionMessage(msg);
+                            @Override
+                            public void onConnectionMessage(String msg) {
+                                for (NostrTURNChannel user : wss.getUsers()) {
+                                    if (user.isUsingTransport(wss)) user.onConnectionMessage(msg);
+                                }
                             }
-                        }
 
-                        @Override
-                        public void onConnectionBinaryMessage(ByteBuffer msg) {
-                            dispatchBinaryFrameToUsers(wss, msg);
-                        }
+                            @Override
+                            public void onConnectionBinaryMessage(ByteBuffer msg) {
+                                if (!wss.isClosed()) dispatchBinaryFrameToUsers(wss, msg);
+                            }
 
-                        @Override
-                        public void onConnectionClosedByClient(String reason) {
-                            for (NostrTURNChannel user : wss.getUsers()) {
-                                user.setTransport(null);
+                            @Override
+                            public void onConnectionClosedByClient(String reason) {
+                                failOnce.accept(new RuntimeException("Websocket closed by client: " + reason));
+                                wss.close("TURN websocket closed by client");
                             }
-                            failOnce.accept(new RuntimeException("Websocket closed by client: " + reason));
-                        }
 
-                        @Override
-                        public void onConnectionError(Throwable e) {
-                            for (NostrTURNChannel user : wss.getUsers()) {
-                                user.onError(e);
-                            }
-                            if (!settled.get()) {
-                                failOnce.accept(e);
+                            @Override
+                            public void onConnectionError(Throwable e) {
+                                if (wss.isClosed()) return;
+                                for (NostrTURNChannel user : wss.getUsers()) {
+                                    user.onError(e, wss);
+                                }
+                                if (!settled.get()) {
+                                    failOnce.accept(e);
+                                }
                             }
                         }
+                    );
+
+                    synchronized (channel) {
+                        if (!channel.isClosed() && url.equals(channel.getServerUrl())) channel.setTransport(wss);
                     }
-                );
+                    if (closed || wss.isClosed() || !wss.isUsed()) {
+                        failOnce.accept(new IllegalStateException("TURN transport has no active owner"));
+                        return;
+                    }
+                    AsyncTask<Void> timeoutTask = executor.runLater(
+                        () -> {
+                            failOnce.accept(
+                                new RuntimeException(
+                                    "Websocket connect timed out after " + WEBSOCKET_CONNECT_TIMEOUT_MS + " ms for: " + url
+                                )
+                            );
+                            return null;
+                        },
+                        WEBSOCKET_CONNECT_TIMEOUT_MS,
+                        TimeUnit.MILLISECONDS
+                    );
+                    wss.setConnectTimeoutTask(timeoutTask);
 
-                AsyncTask<Void> timeoutTask = executor.runLater(
-                    () -> {
-                        failOnce.accept(
-                            new RuntimeException(
-                                "Websocket connect timed out after " + WEBSOCKET_CONNECT_TIMEOUT_MS + " ms for: " + url
-                            )
-                        );
-                        wss.close("turn-websocket-connect-timeout");
-                        return null;
-                    },
-                    WEBSOCKET_CONNECT_TIMEOUT_MS,
-                    TimeUnit.MILLISECONDS
-                );
-                wss.setConnectTimeoutTask(timeoutTask);
-
-                wss.transport
-                    .connect(url)
-                    .catchException(ex -> {
-                        failOnce.accept(ex);
-                    });
-            });
-        taskRef[0] = task;
-        return task;
+                    wss.connect(url)
+                        .catchException(ex -> {
+                            failOnce.accept(ex);
+                        });
+                } catch (Throwable error) {
+                    failOnce.accept(error);
+                }
+            }));
     }
 
     private static void cacheChallengeFrameIfPresent(TURNTransport ws, ByteBuffer frame) {
@@ -333,7 +403,7 @@ public final class NostrTURNPool implements AutoCloseable {
     }
 
     void dispatchBinaryFrameToUsers(TURNTransport transport, ByteBuffer msg) {
-        if (transport == null || msg == null) {
+        if (transport == null || transport.isClosed() || msg == null) {
             return;
         }
         ByteBuffer source = msg.asReadOnlyBuffer();
@@ -348,24 +418,21 @@ public final class NostrTURNPool implements AutoCloseable {
             envelopeVsocketId = NostrTURNCodec.extractVsocketId(source.asReadOnlyBuffer());
         } catch (Throwable decodeError) {
             for (NostrTURNChannel user : transport.getUsers()) {
-                user.onError(decodeError);
+                user.onError(decodeError, transport);
             }
             return;
         }
 
         for (NostrTURNChannel user : transport.getUsers()) {
-            if (!shouldDispatchToUser(type, envelopeVsocketId, user)) {
+            if (!user.isUsingTransport(transport) || !shouldDispatchToUser(type, envelopeVsocketId, user)) {
                 continue;
             }
             ByteBuffer frame = source.asReadOnlyBuffer();
             frame.rewind();
             try {
-                user.onBinaryMessage(frame);
-            } catch (IllegalArgumentException ex) {
-                // Targeted malformed/protocol-invalid frame for this channel.
-                user.onError(ex);
+                user.onBinaryMessage(frame, transport);
             } catch (Throwable ex) {
-                user.onError(ex);
+                user.onError(ex, transport);
             }
         }
     }
@@ -390,7 +457,7 @@ public final class NostrTURNPool implements AutoCloseable {
      * @param channel
      */
     private void resurrectChannel(NostrTURNChannel channel) {
-        if (!channel.beginResurrection(System.currentTimeMillis())) {
+        if (closed || !channel.beginResurrection(System.currentTimeMillis())) {
             return;
         }
         useWebsocketTransport(channel)
@@ -407,50 +474,47 @@ public final class NostrTURNPool implements AutoCloseable {
     }
 
     private void loop() {
+        if (closed) return;
         executor.runLater(
             () -> {
                 if (closed) {
                     return null;
                 }
                 try {
+                    long nowMs = System.currentTimeMillis();
+                    for (Entry<String, Long> retry : failedTransportRetryAtMs.entrySet()) {
+                        if (nowMs >= retry.getValue().longValue()) {
+                            failedTransportRetryAtMs.remove(retry.getKey(), retry.getValue());
+                        }
+                    }
                     // cleanup idle connections
-                    Iterator<Entry<String, AsyncTask<TURNTransport>>> transportIterator = transports.entrySet().iterator();
-                    while (transportIterator.hasNext()) {
-                        Entry<String, AsyncTask<TURNTransport>> entry = transportIterator.next();
+                    for (Entry<String, AsyncTask<TURNTransport>> entry : transports.entrySet()) {
                         String url = entry.getKey();
                         AsyncTask<TURNTransport> transportTask = entry.getValue();
                         if (!transportTask.isDone()) {
-                            TURNTransport connecting = connectingTransports.get(url);
-                            if (connecting != null && !connecting.isUsed()) {
+                            TURNTransport connecting = connectingTransports.get(transportTask);
+                            if (connecting != null && !connecting.isUsed() && transports.remove(url, transportTask)) {
                                 connecting.close(CLEANUP_CLOSE_REASON);
                                 transportTask.cancel();
-                                connectingTransports.remove(url, connecting);
-                                transportIterator.remove();
+                                connectingTransports.remove(transportTask, connecting);
                             }
                             continue;
                         }
                         if (transportTask.isFailed()) {
-                            transportIterator.remove();
+                            transports.remove(url, transportTask);
                             continue;
                         }
                         TURNTransport transport = NGEUtils.awaitNoThrow(transportTask);
                         if (transport == null) {
-                            transportIterator.remove();
+                            transports.remove(url, transportTask);
                             continue;
                         }
                         boolean unused = !transport.isUsed();
                         boolean disconnected = !transport.isConnected();
                         if (unused || disconnected) {
-                            if (transport.isConnected()) {
+                            if (transports.remove(url, transportTask)) {
                                 transport.close(CLEANUP_CLOSE_REASON);
                             }
-                            transport
-                                .getUsers()
-                                .forEach(ch -> {
-                                    ch.setTransport(null);
-                                });
-                            transport.getUsers().clear();
-                            transportIterator.remove();
                         }
                     }
 
@@ -476,6 +540,8 @@ public final class NostrTURNPool implements AutoCloseable {
         private volatile byte[] lastChallengeFrame = null;
         private volatile AsyncTask<Void> connectTimeoutTask = null;
         private volatile Consumer<Throwable> pendingConnectFailure = null;
+        private volatile WebsocketTransportListener connectionListener = null;
+        private final AtomicBoolean closed = new AtomicBoolean(false);
 
         public TURNTransport(WebsocketTransport transport) {
             this.transport = transport;
@@ -494,21 +560,71 @@ public final class NostrTURNPool implements AutoCloseable {
         }
 
         public boolean isConnected() {
-            return transport.isConnected();
+            return !closed.get() && transport.isConnected();
+        }
+
+        boolean isClosed() {
+            return closed.get();
+        }
+
+        AsyncTask<Void> connect(String url) {
+            if (closed.get()) {
+                return AsyncTask.failed(new IllegalStateException("TURN websocket transport is closed"));
+            }
+            AsyncTask<Void> attempt;
+            try {
+                attempt = transport.connect(url);
+            } finally {
+                // close() can retire this wrapper just before the reusable delegate
+                // installs its attempt. Clean up after that launch too, without
+                // holding a wrapper/channel monitor across external callbacks.
+                if (closed.get()) closeDelegate(CLEANUP_CLOSE_REASON);
+            }
+            return closed.get()
+                ? AsyncTask.failed(new IllegalStateException("TURN websocket transport is closed"))
+                : attempt;
         }
 
         public void close(String reason) {
-            Consumer<Throwable> failure = this.pendingConnectFailure;
-            if (failure != null) {
-                failure.accept(new RuntimeException("Websocket transport closed while connecting: " + reason));
+            if (!closed.compareAndSet(false, true)) {
+                return;
             }
+            Consumer<Throwable> failure = this.pendingConnectFailure;
+            clearPendingConnectFailure();
             clearConnectTimeoutTask();
-            transport.close(reason);
+            WebsocketTransportListener listener = this.connectionListener;
+            this.connectionListener = null;
+            try {
+                if (listener != null) transport.removeListener(listener);
+            } catch (Throwable error) {
+                logger.warning("Failed to detach TURN websocket listener: " + error.getMessage());
+            }
+            for (NostrTURNChannel user : users) {
+                user.detachTransport(this);
+            }
+            users.clear();
+            try {
+                closeDelegate(reason);
+            } finally {
+                if (failure != null) {
+                    failure.accept(new RuntimeException("Websocket transport closed while connecting: " + reason));
+                }
+            }
+        }
+
+        private void closeDelegate(String reason) {
+            try {
+                transport.close(reason).catchException(error ->
+                    logger.warning("Failed to close TURN websocket transport: " + error.getMessage())
+                );
+            } catch (Throwable error) {
+                logger.warning("Failed to close TURN websocket transport: " + error.getMessage());
+            }
         }
 
         public void addUser(NostrTURNChannel channel) {
-            if (!users.contains(channel)) {
-                users.add(channel);
+            if (!closed.get()) {
+                users.addIfAbsent(channel);
             }
         }
 
@@ -516,13 +632,27 @@ public final class NostrTURNPool implements AutoCloseable {
             users.remove(channel);
         }
 
+        void setConnectionListener(WebsocketTransportListener listener) {
+            this.connectionListener = listener;
+            transport.addListener(listener);
+            if (closed.get()) transport.removeListener(listener);
+        }
+
         void setConnectTimeoutTask(AsyncTask<Void> timeoutTask) {
-            this.connectTimeoutTask = timeoutTask;
+            boolean cancel;
+            synchronized (this) {
+                cancel = closed.get() || pendingConnectFailure == null;
+                if (!cancel) this.connectTimeoutTask = timeoutTask;
+            }
+            if (cancel) timeoutTask.cancel();
         }
 
         void clearConnectTimeoutTask() {
-            AsyncTask<Void> timeoutTask = this.connectTimeoutTask;
-            this.connectTimeoutTask = null;
+            AsyncTask<Void> timeoutTask;
+            synchronized (this) {
+                timeoutTask = this.connectTimeoutTask;
+                this.connectTimeoutTask = null;
+            }
             if (timeoutTask != null) {
                 timeoutTask.cancel();
             }
@@ -530,6 +660,7 @@ public final class NostrTURNPool implements AutoCloseable {
 
         void setPendingConnectFailure(Consumer<Throwable> pendingConnectFailure) {
             this.pendingConnectFailure = pendingConnectFailure;
+            if (closed.get()) pendingConnectFailure.accept(new IllegalStateException("TURN websocket transport is closed"));
         }
 
         void clearPendingConnectFailure() {

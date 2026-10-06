@@ -226,6 +226,9 @@ public final class NostrTURNChannel {
     }
 
     synchronized void setTransport(TURNTransport transport) {
+        if (transport != null && (closed || transport.isClosed())) {
+            return;
+        }
         TURNTransport previous = this.transport;
         if (previous == transport) {
             return;
@@ -236,6 +239,10 @@ public final class NostrTURNChannel {
         this.transport = transport;
         if (transport != null) {
             transport.addUser(this);
+            if (transport.isClosed()) {
+                setTransport(null);
+                return;
+            }
         }
         if (transport == null || previous != null) {
             this.outgoingDataEvent = null;
@@ -245,6 +252,16 @@ public final class NostrTURNChannel {
             failPendingWrites(new DeliveryTransportReplacedException("TURN"));
             this.state = 0;
         }
+    }
+
+    synchronized void detachTransport(TURNTransport expected) {
+        if (this.transport == expected) {
+            setTransport(null);
+        }
+    }
+
+    boolean isUsingTransport(TURNTransport expected) {
+        return !closed && this.transport == expected && !expected.isClosed();
     }
 
     boolean isReady() {
@@ -437,6 +454,10 @@ public final class NostrTURNChannel {
         return closed;
     }
 
+    void onError(Throwable e, TURNTransport expected) {
+        if (isUsingTransport(expected)) onError(e);
+    }
+
     void onError(Throwable e) {
         failPendingWrites(e == null ? new RuntimeException("TURN channel error") : e);
         logger.log(Level.SEVERE, "TURN channel error", e);
@@ -454,11 +475,14 @@ public final class NostrTURNChannel {
     }
 
     void openConnectionMaybe() {
+        openConnectionMaybe(this.transport);
+    }
+
+    void openConnectionMaybe(TURNTransport currentTransport) {
         if (closed || state != 0) {
             return;
         }
-        TURNTransport currentTransport = this.transport;
-        if (currentTransport == null || !currentTransport.isConnected()) {
+        if (currentTransport == null || !isUsingTransport(currentTransport) || !currentTransport.isConnected()) {
             return;
         }
         byte[] challengeFrame = currentTransport.getLastChallengeFrame();
@@ -474,14 +498,14 @@ public final class NostrTURNChannel {
                 return;
             }
             NostrTURNChallengeEvent challengeEvent = NostrTURNChallengeEvent.parseIncoming(header, localPeer, maxDiff);
-            handleChallengeEvent(challengeEvent);
+            handleChallengeEvent(challengeEvent, currentTransport);
         } catch (Exception ex) {
             logger.log(Level.FINE, "TURN: Failed to replay cached challenge", ex);
         }
     }
 
-    private synchronized void handleChallengeEvent(NostrTURNChallengeEvent challengeEvent) {
-        if (challengeEvent == null || state != 0) {
+    private synchronized void handleChallengeEvent(NostrTURNChallengeEvent challengeEvent, TURNTransport expected) {
+        if (challengeEvent == null || closed || state != 0 || (expected != null && !isUsingTransport(expected))) {
             return;
         }
         String redirect = challengeEvent.getRedirect();
@@ -529,6 +553,10 @@ public final class NostrTURNChannel {
      * @return true if the message was handled, false otherwise
      */
     boolean tryHandleData(ByteBuffer msg, SignedNostrEvent header, int messageId) {
+        return tryHandleData(msg, header, messageId, null);
+    }
+
+    private boolean tryHandleData(ByteBuffer msg, SignedNostrEvent header, int messageId, TURNTransport expected) {
         if (header == null) {
             return false;
         }
@@ -549,11 +577,15 @@ public final class NostrTURNChannel {
             incomingRoutingHash == null ? null : incomingRoutingHash.asReadOnlyBuffer()
         );
 
-        incomingDataEvent = receivedData;
+        synchronized (this) {
+            if (expected != null && !isUsingTransport(expected)) return true;
+            incomingDataEvent = receivedData;
+        }
         ByteBuffer receivedFrame = copyPayload(msg);
         receivedData
             .decodeFramePayloads(receivedFrame)
             .compose(ps -> {
+                if (expected != null && !isUsingTransport(expected)) return AsyncTask.completed(null);
                 List<Long> packetIds = new ArrayList<Long>();
                 List<AsyncTask<Void>> dispatches = new ArrayList<AsyncTask<Void>>();
                 for (ByteBuffer payload : ps) {
@@ -561,12 +593,12 @@ public final class NostrTURNChannel {
                     if (packetId != null) {
                         packetIds.add(packetId);
                     }
-                    dispatches.add(enqueuePayloadDispatch(payload));
+                    dispatches.add(enqueuePayloadDispatch(payload, expected));
                 }
                 return AsyncTask
                     .all(dispatches)
                     .then(ignored -> {
-                        if (requiresDeliveryAck) {
+                        if (requiresDeliveryAck && (expected == null || isUsingTransport(expected))) {
                             sendDeliveryAck(messageId, receivedData, receivedFrame);
                         }
                         logger.fine(() ->
@@ -577,7 +609,7 @@ public final class NostrTURNChannel {
                     });
             })
             .catchException(ex -> {
-                handleTargetedInboundDecodeFailure(messageId, ex);
+                if (expected == null || isUsingTransport(expected)) handleTargetedInboundDecodeFailure(messageId, ex);
             });
 
         return true;
@@ -590,6 +622,11 @@ public final class NostrTURNChannel {
     }
 
     void onBinaryMessage(ByteBuffer msg) {
+        onBinaryMessage(msg, null);
+    }
+
+    void onBinaryMessage(ByteBuffer msg, TURNTransport expected) {
+        if (expected != null && !isUsingTransport(expected)) return;
         long envelopeVsocketId;
         int envelopeMessageId;
         try {
@@ -636,7 +673,7 @@ public final class NostrTURNChannel {
                         );
                         return;
                     }
-                    tryHandleData(msg, header, envelopeMessageId);
+                    tryHandleData(msg, header, envelopeMessageId, expected);
                     break;
                 }
             case "delivery_ack":
@@ -676,7 +713,7 @@ public final class NostrTURNChannel {
                     sentData
                         .decodeDeliveryReceipt(receipts.get(0))
                         .then(receipt -> {
-                            completePendingWrite(envelopeMessageId, receipt);
+                            if (expected == null || isUsingTransport(expected)) completePendingWrite(envelopeMessageId, receipt);
                             return null;
                         })
                         .catchException(error -> logger.fine("Ignoring invalid TURN delivery receipt"));
@@ -695,7 +732,7 @@ public final class NostrTURNChannel {
                         return;
                     }
                     NostrTURNChallengeEvent challengeEvent = NostrTURNChallengeEvent.parseIncoming(header, localPeer, maxDiff);
-                    handleChallengeEvent(challengeEvent);
+                    handleChallengeEvent(challengeEvent, expected);
                     break;
                 }
             case "ack":
@@ -710,7 +747,7 @@ public final class NostrTURNChannel {
                         return;
                     }
                     synchronized (this) {
-                        if (closed || state != 1) {
+                        if (closed || state != 1 || (expected != null && !isUsingTransport(expected))) {
                             logger.warning("TURN: Received ack in invalid state " + state);
                             return;
                         }
@@ -719,8 +756,9 @@ public final class NostrTURNChannel {
                         state = 2;
                     }
 
-                    // notify listeners
+                    // Application callbacks must run outside the channel monitor.
                     for (NostrTURNChannelListener l : listeners) {
+                        if (expected != null && !isUsingTransport(expected)) break;
                         try {
                             l.onTurnChannelReady(this);
                         } catch (Throwable e) {
@@ -749,6 +787,7 @@ public final class NostrTURNChannel {
                         channelLabel,
                         envelopeVsocketId
                     );
+                    if (expected != null && !isUsingTransport(expected)) return;
                     String reason = disconnectEvent.getReason();
                     boolean error = disconnectEvent.isError();
                     logger.fine("TURN: Disconnected by peer. Reason: " + reason + ", error  " + error);
@@ -869,21 +908,21 @@ public final class NostrTURNChannel {
             });
     }
 
-    private AsyncTask<Void> enqueuePayloadDispatch(ByteBuffer payload) {
-        if (closed) {
+    private AsyncTask<Void> enqueuePayloadDispatch(ByteBuffer payload, TURNTransport expected) {
+        if (closed || (expected != null && !isUsingTransport(expected))) {
             return AsyncTask.completed(null);
         }
         final ByteBuffer payloadCopy = copyPayload(payload);
         return AsyncTask.create((resolveOuter, rejectOuter) -> {
             inboundPayloadDispatchQueue.enqueue((resolve, reject) -> {
-                if (closed) {
+                if (closed || (expected != null && !isUsingTransport(expected))) {
                     resolve.accept(null);
                     resolveOuter.accept(null);
                     return;
                 }
                 inboundPayloadExecutor
                     .run(() -> {
-                        if (!closed) {
+                        if (!closed && (expected == null || isUsingTransport(expected))) {
                             onPayload(payloadCopy.asReadOnlyBuffer());
                         }
                         return null;
