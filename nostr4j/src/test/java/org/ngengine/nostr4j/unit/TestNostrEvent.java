@@ -66,7 +66,7 @@ public class TestNostrEvent {
             fixture = new String(input.readAllBytes(), StandardCharsets.UTF_8);
         }
         List<Map<String, Object>> vectors = NGEUtils.getPlatform().fromJSON(fixture, List.class);
-        assertEquals(6, vectors.size());
+        assertEquals(8, vectors.size());
         for (Map<String, Object> map : vectors) {
             SignedNostrEvent event = new SignedNostrEvent(map);
             assertEquals(event.getId(), NostrEvent.computeEventId(event.getPubkey().asHex(), event));
@@ -76,6 +76,13 @@ public class TestNostrEvent {
         String first = NostrEvent.computeEventId((String) vectors.get(0).get("pubkey"), mutable);
         mutable.withContent("changed after first hash");
         assertNotEquals(first, NostrEvent.computeEventId((String) vectors.get(0).get("pubkey"), mutable));
+        UnsignedNostrEvent largeTimestamp = new UnsignedNostrEvent(vectors.get(0));
+        largeTimestamp.createdAt(Instant.ofEpochSecond(9007199254740993L));
+        largeTimestamp.withContent("large timestamp");
+        assertEquals(
+            "64dfd74ee483d5e8568a42aea3bbfe06d2415b8865e090bb808e4a0dde953545",
+            NostrEvent.computeEventId((String) vectors.get(0).get("pubkey"), largeTimestamp)
+        );
     }
 
     @Test
