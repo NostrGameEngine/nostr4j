@@ -691,12 +691,14 @@ public final class TurnServer {
         }
         logger.fine("TURN connection closing: reason=" + reason);
 
-        // Evict client and tear down its sockets symmetrically.
+        // Evict this transport and retire only its owned sockets. Transport loss is not an
+        // explicit protocol disconnect: reciprocal registrations and their queues survive
+        // so the same logical session can reconnect and resume delivery.
         TurnClientConnection removed = clients.remove(session);
         if (removed != null) {
             List<TurnVirtualSocket> stale = new ArrayList<TurnVirtualSocket>(removed.getSockets().values());
             for (TurnVirtualSocket virtualSocket : stale) {
-                teardownSocket(virtualSocket, PEER_UNREACHABLE_REASON, true, true, true);
+                retireSocket(session, virtualSocket);
             }
             removed.getSockets().clear();
         }
