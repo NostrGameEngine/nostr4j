@@ -96,21 +96,42 @@ public interface NostrEvent extends Cloneable, Serializable {
     class TagValue {
 
         private final List<String> values;
+        private final List<String> storage;
+        private final int offset;
+        private final String firstValue;
 
         public TagValue(List<String> values) {
             this.values = Collections.unmodifiableList(values);
+            this.storage = this.values;
+            this.offset = 0;
+            this.firstValue = null;
         }
 
         public TagValue(String... values) {
             this.values = Arrays.asList(values);
+            this.storage = this.values;
+            this.offset = 0;
+            this.firstValue = null;
         }
 
         public TagValue(String value) {
             this.values = Arrays.asList(value);
+            this.storage = this.values;
+            this.offset = 0;
+            this.firstValue = null;
+        }
+
+        // Signed events own immutable rows. Read values directly from the row
+        // instead of traversing nested sublist wrappers on every lookup.
+        TagValue(List<String> row, int offset) {
+            this.storage = row;
+            this.offset = offset;
+            this.values = row.subList(offset, row.size());
+            this.firstValue = offset < row.size() ? row.get(offset) : null;
         }
 
         public int size() {
-            return values.size();
+            return storage.size() - offset;
         }
 
         /**
@@ -120,10 +141,11 @@ public interface NostrEvent extends Cloneable, Serializable {
          * @return the value at the specified index, or null if the index is out of bounds
          */
         public String get(int index) {
-            if (index < 0 || index >= values.size()) {
+            if (offset > 0 && index == 0) return firstValue;
+            if (index < 0 || index >= storage.size() - offset) {
                 return null;
             }
-            return values.get(index);
+            return storage.get(index + offset);
         }
 
         public List<String> getAll() {
@@ -141,26 +163,17 @@ public interface NostrEvent extends Cloneable, Serializable {
 
     default String getFirstTagFirstValue(String key) {
         TagValue tagValue = getFirstTag(key);
-        if (tagValue == null || tagValue.size() == 0) {
-            return null;
-        }
-        return tagValue.get(0);
+        return tagValue == null ? null : tagValue.get(0);
     }
 
     default String getFirstTagSecondValue(String key) {
         TagValue tagValue = getFirstTag(key);
-        if (tagValue == null || tagValue.size() < 2) {
-            return null;
-        }
-        return tagValue.get(1);
+        return tagValue == null ? null : tagValue.get(1);
     }
 
     default String getFirstTagThirdValue(String key) {
         TagValue tagValue = getFirstTag(key);
-        if (tagValue == null || tagValue.size() < 3) {
-            return null;
-        }
-        return tagValue.get(2);
+        return tagValue == null ? null : tagValue.get(2);
     }
 
     Set<String> listTagKeys();

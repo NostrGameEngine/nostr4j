@@ -129,6 +129,8 @@ public class TestNostrEvent {
                 readers.add(
                     executor.submit(() -> {
                         start.await();
+                        assertEquals(null, event.getTag("missing"));
+                        assertEquals("value", event.getFirstTagFirstValue("other"));
                         return event.getTag("t");
                     })
                 );
@@ -142,6 +144,27 @@ public class TestNostrEvent {
         } finally {
             executor.shutdownNow();
         }
+    }
+
+    @Test
+    public void testEmptyTagValuesRemainDistinctFromMissingTags() {
+        SignedNostrEvent event = new SignedNostrEvent(
+            "0".repeat(64),
+            new NostrKeyPair().getPublicKey(),
+            1,
+            "content",
+            Instant.ofEpochSecond(1700000000),
+            "0".repeat(128),
+            List.of(List.of("t"), List.of("t", "second"))
+        );
+        assertEquals(null, event.getFirstTagFirstValue("missing"));
+        assertTrue(event.hasTag("t"));
+        assertEquals(null, event.getFirstTagFirstValue("t"));
+        assertEquals(null, event.getFirstTagSecondValue("t"));
+        assertEquals(null, event.getFirstTagThirdValue("t"));
+        assertEquals(2, event.getTag("t").size());
+        assertEquals("second", event.getTag("t").get(1).get(0));
+        assertEquals(0, event.getFirstTag("t").getAll().size());
     }
 
     @Test
@@ -250,6 +273,12 @@ public class TestNostrEvent {
         assertEquals(event.getFirstTag("b").get(2), "3");
 
         assertEquals(event.getFirstTag("c"), null);
+        assertEquals("1", event.getFirstTagFirstValue("a"));
+        assertEquals(null, event.getFirstTagSecondValue("a"));
+        assertEquals(null, event.getFirstTagThirdValue("a"));
+        assertEquals(null, event.getFirstTagFirstValue("missing"));
+        assertEquals("2", event.getFirstTagSecondValue("b"));
+        assertEquals("3", event.getFirstTagThirdValue("b"));
 
         assertEquals(event.getFirstTag("b").get(0), "1");
         assertEquals(event.getFirstTag("b").get(1), "2");

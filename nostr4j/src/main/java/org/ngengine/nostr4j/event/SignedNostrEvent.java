@@ -43,6 +43,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Objects;
 import java.util.Set;
 import org.ngengine.bech32.Bech32;
 import org.ngengine.bech32.Bech32Exception;
@@ -90,6 +91,7 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
     private final int kind;
     private final String content;
     private transient volatile Map<String, List<TagValue>> tags;
+    private transient volatile TagLookup firstTagLookup;
     private final List<List<String>> tagRows;
     private final String signature;
     private final String pubkey;
@@ -100,6 +102,19 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
     private transient Instant expiresAt;
     private transient SafeFlag verificationCached = new SafeFlag(false);
     private transient SafeFlag verificationResult = new SafeFlag(false);
+
+    private static final class TagLookup {
+
+        final String key;
+        final List<TagValue> values;
+        final TagValue first;
+
+        TagLookup(String key, List<TagValue> values) {
+            this.key = key;
+            this.values = values;
+            this.first = values.get(0);
+        }
+    }
 
     public SignedNostrEvent(
         String id,
@@ -160,7 +175,7 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
             if (this.tags != null) return this.tags;
             Map<String, List<TagValue>> tagsMap = new LinkedHashMap<>();
             for (List<String> row : tagRows) {
-                TagValue value = new TagValue(row.subList(1, row.size()));
+                TagValue value = new TagValue(row, 1);
                 tagsMap.computeIfAbsent(row.get(0), key -> new ArrayList<>()).add(value);
             }
             for (Entry<String, List<TagValue>> entry : tagsMap.entrySet()) {
@@ -365,22 +380,34 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
     @Override
     public boolean hasTag(String tag) {
         if (tag == null) return false;
-        return getTagsIndex().get(tag) != null;
+        return getTagValues(tag) != null;
     }
 
     @Override
     public List<TagValue> getTag(String key) {
+        return getTagValues(key);
+    }
+
+    private List<TagValue> getTagValues(String key) {
+        TagLookup cached = firstTagLookup;
+        if (cached != null && Objects.equals(cached.key, key)) return cached.values;
         List<TagValue> values = getTagsIndex().get(key);
         if (values != null && values.isEmpty()) {
             return null;
         }
+        // Cache one successful lookup, usually the tag queried by a filter.
+        // Immutable event rows make the result stable. Other queries retain
+        // the indexed path without allocating cache entries on every miss.
+        if (cached == null && values != null) firstTagLookup = new TagLookup(key, values);
         return values;
     }
 
     @Override
     public TagValue getFirstTag(String key) {
-        List<TagValue> values = getTagsIndex().get(key);
-        if (values == null || values.isEmpty()) {
+        TagLookup cached = firstTagLookup;
+        if (cached != null && Objects.equals(cached.key, key)) return cached.first;
+        List<TagValue> values = getTagValues(key);
+        if (values == null) {
             return null;
         }
         return values.get(0);
