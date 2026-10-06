@@ -46,9 +46,11 @@ import org.ngengine.platform.SchnorrSigner;
 
 public class NostrKeyPairSigner implements NostrSigner {
 
+    private static final long serialVersionUID = 7419600314608918328L;
+
     private static final Logger logger = Logger.getLogger(NostrKeyPairSigner.class.getName());
     private final NostrKeyPair keyPair;
-    private volatile SchnorrSigner signingContext;
+    private transient volatile SchnorrSigner signingContext;
 
     public NostrKeyPairSigner(NostrKeyPair keyPair) {
         this.keyPair = keyPair;
