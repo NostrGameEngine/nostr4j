@@ -59,6 +59,61 @@ import org.ngengine.platform.jvm.JVMAsyncPlatform;
 public class TestNostrEvent {
 
     @Test
+    public void testSignedTagGroupsRemainStableAcrossConcurrentFirstReads() throws Exception {
+        SignedNostrEvent event = new SignedNostrEvent(
+            "0".repeat(64),
+            NostrPublicKey.fromHex("f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9", false),
+            1,
+            "",
+            Instant.ofEpochSecond(1700000000),
+            "0".repeat(128),
+            List.of(List.of("t"), List.of("p", "first"), List.of("other", "value"), List.of("p", "second"))
+        );
+        java.util.concurrent.ExecutorService readers = java.util.concurrent.Executors.newFixedThreadPool(4);
+        java.util.concurrent.CountDownLatch start = new java.util.concurrent.CountDownLatch(1);
+        List<java.util.concurrent.Future<?>> tasks = new java.util.ArrayList<>();
+        try {
+            for (int worker = 0; worker < 4; worker++) tasks.add(
+                readers.submit(() -> {
+                    try {
+                        start.await();
+                        for (int repeat = 0; repeat < 500; repeat++) {
+                            List<NostrEvent.TagValue> group = event.getTag(new String("p"));
+                            assertEquals(2, group.size());
+                            assertSame(group.get(0), event.getFirstTag("p"));
+                            assertEquals("first", event.getFirstTagFirstValue("p"));
+                            assertEquals("second", group.get(1).get(0));
+                            assertEquals("value", event.getFirstTagFirstValue("other"));
+                            assertTrue(event.hasTag("t"));
+                            assertEquals(0, event.getFirstTag("t").size());
+                            assertNull(event.getFirstTagFirstValue("t"));
+                            assertNull(event.getTag("missing-" + repeat));
+                            assertNull(event.getFirstTag(null));
+                        }
+                    } catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                        throw new AssertionError(interrupted);
+                    }
+                })
+            );
+            start.countDown();
+            for (java.util.concurrent.Future<?> task : tasks) task.get(10, java.util.concurrent.TimeUnit.SECONDS);
+            assertEquals(List.of("t", "p", "other"), new java.util.ArrayList<>(event.listTagKeys()));
+            for (String key : List.of("p", "other", "t")) {
+                int size = event.getTag(key).size();
+                try {
+                    event.getTag(key).clear();
+                    fail("Mutable tag group escaped");
+                } catch (UnsupportedOperationException expected) {
+                    assertEquals(size, event.getTag(key).size());
+                }
+            }
+        } finally {
+            readers.shutdownNow();
+        }
+    }
+
+    @Test
     public void testIndependentCanonicalUnicodeAndControlCharacterVectors() throws Exception {
         String fixture;
         try (java.io.InputStream input = getClass().getResourceAsStream("/canonical-event-vectors.json")) {

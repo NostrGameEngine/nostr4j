@@ -42,7 +42,6 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Set;
 import org.ngengine.bech32.Bech32;
@@ -91,7 +90,7 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
 
     private final int kind;
     private final String content;
-    private transient volatile Map<String, List<TagValue>> tags;
+    private transient volatile LinkedHashMap<String, TagLookup> tags;
     private transient volatile TagLookup firstTagLookup;
     private final List<List<String>> tagRows;
     private final String signature;
@@ -151,7 +150,8 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
     private static final class TagLookup {
 
         final String key;
-        final List<TagValue> values;
+        // Built and frozen while holding the event lock, before publishing the index.
+        List<TagValue> values;
         final TagValue first;
 
         TagLookup(String key, List<TagValue> values) {
@@ -234,23 +234,32 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
         this.tagRows = Collections.unmodifiableList(tagRows);
     }
 
-    private Map<String, List<TagValue>> getTagsIndex() {
-        Map<String, List<TagValue>> index = this.tags;
+    private LinkedHashMap<String, TagLookup> getTagsIndex() {
+        LinkedHashMap<String, TagLookup> index = this.tags;
         if (index != null) return index;
         synchronized (this) {
             if (this.tags != null) return this.tags;
-            Map<String, List<TagValue>> tagsMap = new LinkedHashMap<>();
+            LinkedHashMap<String, TagLookup> indexByKey = new LinkedHashMap<>();
             for (List<String> row : tagRows) {
+                String key = row.get(0);
                 TagValue value = new TagValue(row, 1);
-                tagsMap.computeIfAbsent(row.get(0), key -> new ArrayList<>()).add(value);
+                TagLookup group = indexByKey.get(key);
+                if (group == null) {
+                    List<TagValue> values = new ArrayList<>();
+                    values.add(value);
+                    indexByKey.put(key, new TagLookup(key, values));
+                } else {
+                    group.values.add(value);
+                }
             }
-            for (Entry<String, List<TagValue>> entry : tagsMap.entrySet()) {
-                entry.setValue(Collections.unmodifiableList(entry.getValue()));
+            for (TagLookup group : indexByKey.values()) {
+                group.values = Collections.unmodifiableList(group.values);
             }
-            // The owned index is never mutated after publication. Keep it
-            // private and protect the exposed views separately.
-            this.tags = tagsMap;
-            return tagsMap;
+            // Build and freeze the owned groups in one map. Keep the first value
+            // directly indexed, without a temporary map or entries for misses.
+            // The volatile publication happens only after every view is protected.
+            this.tags = indexByKey;
+            return indexByKey;
         }
     }
 
@@ -457,32 +466,25 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
     private List<TagValue> getTagValues(String key) {
         TagLookup cached = firstTagLookup;
         if (cached != null && Objects.equals(cached.key, key)) return cached.values;
-        return getIndexedTagValues(key, cached);
+        TagLookup indexed = getIndexedTagLookup(key, cached);
+        return indexed == null ? null : indexed.values;
     }
 
-    private List<TagValue> getIndexedTagValues(String key, TagLookup cached) {
-        List<TagValue> values = getTagsIndex().get(key);
-        if (values != null && values.isEmpty()) {
-            return null;
-        }
-        // Cache one successful lookup, usually the tag queried by a filter.
-        // Immutable event rows make the result stable. Other queries retain
-        // the indexed path without allocating cache entries on every miss.
-        if (cached == null && values != null) firstTagLookup = new TagLookup(key, values);
-        return values;
+    private TagLookup getIndexedTagLookup(String key, TagLookup cached) {
+        TagLookup indexed = getTagsIndex().get(key);
+        // Preserve the caller's key identity for the one successful-key shortcut.
+        // Prepared filters reuse that String, avoiding content comparisons. Other
+        // keys use the complete index; misses never add entries or shortcuts.
+        if (cached == null && indexed != null) firstTagLookup = new TagLookup(key, indexed.values);
+        return indexed;
     }
 
     @Override
     public TagValue getFirstTag(String key) {
         TagLookup cached = firstTagLookup;
         if (cached != null && Objects.equals(cached.key, key)) return cached.first;
-        // The first-key cache was already checked. Mixed lookups should go
-        // directly to the index without repeating the same string comparison.
-        List<TagValue> values = getIndexedTagValues(key, cached);
-        if (values == null) {
-            return null;
-        }
-        return values.get(0);
+        TagLookup indexed = getIndexedTagLookup(key, cached);
+        return indexed == null ? null : indexed.first;
     }
 
     @Override
