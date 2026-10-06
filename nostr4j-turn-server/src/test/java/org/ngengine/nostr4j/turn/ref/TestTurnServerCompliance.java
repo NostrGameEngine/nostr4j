@@ -31,8 +31,6 @@
 
 package org.ngengine.nostr4j.turn.ref;
 
-import org.ngengine.nostr4j.RTCSettings;
-
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -40,6 +38,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
+import java.lang.reflect.Field;
 import java.net.ServerSocket;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -55,9 +54,12 @@ import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BooleanSupplier;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.ngengine.nostr4j.RTCSettings;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.event.UnsignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
@@ -278,6 +280,10 @@ public class TestTurnServerCompliance {
         SignedNostrEvent staleData = waitForType(receiverWs, "data", 700);
         assertNull("old logical socket must be retired after replacement", staleData);
 
+        senderOldWs.closeNow();
+        assertTrue("superseded websocket should close", senderOldWs.awaitClose(3000));
+        assertNull("stale websocket close must not notify the live reciprocal", waitForType(receiverWs, "disconnect", 700));
+
         senderNewWs.send(
             NGEUtils.awaitNoThrow(
                 NostrTURNDataEvent
@@ -288,9 +294,141 @@ public class TestTurnServerCompliance {
         SignedNostrEvent freshData = waitForType(receiverWs, "data", 3000);
         assertNotNull("new logical socket must win after replacement", freshData);
 
-        senderOldWs.closeNow();
         senderNewWs.closeNow();
         receiverWs.closeNow();
+    }
+
+    @Test
+    public void testTransportLossRetainsSenderQueueForSameSessionReconnect() throws Exception {
+        NostrKeyPairSigner aliceSigner = NostrKeyPairSigner.generate();
+        NostrKeyPairSigner bobSigner = NostrKeyPairSigner.generate();
+        NostrRTCLocalPeer alice = localPeer(aliceSigner, roomKeyPair, "sess-recovery-alice");
+        NostrRTCLocalPeer bob = localPeer(bobSigner, roomKeyPair, "sess-recovery-bob");
+        NostrRTCPeer bobRemoteForAlice = remotePeer(bobSigner, roomKeyPair, bob.getSessionId());
+        NostrRTCPeer aliceRemoteForBob = remotePeer(aliceSigner, roomKeyPair, alice.getSessionId());
+
+        WsClient aliceWs = WsClient.connect(wsUri);
+        NostrTURNChallengeEvent challengeAlice = NostrTURNChallengeEvent.parseIncoming(
+            waitForType(aliceWs, "challenge", 2000),
+            alice,
+            64
+        );
+        long aliceVsocketId = 861L;
+        sendValidConnect(aliceWs, alice, bobRemoteForAlice, roomKeyPair, challengeAlice, aliceVsocketId);
+        assertNotNull("A should receive its connect ACK", waitForType(aliceWs, "ack", 2000));
+
+        WsClient bobWs = WsClient.connect(wsUri);
+        NostrTURNChallengeEvent challengeBob = NostrTURNChallengeEvent.parseIncoming(
+            waitForType(bobWs, "challenge", 2000),
+            bob,
+            64
+        );
+        long bobVsocketId = 862L;
+        sendValidConnect(bobWs, bob, aliceRemoteForBob, roomKeyPair, challengeBob, bobVsocketId);
+        assertNotNull("B should receive its connect ACK", waitForType(bobWs, "ack", 2000));
+
+        TurnVirtualSocket.LogicalIdentity aliceIdentity = TurnVirtualSocket.logicalIdentity(
+            roomKeyPair.getPublicKey(),
+            alice.getPubkey(),
+            alice.getSessionId(),
+            bob.getPubkey(),
+            bob.getSessionId(),
+            alice.getProtocolId(),
+            alice.getApplicationId(),
+            CHANNEL_LABEL
+        );
+        TurnVirtualSocket.LogicalIdentity bobIdentity = TurnVirtualSocket.logicalIdentity(
+            roomKeyPair.getPublicKey(),
+            bob.getPubkey(),
+            bob.getSessionId(),
+            alice.getPubkey(),
+            alice.getSessionId(),
+            bob.getProtocolId(),
+            bob.getApplicationId(),
+            CHANNEL_LABEL
+        );
+        assertTrue("A registration should be present before transport loss", server.logicalSockets.containsKey(aliceIdentity));
+        assertTrue("B registration should be present before transport loss", server.logicalSockets.containsKey(bobIdentity));
+
+        bobWs.abort();
+        awaitCondition(
+            () -> !server.logicalSockets.containsKey(bobIdentity),
+            3000,
+            "server did not evict B's transport-owned registration"
+        );
+        assertTrue("A registration must survive B transport loss", server.logicalSockets.containsKey(aliceIdentity));
+        assertFalse("A transport must remain connected", aliceWs.awaitClose(300));
+        assertNull("transport loss must not notify A", waitForType(aliceWs, "disconnect", 700));
+
+        byte[] encryptionKey = NGEUtils.getPlatform().randomBytes(32);
+        NostrTURNDataEvent outgoing = NostrTURNDataEvent.createOutgoing(
+            alice,
+            bobRemoteForAlice,
+            roomKeyPair,
+            CHANNEL_LABEL,
+            aliceVsocketId,
+            encryptionKey
+        );
+        int firstMessageId = 901;
+        int secondMessageId = 902;
+        ByteBuffer firstFrame = NGEUtils.awaitNoThrow(
+            outgoing.encodeToFrame(
+                Collections.singletonList(ByteBuffer.wrap("queued-first".getBytes(java.nio.charset.StandardCharsets.UTF_8))),
+                firstMessageId
+            )
+        );
+        ByteBuffer secondFrame = NGEUtils.awaitNoThrow(
+            outgoing.encodeToFrame(
+                Collections.singletonList(ByteBuffer.wrap("queued-second".getBytes(java.nio.charset.StandardCharsets.UTF_8))),
+                secondMessageId
+            )
+        );
+        aliceWs.send(firstFrame);
+        aliceWs.send(secondFrame);
+        long expectedQueuedBytes = firstFrame.remaining() + secondFrame.remaining();
+        awaitCondition(
+            () -> serverQueuedBytes(server) == expectedQueuedBytes,
+            3000,
+            "A frames were not retained while B was offline"
+        );
+
+        WsClient bobReconnectedWs = WsClient.connect(wsUri);
+        NostrTURNChallengeEvent challengeBobReconnected = NostrTURNChallengeEvent.parseIncoming(
+            waitForType(bobReconnectedWs, "challenge", 2000),
+            bob,
+            64
+        );
+        long bobReconnectedVsocketId = 863L;
+        sendValidConnect(
+            bobReconnectedWs,
+            bob,
+            aliceRemoteForBob,
+            roomKeyPair,
+            challengeBobReconnected,
+            bobReconnectedVsocketId
+        );
+        assertNotNull("reconnected B should receive its connect ACK", waitForType(bobReconnectedWs, "ack", 3000));
+
+        ByteBuffer receivedFirstFrame = waitForFrameType(bobReconnectedWs, "data", 5000);
+        ByteBuffer receivedSecondFrame = waitForFrameType(bobReconnectedWs, "data", 5000);
+        assertNotNull("first queued frame should drain after B reconnects", receivedFirstFrame);
+        assertNotNull("second queued frame should drain after B reconnects", receivedSecondFrame);
+        assertEquals(firstMessageId, NostrTURNCodec.extractMessageId(receivedFirstFrame));
+        assertEquals(secondMessageId, NostrTURNCodec.extractMessageId(receivedSecondFrame));
+        assertEquals(
+            "reconnected B's vsocket must replace the dropped transport's id",
+            bobReconnectedVsocketId,
+            NostrTURNCodec.extractVsocketId(receivedFirstFrame)
+        );
+        assertEquals(bobReconnectedVsocketId, NostrTURNCodec.extractVsocketId(receivedSecondFrame));
+
+        assertFramePayload(receivedFirstFrame, bob, aliceRemoteForBob, roomKeyPair, bobReconnectedVsocketId, "queued-first");
+        assertFramePayload(receivedSecondFrame, bob, aliceRemoteForBob, roomKeyPair, bobReconnectedVsocketId, "queued-second");
+        assertTrue("A registration must remain after queued delivery", server.logicalSockets.containsKey(aliceIdentity));
+        assertNull("A must not receive a delayed disconnect", waitForType(aliceWs, "disconnect", 700));
+
+        aliceWs.closeNow();
+        bobReconnectedWs.closeNow();
     }
 
     @Test
@@ -630,6 +768,16 @@ public class TestTurnServerCompliance {
     }
 
     private static SignedNostrEvent waitForType(WsClient ws, String type, long timeoutMs) throws Exception {
+        ByteBuffer frame = waitForFrameType(ws, type, timeoutMs);
+        if (frame == null) {
+            return null;
+        }
+        SignedNostrEvent header = NostrTURNCodec.decodeHeader(frame);
+        ws.rememberTypedFrame(type, frame);
+        return header;
+    }
+
+    private static ByteBuffer waitForFrameType(WsClient ws, String type, long timeoutMs) throws Exception {
         long deadline = System.currentTimeMillis() + timeoutMs;
         while (System.currentTimeMillis() < deadline) {
             ByteBuffer frame = ws.pollFrame(100);
@@ -638,11 +786,63 @@ public class TestTurnServerCompliance {
             }
             SignedNostrEvent header = NostrTURNCodec.decodeHeader(frame);
             if (type.equals(header.getFirstTagFirstValue("t"))) {
-                ws.rememberTypedFrame(type, frame);
-                return header;
+                return frame;
             }
         }
         return null;
+    }
+
+    private static void assertFramePayload(
+        ByteBuffer frame,
+        NostrRTCLocalPeer local,
+        NostrRTCPeer remote,
+        NostrKeyPair roomKeyPair,
+        long vsocketId,
+        String expected
+    ) {
+        SignedNostrEvent header = NostrTURNCodec.decodeHeader(frame);
+        NostrTURNDataEvent incoming = NostrTURNDataEvent.parseIncoming(
+            header,
+            local,
+            remote,
+            roomKeyPair,
+            CHANNEL_LABEL,
+            vsocketId
+        );
+        Queue<ByteBuffer> decoded = new ConcurrentLinkedQueue<ByteBuffer>(
+            NGEUtils.awaitNoThrow(incoming.decodeFramePayloads(frame))
+        );
+        assertEquals(1, decoded.size());
+        ByteBuffer payload = decoded.peek();
+        byte[] actual = new byte[payload.remaining()];
+        payload.get(actual);
+        assertArrayEquals(expected.getBytes(java.nio.charset.StandardCharsets.UTF_8), actual);
+    }
+
+    private static void awaitCondition(BooleanSupplier condition, long timeoutMs, String failureMessage) {
+        long deadline = System.currentTimeMillis() + timeoutMs;
+        while (System.currentTimeMillis() < deadline) {
+            if (condition.getAsBoolean()) {
+                return;
+            }
+            try {
+                Thread.sleep(25L);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                throw new AssertionError(failureMessage, interrupted);
+            }
+        }
+        assertTrue(failureMessage, condition.getAsBoolean());
+    }
+
+    private static long serverQueuedBytes(TurnServer server) {
+        try {
+            Field field = TurnServer.class.getDeclaredField("queuedBytes");
+            field.setAccessible(true);
+            return ((AtomicLong) field.get(server)).get();
+        } catch (ReflectiveOperationException error) {
+            throw new AssertionError("Unable to inspect TURN queue accounting", error);
+        }
     }
 
     private static final class WsClient implements WebSocket.Listener {
@@ -715,6 +915,12 @@ public class TestTurnServerCompliance {
                 try {
                     ws.sendClose(WebSocket.NORMAL_CLOSURE, "test-done").join();
                 } catch (Exception ignored) {}
+            }
+        }
+
+        void abort() {
+            if (ws != null) {
+                ws.abort();
             }
         }
 
