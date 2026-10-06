@@ -46,7 +46,7 @@ jobs:
 
 
     - name: Publish Snapshot
-      if: github.event_name != 'pull_request' && github.event_name != 'release'
+      if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request' && github.event_name != 'release'
       env:
         SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
         SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
@@ -56,7 +56,7 @@ jobs:
         ./gradlew --no-daemon publishAllPublicationsToDistFolder publishToSonatype  --info
 
     - name: Publish Release
-      if: github.event_name != 'pull_request' && github.event_name == 'release'
+      if: github.ref == 'refs/heads/master' && github.event_name == 'release' && github.event.action == 'published'
       env:
         SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
         SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
