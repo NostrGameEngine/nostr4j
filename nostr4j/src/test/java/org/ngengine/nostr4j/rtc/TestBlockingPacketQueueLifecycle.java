@@ -20,11 +20,18 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.logging.Logger;
+import org.junit.BeforeClass;
 import org.junit.Test;
 import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.ExecutionQueue;
+import org.ngengine.platform.NGEPlatform;
 
 public class TestBlockingPacketQueueLifecycle {
+
+    @BeforeClass
+    public static void initializePlatform() {
+        NGEPlatform.get();
+    }
 
     @Test
     public void finiteLifetimeDoesNotRetryAnOtherwiseValidLongAttempt() throws Exception {
@@ -194,6 +201,182 @@ public class TestBlockingPacketQueueLifecycle {
             assertFalse(first.isAlive());
             assertEquals(Arrays.asList("first", "second"), handled);
             assertEquals(0, queue.size());
+        }
+    }
+
+    @Test(timeout = 10000L)
+    public void completionMayAwaitWorkerClosingAndRejectingAnotherPendingSend() throws Exception {
+        PendingHandler handler = new PendingHandler();
+        CountDownLatch rejected = new CountDownLatch(1);
+        CountDownLatch completed = new CountDownLatch(1);
+        AtomicInteger rejections = new AtomicInteger();
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        try (BlockingPacketQueue<String> queue = queue(handler, 60_000L)) {
+            queue.enqueue(
+                "first",
+                ignored -> {
+                    awaitWorker(
+                        () -> {
+                            queue.close();
+                            assertTrue(
+                                "pending send rejection must progress during the callback",
+                                rejected.await(1, TimeUnit.SECONDS)
+                            );
+                        },
+                        failure
+                    );
+                    completed.countDown();
+                },
+                failure::set
+            );
+            queue.enqueue(
+                "second",
+                ignored -> failure.set(new AssertionError("closed send resolved")),
+                error -> {
+                    rejections.incrementAndGet();
+                    rejected.countDown();
+                }
+            );
+            handler.attempts.get(0).resolve.accept(true);
+            assertTrue(completed.await(3, TimeUnit.SECONDS));
+            assertNull(failure.get());
+            handler.attempts.get(0).resolve.accept(true);
+            queue.close();
+            assertEquals("close and stale success must reject the send only once", 1, rejections.get());
+        }
+    }
+
+    @Test(timeout = 10000L)
+    public void completionMayAwaitNewSendEnqueuedByAnotherThread() throws Exception {
+        Attempt first = new Attempt();
+        CountDownLatch secondCompleted = new CountDownLatch(1);
+        CountDownLatch callbackCompleted = new CountDownLatch(1);
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        try (
+            BlockingPacketQueue<String> queue = queue(
+                packet -> "first".equals(packet) ? first.task : AsyncTask.completed(true),
+                60_000L
+            )
+        ) {
+            queue.enqueue(
+                "first",
+                ignored -> {
+                    awaitWorker(
+                        () -> {
+                            queue.enqueue("second", done -> secondCompleted.countDown(), failure::set);
+                            assertTrue(
+                                "new send must progress during the first callback",
+                                secondCompleted.await(1, TimeUnit.SECONDS)
+                            );
+                        },
+                        failure
+                    );
+                    callbackCompleted.countDown();
+                },
+                failure::set
+            );
+            first.resolve.accept(true);
+            assertTrue(callbackCompleted.await(3, TimeUnit.SECONDS));
+            assertNull(failure.get());
+            assertEquals(0, queue.size());
+        }
+    }
+
+    @Test(timeout = 10000L)
+    public void closeRejectionMayAwaitWorkerReclosingAndRejectingAnotherPendingSend() throws Exception {
+        CountDownLatch secondRejected = new CountDownLatch(1);
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        try (BlockingPacketQueue<String> queue = queue(new PendingHandler(), 60_000L)) {
+            queue.enqueue(
+                "first",
+                ignored -> fail("closed send resolved"),
+                error ->
+                    awaitWorker(
+                        () -> {
+                            queue.close();
+                            assertTrue(
+                                "reentrant close must settle the other rejection",
+                                secondRejected.await(1, TimeUnit.SECONDS)
+                            );
+                        },
+                        failure
+                    )
+            );
+            queue.enqueue("second", ignored -> fail("closed send resolved"), error -> secondRejected.countDown());
+            queue.close();
+            assertNull(failure.get());
+            assertEquals(0L, secondRejected.getCount());
+        }
+    }
+
+    @Test(timeout = 10000L)
+    public void synchronousBacklogPreservesOrderWithoutRecursiveDrain() throws Exception {
+        Attempt first = new Attempt();
+        AtomicInteger handled = new AtomicInteger();
+        AtomicInteger completed = new AtomicInteger();
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        int count = 4096;
+        try (
+            BlockingPacketQueue<String> queue = queue(
+                packet -> {
+                    int position = handled.getAndIncrement();
+                    if (!Integer.toString(position).equals(packet)) failure.set(new AssertionError("packet order changed"));
+                    return position == 0 ? first.task : AsyncTask.completed(true);
+                },
+                60_000L
+            )
+        ) {
+            for (int i = 0; i < count; i++) {
+                queue.enqueue(Integer.toString(i), ignored -> completed.incrementAndGet(), failure::set);
+            }
+            first.resolve.accept(true);
+            assertNull(failure.get());
+            assertEquals(count, handled.get());
+            assertEquals(count, completed.get());
+            assertEquals(0, queue.size());
+        }
+    }
+
+    @Test
+    public void throwingCloseCallbackDoesNotPreventOtherRejections() throws Exception {
+        AtomicInteger rejected = new AtomicInteger();
+        try (BlockingPacketQueue<String> queue = queue(new PendingHandler(), 60_000L)) {
+            queue.enqueue(
+                "first",
+                null,
+                error -> {
+                    throw new IllegalStateException("application rejection failure");
+                }
+            );
+            queue.enqueue("second", null, error -> rejected.incrementAndGet());
+            queue.close();
+            queue.enqueue("third", null, error -> rejected.incrementAndGet());
+            assertEquals(2, rejected.get());
+        }
+    }
+
+    private interface CheckedAction {
+        void run() throws Exception;
+    }
+
+    private static void awaitWorker(CheckedAction action, AtomicReference<Throwable> failure) {
+        Thread worker = new Thread(
+            () -> {
+                try {
+                    action.run();
+                } catch (Throwable error) {
+                    failure.compareAndSet(null, error);
+                }
+            },
+            "queue-callback-worker"
+        );
+        worker.setDaemon(true);
+        worker.start();
+        try {
+            worker.join(2000L);
+            if (worker.isAlive()) failure.compareAndSet(null, new AssertionError("callback blocked worker progress"));
+        } catch (InterruptedException error) {
+            failure.compareAndSet(null, error);
         }
     }
 
