@@ -96,21 +96,42 @@ public interface NostrEvent extends Cloneable, Serializable {
     class TagValue {
 
         private final List<String> values;
+        private final List<String> storage;
+        private final int offset;
+        private final String firstValue;
 
         public TagValue(List<String> values) {
             this.values = Collections.unmodifiableList(values);
+            this.storage = this.values;
+            this.offset = 0;
+            this.firstValue = null;
         }
 
         public TagValue(String... values) {
             this.values = Arrays.asList(values);
+            this.storage = this.values;
+            this.offset = 0;
+            this.firstValue = null;
         }
 
         public TagValue(String value) {
             this.values = Arrays.asList(value);
+            this.storage = this.values;
+            this.offset = 0;
+            this.firstValue = null;
+        }
+
+        // Signed events own immutable rows. Read values directly from the row
+        // instead of traversing nested sublist wrappers on every lookup.
+        TagValue(List<String> row, int offset) {
+            this.storage = row;
+            this.offset = offset;
+            this.values = row.subList(offset, row.size());
+            this.firstValue = offset < row.size() ? row.get(offset) : null;
         }
 
         public int size() {
-            return values.size();
+            return storage.size() - offset;
         }
 
         /**
@@ -120,10 +141,11 @@ public interface NostrEvent extends Cloneable, Serializable {
          * @return the value at the specified index, or null if the index is out of bounds
          */
         public String get(int index) {
-            if (index < 0 || index >= values.size()) {
+            if (offset > 0 && index == 0) return firstValue;
+            if (index < 0 || index >= storage.size() - offset) {
                 return null;
             }
-            return values.get(index);
+            return storage.get(index + offset);
         }
 
         public List<String> getAll() {
@@ -141,26 +163,17 @@ public interface NostrEvent extends Cloneable, Serializable {
 
     default String getFirstTagFirstValue(String key) {
         TagValue tagValue = getFirstTag(key);
-        if (tagValue == null || tagValue.size() == 0) {
-            return null;
-        }
-        return tagValue.get(0);
+        return tagValue == null ? null : tagValue.get(0);
     }
 
     default String getFirstTagSecondValue(String key) {
         TagValue tagValue = getFirstTag(key);
-        if (tagValue == null || tagValue.size() < 2) {
-            return null;
-        }
-        return tagValue.get(1);
+        return tagValue == null ? null : tagValue.get(1);
     }
 
     default String getFirstTagThirdValue(String key) {
         TagValue tagValue = getFirstTag(key);
-        if (tagValue == null || tagValue.size() < 3) {
-            return null;
-        }
-        return tagValue.get(2);
+        return tagValue == null ? null : tagValue.get(2);
     }
 
     Set<String> listTagKeys();
@@ -201,23 +214,38 @@ public interface NostrEvent extends Cloneable, Serializable {
     }
 
     static String computeEventId(String pubkey, NostrEvent event) {
+        if (
+            event != null &&
+            (event.getClass() == SignedNostrEvent.class || event.getClass() == SignedNostrEvent.ReceivedSignedNostrEvent.class)
+        ) {
+            return ((SignedNostrEvent) event).computeCachedEventId(pubkey);
+        }
+        return computeEventIdUncached(pubkey, event);
+    }
+
+    static String computeEventIdUncached(String pubkey, NostrEvent event) {
         try {
-            Collection<Object> serial = Arrays.asList(
-                0,
-                pubkey,
-                event.getCreatedAt().getEpochSecond(),
-                event.getKind(),
-                event.getTagRows(),
-                event.getContent()
-            );
+            NGEPlatform platform = NGEUtils.getPlatform();
+            long createdAt = event.getCreatedAt().getEpochSecond();
+            if (platform.supportsMinimalJSONEscaping() && createdAt >= -9007199254740991L && createdAt <= 9007199254740991L) {
+                List<Object> payload = Arrays.asList(
+                    0,
+                    pubkey,
+                    createdAt,
+                    event.getKind(),
+                    event.getTagRows(),
+                    event.getContent()
+                );
+                assert dbg(() -> {
+                    Logger logger = Logger.getLogger(NostrEvent.class.getName());
+                    if (logger.isLoggable(Level.FINEST)) logger.finest("Serialized event: " + platform.toJSON(payload));
+                });
+                return platform.sha256JSON(payload);
+            }
+            String json = NostrEventJson.canonical(pubkey, event);
             assert dbg(() -> {
                 Logger logger = Logger.getLogger(NostrEvent.class.getName());
-                logger.finest("Serializing event: " + serial);
-            });
-            String json = NGEUtils.getPlatform().toJSON(serial);
-            assert dbg(() -> {
-                Logger logger = Logger.getLogger(NostrEvent.class.getName());
-                logger.finest("Serialized event: " + json);
+                if (logger.isLoggable(Level.FINEST)) logger.finest("Serialized event: " + json);
             });
             String id = NGEUtils.getPlatform().sha256(json);
             return id;

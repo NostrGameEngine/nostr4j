@@ -240,6 +240,48 @@ public class NostrFilter extends NostrMessageFragment implements Cloneable {
      * @return true if the event matches the filter, false otherwise
      */
     public boolean matches(SignedNostrEvent event, int count, boolean anyTagValue) {
+        if (!matchesFields(event, count)) return false;
+        if (tags != null) {
+            for (Map.Entry<String, List<String>> entry : tags.entrySet()) {
+                if (!matchesTag(event, entry.getKey(), entry.getValue(), anyTagValue)) return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Captures this filter for repeated matches without allocating map iterators per event.
+     * Like {@link #matches(SignedNostrEvent)}, each call uses count zero; the predicate
+     * does not maintain a cumulative match count for the limit.
+     */
+    public java.util.function.Predicate<SignedNostrEvent> prepare() {
+        return prepare(false);
+    }
+
+    /**
+     * Captures the filter's current lists and tag rules; subsequent filter edits do not affect it.
+     * Each call uses count zero. Use {@link #matches(SignedNostrEvent, int, boolean)}
+     * when applying a limit to a running count of matched events.
+     */
+    public java.util.function.Predicate<SignedNostrEvent> prepare(boolean anyTagValue) {
+        NostrFilter snapshot = clone();
+        if (getClass() != NostrFilter.class) {
+            return anyTagValue ? event -> snapshot.matches(event, true) : snapshot::matches;
+        }
+        List<Map.Entry<String, List<String>>> rules = snapshot.tags == null
+            ? java.util.Collections.emptyList()
+            : new ArrayList<>(snapshot.tags.entrySet());
+        return event -> {
+            if (!snapshot.matchesFields(event, 0)) return false;
+            for (int i = 0; i < rules.size(); i++) {
+                Map.Entry<String, List<String>> rule = rules.get(i);
+                if (!matchesTag(event, rule.getKey(), rule.getValue(), anyTagValue)) return false;
+            }
+            return true;
+        };
+    }
+
+    private boolean matchesFields(SignedNostrEvent event, int count) {
         if (limit != null && count >= limit) {
             return false;
         }
@@ -249,8 +291,14 @@ public class NostrFilter extends NostrMessageFragment implements Cloneable {
         if (authors != null && !authors.contains(event.getPubkey().asHex())) {
             return false;
         }
-        if (kinds != null && !kinds.contains(event.getKind())) {
-            return false;
+        if (kinds != null) {
+            int kind = event.getKind();
+            if (kinds.size() == 1) {
+                Object expected = kinds.get(0);
+                if (!(expected instanceof Integer) || ((Integer) expected).intValue() != kind) return false;
+            } else if (!kinds.contains(kind)) {
+                return false;
+            }
         }
         if (since != null && event.getCreatedAt().isBefore(since)) {
             return false;
@@ -258,39 +306,27 @@ public class NostrFilter extends NostrMessageFragment implements Cloneable {
         if (until != null && event.getCreatedAt().isAfter(until)) {
             return false;
         }
-        if (tags != null) {
-            for (Map.Entry<String, List<String>> filterTagEntry : tags.entrySet()) {
-                String filterTagKey = filterTagEntry.getKey();
-                List<String> filterTagValues = filterTagEntry.getValue();
-                boolean found = false;
-                if (event.hasTag(filterTagKey)) {
-                    List<TagValue> tags = event.getTag(filterTagKey);
-                    for (String expectedValue : filterTagValues) {
-                        for (TagValue tagValue : tags) {
-                            if (anyTagValue) {
-                                for (String value : tagValue.getAll()) {
-                                    if (Objects.equals(value, expectedValue)) {
-                                        found = true;
-                                        break;
-                                    }
-                                }
-                            } else {
-                                if (Objects.equals(tagValue.get(0), expectedValue)) {
-                                    found = true;
-                                    break;
-                                }
-                            }
-                            if (found) break;
-                        }
-                        if (found) break;
+        return true;
+    }
+
+    private static boolean matchesTag(SignedNostrEvent event, String key, List<String> values, boolean anyTagValue) {
+        if (!event.hasTag(key)) return false;
+        List<TagValue> eventTags = event.getTag(key);
+        if (eventTags == null) return false;
+        if (!anyTagValue && values.size() == 1 && eventTags.size() == 1) {
+            return Objects.equals(eventTags.get(0).get(0), values.get(0));
+        }
+        for (String expected : values) {
+            for (TagValue tag : eventTags) {
+                if (anyTagValue) {
+                    for (String value : tag.getAll()) {
+                        if (Objects.equals(value, expected)) return true;
                     }
-                }
-                if (!found) {
-                    return false;
+                } else if (Objects.equals(tag.get(0), expected)) {
+                    return true;
                 }
             }
         }
-
-        return true;
+        return false;
     }
 }

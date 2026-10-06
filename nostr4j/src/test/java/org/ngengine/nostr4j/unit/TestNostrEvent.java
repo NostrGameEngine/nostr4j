@@ -33,6 +33,7 @@ package org.ngengine.nostr4j.unit;
 import static org.junit.Assert.*;
 
 import java.lang.reflect.Field;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collection;
@@ -56,6 +57,239 @@ import org.ngengine.platform.SafeFlag;
 import org.ngengine.platform.jvm.JVMAsyncPlatform;
 
 public class TestNostrEvent {
+
+    @Test
+    public void testSignedTagGroupsRemainStableAcrossConcurrentFirstReads() throws Exception {
+        SignedNostrEvent event = new SignedNostrEvent(
+            "0".repeat(64),
+            NostrPublicKey.fromHex("f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9", false),
+            1,
+            "",
+            Instant.ofEpochSecond(1700000000),
+            "0".repeat(128),
+            List.of(List.of("t"), List.of("p", "first"), List.of("other", "value"), List.of("p", "second"))
+        );
+        java.util.concurrent.ExecutorService readers = java.util.concurrent.Executors.newFixedThreadPool(4);
+        java.util.concurrent.CountDownLatch start = new java.util.concurrent.CountDownLatch(1);
+        List<java.util.concurrent.Future<?>> tasks = new java.util.ArrayList<>();
+        try {
+            for (int worker = 0; worker < 4; worker++) tasks.add(
+                readers.submit(() -> {
+                    try {
+                        start.await();
+                        for (int repeat = 0; repeat < 500; repeat++) {
+                            List<NostrEvent.TagValue> group = event.getTag(new String("p"));
+                            assertEquals(2, group.size());
+                            assertSame(group.get(0), event.getFirstTag("p"));
+                            assertEquals("first", event.getFirstTagFirstValue("p"));
+                            assertEquals("second", group.get(1).get(0));
+                            assertEquals("value", event.getFirstTagFirstValue("other"));
+                            assertTrue(event.hasTag("t"));
+                            assertEquals(0, event.getFirstTag("t").size());
+                            assertNull(event.getFirstTagFirstValue("t"));
+                            assertNull(event.getTag("missing-" + repeat));
+                            assertNull(event.getFirstTag(null));
+                        }
+                    } catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                        throw new AssertionError(interrupted);
+                    }
+                })
+            );
+            start.countDown();
+            for (java.util.concurrent.Future<?> task : tasks) task.get(10, java.util.concurrent.TimeUnit.SECONDS);
+            assertEquals(List.of("t", "p", "other"), new java.util.ArrayList<>(event.listTagKeys()));
+            for (String key : List.of("p", "other", "t")) {
+                int size = event.getTag(key).size();
+                try {
+                    event.getTag(key).clear();
+                    fail("Mutable tag group escaped");
+                } catch (UnsupportedOperationException expected) {
+                    assertEquals(size, event.getTag(key).size());
+                }
+            }
+        } finally {
+            readers.shutdownNow();
+        }
+    }
+
+    @Test
+    public void testIndependentCanonicalUnicodeAndControlCharacterVectors() throws Exception {
+        String fixture;
+        try (java.io.InputStream input = getClass().getResourceAsStream("/canonical-event-vectors.json")) {
+            assertNotNull(input);
+            fixture = new String(input.readAllBytes(), StandardCharsets.UTF_8);
+        }
+        List<Map<String, Object>> vectors = NGEUtils.getPlatform().fromJSON(fixture, List.class);
+        assertEquals(8, vectors.size());
+        for (Map<String, Object> map : vectors) {
+            SignedNostrEvent event = new SignedNostrEvent(map);
+            assertEquals(event.getId(), NostrEvent.computeEventId(event.getPubkey().asHex(), event));
+            assertTrue(event.verify());
+        }
+        UnsignedNostrEvent mutable = new UnsignedNostrEvent(vectors.get(0));
+        String first = NostrEvent.computeEventId((String) vectors.get(0).get("pubkey"), mutable);
+        mutable.withContent("changed after first hash");
+        assertNotEquals(first, NostrEvent.computeEventId((String) vectors.get(0).get("pubkey"), mutable));
+        UnsignedNostrEvent largeTimestamp = new UnsignedNostrEvent(vectors.get(0));
+        largeTimestamp.createdAt(Instant.ofEpochSecond(9007199254740993L));
+        largeTimestamp.withContent("large timestamp");
+        assertEquals(
+            "64dfd74ee483d5e8568a42aea3bbfe06d2415b8865e090bb808e4a0dde953545",
+            NostrEvent.computeEventId((String) vectors.get(0).get("pubkey"), largeTimestamp)
+        );
+    }
+
+    @Test
+    public void testTypedTagSnapshotAndIndexCannotBeMutated() {
+        List<String> sourceRow = new java.util.ArrayList<>(Arrays.asList("t", "first", "second"));
+        List<List<String>> sourceRows = new java.util.ArrayList<>(List.of(sourceRow));
+        SignedNostrEvent event = new SignedNostrEvent(
+            "0".repeat(64),
+            new NostrKeyPair().getPublicKey(),
+            1,
+            "content",
+            Instant.ofEpochSecond(1700000000),
+            "0".repeat(128),
+            sourceRows
+        );
+        sourceRow.set(1, "changed");
+        sourceRows.clear();
+        assertEquals("first", event.getFirstTagFirstValue("t"));
+        assertEquals("first", event.getTagRows().get(0).get(1));
+        assertThrows(UnsupportedOperationException.class, () -> event.getFirstTag("t").getAll().set(0, "changed"));
+        assertThrows(UnsupportedOperationException.class, () -> event.getTagRows().get(0).set(1, "changed"));
+        assertThrows(UnsupportedOperationException.class, () -> event.getTag("t").clear());
+        assertThrows(UnsupportedOperationException.class, () -> event.listTagKeys().remove("t"));
+        assertThrows(UnsupportedOperationException.class, () -> event.listTagKeys().iterator().remove());
+        assertEquals("first", event.getFirstTagFirstValue("t"));
+    }
+
+    @Test
+    public void testLazyTagIndexIsPublishedOnceToConcurrentReaders() throws Exception {
+        SignedNostrEvent event = new SignedNostrEvent(
+            "0".repeat(64),
+            new NostrKeyPair().getPublicKey(),
+            1,
+            "content",
+            Instant.ofEpochSecond(1700000000),
+            "0".repeat(128),
+            List.of(List.of("t", "first"), List.of("t", "second"), List.of("other", "value"))
+        );
+        java.util.concurrent.ExecutorService executor = java.util.concurrent.Executors.newFixedThreadPool(8);
+        java.util.concurrent.CountDownLatch start = new java.util.concurrent.CountDownLatch(1);
+        try {
+            List<java.util.concurrent.Future<List<NostrEvent.TagValue>>> readers = new java.util.ArrayList<>();
+            for (int i = 0; i < 32; i++) {
+                readers.add(
+                    executor.submit(() -> {
+                        start.await();
+                        assertEquals(null, event.getTag("missing"));
+                        assertEquals("value", event.getFirstTagFirstValue("other"));
+                        return event.getTag("t");
+                    })
+                );
+            }
+            start.countDown();
+            List<NostrEvent.TagValue> index = readers.get(0).get();
+            assertEquals("first", index.get(0).get(0));
+            assertEquals("second", index.get(1).get(0));
+            for (java.util.concurrent.Future<List<NostrEvent.TagValue>> reader : readers) assertSame(index, reader.get());
+            assertEquals(List.of("t", "other"), new java.util.ArrayList<>(event.listTagKeys()));
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
+    public void testEmptyTagValuesRemainDistinctFromMissingTags() {
+        SignedNostrEvent event = new SignedNostrEvent(
+            "0".repeat(64),
+            new NostrKeyPair().getPublicKey(),
+            1,
+            "content",
+            Instant.ofEpochSecond(1700000000),
+            "0".repeat(128),
+            List.of(List.of("t"), List.of("t", "second"))
+        );
+        assertEquals(null, event.getFirstTagFirstValue("missing"));
+        assertTrue(event.hasTag("t"));
+        assertEquals(null, event.getFirstTagFirstValue("t"));
+        assertEquals(null, event.getFirstTagSecondValue("t"));
+        assertEquals(null, event.getFirstTagThirdValue("t"));
+        assertEquals(2, event.getTag("t").size());
+        assertEquals("second", event.getTag("t").get(1).get(0));
+        assertEquals(0, event.getFirstTag("t").getAll().size());
+    }
+
+    @Test
+    public void testMixedTagQueriesPreserveOrderIdentityAndEmptyValues() {
+        SignedNostrEvent event = new SignedNostrEvent(
+            "0".repeat(64),
+            new NostrKeyPair().getPublicKey(),
+            1,
+            "content",
+            Instant.ofEpochSecond(1700000000),
+            "0".repeat(128),
+            List.of(List.of("t"), List.of("p", "first"), List.of("p", "second"), List.of("other", "value"))
+        );
+        assertEquals(null, event.getFirstTag("missing"));
+        List<NostrEvent.TagValue> first = event.getTag("p");
+        for (int repeat = 0; repeat < 10; repeat++) {
+            // Distinct equal strings exercise equality as well as identity.
+            assertSame(first.get(0), event.getFirstTag(new String("p")));
+            assertSame(first, event.getTag(new String("p")));
+            assertEquals("first", event.getFirstTagFirstValue("p"));
+            assertEquals("second", event.getTag("p").get(1).get(0));
+            assertEquals("value", event.getFirstTagFirstValue("other"));
+            assertSame(event.getTag("other").get(0), event.getFirstTag("other"));
+            assertTrue(event.hasTag("t"));
+            assertEquals(0, event.getFirstTag("t").size());
+            assertEquals(null, event.getFirstTagFirstValue("t"));
+            assertEquals(null, event.getFirstTag("missing"));
+            assertEquals(null, event.getTag("missing"));
+            assertEquals(null, event.getFirstTag(null));
+        }
+        assertEquals(List.of("t", "p", "other"), new java.util.ArrayList<>(event.listTagKeys()));
+        assertThrows(UnsupportedOperationException.class, first::clear);
+    }
+
+    @Test
+    public void testLazyIndexSurvivesJavaSerializationAndReadsPreviousSnapshot() throws Exception {
+        try (
+            java.io.ObjectInputStream input = new java.io.ObjectInputStream(
+                getClass().getResourceAsStream("/serialized-event-round1.bin")
+            )
+        ) {
+            SignedNostrEvent legacy = (SignedNostrEvent) input.readObject();
+            assertEquals("Serialization compatibility fixture", legacy.getContent());
+            assertTrue(legacy.verify());
+            assertTrue(legacy.listTagKeys().isEmpty());
+        }
+        String fixture;
+        try (java.io.InputStream input = getClass().getResourceAsStream("/canonical-event-vectors.json")) {
+            fixture = new String(input.readAllBytes(), StandardCharsets.UTF_8);
+        }
+        List<Map<String, Object>> vectors = NGEUtils.getPlatform().fromJSON(fixture, List.class);
+        SignedNostrEvent original = new SignedNostrEvent(vectors.get(0));
+        original.getTag("t");
+        assertTrue(original.verify());
+        java.io.ByteArrayOutputStream bytes = new java.io.ByteArrayOutputStream();
+        try (java.io.ObjectOutputStream output = new java.io.ObjectOutputStream(bytes)) {
+            output.writeObject(original);
+        }
+        try (
+            java.io.ObjectInputStream input = new java.io.ObjectInputStream(
+                new java.io.ByteArrayInputStream(bytes.toByteArray())
+            )
+        ) {
+            SignedNostrEvent restored = (SignedNostrEvent) input.readObject();
+            assertEquals(original.getTagRows(), restored.getTagRows());
+            assertEquals(original.getFirstTag("t").getAll(), restored.getFirstTag("t").getAll());
+            assertTrue(restored.verify());
+            assertThrows(UnsupportedOperationException.class, () -> restored.getFirstTag("t").getAll().clear());
+        }
+    }
 
     private static void setPlatformTestFlags(boolean noAuxRandom) throws Exception {
         setPlatformTestFlag("_NO_AUX_RANDOM", noAuxRandom);
@@ -126,6 +360,12 @@ public class TestNostrEvent {
         assertEquals(event.getFirstTag("b").get(2), "3");
 
         assertEquals(event.getFirstTag("c"), null);
+        assertEquals("1", event.getFirstTagFirstValue("a"));
+        assertEquals(null, event.getFirstTagSecondValue("a"));
+        assertEquals(null, event.getFirstTagThirdValue("a"));
+        assertEquals(null, event.getFirstTagFirstValue("missing"));
+        assertEquals("2", event.getFirstTagSecondValue("b"));
+        assertEquals("3", event.getFirstTagThirdValue("b"));
 
         assertEquals(event.getFirstTag("b").get(0), "1");
         assertEquals(event.getFirstTag("b").get(1), "2");

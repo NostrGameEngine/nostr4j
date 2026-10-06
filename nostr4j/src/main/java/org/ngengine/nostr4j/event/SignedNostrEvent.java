@@ -42,7 +42,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
+import java.util.Objects;
 import java.util.Set;
 import org.ngengine.bech32.Bech32;
 import org.ngengine.bech32.Bech32Exception;
@@ -51,10 +51,13 @@ import org.ngengine.nostr4j.proto.NostrMessage;
 import org.ngengine.nostr4j.utils.ImmutableSnapshot;
 import org.ngengine.nostr4j.utils.ZeroCounter;
 import org.ngengine.platform.AsyncTask;
+import org.ngengine.platform.NGEPlatform;
 import org.ngengine.platform.NGEUtils;
 import org.ngengine.platform.SafeFlag;
 
 public class SignedNostrEvent extends NostrMessage implements NostrEvent {
+
+    private static final long serialVersionUID = 2541630848810678482L;
 
     private static final byte[] BECH32_PREVIX = "note".getBytes(StandardCharsets.UTF_8);
 
@@ -87,17 +90,76 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
 
     private final int kind;
     private final String content;
-    private Map<String, List<TagValue>> tags;
+    private transient volatile LinkedHashMap<String, TagLookup> tags;
+    private transient volatile TagLookup firstTagLookup;
     private final List<List<String>> tagRows;
     private final String signature;
     private final String pubkey;
     private final Identifier identifier;
+    private final boolean encodingCacheAllowed;
 
     private transient String bech32Id;
     private transient NostrPublicKey parsedPublicKey;
     private transient Instant expiresAt;
     private transient SafeFlag verificationCached = new SafeFlag(false);
     private transient SafeFlag verificationResult = new SafeFlag(false);
+    private transient volatile CachedEncoding eventIdCache;
+    private transient volatile CachedEncoding eventJsonCache;
+
+    private static final class CachedEncoding {
+
+        final NGEPlatform platform;
+        final String pubkey;
+        final String value;
+
+        CachedEncoding(NGEPlatform platform, String pubkey, String value) {
+            this.platform = platform;
+            this.pubkey = pubkey;
+            this.value = value;
+        }
+    }
+
+    String computeCachedEventId(String pubkey) {
+        if (!encodingCacheAllowed) return NostrEvent.computeEventIdUncached(pubkey, this);
+        NGEPlatform platform = NGEUtils.getPlatform();
+        CachedEncoding cached = eventIdCache;
+        if (cached != null && cached.platform == platform && Objects.equals(cached.pubkey, pubkey)) return cached.value;
+        String id = NostrEvent.computeEventIdUncached(pubkey, this);
+        if (id != null) eventIdCache = new CachedEncoding(platform, pubkey, id);
+        return id;
+    }
+
+    /**
+     * Returns the event JSON object, without the relay message envelope.
+     * The serialized string is cached on immutable event models for repeated use
+     * and remains retained for the lifetime of the event.
+     */
+    public String toEventJSON() {
+        NGEPlatform platform = NGEUtils.getPlatform();
+        // Subclasses may override getters or toMap with mutable behavior.
+        if (!encodingCacheAllowed || (getClass() != SignedNostrEvent.class && getClass() != ReceivedSignedNostrEvent.class)) {
+            return platform.toJSON(toMap());
+        }
+        CachedEncoding cached = eventJsonCache;
+        if (cached != null && cached.platform == platform) return cached.value;
+        String json = platform.toJSON(toMap());
+        eventJsonCache = new CachedEncoding(platform, null, json);
+        return json;
+    }
+
+    private static final class TagLookup {
+
+        final String key;
+        // Built and frozen while holding the event lock, before publishing the index.
+        List<TagValue> values;
+        final TagValue first;
+
+        TagLookup(String key, List<TagValue> values) {
+            this.key = key;
+            this.values = values;
+            this.first = values.get(0);
+        }
+    }
 
     public SignedNostrEvent(
         String id,
@@ -115,29 +177,38 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
         this.parsedPublicKey = pubkey;
         this.identifier = new Identifier(id, created_at);
 
-        Map<String, List<TagValue>> tagsMap = new LinkedHashMap<>();
-        ArrayList<List<String>> tagRows = new ArrayList<>();
+        ArrayList<List<String>> tagRows = new ArrayList<>(tags.size());
+        boolean immutableValues = true;
 
         for (List<String> tag : tags) {
             if (tag.isEmpty()) continue;
-            ArrayList<String> values = new ArrayList<>();
-            for (int i = 1; i < tag.size(); i++) {
-                values.add(tag.get(i));
+            List<String> row = Collections.unmodifiableList(new ArrayList<>(tag));
+            for (Object value : row) {
+                if (value != null && !(value instanceof String)) immutableValues = false;
             }
-            TagValue tagValue = new TagValue(values);
-            List<TagValue> tagValues = tagsMap.computeIfAbsent(tag.get(0), k -> new ArrayList<>());
-            tagValues.add(tagValue);
-            tagRows.add(Collections.unmodifiableList(new ArrayList<>(tag)));
+            tagRows.add(row);
         }
-
-        for (Entry<String, List<TagValue>> entry : tagsMap.entrySet()) {
-            entry.setValue(Collections.unmodifiableList(new ArrayList<>(entry.getValue())));
-        }
-        this.tags = Collections.unmodifiableMap(tagsMap);
         this.tagRows = Collections.unmodifiableList(tagRows);
+        this.encodingCacheAllowed = immutableValues;
+    }
+
+    /** Parses an event object into an owned immutable model; call verify to authenticate it. */
+    public static SignedNostrEvent fromJSON(String json) {
+        return new SignedNostrEvent(NGEUtils.getPlatform().parseJsonObject(json));
+    }
+
+    private SignedNostrEvent(org.ngengine.platform.JsonObject source) {
+        this.encodingCacheAllowed = true;
+        this.kind = source.getInt("kind");
+        this.content = source.getString("content");
+        this.signature = source.getString("sig");
+        this.pubkey = source.getString("pubkey");
+        this.identifier = new Identifier(source.getString("id"), source.getSecondsInstant("created_at"));
+        this.tagRows = source.getStringRows("tags");
     }
 
     public SignedNostrEvent(Map<String, Object> map) {
+        this.encodingCacheAllowed = true;
         this.kind = NGEUtils.safeInt(map.get("kind"));
         this.content = NGEUtils.safeString(map.get("content"));
         this.signature = NGEUtils.safeString(map.get("sig"));
@@ -151,26 +222,45 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
             map.getOrDefault("tags", new ArrayList<Collection<String>>())
         );
 
-        Map<String, List<TagValue>> tagsMap = new LinkedHashMap<>();
-        ArrayList<List<String>> tagRows = new ArrayList<>();
+        ArrayList<List<String>> tagRows = new ArrayList<>(tags.size());
 
         for (String tag[] : tags) {
             if (tag.length == 0) continue;
-            ArrayList<String> values = new ArrayList<>();
-            for (int i = 1; i < tag.length; i++) {
-                values.add(tag[i]);
-            }
-            TagValue tagValue = new TagValue(values);
-            List<TagValue> tagValues = tagsMap.computeIfAbsent(tag[0], k -> new ArrayList<>());
-            tagValues.add(tagValue);
-            tagRows.add(Collections.unmodifiableList(new ArrayList<>(Arrays.asList(tag))));
+            // safeCollectionOfStringArray already owns and validates this array.
+            // The immutable row and index can share it without another copy.
+            List<String> row = Collections.unmodifiableList(Arrays.asList(tag));
+            tagRows.add(row);
         }
-
-        for (Entry<String, List<TagValue>> entry : tagsMap.entrySet()) {
-            entry.setValue(Collections.unmodifiableList(new ArrayList<>(entry.getValue())));
-        }
-        this.tags = Collections.unmodifiableMap(tagsMap);
         this.tagRows = Collections.unmodifiableList(tagRows);
+    }
+
+    private LinkedHashMap<String, TagLookup> getTagsIndex() {
+        LinkedHashMap<String, TagLookup> index = this.tags;
+        if (index != null) return index;
+        synchronized (this) {
+            if (this.tags != null) return this.tags;
+            LinkedHashMap<String, TagLookup> indexByKey = new LinkedHashMap<>();
+            for (List<String> row : tagRows) {
+                String key = row.get(0);
+                TagValue value = new TagValue(row, 1);
+                TagLookup group = indexByKey.get(key);
+                if (group == null) {
+                    List<TagValue> values = new ArrayList<>();
+                    values.add(value);
+                    indexByKey.put(key, new TagLookup(key, values));
+                } else {
+                    group.values.add(value);
+                }
+            }
+            for (TagLookup group : indexByKey.values()) {
+                group.values = Collections.unmodifiableList(group.values);
+            }
+            // Build and freeze the owned groups in one map. Keep the first value
+            // directly indexed, without a temporary map or entries for misses.
+            // The volatile publication happens only after every view is protected.
+            this.tags = indexByKey;
+            return indexByKey;
+        }
     }
 
     @Override
@@ -365,30 +455,41 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
     @Override
     public boolean hasTag(String tag) {
         if (tag == null) return false;
-        return tags.get(tag) != null;
+        return getTagValues(tag) != null;
     }
 
     @Override
     public List<TagValue> getTag(String key) {
-        List<TagValue> values = tags.get(key);
-        if (values != null && values.isEmpty()) {
-            return null;
-        }
-        return values;
+        return getTagValues(key);
+    }
+
+    private List<TagValue> getTagValues(String key) {
+        TagLookup cached = firstTagLookup;
+        if (cached != null && Objects.equals(cached.key, key)) return cached.values;
+        TagLookup indexed = getIndexedTagLookup(key, cached);
+        return indexed == null ? null : indexed.values;
+    }
+
+    private TagLookup getIndexedTagLookup(String key, TagLookup cached) {
+        TagLookup indexed = getTagsIndex().get(key);
+        // Preserve the caller's key identity for the one successful-key shortcut.
+        // Prepared filters reuse that String, avoiding content comparisons. Other
+        // keys use the complete index; misses never add entries or shortcuts.
+        if (cached == null && indexed != null) firstTagLookup = new TagLookup(key, indexed.values);
+        return indexed;
     }
 
     @Override
     public TagValue getFirstTag(String key) {
-        List<TagValue> values = tags.get(key);
-        if (values == null || values.isEmpty()) {
-            return null;
-        }
-        return values.get(0);
+        TagLookup cached = firstTagLookup;
+        if (cached != null && Objects.equals(cached.key, key)) return cached.first;
+        TagLookup indexed = getIndexedTagLookup(key, cached);
+        return indexed == null ? null : indexed.first;
     }
 
     @Override
     public Set<String> listTagKeys() {
-        return tags.keySet();
+        return Collections.unmodifiableSet(getTagsIndex().keySet());
     }
 
     @Override
