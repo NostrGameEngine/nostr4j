@@ -204,6 +204,39 @@ public class TestForwardSlidingWindowEventTracker {
     // ------ Event Ordering Tests ------
 
     @Test
+    public void testEqualTimestampAppendPreservesOrderAndEviction() {
+        tracker.setMockTime(currentTimeSeconds * 1000);
+        for (int i = 0; i < MAX_EVENTS; i++) {
+            assertFalse(tracker.seen(createEvent(currentTimeSeconds, "equal" + i)));
+        }
+        int index = 0;
+        for (SignedNostrEvent.Identifier identifier : tracker.getAll()) {
+            assertEquals("equal" + index++, identifier.id);
+        }
+        assertFalse(tracker.seen(createEvent(currentTimeSeconds, "overflow")));
+        assertEquals(MAX_EVENTS, tracker.count());
+        assertFalse("The appended oldest tie is evicted as before", tracker.isIndexed("overflow"));
+        assertTrue(tracker.seen(createEvent(currentTimeSeconds, "equal0")));
+        assertTrue(tracker.indexMatchesWindow());
+    }
+
+    @Test
+    public void testOldestAppendAndInteriorTiesPreserveStableOrder() {
+        tracker.setMockTime(currentTimeSeconds * 1000);
+        long[] offsets = { 3, 1, 1, 2, 3, 0, 0, 2 };
+        for (int i = 0; i < offsets.length; i++) {
+            assertFalse(tracker.seen(createEvent(currentTimeSeconds + offsets[i], "ordered" + i)));
+        }
+        String[] expected = { "ordered0", "ordered4", "ordered3", "ordered7", "ordered1", "ordered2", "ordered5", "ordered6" };
+        int index = 0;
+        for (SignedNostrEvent.Identifier identifier : tracker.getAll()) {
+            assertEquals(expected[index++], identifier.id);
+        }
+        assertEquals(expected.length, index);
+        assertTrue(tracker.indexMatchesWindow());
+    }
+
+    @Test
     public void testEventsShouldBeOrderedByTimestamp() {
         // Add events in reverse chronological order
         SignedNostrEvent event3 = createEvent(currentTimeSeconds + 30, "event3");

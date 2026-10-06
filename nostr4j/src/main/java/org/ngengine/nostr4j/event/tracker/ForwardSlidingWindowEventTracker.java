@@ -86,6 +86,17 @@ public class ForwardSlidingWindowEventTracker implements EventTracker {
             if (seenEventIds.contains(newEventId.id)) {
                 return true;
             }
+            // Historical batches and bursts within one second often belong at the
+            // oldest edge. Append directly while preserving the existing order
+            // of equal timestamps, instead of scanning the entire window.
+            if (seenEvents.isEmpty() || newEventId.createdAt <= seenEvents.getLast().createdAt) {
+                seenEvents.addLast(newEventId);
+                seenEventIds.add(newEventId.id);
+                update();
+                assert checkOrder() : "Events are not in order";
+                assert checkIndex() : "Event index is inconsistent";
+                return false;
+            }
             ListIterator<SignedNostrEvent.Identifier> it = seenEvents.listIterator();
 
             // Add the event to the list, ordered from most recent to oldest. Duplicate
