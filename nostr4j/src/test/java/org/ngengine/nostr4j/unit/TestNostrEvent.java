@@ -168,6 +168,38 @@ public class TestNostrEvent {
     }
 
     @Test
+    public void testMixedTagQueriesPreserveOrderIdentityAndEmptyValues() {
+        SignedNostrEvent event = new SignedNostrEvent(
+            "0".repeat(64),
+            new NostrKeyPair().getPublicKey(),
+            1,
+            "content",
+            Instant.ofEpochSecond(1700000000),
+            "0".repeat(128),
+            List.of(List.of("t"), List.of("p", "first"), List.of("p", "second"), List.of("other", "value"))
+        );
+        assertEquals(null, event.getFirstTag("missing"));
+        List<NostrEvent.TagValue> first = event.getTag("p");
+        for (int repeat = 0; repeat < 10; repeat++) {
+            // Distinct equal strings exercise equality as well as identity.
+            assertSame(first.get(0), event.getFirstTag(new String("p")));
+            assertSame(first, event.getTag(new String("p")));
+            assertEquals("first", event.getFirstTagFirstValue("p"));
+            assertEquals("second", event.getTag("p").get(1).get(0));
+            assertEquals("value", event.getFirstTagFirstValue("other"));
+            assertSame(event.getTag("other").get(0), event.getFirstTag("other"));
+            assertTrue(event.hasTag("t"));
+            assertEquals(0, event.getFirstTag("t").size());
+            assertEquals(null, event.getFirstTagFirstValue("t"));
+            assertEquals(null, event.getFirstTag("missing"));
+            assertEquals(null, event.getTag("missing"));
+            assertEquals(null, event.getFirstTag(null));
+        }
+        assertEquals(List.of("t", "p", "other"), new java.util.ArrayList<>(event.listTagKeys()));
+        assertThrows(UnsupportedOperationException.class, first::clear);
+    }
+
+    @Test
     public void testLazyIndexSurvivesJavaSerializationAndReadsPreviousSnapshot() throws Exception {
         try (
             java.io.ObjectInputStream input = new java.io.ObjectInputStream(

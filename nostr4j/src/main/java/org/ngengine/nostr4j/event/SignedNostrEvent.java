@@ -457,6 +457,10 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
     private List<TagValue> getTagValues(String key) {
         TagLookup cached = firstTagLookup;
         if (cached != null && Objects.equals(cached.key, key)) return cached.values;
+        return getIndexedTagValues(key, cached);
+    }
+
+    private List<TagValue> getIndexedTagValues(String key, TagLookup cached) {
         List<TagValue> values = getTagsIndex().get(key);
         if (values != null && values.isEmpty()) {
             return null;
@@ -472,7 +476,9 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
     public TagValue getFirstTag(String key) {
         TagLookup cached = firstTagLookup;
         if (cached != null && Objects.equals(cached.key, key)) return cached.first;
-        List<TagValue> values = getTagValues(key);
+        // The first-key cache was already checked. Mixed lookups should go
+        // directly to the index without repeating the same string comparison.
+        List<TagValue> values = getIndexedTagValues(key, cached);
         if (values == null) {
             return null;
         }
