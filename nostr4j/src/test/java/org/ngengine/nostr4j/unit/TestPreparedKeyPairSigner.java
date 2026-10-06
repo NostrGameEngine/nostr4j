@@ -21,6 +21,13 @@ import org.ngengine.platform.AsyncTask;
 public class TestPreparedKeyPairSigner {
 
     @Test
+    public void retainsUnsignedIntegerPrivateKeyEncodingCompatibility() throws Exception {
+        NostrKeyPairSigner signer = new NostrKeyPairSigner(new NostrKeyPair(NostrPrivateKey.fromHex("03")));
+        assertTrue(signer.sign(new UnsignedNostrEvent().withContent("legacy key encoding")).await().verify());
+        signer.getKeyPair().destroy();
+    }
+
+    @Test
     public void serializesPreparedSignerAndRebuildsRuntimeContext() throws Exception {
         NostrKeyPairSigner signer = new NostrKeyPairSigner(new NostrKeyPair(NostrPrivateKey.fromHex("00".repeat(31) + "03")));
         assertTrue(signer.sign(new UnsignedNostrEvent().withContent("before serialization")).await().verify());
