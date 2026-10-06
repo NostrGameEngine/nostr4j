@@ -34,7 +34,9 @@ import jakarta.annotation.Nullable;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -101,6 +103,27 @@ public final class NostrRTCSocket {
     private final NostrKeyPair roomKeyPair;
     private final NostrTURNPool turnPool;
     private final Map<String, NostrRTCChannel> channels = new ConcurrentHashMap<>();
+    private static final int MAX_PENDING_CHANNEL_MESSAGES = 64;
+    private static final int MAX_PENDING_CHANNEL_BYTES = NostrRTCChannel.MAX_REASSEMBLY_BYTES;
+    // Guarded by this socket. Registration and delivery callbacks never run under its monitor.
+    private final Map<NostrRTCChannel, PendingChannelRegistration> channelRegistrations = new HashMap<>();
+
+    private static final class PendingChannelRegistration {
+        private final ArrayDeque<PendingChannelMessage> messages = new ArrayDeque<>();
+        private int pendingBytes;
+    }
+
+    private static final class PendingChannelMessage {
+        private final BoundRTCListener source;
+        private final RTCDataChannel nativeChannel;
+        private final ByteBuffer data;
+
+        private PendingChannelMessage(BoundRTCListener source, RTCDataChannel nativeChannel, ByteBuffer data) {
+            this.source = source;
+            this.nativeChannel = nativeChannel;
+            this.data = data;
+        }
+    }
 
     private volatile RTCTransport transport;
     private BoundRTCListener currentRtcListener;
@@ -218,8 +241,8 @@ public final class NostrRTCSocket {
             //         );
             // }
             if (logicalChannel != null) {
-                if (setChannelFromTransport(source, logicalChannel, chan, null) && isCurrentCallback(source)) {
-                    logicalChannel.onRTCSocketMessage(bbf);
+                if (!deferBinaryUntilChannelRegistered(source, logicalChannel, chan, bbf)) {
+                    deliverRegisteredBinary(source, logicalChannel, chan, bbf);
                 }
             } else {
                 logger.fine("Dropping binary for unknown logical channel: " + chan.getName());
@@ -909,7 +932,10 @@ public final class NostrRTCSocket {
      * Close the socket.
      */
     void close() {
-        stopped = true;
+        synchronized (this) {
+            stopped = true;
+            channelRegistrations.clear();
+        }
         logger.fine("Closing RTC Socket");
 
         for (NostrRTCChannel channel : channels.values()) {
@@ -1196,6 +1222,69 @@ public final class NostrRTCSocket {
         this.transport.addRemoteIceCandidates(candidate.getCandidates());
     }
 
+    private boolean deferBinaryUntilChannelRegistered(
+        BoundRTCListener source,
+        NostrRTCChannel logicalChannel,
+        RTCDataChannel nativeChannel,
+        ByteBuffer data
+    ) {
+        synchronized (this) {
+            if (!isCurrentCallback(source) || logicalChannel.isClosed()) return true;
+            PendingChannelRegistration registration = channelRegistrations.get(logicalChannel);
+            if (registration == null) return false;
+            int bytes = data.remaining();
+            if (registration.messages.size() >= MAX_PENDING_CHANNEL_MESSAGES ||
+                bytes > MAX_PENDING_CHANNEL_BYTES - registration.pendingBytes) {
+                // Do not deduplicate dropped frames; a later transport retry can still deliver them.
+                logger.fine("Dropping RTC frame while channel registration queue is full");
+                return true;
+            }
+            ByteBuffer copy = ByteBuffer.allocate(bytes);
+            copy.put(data.asReadOnlyBuffer()).flip();
+            registration.messages.addLast(new PendingChannelMessage(source, nativeChannel, copy));
+            registration.pendingBytes += bytes;
+            return true;
+        }
+    }
+
+    private void deliverRegisteredBinary(
+        BoundRTCListener source,
+        NostrRTCChannel logicalChannel,
+        RTCDataChannel nativeChannel,
+        ByteBuffer data
+    ) {
+        if (!logicalChannel.isClosed() &&
+            setChannelFromTransport(source, logicalChannel, nativeChannel, null) && isCurrentCallback(source)) {
+            logicalChannel.onRTCSocketMessage(data);
+        }
+    }
+
+    private void finishChannelRegistration(NostrRTCChannel logicalChannel) {
+        while (true) {
+            PendingChannelMessage message;
+            synchronized (this) {
+                PendingChannelRegistration registration = channelRegistrations.get(logicalChannel);
+                if (registration == null) return;
+                if (stopped || logicalChannel.isClosed() || channels.get(logicalChannel.getName()) != logicalChannel) {
+                    channelRegistrations.remove(logicalChannel);
+                    return;
+                }
+                message = registration.messages.pollFirst();
+                if (message == null) {
+                    channelRegistrations.remove(logicalChannel);
+                    return;
+                }
+                registration.pendingBytes -= message.data.remaining();
+            }
+            // Keep the gate installed until draining finishes, so a newer callback cannot overtake queued frames.
+            try {
+                deliverRegisteredBinary(message.source, logicalChannel, message.nativeChannel, message.data);
+            } catch (Throwable error) {
+                logger.log(Level.WARNING, "Failed to deliver RTC frame after channel registration", error);
+            }
+        }
+    }
+
     NostrRTCChannel getChannel(String name) {
         String nativeName = normalizeChannelName(name);
         NostrRTCChannel channel = channels.get(nativeName);
@@ -1240,21 +1329,26 @@ public final class NostrRTCSocket {
             created = chan == null;
             if (created) {
                 chan = new NostrRTCChannel(channelName, this, ordered, reliable, normalizedMaxRetransmits, maxPacketLifeTime);
+                channelRegistrations.put(chan, new PendingChannelRegistration());
                 channels.put(channelName, chan);
             }
         }
         if (created) {
-            for (NostrRTCSocketListener listener : listeners) {
-                synchronized (this) {
-                    // Publication was owner-guarded, but registration belongs to the persistent logical channel.
-                    if (stopped || chan.isClosed() || channels.get(channelName) != chan) break;
+            try {
+                for (NostrRTCSocketListener listener : listeners) {
+                    synchronized (this) {
+                        // Publication was owner-guarded, but registration belongs to the persistent logical channel.
+                        if (stopped || chan.isClosed() || channels.get(channelName) != chan) break;
+                    }
+                    if (InternalRoutingChannels.isReserved(channelName) && !internalListeners.contains(listener)) continue;
+                    try {
+                        listener.onRTCChannel(chan);
+                    } catch (Throwable error) {
+                        logger.log(Level.SEVERE, "Exception in listener", error);
+                    }
                 }
-                if (InternalRoutingChannels.isReserved(channelName) && !internalListeners.contains(listener)) continue;
-                try {
-                    listener.onRTCChannel(chan);
-                } catch (Throwable error) {
-                    logger.log(Level.SEVERE, "Exception in listener", error);
-                }
+            } finally {
+                finishChannelRegistration(chan);
             }
         }
         RTCTransport currentTransport;
