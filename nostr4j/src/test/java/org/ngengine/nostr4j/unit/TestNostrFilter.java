@@ -189,6 +189,8 @@ public class TestNostrFilter {
         assertFalse(event.hasTag(null));
         assertFalse(filter.matches(event));
         assertFalse(filter.matches(event, true));
+        assertFalse(filter.prepare().test(event));
+        assertFalse(filter.prepare(true).test(event));
     }
 
     @Test
@@ -215,6 +217,25 @@ public class TestNostrFilter {
         NostrFilter filter = new NostrFilter().withTag("t", "value");
         assertFalse(filter.matches(event));
         assertFalse(filter.matches(event, true));
+        assertFalse(filter.prepare().test(event));
+        assertFalse(filter.prepare(true).test(event));
     }
 
+    @Test
+    public void testPreparedFilterKeepsZeroCountMatchingSemantics() {
+        SignedNostrEvent event = new SignedNostrEvent(
+            "0".repeat(64),
+            NostrPublicKey.fromHex("f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9"),
+            1,
+            "content",
+            Instant.ofEpochSecond(1700000000),
+            "0".repeat(128),
+            List.of(List.of("t", "value"))
+        );
+        NostrFilter filter = new NostrFilter().withTag("t", "value").limit(1);
+        java.util.function.Predicate<SignedNostrEvent> prepared = filter.prepare();
+        assertTrue(prepared.test(event));
+        assertTrue(prepared.test(event));
+        assertFalse(filter.matches(event, 1));
+    }
 }

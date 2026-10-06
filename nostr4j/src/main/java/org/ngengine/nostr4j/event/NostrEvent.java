@@ -214,6 +214,16 @@ public interface NostrEvent extends Cloneable, Serializable {
     }
 
     static String computeEventId(String pubkey, NostrEvent event) {
+        if (
+            event != null &&
+            (event.getClass() == SignedNostrEvent.class || event.getClass() == SignedNostrEvent.ReceivedSignedNostrEvent.class)
+        ) {
+            return ((SignedNostrEvent) event).computeCachedEventId(pubkey);
+        }
+        return computeEventIdUncached(pubkey, event);
+    }
+
+    static String computeEventIdUncached(String pubkey, NostrEvent event) {
         try {
             NGEPlatform platform = NGEUtils.getPlatform();
             long createdAt = event.getCreatedAt().getEpochSecond();

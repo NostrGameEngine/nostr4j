@@ -52,6 +52,7 @@ import org.ngengine.nostr4j.proto.NostrMessage;
 import org.ngengine.nostr4j.utils.ImmutableSnapshot;
 import org.ngengine.nostr4j.utils.ZeroCounter;
 import org.ngengine.platform.AsyncTask;
+import org.ngengine.platform.NGEPlatform;
 import org.ngengine.platform.NGEUtils;
 import org.ngengine.platform.SafeFlag;
 
@@ -96,12 +97,56 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
     private final String signature;
     private final String pubkey;
     private final Identifier identifier;
+    private final boolean encodingCacheAllowed;
 
     private transient String bech32Id;
     private transient NostrPublicKey parsedPublicKey;
     private transient Instant expiresAt;
     private transient SafeFlag verificationCached = new SafeFlag(false);
     private transient SafeFlag verificationResult = new SafeFlag(false);
+    private transient volatile CachedEncoding eventIdCache;
+    private transient volatile CachedEncoding eventJsonCache;
+
+    private static final class CachedEncoding {
+
+        final NGEPlatform platform;
+        final String pubkey;
+        final String value;
+
+        CachedEncoding(NGEPlatform platform, String pubkey, String value) {
+            this.platform = platform;
+            this.pubkey = pubkey;
+            this.value = value;
+        }
+    }
+
+    String computeCachedEventId(String pubkey) {
+        if (!encodingCacheAllowed) return NostrEvent.computeEventIdUncached(pubkey, this);
+        NGEPlatform platform = NGEUtils.getPlatform();
+        CachedEncoding cached = eventIdCache;
+        if (cached != null && cached.platform == platform && Objects.equals(cached.pubkey, pubkey)) return cached.value;
+        String id = NostrEvent.computeEventIdUncached(pubkey, this);
+        if (id != null) eventIdCache = new CachedEncoding(platform, pubkey, id);
+        return id;
+    }
+
+    /**
+     * Returns the event JSON object, without the relay message envelope.
+     * The serialized string is cached on immutable event models for repeated use
+     * and remains retained for the lifetime of the event.
+     */
+    public String toEventJSON() {
+        NGEPlatform platform = NGEUtils.getPlatform();
+        // Subclasses may override getters or toMap with mutable behavior.
+        if (!encodingCacheAllowed || (getClass() != SignedNostrEvent.class && getClass() != ReceivedSignedNostrEvent.class)) {
+            return platform.toJSON(toMap());
+        }
+        CachedEncoding cached = eventJsonCache;
+        if (cached != null && cached.platform == platform) return cached.value;
+        String json = platform.toJSON(toMap());
+        eventJsonCache = new CachedEncoding(platform, null, json);
+        return json;
+    }
 
     private static final class TagLookup {
 
@@ -133,16 +178,37 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
         this.identifier = new Identifier(id, created_at);
 
         ArrayList<List<String>> tagRows = new ArrayList<>(tags.size());
+        boolean immutableValues = true;
 
         for (List<String> tag : tags) {
             if (tag.isEmpty()) continue;
             List<String> row = Collections.unmodifiableList(new ArrayList<>(tag));
+            for (Object value : row) {
+                if (value != null && !(value instanceof String)) immutableValues = false;
+            }
             tagRows.add(row);
         }
         this.tagRows = Collections.unmodifiableList(tagRows);
+        this.encodingCacheAllowed = immutableValues;
+    }
+
+    /** Parses an event object into an owned immutable model; call verify to authenticate it. */
+    public static SignedNostrEvent fromJSON(String json) {
+        return new SignedNostrEvent(NGEUtils.getPlatform().parseJsonObject(json));
+    }
+
+    private SignedNostrEvent(org.ngengine.platform.JsonObject source) {
+        this.encodingCacheAllowed = true;
+        this.kind = source.getInt("kind");
+        this.content = source.getString("content");
+        this.signature = source.getString("sig");
+        this.pubkey = source.getString("pubkey");
+        this.identifier = new Identifier(source.getString("id"), source.getSecondsInstant("created_at"));
+        this.tagRows = source.getStringRows("tags");
     }
 
     public SignedNostrEvent(Map<String, Object> map) {
+        this.encodingCacheAllowed = true;
         this.kind = NGEUtils.safeInt(map.get("kind"));
         this.content = NGEUtils.safeString(map.get("content"));
         this.signature = NGEUtils.safeString(map.get("sig"));
