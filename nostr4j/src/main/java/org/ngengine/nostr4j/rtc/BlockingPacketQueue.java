@@ -107,10 +107,19 @@ public final class BlockingPacketQueue<T> implements AutoCloseable {
     private volatile long inFlightSince = 0;
     private volatile long lastRestartAttempt;
     private volatile boolean pausedForRetry = false;
-    // Register work in state-transition order, but never call provider or application
-    // code under this queue's monitor. In particular, synchronous promises may reenter.
+    // Only execution registrations are serialized. Handlers and completion callbacks
+    // must remain independent so reentrant close/enqueue can settle other sends.
+    private final Queue<Runnable> registrations = new ArrayDeque<>();
     private final Queue<Runnable> deferred = new ArrayDeque<>();
-    private boolean draining;
+    private final Queue<Runnable> completions = new ArrayDeque<>();
+    private final ThreadLocal<Boolean> runningDeferred = ThreadLocal.withInitial(() -> Boolean.FALSE);
+    private boolean registering;
+
+    private static final class Registration {
+
+        boolean submitted;
+        final Queue<Runnable> ready = new ArrayDeque<>();
+    }
 
     public BlockingPacketQueue(PacketHandler<T> handler, Logger logger, String failureMessage) {
         this(handler, logger, failureMessage, 1000L, 6000L, 0L);
@@ -172,7 +181,7 @@ public final class BlockingPacketQueue<T> implements AutoCloseable {
     public void enqueue(T packet, Consumer<Void> resolve, Consumer<Throwable> reject) {
         synchronized (this) {
             if (closed) {
-                if (reject != null) deferred.add(() -> reject.accept(new IllegalStateException("Queue is closed")));
+                if (reject != null) completions.add(() -> reject.accept(new IllegalStateException("Queue is closed")));
             } else {
                 Enqueued<T> enqueued = new Enqueued<T>(packet, resolve, reject, clock.getAsLong());
                 queue.add(enqueued);
@@ -215,21 +224,44 @@ public final class BlockingPacketQueue<T> implements AutoCloseable {
         ExecutionQueue eq = executionQueue;
         if (eq == null) return;
         long scheduledEpoch = epoch;
-        deferred.add(() ->
-            eq.enqueue((resolve, reject) -> {
-                synchronized (this) {
-                    if (closed || epoch != scheduledEpoch || queue.peek() != enqueued) {
-                        deferred.add(() -> resolve.accept(null));
-                    } else if (failHeadIfExpired(clock.getAsLong())) {
-                        deferred.add(() -> resolve.accept(null));
-                    } else {
-                        inFlightSince = clock.getAsLong();
-                        deferred.add(() -> runAttempt(enqueued, scheduledEpoch, resolve, reject));
+        Registration registration = new Registration();
+        registrations.add(() -> {
+            try {
+                eq.enqueue((resolve, reject) -> {
+                    boolean submitted;
+                    synchronized (this) {
+                        submitted = registration.submitted;
+                        Runnable start = () -> startAttempt(enqueued, scheduledEpoch, resolve, reject);
+                        if (submitted) {
+                            deferred.add(start);
+                        } else {
+                            // A synchronous provider callback still holds its enqueue
+                            // monitor. Publish this work only after enqueue returns.
+                            registration.ready.add(start);
+                        }
                     }
+                    if (submitted) drainDeferred();
+                });
+            } finally {
+                synchronized (this) {
+                    registration.submitted = true;
+                    deferred.addAll(registration.ready);
+                    registration.ready.clear();
                 }
-                drainDeferred();
-            })
-        );
+            }
+        });
+    }
+
+    private void startAttempt(Enqueued<T> enqueued, long scheduledEpoch, Consumer<Object> resolve, Consumer<Throwable> reject) {
+        synchronized (this) {
+            if (!ownsAttempt(enqueued, scheduledEpoch) || failHeadIfExpired(clock.getAsLong())) {
+                deferred.add(() -> resolve.accept(null));
+            } else {
+                inFlightSince = clock.getAsLong();
+                deferred.add(() -> runAttempt(enqueued, scheduledEpoch, resolve, reject));
+            }
+        }
+        drainDeferred();
     }
 
     private void runAttempt(Enqueued<T> enqueued, long scheduledEpoch, Consumer<Object> resolve, Consumer<Throwable> reject) {
@@ -280,7 +312,7 @@ public final class BlockingPacketQueue<T> implements AutoCloseable {
                     pausedForRetry = false;
                     queue.remove(enqueued);
                     deferred.add(() -> resolve.accept(null));
-                    if (enqueued.resolve != null) deferred.add(() -> enqueued.resolve.accept(null));
+                    if (enqueued.resolve != null) completions.add(() -> enqueued.resolve.accept(null));
                 } else if (error == null || retryable) {
                     pausedForRetry = true;
                     stopInternal();
@@ -299,7 +331,7 @@ public final class BlockingPacketQueue<T> implements AutoCloseable {
 
     private void rejectEnqueuedOnce(Enqueued<T> enqueued, Throwable error) {
         if (queue.remove(enqueued) && enqueued.reject != null) {
-            deferred.add(() -> enqueued.reject.accept(error));
+            completions.add(() -> enqueued.reject.accept(error));
         }
     }
 
@@ -415,48 +447,92 @@ public final class BlockingPacketQueue<T> implements AutoCloseable {
     }
 
     private void drainDeferred() {
-        synchronized (this) {
-            if (draining) return;
-            draining = true;
+        // A per-thread trampoline bounds synchronous provider recursion without
+        // preventing another thread from advancing work or completing close().
+        if (!runningDeferred.get()) {
+            runningDeferred.set(Boolean.TRUE);
+            try {
+                drainInternal();
+            } finally {
+                runningDeferred.remove();
+            }
         }
+        drainCompletions();
+    }
+
+    private void drainInternal() {
         while (true) {
             Runnable action;
+            boolean registration;
             synchronized (this) {
-                action = deferred.poll();
-                if (action == null) {
-                    draining = false;
-                    return;
+                registration = !registering && !registrations.isEmpty();
+                if (registration) {
+                    registering = true;
+                    action = registrations.poll();
+                } else {
+                    action = deferred.poll();
+                    if (action == null) return;
                 }
             }
             try {
                 action.run();
             } catch (Throwable error) {
                 logger.log(Level.WARNING, "Packet queue callback failed", error);
+            } finally {
+                if (registration) {
+                    synchronized (this) {
+                        registering = false;
+                    }
+                }
             }
+        }
+    }
+
+    private void drainCompletions() {
+        boolean running = runningDeferred.get();
+        // Application callbacks may reenter even on the same thread. They neither
+        // own the registration gate nor suppress a nested internal drain.
+        runningDeferred.remove();
+        try {
+            while (true) {
+                Runnable completion;
+                synchronized (this) {
+                    completion = completions.poll();
+                }
+                if (completion == null) return;
+                try {
+                    completion.run();
+                } catch (Throwable error) {
+                    logger.log(Level.WARNING, "Packet queue completion callback failed", error);
+                }
+            }
+        } finally {
+            if (running) runningDeferred.set(Boolean.TRUE); else runningDeferred.remove();
         }
     }
 
     @Override
     public void close() {
         synchronized (this) {
-            if (closed) return;
-            closed = true;
-            pausedForRetry = false;
-            stopInternal();
-            Enqueued<T> enqueued;
-            while ((enqueued = queue.poll()) != null) {
-                Enqueued<T> pending = enqueued;
-                if (pending.reject != null) deferred.add(() ->
-                    pending.reject.accept(new IllegalStateException("Queue is closed"))
-                );
-            }
-            deferred.add(() -> {
-                try {
-                    watchdogExecutor.close();
-                } catch (Exception error) {
-                    logger.log(Level.FINE, "Failed to close queue watchdog", error);
+            if (!closed) {
+                closed = true;
+                pausedForRetry = false;
+                stopInternal();
+                Enqueued<T> enqueued;
+                while ((enqueued = queue.poll()) != null) {
+                    Enqueued<T> pending = enqueued;
+                    if (pending.reject != null) completions.add(() ->
+                        pending.reject.accept(new IllegalStateException("Queue is closed"))
+                    );
                 }
-            });
+                deferred.add(() -> {
+                    try {
+                        watchdogExecutor.close();
+                    } catch (Exception error) {
+                        logger.log(Level.FINE, "Failed to close queue watchdog", error);
+                    }
+                });
+            }
         }
         drainDeferred();
     }
