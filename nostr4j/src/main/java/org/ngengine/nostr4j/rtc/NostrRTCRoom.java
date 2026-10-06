@@ -39,6 +39,8 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BooleanSupplier;
+import java.util.function.LongSupplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.NostrPool;
@@ -104,6 +106,7 @@ public final class NostrRTCRoom implements Closeable {
     private final NostrRTCLocalPeer localPeer;
     private final NostrRTCSignaling signaling;
     private final RTCSettings settings;
+    private final LongSupplier queuedSendClock;
     private final AsyncExecutor executor;
     private final NostrKeyPair roomKeyPair;
     private final NostrTURNPool turnPool;
@@ -142,9 +145,22 @@ public final class NostrRTCRoom implements Closeable {
     private BlockingPacketQueue<NostrRTCChannel.PreparedPacket> newPendingSendQueue(NostrRTCChannel chan) {
         return new BlockingPacketQueue<NostrRTCChannel.PreparedPacket>(
             new BlockingPacketQueue.PacketHandler<NostrRTCChannel.PreparedPacket>() {
+                private volatile long attemptGeneration;
+
                 @Override
                 public AsyncTask<Boolean> handle(NostrRTCChannel.PreparedPacket packet) {
                     return chan.write(packet);
+                }
+
+                @Override
+                public AsyncTask<Boolean> handle(NostrRTCChannel.PreparedPacket packet, BooleanSupplier attemptActive) {
+                    attemptGeneration = chan.getWriteGeneration();
+                    return chan.write(packet, () -> !closed && !chan.getSocket().isClosed() && attemptActive.getAsBoolean());
+                }
+
+                @Override
+                public boolean isInFlightValid() {
+                    return !closed && !chan.getSocket().isClosed() && attemptGeneration == chan.getWriteGeneration();
                 }
 
                 @Override
@@ -161,7 +177,8 @@ public final class NostrRTCRoom implements Closeable {
             "Failed to send data to peer",
             1000L,
             6000L,
-            getQueuedSendTimeoutMs()
+            getQueuedSendTimeoutMs(),
+            queuedSendClock
         );
     }
 
@@ -332,8 +349,20 @@ public final class NostrRTCRoom implements Closeable {
         NostrPool signalingPool,
         NostrTURNPool turnPool
     ) {
+        this(settings, localPeer, roomKeyPair, signalingPool, turnPool, System::currentTimeMillis);
+    }
+
+    NostrRTCRoom(
+        RTCSettings settings,
+        NostrRTCLocalPeer localPeer,
+        NostrKeyPair roomKeyPair,
+        NostrPool signalingPool,
+        NostrTURNPool turnPool,
+        LongSupplier queuedSendClock
+    ) {
         this.roomKeyPair = Objects.requireNonNull(roomKeyPair, "Room key pair cannot be null");
         this.settings = Objects.requireNonNull(settings, "Settings cannot be null");
+        this.queuedSendClock = Objects.requireNonNull(queuedSendClock, "Queued send clock cannot be null");
         this.localPeer = Objects.requireNonNull(localPeer, "Local peer cannot be null");
         this.turnPool = turnPool;
         NostrPool checkedPool = Objects.requireNonNull(signalingPool, "Signaling pool cannot be null");

@@ -31,10 +31,14 @@
 package org.ngengine.nostr4j.rtc;
 
 import java.io.IOException;
-import java.util.NoSuchElementException;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
+import java.util.function.LongSupplier;
 import java.util.function.Predicate;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -55,6 +59,15 @@ public final class BlockingPacketQueue<T> implements AutoCloseable {
     public interface PacketHandler<T> {
         AsyncTask<Boolean> handle(T packet);
 
+        default AsyncTask<Boolean> handle(T packet, BooleanSupplier attemptActive) {
+            return handle(packet);
+        }
+
+        /** A replaced transport may invalidate a live attempt before its item deadline. */
+        default boolean isInFlightValid() {
+            return true;
+        }
+
         default boolean isReady() {
             return true;
         }
@@ -71,11 +84,11 @@ public final class BlockingPacketQueue<T> implements AutoCloseable {
         final Consumer<Throwable> reject;
         final long enqueuedAtMs;
 
-        Enqueued(T packet, Consumer<Void> resolve, Consumer<Throwable> reject) {
+        Enqueued(T packet, Consumer<Void> resolve, Consumer<Throwable> reject, long enqueuedAtMs) {
             this.packet = packet;
             this.resolve = resolve;
             this.reject = reject;
-            this.enqueuedAtMs = System.currentTimeMillis();
+            this.enqueuedAtMs = enqueuedAtMs;
         }
     }
 
@@ -86,13 +99,18 @@ public final class BlockingPacketQueue<T> implements AutoCloseable {
     private final long watchdogIntervalMs;
     private final long stuckTimeoutMs;
     private final long queueItemTimeoutMs;
+    private final LongSupplier clock;
     private final AsyncExecutor watchdogExecutor;
     private volatile boolean closed = false;
     private volatile ExecutionQueue executionQueue = NGEPlatform.get().newExecutionQueue();
     private volatile long epoch = 0;
     private volatile long inFlightSince = 0;
-    private volatile long lastRestartAttempt = System.currentTimeMillis();
+    private volatile long lastRestartAttempt;
     private volatile boolean pausedForRetry = false;
+    // Register work in state-transition order, but never call provider or application
+    // code under this queue's monitor. In particular, synchronous promises may reenter.
+    private final Queue<Runnable> deferred = new ArrayDeque<>();
+    private boolean draining;
 
     public BlockingPacketQueue(PacketHandler<T> handler, Logger logger, String failureMessage) {
         this(handler, logger, failureMessage, 1000L, 6000L, 0L);
@@ -116,6 +134,26 @@ public final class BlockingPacketQueue<T> implements AutoCloseable {
         long stuckTimeoutMs,
         long queueItemTimeoutMs
     ) {
+        this(
+            handler,
+            logger,
+            failureMessage,
+            watchdogIntervalMs,
+            stuckTimeoutMs,
+            queueItemTimeoutMs,
+            System::currentTimeMillis
+        );
+    }
+
+    BlockingPacketQueue(
+        PacketHandler<T> handler,
+        Logger logger,
+        String failureMessage,
+        long watchdogIntervalMs,
+        long stuckTimeoutMs,
+        long queueItemTimeoutMs,
+        LongSupplier clock
+    ) {
         @SuppressWarnings("unchecked")
         Queue<Enqueued<T>> createdQueue = (Queue<Enqueued<T>>) (Queue<?>) NGEPlatform.get().newConcurrentQueue(Enqueued.class);
         this.queue = createdQueue;
@@ -125,20 +163,23 @@ public final class BlockingPacketQueue<T> implements AutoCloseable {
         this.watchdogIntervalMs = watchdogIntervalMs;
         this.stuckTimeoutMs = stuckTimeoutMs;
         this.queueItemTimeoutMs = Math.max(0L, queueItemTimeoutMs);
+        this.clock = clock;
+        this.lastRestartAttempt = clock.getAsLong();
         this.watchdogExecutor = NGEPlatform.get().newAsyncExecutor(BlockingPacketQueue.class.getSimpleName() + "-watchdog");
         startWatchdog();
     }
 
     public void enqueue(T packet, Consumer<Void> resolve, Consumer<Throwable> reject) {
-        if (closed) {
-            if (reject != null) {
-                reject.accept(new IllegalStateException("Queue is closed"));
+        synchronized (this) {
+            if (closed) {
+                if (reject != null) deferred.add(() -> reject.accept(new IllegalStateException("Queue is closed")));
+            } else {
+                Enqueued<T> enqueued = new Enqueued<T>(packet, resolve, reject, clock.getAsLong());
+                queue.add(enqueued);
+                schedule(enqueued);
             }
-            return;
         }
-        Enqueued<T> enqueued = new Enqueued<T>(packet, resolve, reject);
-        queue.add(enqueued);
-        schedule(enqueued);
+        drainDeferred();
     }
 
     public void enqueue(T packet) {
@@ -150,239 +191,222 @@ public final class BlockingPacketQueue<T> implements AutoCloseable {
     }
 
     public int removeIf(Predicate<T> predicate) {
-        int removed = 0;
+        List<Enqueued<T>> matching = new ArrayList<>();
         for (Enqueued<T> enqueued : queue) {
-            if (predicate.test(enqueued.packet) && queue.remove(enqueued)) {
-                removed++;
+            if (predicate.test(enqueued.packet)) matching.add(enqueued);
+        }
+        int removed = 0;
+        synchronized (this) {
+            Enqueued<T> previousHead = queue.peek();
+            for (Enqueued<T> enqueued : matching) {
+                if (queue.remove(enqueued)) removed++;
+            }
+            if (previousHead != queue.peek() && executionQueue != null) {
+                stopInternal();
+                restartInternal();
             }
         }
+        drainDeferred();
         return removed;
     }
 
+    /** Called under the queue monitor; actual registration is ordered and lock-free. */
     private void schedule(Enqueued<T> enqueued) {
-        ExecutionQueue eq = this.executionQueue;
-        if (eq == null) {
-            return;
-        }
-        long scheduledEpoch = this.epoch;
-        eq.enqueue((resolve, reject) -> {
-            if (this.epoch != scheduledEpoch) {
-                reject.accept(new IllegalStateException("A newer queue epoch cancelled this task"));
-                return;
-            }
-            if (failHeadIfExpired(System.currentTimeMillis())) {
-                resolve.accept(null);
-                return;
-            }
-            inFlightSince = System.currentTimeMillis();
-            handler
-                .handle(enqueued.packet)
-                .then(processed -> {
-                    if (this.epoch != scheduledEpoch) {
-                        return null;
-                    }
-                    inFlightSince = 0;
-                    if (Boolean.TRUE.equals(processed)) {
-                        pausedForRetry = false;
-                        boolean removed = queue.remove(enqueued);
-                        resolve.accept(null);
-                        if (removed && enqueued.resolve != null) {
-                            enqueued.resolve.accept(null);
-                        }
+        ExecutionQueue eq = executionQueue;
+        if (eq == null) return;
+        long scheduledEpoch = epoch;
+        deferred.add(() ->
+            eq.enqueue((resolve, reject) -> {
+                synchronized (this) {
+                    if (closed || epoch != scheduledEpoch || queue.peek() != enqueued) {
+                        deferred.add(() -> resolve.accept(null));
+                    } else if (failHeadIfExpired(clock.getAsLong())) {
+                        deferred.add(() -> resolve.accept(null));
                     } else {
-                        // Packet could not be processed yet: pause queue without rejecting the caller.
-                        // The same head packet remains queued and will be retried on restart().
-                        pauseForRetry();
-                        resolve.accept(null);
+                        inFlightSince = clock.getAsLong();
+                        deferred.add(() -> runAttempt(enqueued, scheduledEpoch, resolve, reject));
                     }
-                    return null;
-                })
-                .catchException(ex -> {
-                    if (this.epoch != scheduledEpoch) {
-                        return;
-                    }
-                    inFlightSince = 0;
-                    if (handler.shouldPauseOnError(ex)) {
-                        pauseForRetry();
-                        resolve.accept(null);
-                        return;
-                    }
-                    pausedForRetry = false;
-                    stopInternal();
-                    IllegalStateException err = new IllegalStateException(failureMessage, ex);
-                    rejectEnqueuedOnce(enqueued, err);
-                    reject.accept(err);
-                });
-        });
+                }
+                drainDeferred();
+            })
+        );
     }
 
-    private void popHead() {
+    private void runAttempt(Enqueued<T> enqueued, long scheduledEpoch, Consumer<Object> resolve, Consumer<Throwable> reject) {
+        synchronized (this) {
+            if (!ownsAttempt(enqueued, scheduledEpoch) || failHeadIfExpired(clock.getAsLong())) return;
+        }
         try {
-            queue.remove();
-        } catch (NoSuchElementException ignored) {}
+            handler
+                .handle(enqueued.packet, () -> isAttemptActive(enqueued, scheduledEpoch))
+                .then(processed -> {
+                    complete(enqueued, scheduledEpoch, processed, null, resolve, reject);
+                    return null;
+                })
+                .catchException(error -> complete(enqueued, scheduledEpoch, false, error, resolve, reject));
+        } catch (Throwable error) {
+            complete(enqueued, scheduledEpoch, false, error, resolve, reject);
+        }
+    }
+
+    private boolean isAttemptActive(Enqueued<T> enqueued, long scheduledEpoch) {
+        synchronized (this) {
+            if (!ownsAttempt(enqueued, scheduledEpoch) || isExpired(enqueued, clock.getAsLong())) return false;
+        }
+        boolean valid = handler.isInFlightValid();
+        synchronized (this) {
+            return valid && ownsAttempt(enqueued, scheduledEpoch) && !isExpired(enqueued, clock.getAsLong());
+        }
+    }
+
+    private boolean ownsAttempt(Enqueued<T> enqueued, long scheduledEpoch) {
+        return !closed && epoch == scheduledEpoch && queue.peek() == enqueued;
+    }
+
+    private void complete(
+        Enqueued<T> enqueued,
+        long scheduledEpoch,
+        Boolean processed,
+        Throwable error,
+        Consumer<Object> resolve,
+        Consumer<Throwable> reject
+    ) {
+        boolean valid = handler.isInFlightValid();
+        boolean retryable = error != null && handler.shouldPauseOnError(error);
+        synchronized (this) {
+            if (ownsAttempt(enqueued, scheduledEpoch) && !failHeadIfExpired(clock.getAsLong()) && valid) {
+                inFlightSince = 0;
+                if (error == null && Boolean.TRUE.equals(processed)) {
+                    pausedForRetry = false;
+                    queue.remove(enqueued);
+                    deferred.add(() -> resolve.accept(null));
+                    if (enqueued.resolve != null) deferred.add(() -> enqueued.resolve.accept(null));
+                } else if (error == null || retryable) {
+                    pausedForRetry = true;
+                    stopInternal();
+                    deferred.add(() -> resolve.accept(null));
+                } else {
+                    pausedForRetry = false;
+                    stopInternal();
+                    IllegalStateException failure = new IllegalStateException(failureMessage, error);
+                    rejectEnqueuedOnce(enqueued, failure);
+                    deferred.add(() -> reject.accept(failure));
+                }
+            }
+        }
+        drainDeferred();
     }
 
     private void rejectEnqueuedOnce(Enqueued<T> enqueued, Throwable error) {
-        if (enqueued == null) {
-            popAndRejectHead(error);
-            return;
+        if (queue.remove(enqueued) && enqueued.reject != null) {
+            deferred.add(() -> enqueued.reject.accept(error));
         }
-        if (queue.remove(enqueued)) {
-            if (enqueued.reject != null) {
-                enqueued.reject.accept(error);
-            }
-            return;
-        }
-        popAndRejectHead(error);
     }
 
     public void restartIfStuck(long timeoutMs) {
-        if (closed) {
-            return;
-        }
-        if (failHeadIfExpired(System.currentTimeMillis())) {
-            return;
-        }
-        if (queue.isEmpty()) {
-            return;
-        }
-        long now = System.currentTimeMillis();
-        if (executionQueue == null) {
-            if (handler.isReady()) {
-                if (pausedForRetry) {
-                    restart();
-                } else if (now - lastRestartAttempt > timeoutMs) {
-                    logger.warning("Detected likely stuck queue... recovering");
-                    restart();
+        if (closed || queue.isEmpty()) return;
+        boolean ready = handler.isReady();
+        boolean valid = handler.isInFlightValid();
+        synchronized (this) {
+            if (!closed && !failHeadIfExpired(clock.getAsLong()) && !queue.isEmpty()) {
+                long now = clock.getAsLong();
+                if (executionQueue == null) {
+                    if (ready && (pausedForRetry || now - lastRestartAttempt > timeoutMs)) {
+                        if (!pausedForRetry) deferred.add(() -> logger.warning("Detected likely stuck queue... recovering"));
+                        restartInternal();
+                    }
+                } else if (inFlightSince > 0 && (!valid || (queueItemTimeoutMs <= 0L && now - inFlightSince > timeoutMs))) {
+                    // Finite deadlines bound the whole fragment chain. Preserve the
+                    // legacy stuck-attempt watchdog for unlimited-lifetime entries.
+                    deferred.add(() -> logger.warning("Detected likely stuck packet... recovering"));
+                    pausedForRetry = false;
+                    stopInternal();
+                    restartInternal();
                 }
             }
-            return;
         }
-        if (inFlightSince > 0 && now - inFlightSince > timeoutMs) {
-            logger.warning("Detected likely stuck packet... recovering");
-            stop();
-            restart();
-        }
+        drainDeferred();
     }
 
-    /**
-     * External queue loop hook.
-     * Useful when a caller wants to drive stuck detection/restart checks explicitly.
-     */
+    /** External hook for stuck detection and retry checks. */
     public void loop() {
-        if (closed || queue.isEmpty()) {
-            return;
-        }
+        if (closed || queue.isEmpty()) return;
         restartIfStuck(stuckTimeoutMs);
-        if (executionQueue == null && handler.isReady()) {
-            restart();
-        }
+        if (executionQueue == null && handler.isReady()) restart();
     }
 
     public void restart() {
-        if (closed) {
-            return;
-        }
-        if (failHeadIfExpired(System.currentTimeMillis())) {
-            return;
-        }
-        if (executionQueue != null) {
-            return;
-        }
-        lastRestartAttempt = System.currentTimeMillis();
         synchronized (this) {
-            if (executionQueue != null) {
-                return;
-            }
-            pausedForRetry = false;
-            executionQueue = NGEPlatform.get().newExecutionQueue();
-            for (Enqueued<T> enqueued : queue) {
-                schedule(enqueued);
-            }
+            if (!closed && !failHeadIfExpired(clock.getAsLong())) restartInternal();
         }
+        drainDeferred();
     }
 
-    private void pauseForRetry() {
-        pausedForRetry = true;
-        stopInternal();
+    private void restartInternal() {
+        if (closed || executionQueue != null) return;
+        lastRestartAttempt = clock.getAsLong();
+        pausedForRetry = false;
+        executionQueue = NGEPlatform.get().newExecutionQueue();
+        for (Enqueued<T> enqueued : queue) schedule(enqueued);
     }
 
     public void stop() {
-        pausedForRetry = false;
-        stopInternal();
+        synchronized (this) {
+            pausedForRetry = false;
+            stopInternal();
+        }
+        drainDeferred();
     }
 
     private void stopInternal() {
-        if (closed) {
-            return;
-        }
-        this.epoch++;
-        this.inFlightSince = 0;
-        synchronized (this) {
-            if (executionQueue == null) {
-                return;
-            }
+        epoch++;
+        inFlightSince = 0;
+        ExecutionQueue retired = executionQueue;
+        executionQueue = null;
+        if (retired != null) deferred.add(() -> {
             try {
-                executionQueue.close();
-            } catch (IOException e) {
-                logger.log(Level.FINE, "Failed to close queue", e);
+                retired.close();
+            } catch (IOException error) {
+                logger.log(Level.FINE, "Failed to close queue", error);
             }
-            executionQueue = null;
-        }
+        });
     }
 
     public void clear() {
-        queue.clear();
+        synchronized (this) {
+            queue.clear();
+            // A removed pending head must not hold subsequent entries behind its
+            // unresolved execution task, or let its late callback settle them.
+            if (executionQueue != null) {
+                stopInternal();
+                restartInternal();
+            }
+        }
+        drainDeferred();
+    }
+
+    private boolean isExpired(Enqueued<T> enqueued, long nowMs) {
+        return queueItemTimeoutMs > 0L && nowMs - enqueued.enqueuedAtMs >= queueItemTimeoutMs;
     }
 
     private boolean failHeadIfExpired(long nowMs) {
-        if (queueItemTimeoutMs <= 0L) {
-            return false;
-        }
         Enqueued<T> head = queue.peek();
-        if (head == null) {
-            return false;
-        }
-        long ageMs = nowMs - head.enqueuedAtMs;
-        if (ageMs < queueItemTimeoutMs) {
-            return false;
-        }
+        if (head == null || !isExpired(head, nowMs)) return false;
         pausedForRetry = false;
         stopInternal();
-        popAndRejectHead(new Exception(failureMessage + " timed out after " + ageMs + " ms"));
-        if (!queue.isEmpty() && handler.isReady()) {
-            restart();
-        }
+        rejectEnqueuedOnce(head, new Exception(failureMessage + " timed out after " + (nowMs - head.enqueuedAtMs) + " ms"));
+        if (!queue.isEmpty()) deferred.add(() -> {
+            if (handler.isReady()) restart();
+        });
         return true;
-    }
-
-    private void popAndRejectHead(Throwable error) {
-        Enqueued<T> head = queue.poll();
-        if (head == null) {
-            return;
-        }
-        if (head.reject != null) {
-            head.reject.accept(error);
-        }
-    }
-
-    private void rejectAll(Throwable error) {
-        Enqueued<T> enqueued;
-        while ((enqueued = queue.poll()) != null) {
-            if (enqueued.reject != null) {
-                enqueued.reject.accept(error);
-            }
-        }
     }
 
     private void startWatchdog() {
         watchdogExecutor.runLater(
             () -> {
-                if (closed) {
-                    return null;
-                }
+                if (closed) return null;
                 restartIfStuck(stuckTimeoutMs);
-                startWatchdog();
+                if (!closed) startWatchdog();
                 return null;
             },
             watchdogIntervalMs,
@@ -390,26 +414,50 @@ public final class BlockingPacketQueue<T> implements AutoCloseable {
         );
     }
 
-    @Override
-    public void close() {
-        closed = true;
-        pausedForRetry = false;
-        rejectAll(new IllegalStateException("Queue is closed"));
-        this.epoch++;
+    private void drainDeferred() {
         synchronized (this) {
-            if (executionQueue != null) {
-                try {
-                    executionQueue.close();
-                } catch (IOException e) {
-                    logger.log(Level.FINE, "Failed to close queue", e);
+            if (draining) return;
+            draining = true;
+        }
+        while (true) {
+            Runnable action;
+            synchronized (this) {
+                action = deferred.poll();
+                if (action == null) {
+                    draining = false;
+                    return;
                 }
-                executionQueue = null;
+            }
+            try {
+                action.run();
+            } catch (Throwable error) {
+                logger.log(Level.WARNING, "Packet queue callback failed", error);
             }
         }
-        try {
-            watchdogExecutor.close();
-        } catch (Exception e) {
-            logger.log(Level.FINE, "Failed to close queue watchdog", e);
+    }
+
+    @Override
+    public void close() {
+        synchronized (this) {
+            if (closed) return;
+            closed = true;
+            pausedForRetry = false;
+            stopInternal();
+            Enqueued<T> enqueued;
+            while ((enqueued = queue.poll()) != null) {
+                Enqueued<T> pending = enqueued;
+                if (pending.reject != null) deferred.add(() ->
+                    pending.reject.accept(new IllegalStateException("Queue is closed"))
+                );
+            }
+            deferred.add(() -> {
+                try {
+                    watchdogExecutor.close();
+                } catch (Exception error) {
+                    logger.log(Level.FINE, "Failed to close queue watchdog", error);
+                }
+            });
         }
+        drainDeferred();
     }
 }
