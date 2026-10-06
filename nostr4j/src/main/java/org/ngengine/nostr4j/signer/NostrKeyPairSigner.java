@@ -42,11 +42,13 @@ import org.ngengine.nostr4j.nip44.Nip44;
 import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEPlatform;
 import org.ngengine.platform.NGEUtils;
+import org.ngengine.platform.SchnorrSigner;
 
 public class NostrKeyPairSigner implements NostrSigner {
 
     private static final Logger logger = Logger.getLogger(NostrKeyPairSigner.class.getName());
     private final NostrKeyPair keyPair;
+    private volatile SchnorrSigner signingContext;
 
     public NostrKeyPairSigner(NostrKeyPair keyPair) {
         this.keyPair = keyPair;
@@ -79,9 +81,18 @@ public class NostrKeyPairSigner implements NostrSigner {
                     rej.accept(new IllegalStateException(err));
                 });
         }
-        return NGEUtils
-            .getPlatform()
-            .schnorrSignAsync(id, keyPair.getPrivateKey().asReadOnlyBuffer())
+        SchnorrSigner context = signingContext;
+        if (context == null) {
+            synchronized (this) {
+                context = signingContext;
+                if (context == null) {
+                    context = NGEUtils.getPlatform().createSchnorrSigner(keyPair.getPrivateKey()::asReadOnlyBuffer);
+                    signingContext = context;
+                }
+            }
+        }
+        return context
+            .sign(id)
             .then(sig -> {
                 return new SignedNostrEvent(
                     id,
