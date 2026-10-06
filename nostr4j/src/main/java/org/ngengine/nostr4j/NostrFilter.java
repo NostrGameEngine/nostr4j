@@ -263,8 +263,9 @@ public class NostrFilter extends NostrMessageFragment implements Cloneable {
                 String filterTagKey = filterTagEntry.getKey();
                 List<String> filterTagValues = filterTagEntry.getValue();
                 boolean found = false;
-                if (event.hasTag(filterTagKey)) {
-                    List<TagValue> tags = event.getTag(filterTagKey);
+                if (!event.hasTag(filterTagKey)) return false;
+                List<TagValue> tags = event.getTag(filterTagKey);
+                if (tags != null) {
                     for (String expectedValue : filterTagValues) {
                         for (TagValue tagValue : tags) {
                             if (anyTagValue) {

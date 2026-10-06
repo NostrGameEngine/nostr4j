@@ -34,6 +34,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import org.junit.Test;
@@ -142,4 +143,47 @@ public class TestNostrFilter {
         assertFalse(original.getTags().containsKey("x"));
         assertEquals(List.of("alpha", "beta"), original.getTagValues("p"));
     }
+    @Test
+    public void testTagMatchingKeepsHasTagGuardForNullKeys() {
+        SignedNostrEvent event = new SignedNostrEvent(
+            "0".repeat(64),
+            NostrPublicKey.fromHex("f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9"),
+            1,
+            "content",
+            Instant.ofEpochSecond(1700000000),
+            "0".repeat(128),
+            List.of(Arrays.asList(null, "value"))
+        );
+        NostrFilter filter = new NostrFilter().withTag(null, "value");
+        assertFalse(event.hasTag(null));
+        assertFalse(filter.matches(event));
+        assertFalse(filter.matches(event, true));
+    }
+
+    @Test
+    public void testTagMatchingRespectsHasTagOverrideBeforeReadingValues() {
+        SignedNostrEvent event = new SignedNostrEvent(
+            "0".repeat(64),
+            NostrPublicKey.fromHex("f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9"),
+            1,
+            "content",
+            Instant.ofEpochSecond(1700000000),
+            "0".repeat(128),
+            List.of(List.of("t", "value"))
+        ) {
+            @Override
+            public boolean hasTag(String key) {
+                return false;
+            }
+
+            @Override
+            public List<org.ngengine.nostr4j.event.NostrEvent.TagValue> getTag(String key) {
+                throw new AssertionError("A missing tag must not be read");
+            }
+        };
+        NostrFilter filter = new NostrFilter().withTag("t", "value");
+        assertFalse(filter.matches(event));
+        assertFalse(filter.matches(event, true));
+    }
+
 }

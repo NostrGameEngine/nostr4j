@@ -105,6 +105,9 @@ public class TestNostrEvent {
         assertThrows(UnsupportedOperationException.class, () -> event.getFirstTag("t").getAll().set(0, "changed"));
         assertThrows(UnsupportedOperationException.class, () -> event.getTagRows().get(0).set(1, "changed"));
         assertThrows(UnsupportedOperationException.class, () -> event.getTag("t").clear());
+        assertThrows(UnsupportedOperationException.class, () -> event.listTagKeys().remove("t"));
+        assertThrows(UnsupportedOperationException.class, () -> event.listTagKeys().iterator().remove());
+        assertEquals("first", event.getFirstTagFirstValue("t"));
     }
 
     @Test

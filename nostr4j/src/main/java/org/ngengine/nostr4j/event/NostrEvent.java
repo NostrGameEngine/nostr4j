@@ -213,15 +213,16 @@ public interface NostrEvent extends Cloneable, Serializable {
                     event.getTagRows(),
                     event.getContent()
                 );
-                assert dbg(() ->
-                    Logger.getLogger(NostrEvent.class.getName()).finest("Serialized event: " + platform.toJSON(payload))
-                );
+                assert dbg(() -> {
+                    Logger logger = Logger.getLogger(NostrEvent.class.getName());
+                    if (logger.isLoggable(Level.FINEST)) logger.finest("Serialized event: " + platform.toJSON(payload));
+                });
                 return platform.sha256JSON(payload);
             }
             String json = NostrEventJson.canonical(pubkey, event);
             assert dbg(() -> {
                 Logger logger = Logger.getLogger(NostrEvent.class.getName());
-                logger.finest("Serialized event: " + json);
+                if (logger.isLoggable(Level.FINEST)) logger.finest("Serialized event: " + json);
             });
             String id = NGEUtils.getPlatform().sha256(json);
             return id;

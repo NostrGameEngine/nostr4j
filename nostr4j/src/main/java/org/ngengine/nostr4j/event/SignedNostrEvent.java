@@ -166,9 +166,10 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
             for (Entry<String, List<TagValue>> entry : tagsMap.entrySet()) {
                 entry.setValue(Collections.unmodifiableList(entry.getValue()));
             }
-            index = Collections.unmodifiableMap(tagsMap);
-            this.tags = index;
-            return index;
+            // The owned index is never mutated after publication. Keep it
+            // private and protect the exposed views separately.
+            this.tags = tagsMap;
+            return tagsMap;
         }
     }
 
@@ -387,7 +388,7 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
 
     @Override
     public Set<String> listTagKeys() {
-        return getTagsIndex().keySet();
+        return Collections.unmodifiableSet(getTagsIndex().keySet());
     }
 
     @Override
