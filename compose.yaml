@@ -1,0 +1,20 @@
+services:
+  nostr4j-demo-api:
+    build:
+      context: https://github.com/NostrGameEngine/nostr4j.git#gh-pages
+      dockerfile: site-demos/src/backend/docker/Dockerfile
+      target: backend-only
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:rw,exec,nosuid,nodev,size=16m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 1g
+    cpus: 2.0
+    environment:
+      NOSTR4jDEMO_CLOUDFLARE_TUNNEL_TOKEN: ${NOSTR4jDEMO_CLOUDFLARE_TUNNEL_TOKEN:?Set NOSTR4jDEMO_CLOUDFLARE_TUNNEL_TOKEN in .env}
+      DEMO_PORT: "8080"
+      DEMO_API_ONLY: "true"

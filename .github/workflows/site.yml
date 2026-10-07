@@ -1,0 +1,208 @@
+# Build the website with MkDocs against the nostr4j library.
+# - On routine pushes to gh-pages: compiles against master and publishes a temporary Cloudflare preview.
+# - On release published: compiles against the release tag and publishes live to GitHub Pages.
+name: Build and deploy site
+
+on:
+  push:
+    branches: [gh-pages]
+    tags: ['v*', '[0-9]*']
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      library_ref:
+        description: 'Git ref (branch or tag) of nostr4j to build demos against'
+        required: false
+        default: 'master'
+      deploy_live:
+        description: 'Deploy to live GitHub Pages (true) or temporary Cloudflare preview (false)'
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  # Keep every snapshot run so each successful push gets its own preview.
+  group: site-${{ github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build site
+    runs-on: ubuntu-latest
+    outputs:
+      should_deploy: ${{ steps.decide.outputs.should_deploy }}
+    steps:
+      - name: Decide library ref and deploy action
+        id: decide
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          REQUESTED_REF: ${{ inputs.library_ref }}
+          DEPLOY_LIVE: ${{ inputs.deploy_live }}
+        run: |
+          if [ "$EVENT_NAME" = "release" ]; then
+            echo "ref=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+            echo "should_deploy=true" >> "$GITHUB_OUTPUT"
+            echo "NOSTR4J_DOC_VERSION=${RELEASE_TAG#v}" >> "$GITHUB_ENV"
+          elif [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            echo "ref=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+            echo "should_deploy=false" >> "$GITHUB_OUTPUT"
+            echo "NOSTR4J_DOC_VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+          elif [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "ref=$REQUESTED_REF" >> "$GITHUB_OUTPUT"
+            echo "should_deploy=$DEPLOY_LIVE" >> "$GITHUB_OUTPUT"
+            if [[ "$REQUESTED_REF" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+([.-][A-Za-z0-9.-]+)?$ ]]; then
+              echo "NOSTR4J_DOC_VERSION=${REQUESTED_REF#v}" >> "$GITHUB_ENV"
+            fi
+          else
+            echo "ref=master" >> $GITHUB_OUTPUT
+            echo "should_deploy=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Checkout website sources
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'push' && github.ref == 'refs/heads/gh-pages' && github.sha || 'gh-pages' }}
+          path: website
+
+      - name: Checkout library sources (${{ steps.decide.outputs.ref }})
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.decide.outputs.ref }}
+          path: library
+
+      - name: Checkout NGE platform sources
+        uses: actions/checkout@v4
+        with:
+          repository: NostrGameEngine/nge-platforms
+          ref: master
+          path: platforms
+
+      - name: Add website build files to the library checkout
+        working-directory: library
+        run: |
+          mkdir -p site-demos
+          cp -a ../website/site-demos/. site-demos/
+          if ! grep -q 'site-demos' settings.gradle; then
+            printf '\ninclude("site-demos")\n' >> settings.gradle
+          fi
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Publish current platform modules to the temporary Maven cache
+        working-directory: platforms
+        run: ./gradlew :nge-platform-common:publishToMavenLocal :nge-platform-jvm:publishToMavenLocal :nge-platform-teavm:publishToMavenLocal --no-daemon
+
+      - name: Check displayed example against compiled source
+        working-directory: website
+        run: node scripts/check-examples.mjs
+
+      - name: Compile browser demos and generate API reference
+        working-directory: library
+        run: ./gradlew :site-demos:buildAllDemos :site-demos:jvmSmokeTest :site-demos:documentationSmokeTest :site-demos:backendJar :nostr4j:javadoc --no-daemon
+
+      - name: Compile Java examples from documentation
+        working-directory: website
+        run: node scripts/check-doc-examples.mjs ../library/site-demos/build/libs/demo-backend-*.jar
+
+      - name: Check API-only backend and cross-origin access
+        working-directory: website
+        env:
+          DEMO_PORT: '18081'
+          DEMO_HOSTS: '127.0.0.1:18081'
+          DEMO_ORIGINS: 'http://127.0.0.1:18080,https://nostrgameengine.github.io,https://*.ngengine.org,https://*.*.workers.dev'
+          DEMO_API_ONLY: 'true'
+          DEMO_GAME_BOTS: 'false'
+        run: |
+          java --enable-native-access=ALL-UNNAMED -jar ../library/site-demos/build/libs/demo-backend-*.jar > "$RUNNER_TEMP/demo-backend.log" 2>&1 &
+          demo_pid=$!
+          trap 'kill "$demo_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:18081/api/config > /dev/null; then break; fi
+            sleep 1
+          done
+          node scripts/check-backend-cors.mjs
+
+      - name: Stage generated examples and API reference into website
+        run: |
+          for d in quickstart relay nwc rtc game; do
+            mkdir -p "website/docs/assets/demos/$d"
+            rsync -a --delete "library/site-demos/build/teavm/$d/" "website/docs/assets/demos/$d/"
+          done
+          mkdir -p website/docs/api
+          rsync -a --delete library/dist/javadoc/nostr4j/ website/docs/api/
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install MkDocs and dependencies
+        run: |
+          pip install --no-cache-dir mkdocs-material mkdocs-redirects pymdown-extensions
+
+      - name: Build static documentation site with MkDocs
+        working-directory: website
+        run: |
+          mkdocs build --strict -d _site
+          node scripts/check-site.mjs _site /nostr4j
+
+      - name: Upload site preview artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: site-preview
+          path: website/_site
+          retention-days: 14
+
+      - name: Set up Node for temporary previews
+        if: steps.decide.outputs.should_deploy != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Check preview deployment script
+        if: steps.decide.outputs.should_deploy != 'true'
+        working-directory: website
+        run: node --test scripts/deploy-preview.test.mjs
+
+      - name: Publish temporary Cloudflare preview
+        if: steps.decide.outputs.should_deploy != 'true'
+        id: preview
+        timeout-minutes: 7
+        working-directory: website
+        run: node scripts/deploy-preview.mjs _site
+
+      - name: Upload Pages artifact
+        if: steps.decide.outputs.should_deploy == 'true'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: website/_site
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    if: needs.build.outputs.should_deploy == 'true'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: github-pages-production
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
