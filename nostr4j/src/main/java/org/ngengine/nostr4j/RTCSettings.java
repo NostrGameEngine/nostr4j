@@ -40,7 +40,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
-
 public final class RTCSettings implements Cloneable, Serializable {
 
     private static final long serialVersionUID = 1L;
@@ -78,7 +77,7 @@ public final class RTCSettings implements Cloneable, Serializable {
                 "wss://nostr.oxtr.dev",
                 "wss://nostr.bitcoiner.social",
                 "wss://nostr-pub.wellorder.net",
-                "wss://relay.snort.social"
+                "wss://relay.snort.social",
             }
         )
     );
@@ -92,6 +91,13 @@ public final class RTCSettings implements Cloneable, Serializable {
     private final Duration queuedSendTimeout;
     private final Duration p2pGiveupTimeout;
     private final int maxDirectPeers;
+    private final Duration connectionRetryInitialDelay;
+    private final Duration connectionRetryMaxDelay;
+    private final float connectionRetryMultiplier;
+    private final float connectionRetryJitter;
+    private final int maxConcurrentConnectionAttempts;
+    private final Duration connectionMinimumLifetime;
+
     private final Collection<String> stunServers;
     private final List<String> signalingRelays;
     private final String applicationId;
@@ -106,6 +112,12 @@ public final class RTCSettings implements Cloneable, Serializable {
         Duration queuedSendTimeout,
         Duration signalingAnnounceExpiration,
         int maxDirectPeers,
+        Duration connectionRetryInitialDelay,
+        Duration connectionRetryMaxDelay,
+        float connectionRetryMultiplier,
+        float connectionRetryJitter,
+        int maxConcurrentConnectionAttempts,
+        Duration connectionMinimumLifetime,
         Collection<String> stunServers,
         Collection<String> signalingRelays,
         String applicationId,
@@ -129,6 +141,28 @@ public final class RTCSettings implements Cloneable, Serializable {
         this.queuedSendTimeout = Objects.requireNonNull(queuedSendTimeout, "queuedSendTimeout");
         this.p2pGiveupTimeout = p2pAttemptTimeout.multipliedBy(4);
         this.maxDirectPeers = maxDirectPeers;
+        requirePositiveMillis(connectionRetryInitialDelay, "connectionRetryInitialDelay");
+        requirePositiveMillis(connectionRetryMaxDelay, "connectionRetryMaxDelay");
+        requirePositiveMillis(connectionMinimumLifetime, "connectionMinimumLifetime");
+        if (connectionRetryMaxDelay.compareTo(connectionRetryInitialDelay) < 0) {
+            throw new IllegalArgumentException("connectionRetryMaxDelay must be >= connectionRetryInitialDelay");
+        }
+        if (!Float.isFinite(connectionRetryMultiplier) || connectionRetryMultiplier <= 1f) {
+            throw new IllegalArgumentException("connectionRetryMultiplier must be finite and > 1");
+        }
+        if (!Float.isFinite(connectionRetryJitter) || connectionRetryJitter < 0f || connectionRetryJitter > 0.5f) {
+            throw new IllegalArgumentException("connectionRetryJitter must be between 0 and 0.5");
+        }
+        if (maxConcurrentConnectionAttempts < 1 || maxConcurrentConnectionAttempts > 64) {
+            throw new IllegalArgumentException("maxConcurrentConnectionAttempts must be between 1 and 64");
+        }
+        this.connectionRetryInitialDelay = connectionRetryInitialDelay;
+        this.connectionRetryMaxDelay = connectionRetryMaxDelay;
+        this.connectionRetryMultiplier = connectionRetryMultiplier;
+        this.connectionRetryJitter = connectionRetryJitter;
+        this.maxConcurrentConnectionAttempts = maxConcurrentConnectionAttempts;
+        this.connectionMinimumLifetime = connectionMinimumLifetime;
+
         this.stunServers = List.copyOf(stunServers);
         if (this.stunServers.stream().anyMatch(String::isBlank)) {
             throw new IllegalArgumentException("stunServers must not contain blank addresses");
@@ -139,6 +173,181 @@ public final class RTCSettings implements Cloneable, Serializable {
         }
         this.applicationId = applicationId;
         this.protocolId = protocolId;
+    }
+
+    private static void requirePositiveMillis(Duration value, String name) {
+        Objects.requireNonNull(value, name);
+        if (value.isNegative() || value.compareTo(Duration.ofDays(1)) > 0 || value.toMillis() < 1L) {
+            throw new IllegalArgumentException(name + " must be between 1 ms and 1 day");
+        }
+    }
+
+    public Duration getConnectionRetryInitialDelay() {
+        return connectionRetryInitialDelay;
+    }
+
+    /** Returns a copy with {@code connectionRetryInitialDelay} changed. */
+    public RTCSettings withConnectionRetryInitialDelay(Duration connectionRetryInitialDelay) {
+        return new RTCSettings(
+            signalingLoopInterval,
+            peerExpiration,
+            delayedCandidatesInterval,
+            roomLoopInterval,
+            p2pAttemptTimeout,
+            queuedSendTimeout,
+            signalingAnnounceExpiration,
+            maxDirectPeers,
+            connectionRetryInitialDelay,
+            connectionRetryMaxDelay,
+            connectionRetryMultiplier,
+            connectionRetryJitter,
+            maxConcurrentConnectionAttempts,
+            connectionMinimumLifetime,
+            stunServers,
+            signalingRelays,
+            applicationId,
+            protocolId
+        );
+    }
+
+    public Duration getConnectionRetryMaxDelay() {
+        return connectionRetryMaxDelay;
+    }
+
+    /** Returns a copy with {@code connectionRetryMaxDelay} changed. */
+    public RTCSettings withConnectionRetryMaxDelay(Duration connectionRetryMaxDelay) {
+        return new RTCSettings(
+            signalingLoopInterval,
+            peerExpiration,
+            delayedCandidatesInterval,
+            roomLoopInterval,
+            p2pAttemptTimeout,
+            queuedSendTimeout,
+            signalingAnnounceExpiration,
+            maxDirectPeers,
+            connectionRetryInitialDelay,
+            connectionRetryMaxDelay,
+            connectionRetryMultiplier,
+            connectionRetryJitter,
+            maxConcurrentConnectionAttempts,
+            connectionMinimumLifetime,
+            stunServers,
+            signalingRelays,
+            applicationId,
+            protocolId
+        );
+    }
+
+    public float getConnectionRetryMultiplier() {
+        return connectionRetryMultiplier;
+    }
+
+    /** Returns a copy with {@code connectionRetryMultiplier} changed. */
+    public RTCSettings withConnectionRetryMultiplier(float connectionRetryMultiplier) {
+        return new RTCSettings(
+            signalingLoopInterval,
+            peerExpiration,
+            delayedCandidatesInterval,
+            roomLoopInterval,
+            p2pAttemptTimeout,
+            queuedSendTimeout,
+            signalingAnnounceExpiration,
+            maxDirectPeers,
+            connectionRetryInitialDelay,
+            connectionRetryMaxDelay,
+            connectionRetryMultiplier,
+            connectionRetryJitter,
+            maxConcurrentConnectionAttempts,
+            connectionMinimumLifetime,
+            stunServers,
+            signalingRelays,
+            applicationId,
+            protocolId
+        );
+    }
+
+    public float getConnectionRetryJitter() {
+        return connectionRetryJitter;
+    }
+
+    /** Returns a copy with {@code connectionRetryJitter} changed. */
+    public RTCSettings withConnectionRetryJitter(float connectionRetryJitter) {
+        return new RTCSettings(
+            signalingLoopInterval,
+            peerExpiration,
+            delayedCandidatesInterval,
+            roomLoopInterval,
+            p2pAttemptTimeout,
+            queuedSendTimeout,
+            signalingAnnounceExpiration,
+            maxDirectPeers,
+            connectionRetryInitialDelay,
+            connectionRetryMaxDelay,
+            connectionRetryMultiplier,
+            connectionRetryJitter,
+            maxConcurrentConnectionAttempts,
+            connectionMinimumLifetime,
+            stunServers,
+            signalingRelays,
+            applicationId,
+            protocolId
+        );
+    }
+
+    public int getMaxConcurrentConnectionAttempts() {
+        return maxConcurrentConnectionAttempts;
+    }
+
+    /** Returns a copy with {@code maxConcurrentConnectionAttempts} changed. */
+    public RTCSettings withMaxConcurrentConnectionAttempts(int maxConcurrentConnectionAttempts) {
+        return new RTCSettings(
+            signalingLoopInterval,
+            peerExpiration,
+            delayedCandidatesInterval,
+            roomLoopInterval,
+            p2pAttemptTimeout,
+            queuedSendTimeout,
+            signalingAnnounceExpiration,
+            maxDirectPeers,
+            connectionRetryInitialDelay,
+            connectionRetryMaxDelay,
+            connectionRetryMultiplier,
+            connectionRetryJitter,
+            maxConcurrentConnectionAttempts,
+            connectionMinimumLifetime,
+            stunServers,
+            signalingRelays,
+            applicationId,
+            protocolId
+        );
+    }
+
+    public Duration getConnectionMinimumLifetime() {
+        return connectionMinimumLifetime;
+    }
+
+    /** Returns a copy with {@code connectionMinimumLifetime} changed. */
+    public RTCSettings withConnectionMinimumLifetime(Duration connectionMinimumLifetime) {
+        return new RTCSettings(
+            signalingLoopInterval,
+            peerExpiration,
+            delayedCandidatesInterval,
+            roomLoopInterval,
+            p2pAttemptTimeout,
+            queuedSendTimeout,
+            signalingAnnounceExpiration,
+            maxDirectPeers,
+            connectionRetryInitialDelay,
+            connectionRetryMaxDelay,
+            connectionRetryMultiplier,
+            connectionRetryJitter,
+            maxConcurrentConnectionAttempts,
+            connectionMinimumLifetime,
+            stunServers,
+            signalingRelays,
+            applicationId,
+            protocolId
+        );
     }
 
     public Duration getSignalingAnnounceExpiration() {
@@ -214,9 +423,16 @@ public final class RTCSettings implements Cloneable, Serializable {
             queuedSendTimeout,
             signalingAnnounceExpiration,
             maxDirectPeers,
+            connectionRetryInitialDelay,
+            connectionRetryMaxDelay,
+            connectionRetryMultiplier,
+            connectionRetryJitter,
+            maxConcurrentConnectionAttempts,
+            connectionMinimumLifetime,
             new ArrayList<String>(stunServers),
             signalingRelays,
-            applicationId, protocolId
+            applicationId,
+            protocolId
         );
     }
 
@@ -236,9 +452,16 @@ public final class RTCSettings implements Cloneable, Serializable {
             queuedSendTimeout,
             signalingAnnounceExpiration,
             maxDirectPeers,
+            connectionRetryInitialDelay,
+            connectionRetryMaxDelay,
+            connectionRetryMultiplier,
+            connectionRetryJitter,
+            maxConcurrentConnectionAttempts,
+            connectionMinimumLifetime,
             new ArrayList<String>(stunServers),
             signalingRelays,
-            applicationId, protocolId
+            applicationId,
+            protocolId
         );
     }
 
@@ -260,9 +483,16 @@ public final class RTCSettings implements Cloneable, Serializable {
             queuedSendTimeout,
             signalingAnnounceExpiration,
             maxDirectPeers,
+            connectionRetryInitialDelay,
+            connectionRetryMaxDelay,
+            connectionRetryMultiplier,
+            connectionRetryJitter,
+            maxConcurrentConnectionAttempts,
+            connectionMinimumLifetime,
             new ArrayList<String>(stunServers),
             signalingRelays,
-            applicationId, protocolId
+            applicationId,
+            protocolId
         );
     }
 
@@ -282,9 +512,16 @@ public final class RTCSettings implements Cloneable, Serializable {
             queuedSendTimeout,
             signalingAnnounceExpiration,
             maxDirectPeers,
+            connectionRetryInitialDelay,
+            connectionRetryMaxDelay,
+            connectionRetryMultiplier,
+            connectionRetryJitter,
+            maxConcurrentConnectionAttempts,
+            connectionMinimumLifetime,
             new ArrayList<String>(stunServers),
             signalingRelays,
-            applicationId, protocolId
+            applicationId,
+            protocolId
         );
     }
 
@@ -304,9 +541,16 @@ public final class RTCSettings implements Cloneable, Serializable {
             queuedSendTimeout,
             signalingAnnounceExpiration,
             maxDirectPeers,
+            connectionRetryInitialDelay,
+            connectionRetryMaxDelay,
+            connectionRetryMultiplier,
+            connectionRetryJitter,
+            maxConcurrentConnectionAttempts,
+            connectionMinimumLifetime,
             new ArrayList<String>(stunServers),
             signalingRelays,
-            applicationId, protocolId
+            applicationId,
+            protocolId
         );
     }
 
@@ -328,9 +572,16 @@ public final class RTCSettings implements Cloneable, Serializable {
             queuedSendTimeout,
             signalingAnnounceExpiration,
             maxDirectPeers,
+            connectionRetryInitialDelay,
+            connectionRetryMaxDelay,
+            connectionRetryMultiplier,
+            connectionRetryJitter,
+            maxConcurrentConnectionAttempts,
+            connectionMinimumLifetime,
             new ArrayList<String>(stunServers),
             signalingRelays,
-            applicationId, protocolId
+            applicationId,
+            protocolId
         );
     }
 
@@ -350,9 +601,16 @@ public final class RTCSettings implements Cloneable, Serializable {
             queuedSendTimeout,
             signalingAnnounceExpiration,
             maxDirectPeers,
+            connectionRetryInitialDelay,
+            connectionRetryMaxDelay,
+            connectionRetryMultiplier,
+            connectionRetryJitter,
+            maxConcurrentConnectionAttempts,
+            connectionMinimumLifetime,
             new ArrayList<String>(stunServers),
             signalingRelays,
-            applicationId, protocolId
+            applicationId,
+            protocolId
         );
     }
 
@@ -374,9 +632,16 @@ public final class RTCSettings implements Cloneable, Serializable {
             queuedSendTimeout,
             signalingAnnounceExpiration,
             maxDirectPeers,
+            connectionRetryInitialDelay,
+            connectionRetryMaxDelay,
+            connectionRetryMultiplier,
+            connectionRetryJitter,
+            maxConcurrentConnectionAttempts,
+            connectionMinimumLifetime,
             new ArrayList<String>(stunServers),
             signalingRelays,
-            applicationId, protocolId
+            applicationId,
+            protocolId
         );
     }
 
@@ -399,9 +664,16 @@ public final class RTCSettings implements Cloneable, Serializable {
             queuedSendTimeout,
             signalingAnnounceExpiration,
             maxDirectPeers,
+            connectionRetryInitialDelay,
+            connectionRetryMaxDelay,
+            connectionRetryMultiplier,
+            connectionRetryJitter,
+            maxConcurrentConnectionAttempts,
+            connectionMinimumLifetime,
             new ArrayList<String>(stunServers),
             signalingRelays,
-            applicationId, protocolId
+            applicationId,
+            protocolId
         );
     }
 
@@ -426,9 +698,16 @@ public final class RTCSettings implements Cloneable, Serializable {
             queuedSendTimeout,
             signalingAnnounceExpiration,
             maxDirectPeers,
+            connectionRetryInitialDelay,
+            connectionRetryMaxDelay,
+            connectionRetryMultiplier,
+            connectionRetryJitter,
+            maxConcurrentConnectionAttempts,
+            connectionMinimumLifetime,
             stunServers,
             signalingRelays,
-            applicationId, protocolId
+            applicationId,
+            protocolId
         );
     }
 
@@ -441,14 +720,26 @@ public final class RTCSettings implements Cloneable, Serializable {
      * @param protocolId protocol namespace identifier
      * @return a copy with the specified identifiers
      */
-    private RTCSettings withPeerConfiguration(
-        String applicationId,
-        String protocolId
-    ) {
+    private RTCSettings withPeerConfiguration(String applicationId, String protocolId) {
         return new RTCSettings(
-            signalingLoopInterval, peerExpiration, delayedCandidatesInterval, roomLoopInterval,
-            p2pAttemptTimeout, queuedSendTimeout, signalingAnnounceExpiration,
-            maxDirectPeers, stunServers, signalingRelays, applicationId, protocolId
+            signalingLoopInterval,
+            peerExpiration,
+            delayedCandidatesInterval,
+            roomLoopInterval,
+            p2pAttemptTimeout,
+            queuedSendTimeout,
+            signalingAnnounceExpiration,
+            maxDirectPeers,
+            connectionRetryInitialDelay,
+            connectionRetryMaxDelay,
+            connectionRetryMultiplier,
+            connectionRetryJitter,
+            maxConcurrentConnectionAttempts,
+            connectionMinimumLifetime,
+            stunServers,
+            signalingRelays,
+            applicationId,
+            protocolId
         );
     }
 
@@ -518,6 +809,12 @@ public final class RTCSettings implements Cloneable, Serializable {
         QUEUED_SEND_TIMEOUT,
         SIGNALING_ANNOUNCE_EXPIRATION,
         DEFAULT_MAX_DIRECT_PEERS,
+        Duration.ofMillis(250),
+        Duration.ofSeconds(2),
+        2f,
+        0.1f,
+        4,
+        Duration.ofSeconds(30),
         PUBLIC_STUN_SERVERS,
         DEFAULT_SIGNALING_RELAYS,
         null,
@@ -563,6 +860,12 @@ public final class RTCSettings implements Cloneable, Serializable {
             Objects.equals(p2pAttemptTimeout, that.p2pAttemptTimeout) &&
             Objects.equals(queuedSendTimeout, that.queuedSendTimeout) &&
             maxDirectPeers == that.maxDirectPeers &&
+            Objects.equals(connectionRetryInitialDelay, that.connectionRetryInitialDelay) &&
+            Objects.equals(connectionRetryMaxDelay, that.connectionRetryMaxDelay) &&
+            Float.compare(connectionRetryMultiplier, that.connectionRetryMultiplier) == 0 &&
+            Float.compare(connectionRetryJitter, that.connectionRetryJitter) == 0 &&
+            maxConcurrentConnectionAttempts == that.maxConcurrentConnectionAttempts &&
+            Objects.equals(connectionMinimumLifetime, that.connectionMinimumLifetime) &&
             Objects.equals(stunServers, that.stunServers) &&
             Objects.equals(signalingRelays, that.signalingRelays) &&
             Objects.equals(applicationId, that.applicationId) &&
@@ -581,6 +884,12 @@ public final class RTCSettings implements Cloneable, Serializable {
             p2pAttemptTimeout,
             queuedSendTimeout,
             maxDirectPeers,
+            connectionRetryInitialDelay,
+            connectionRetryMaxDelay,
+            connectionRetryMultiplier,
+            connectionRetryJitter,
+            maxConcurrentConnectionAttempts,
+            connectionMinimumLifetime,
             stunServers,
             signalingRelays,
             applicationId,
@@ -608,6 +917,18 @@ public final class RTCSettings implements Cloneable, Serializable {
             queuedSendTimeout +
             ", maxDirectPeers=" +
             maxDirectPeers +
+            ", connectionRetry=" +
+            connectionRetryInitialDelay +
+            "/" +
+            connectionRetryMaxDelay +
+            ", retryMultiplier=" +
+            connectionRetryMultiplier +
+            ", retryJitter=" +
+            connectionRetryJitter +
+            ", maxConcurrentConnectionAttempts=" +
+            maxConcurrentConnectionAttempts +
+            ", connectionMinimumLifetime=" +
+            connectionMinimumLifetime +
             ", stunServers=" +
             stunServers +
             ", signalingRelays=" +
