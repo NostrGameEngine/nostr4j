@@ -74,6 +74,7 @@ public final class NostrRTCConnectSignal extends NostrRTCSignal {
         super(localSigner, "connect", roomKeyPair, event);
         int version = NostrRTCProtocolVersion.parse(event.getFirstTagFirstValue("version"));
         getPeer().setNipDcVersion(version);
+        getPeer().setLinkAdmission("1".equals(event.getFirstTagFirstValue("link-admission")) && supportsRouting());
         this.expireAt = event.getExpiration();
         this.message = event.getContent();
     }
@@ -100,6 +101,7 @@ public final class NostrRTCConnectSignal extends NostrRTCSignal {
 
     @Override
     protected final AsyncTask<UnsignedNostrEvent> computeEvent(UnsignedNostrEvent event) {
+        event.withTag("link-admission", "1");
         event.withTag("version", NostrRTCProtocolVersion.serialize(CURRENT_NIP_DC_VERSION));
         event.withTag("expiration", String.valueOf(expireAt.getEpochSecond()));
         if (message != null) {

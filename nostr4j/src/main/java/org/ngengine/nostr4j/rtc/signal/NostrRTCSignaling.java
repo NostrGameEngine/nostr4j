@@ -47,6 +47,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BooleanSupplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.NostrFilter;
@@ -89,6 +90,8 @@ public class NostrRTCSignaling implements Closeable {
         void onReceiveAnswer(NostrRTCAnswerSignal answer);
 
         void onReceiveCandidates(NostrRTCRouteSignal candidate);
+
+        default void onReceiveLinkSignal(NostrRTCLinkSignal signal) {}
     }
 
     private static final Logger logger = Logger.getLogger(NostrRTCSignaling.class.getName());
@@ -221,6 +224,22 @@ public class NostrRTCSignaling implements Closeable {
                     // handle offers and routes
                     NGEPlatform platform = NGEUtils.getPlatform();
                     switch (type) {
+                        case "link":
+                            {
+                                if (!isDirectedToLocalPeer(event)) return null;
+                                NostrRTCLinkSignal link = new NostrRTCLinkSignal(localPeer.getSigner(), roomKeyPair, event);
+                                link.await();
+                                mergeAdvertisedVersion(link);
+                                if (!link.getPeer().supportsLinkAdmission()) return null;
+                                for (Listener listener : listeners) {
+                                    try {
+                                        listener.onReceiveLinkSignal(link);
+                                    } catch (Throwable error) {
+                                        logger.fine("Invalid link admission signal");
+                                    }
+                                }
+                                return null;
+                            }
                         case "offer":
                             {
                                 if (!isDirectedToLocalPeer(event)) return null;
@@ -411,7 +430,7 @@ public class NostrRTCSignaling implements Closeable {
             NostrPublicKey localpk = this.localPeer.getPubkey();
             NostrFilter signalingFilter = new NostrFilter()
                 .withKind(25050)
-                .withTag("t", "offer", "answer", "route")
+                .withTag("t", "offer", "answer", "route", "link")
                 .withTag("P", this.roomKeyPair.getPublicKey().asHex())
                 .withTag("p", localpk.asHex())
                 .since(Instant.now().minus(1, ChronoUnit.SECONDS)) // only listen for new events
@@ -552,6 +571,25 @@ public class NostrRTCSignaling implements Closeable {
             .toEvent(recipient)
             .compose(ev -> {
                 return pool.publish(ev);
+            });
+    }
+
+    /** Recheck the attempt after asynchronous signing, before handing a signal to the relay pool. */
+    public AsyncTask<List<AsyncTask<NostrMessageAck>>> sendBoundSignal(
+        NostrRTCSignal signal,
+        NostrPublicKey recipient,
+        BooleanSupplier active
+    ) {
+        if (closed || !isSignalingStarted() || !active.getAsBoolean()) {
+            return AsyncTask.failed(new IllegalStateException("Inactive signaling attempt"));
+        }
+        return signal
+            .toEvent(recipient)
+            .compose(event -> {
+                if (closed || !active.getAsBoolean()) return AsyncTask.failed(
+                    new IllegalStateException("Obsolete signaling attempt")
+                );
+                return pool.publish(event);
             });
     }
 

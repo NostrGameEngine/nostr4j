@@ -343,7 +343,7 @@ public final class NostrRTCChannel {
 
     private AsyncTask<Boolean> writeSingleFragment(ByteBuffer payload) {
         RTCDataChannel currentChannel = this.channel;
-        if (socket.isPhysicalLinkEnabled() && isConnected() && !socket.isForceTURN()) {
+        if (socket.canUsePhysicalChannel(name) && isConnected() && !socket.isForceTURN()) {
             return NGEPlatform
                 .get()
                 .wrapPromise((res, rej) -> {
@@ -366,7 +366,7 @@ public final class NostrRTCChannel {
         if (routed != null && routed.shouldUseRoute(this)) {
             return routed.writeRouted(this, payload.asReadOnlyBuffer());
         }
-        if (!socket.isPhysicalLinkEnabled()) {
+        if (!socket.canUsePhysicalChannel(name)) {
             return AsyncTask.completed(Boolean.FALSE);
         }
         if (socket.isTurnFallbackAllowed() || socket.isForceTURN()) {
@@ -383,14 +383,14 @@ public final class NostrRTCChannel {
         if (closed) {
             return false;
         }
-        if (socket.isPhysicalLinkEnabled() && !socket.isForceTURN() && channel != null) {
+        if (socket.canUsePhysicalChannel(name) && !socket.isForceTURN() && channel != null) {
             return true;
         }
         InternalRoutedTransport routed = socket.getRoutedTransport();
         if (routed != null && routed.isRouteReady(this)) {
             return true;
         }
-        if (!socket.isPhysicalLinkEnabled()) {
+        if (!socket.canUsePhysicalChannel(name)) {
             return false;
         }
         if (socket.isTurnFallbackAllowed() || socket.isForceTURN()) {
@@ -524,6 +524,15 @@ public final class NostrRTCChannel {
         return (
             currentTurnReceive != null && currentTurnReceive.isReady() && currentTurnSend != null && currentTurnSend.isReady()
         );
+    }
+
+    /** Direct bidirectional readiness, without consulting routed delivery. */
+    boolean isPhysicalReady() {
+        if (closed || !socket.isPhysicalLinkEnabled()) return false;
+        if (!socket.isForceTURN() && socket.isRTCConnected() && channel != null) return true;
+        NostrTURNChannel send = turnSend;
+        NostrTURNChannel receive = turnReceive;
+        return send != null && receive != null && send.isReady() && receive.isReady();
     }
 
     public boolean isClosed() {

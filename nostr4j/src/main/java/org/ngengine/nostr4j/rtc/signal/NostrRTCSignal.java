@@ -55,6 +55,8 @@ public abstract class NostrRTCSignal implements Serializable {
     private final NostrRTCPeer peer;
     private final String type;
     private final NostrSigner localSigner;
+    private String linkAttemptId;
+    private String targetSession;
 
     protected NostrRTCSignal(NostrSigner localSigner, String type, NostrKeyPair roomKeyPair, NostrRTCPeer peer) {
         Objects.requireNonNull(localSigner, "Local signer cannot be null");
@@ -110,6 +112,30 @@ public abstract class NostrRTCSignal implements Serializable {
         this.roomKeyPair = roomKeyPair;
         this.type = type;
         this.localSigner = localSigner;
+        this.linkAttemptId = event.getFirstTagFirstValue("link-attempt");
+        this.targetSession = event.getFirstTagFirstValue("target-session");
+        if (linkAttemptId != null || targetSession != null) validateLinkAttempt(linkAttemptId, targetSession);
+    }
+
+    public String getLinkAttemptId() {
+        return linkAttemptId;
+    }
+
+    public String getTargetSession() {
+        return targetSession;
+    }
+
+    public final NostrRTCSignal withLinkAttempt(String attemptId, String targetSession) {
+        validateLinkAttempt(attemptId, targetSession);
+        this.linkAttemptId = attemptId;
+        this.targetSession = targetSession;
+        return this;
+    }
+
+    private static void validateLinkAttempt(String id, String target) {
+        if (id == null || !id.matches("[0-9a-f]{32}") || target == null || target.isEmpty() || target.length() > 256) {
+            throw new IllegalArgumentException("Invalid link attempt binding");
+        }
     }
 
     public NostrPublicKey getRoomPubkey() {
@@ -145,6 +171,10 @@ public abstract class NostrRTCSignal implements Serializable {
         connectEvent.withTag("d", peer.getSessionId());
         connectEvent.withTag("i", peer.getProtocolId());
         connectEvent.withTag("y", peer.getApplicationId());
+        if (linkAttemptId != null) {
+            connectEvent.withTag("link-attempt", linkAttemptId);
+            connectEvent.withTag("target-session", targetSession);
+        }
         if (toUser != null) {
             connectEvent.withTag("p", toUser.asHex());
         }
@@ -237,6 +267,25 @@ public abstract class NostrRTCSignal implements Serializable {
                 );
         }
         String receiver = event.getFirstTagFirstValue("p");
+        if (event.getFirstTagFirstValue("link-attempt") != null) {
+            return NGEUtils
+                .getPlatform()
+                .toJSON(
+                    List.of(
+                        "nip-dc-link-v1",
+                        type,
+                        NGEUtils.safeString(event.getFirstTagFirstValue("P")),
+                        NGEUtils.safeString(event.getFirstTagFirstValue("d")),
+                        NGEUtils.safeString(event.getFirstTagFirstValue("i")),
+                        NGEUtils.safeString(event.getFirstTagFirstValue("y")),
+                        NGEUtils.safeString(receiver),
+                        NGEUtils.safeString(event.getFirstTagFirstValue("link-attempt")),
+                        NGEUtils.safeString(event.getFirstTagFirstValue("target-session")),
+                        NGEUtils.safeString(event.getFirstTagFirstValue("expiration")),
+                        content
+                    )
+                );
+        }
         if (receiver == null || receiver.isEmpty()) throw new IllegalArgumentException("Missing receiver pubkey for roomproof");
         return NGEUtils.getPlatform().toJSON(List.of(receiver, content));
     }
@@ -247,7 +296,8 @@ public abstract class NostrRTCSignal implements Serializable {
             "disconnect".equals(type) ||
             "offer".equals(type) ||
             "answer".equals(type) ||
-            "route".equals(type)
+            "route".equals(type) ||
+            "link".equals(type)
         );
     }
 

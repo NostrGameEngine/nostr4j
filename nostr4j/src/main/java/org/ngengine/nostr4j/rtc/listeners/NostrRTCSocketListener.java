@@ -43,6 +43,16 @@ public interface NostrRTCSocketListener {
         @Nullable String turnServer
     );
 
+    /** Internal generation-aware emission; existing listeners keep their original callback. */
+    default void onRTCSocketRouteUpdate(
+        NostrRTCSocket socket,
+        Collection<RTCTransportIceCandidate> candidates,
+        @Nullable String turnServer,
+        long transportGeneration
+    ) {
+        onRTCSocketRouteUpdate(socket, candidates, turnServer);
+    }
+
     void onRTCSocketClose(NostrRTCSocket socket);
 
     void onRTCChannelReady(NostrRTCChannel channel);

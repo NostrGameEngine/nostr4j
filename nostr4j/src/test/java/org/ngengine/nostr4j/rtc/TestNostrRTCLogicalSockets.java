@@ -40,7 +40,13 @@ public class TestNostrRTCLogicalSockets {
     public void testEveryAnnouncementCreatesStableLogicalSocketBeforePhysicalConnection() throws Exception {
         NostrKeyPair roomKeys = new NostrKeyPair();
         NostrRTCLocalPeer local = localPeer("local-session", roomKeys);
-        NostrRTCRoom room = new NostrRTCRoom(RTCSettings.getDefault("logical-app", "logical-protocol").withSignalingRelays(java.util.List.of()), local, roomKeys, new NostrPool(), null);
+        NostrRTCRoom room = new NostrRTCRoom(
+            RTCSettings.getDefault("logical-app", "logical-protocol").withSignalingRelays(java.util.List.of()),
+            local,
+            roomKeys,
+            new NostrPool(),
+            null
+        );
         AtomicInteger availableSockets = new AtomicInteger();
         room.addPeerSocketAvailableListener((peer, socket) -> availableSockets.incrementAndGet());
         try {
@@ -82,7 +88,10 @@ public class TestNostrRTCLogicalSockets {
         NostrKeyPair roomKeys = new NostrKeyPair();
         NostrRTCLocalPeer local = localPeer("local-large-session", roomKeys);
         NostrRTCRoom room = new NostrRTCRoom(
-            RTCSettings.getDefault("logical-app", "logical-protocol").withSignalingRelays(java.util.List.of()).withMaxDirectPeers(16),
+            RTCSettings
+                .getDefault("logical-app", "logical-protocol")
+                .withSignalingRelays(java.util.List.of())
+                .withMaxDirectPeers(16),
             local,
             roomKeys,
             new NostrPool(),
@@ -103,7 +112,7 @@ public class TestNostrRTCLogicalSockets {
                 assertNotNull(socket.getChannel(NostrRTCSocket.DEFAULT_CHANNEL_NAME));
             }
             assertTrue("physical direct links must respect maxDirectPeers", physicalLinks <= 16);
-            assertEquals("stable overlay should fill the configured direct degree", 16, physicalLinks);
+            assertEquals("discovery alone reserves no physical connection resources", 0, physicalLinks);
         } finally {
             room.close();
         }
@@ -113,7 +122,13 @@ public class TestNostrRTCLogicalSockets {
     public void testApplicationApisRejectReservedRoutingChannels() throws Exception {
         NostrKeyPair roomKeys = new NostrKeyPair();
         NostrRTCLocalPeer local = localPeer("local-reserved-session", roomKeys);
-        NostrRTCRoom room = new NostrRTCRoom(RTCSettings.getDefault("logical-app", "logical-protocol").withSignalingRelays(java.util.List.of()), local, roomKeys, new NostrPool(), null);
+        NostrRTCRoom room = new NostrRTCRoom(
+            RTCSettings.getDefault("logical-app", "logical-protocol").withSignalingRelays(java.util.List.of()),
+            local,
+            roomKeys,
+            new NostrPool(),
+            null
+        );
         try {
             NostrRTCConnectSignal remote = announce("remote-reserved", roomKeys);
             deliverAnnouncement(room, remote);
@@ -160,7 +175,10 @@ public class TestNostrRTCLogicalSockets {
         NostrKeyPair roomKeys = new NostrKeyPair();
         NostrRTCRoom room = new NostrRTCRoom(
             RTCSettings.getDefault("logical-app", "logical-protocol").withSignalingRelays(List.of()),
-            localPeer("local-expiration-session", roomKeys), roomKeys, new NostrPool(), null
+            localPeer("local-expiration-session", roomKeys),
+            roomKeys,
+            new NostrPool(),
+            null
         );
         AtomicInteger disconnected = new AtomicInteger();
         room.addDisconnectionListener((peer, socket) -> disconnected.incrementAndGet());
@@ -169,9 +187,12 @@ public class TestNostrRTCLogicalSockets {
             deliverAnnouncement(room, remote);
             assertEquals(1, room.getPeers().size());
 
-            Method remove = NostrRTCRoom.class.getDeclaredMethod(
-                "onRemoveAnnounce", NostrRTCConnectSignal.class, NostrRTCSignaling.Listener.RemoveReason.class
-            );
+            Method remove =
+                NostrRTCRoom.class.getDeclaredMethod(
+                        "onRemoveAnnounce",
+                        NostrRTCConnectSignal.class,
+                        NostrRTCSignaling.Listener.RemoveReason.class
+                    );
             remove.setAccessible(true);
             remove.invoke(room, remote, NostrRTCSignaling.Listener.RemoveReason.EXPIRED);
 
@@ -233,7 +254,10 @@ public class TestNostrRTCLogicalSockets {
 
     private static NostrRTCLocalPeer localPeer(String sessionId, NostrKeyPair roomKeys) {
         return new NostrRTCLocalPeer(
-            RTCSettings.getDefault("logical-app", "logical-protocol").withSignalingRelays(java.util.List.of()).withStunServers(Collections.emptyList()),
+            RTCSettings
+                .getDefault("logical-app", "logical-protocol")
+                .withSignalingRelays(java.util.List.of())
+                .withStunServers(Collections.emptyList()),
             NostrKeyPairSigner.generate(),
             sessionId,
             roomKeys,

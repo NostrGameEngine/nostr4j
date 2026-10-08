@@ -21,8 +21,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Consumer;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 import java.util.logging.Handler;
 import java.util.logging.Level;
 import java.util.logging.LogRecord;
@@ -320,13 +320,23 @@ public class TestRtcPendingSendRecovery {
         try {
             NostrKeyPair roomKeys = new NostrKeyPair();
             NostrRTCLocalPeer local = new NostrRTCLocalPeer(
-                RTCSettings.getDefault(APP_ID, PROTOCOL_ID).withSignalingRelays(java.util.List.of()).withStunServers(Collections.emptyList()),
+                RTCSettings
+                    .getDefault(APP_ID, PROTOCOL_ID)
+                    .withSignalingRelays(java.util.List.of())
+                    .withStunServers(Collections.emptyList()),
                 NostrKeyPairSigner.generate(),
                 "room-queue-hang-local",
                 roomKeys,
                 null
             );
-            room = new NostrRTCRoom(RTCSettings.getDefault(APP_ID, PROTOCOL_ID).withSignalingRelays(java.util.List.of()), local, roomKeys, new NostrPool(), turnPool);
+            room =
+                new NostrRTCRoom(
+                    RTCSettings.getDefault(APP_ID, PROTOCOL_ID).withSignalingRelays(java.util.List.of()),
+                    local,
+                    roomKeys,
+                    new NostrPool(),
+                    turnPool
+                );
 
             NostrRTCPeer remote = new NostrRTCPeer(
                 org.ngengine.platform.NGEUtils.awaitNoThrow(NostrKeyPairSigner.generate().getPublicKey()),
@@ -375,13 +385,20 @@ public class TestRtcPendingSendRecovery {
     @Test(timeout = 10000L)
     public void testRoomDirectReplacementKeepsDeadlineAndIgnoresOldSuccessAndFailure() throws Exception {
         AtomicLong clock = new AtomicLong(1_000_000L);
-        RTCSettings settings = RTCSettings.getDefault(APP_ID, PROTOCOL_ID)
-            .withSignalingRelays(Collections.emptyList()).withStunServers(Collections.emptyList());
+        RTCSettings settings = RTCSettings
+            .getDefault(APP_ID, PROTOCOL_ID)
+            .withSignalingRelays(Collections.emptyList())
+            .withStunServers(Collections.emptyList());
         NostrKeyPair keys = new NostrKeyPair();
         NostrRTCLocalPeer local = new NostrRTCLocalPeer(settings, NostrKeyPairSigner.generate(), "deadline-local", keys, null);
         NostrRTCPeer remote = new NostrRTCPeer(
             org.ngengine.platform.NGEUtils.awaitNoThrow(NostrKeyPairSigner.generate().getPublicKey()),
-            APP_ID, PROTOCOL_ID, "deadline-remote", keys.getPublicKey(), null);
+            APP_ID,
+            PROTOCOL_ID,
+            "deadline-remote",
+            keys.getPublicKey(),
+            null
+        );
         try (NostrRTCRoom room = new NostrRTCRoom(settings, local, keys, new NostrPool(), null, clock::get)) {
             NostrRTCSocket socket = newSocket(room, remote);
             putConnection(room, remote, socket);
@@ -391,10 +408,13 @@ public class TestRtcPendingSendRecovery {
             channel.setChannel(original);
             AtomicInteger failures = new AtomicInteger();
             AtomicInteger successes = new AtomicInteger();
-            room.send(channel, ByteBuffer.wrap(new byte[] { 1 })).then(done -> {
-                successes.incrementAndGet();
-                return null;
-            }).catchException(error -> failures.incrementAndGet());
+            room
+                .send(channel, ByteBuffer.wrap(new byte[] { 1 }))
+                .then(done -> {
+                    successes.incrementAndGet();
+                    return null;
+                })
+                .catchException(error -> failures.incrementAndGet());
             waitUntil(() -> original.completions.size() == 1, 2000L, "original write did not start");
             BlockingPacketQueue<NostrRTCChannel.PreparedPacket> queue = pendingQueue(room, channel);
             assertEquals(30_000L, queueLong(queue, "queueItemTimeoutMs"));
@@ -410,10 +430,13 @@ public class TestRtcPendingSendRecovery {
             clock.incrementAndGet();
             queue.loop();
             waitUntil(() -> failures.get() == 1, 2000L, "original deadline was renewed by replacement");
-            room.send(channel, ByteBuffer.wrap(new byte[] { 2 })).then(done -> {
-                successes.incrementAndGet();
-                return null;
-            }).catchException(error -> failures.incrementAndGet());
+            room
+                .send(channel, ByteBuffer.wrap(new byte[] { 2 }))
+                .then(done -> {
+                    successes.incrementAndGet();
+                    return null;
+                })
+                .catchException(error -> failures.incrementAndGet());
             waitUntil(() -> replacement.completions.size() == 2, 2000L, "new head did not start");
             original.errors.get(0).accept(new RuntimeException("late original transport failure"));
             replacement.completions.get(0).accept(null);
@@ -430,7 +453,8 @@ public class TestRtcPendingSendRecovery {
     }
 
     @SuppressWarnings("unchecked")
-    private static BlockingPacketQueue<NostrRTCChannel.PreparedPacket> pendingQueue(NostrRTCRoom room, NostrRTCChannel channel) throws Exception {
+    private static BlockingPacketQueue<NostrRTCChannel.PreparedPacket> pendingQueue(NostrRTCRoom room, NostrRTCChannel channel)
+        throws Exception {
         java.lang.reflect.Field field = NostrRTCRoom.class.getDeclaredField("pendingSends");
         field.setAccessible(true);
         return ((Map<NostrRTCChannel, BlockingPacketQueue<NostrRTCChannel.PreparedPacket>>) field.get(room)).get(channel);
@@ -443,6 +467,7 @@ public class TestRtcPendingSendRecovery {
     }
 
     private static final class ControlledRTCDataChannel extends HangingRTCDataChannel {
+
         private final List<Consumer<Void>> completions = new CopyOnWriteArrayList<Consumer<Void>>();
         private final List<Consumer<Throwable>> errors = new CopyOnWriteArrayList<Consumer<Throwable>>();
 
@@ -450,7 +475,8 @@ public class TestRtcPendingSendRecovery {
             super("primary", PROTOCOL_ID, true, true, 0, null);
         }
 
-        @Override public AsyncTask<Void> write(ByteBuffer data) {
+        @Override
+        public AsyncTask<Void> write(ByteBuffer data) {
             return AsyncTask.create((resolve, reject) -> {
                 errors.add(reject);
                 completions.add(resolve);
@@ -465,13 +491,23 @@ public class TestRtcPendingSendRecovery {
         try {
             NostrKeyPair roomKeys = new NostrKeyPair();
             NostrRTCLocalPeer local = new NostrRTCLocalPeer(
-                RTCSettings.getDefault(APP_ID, PROTOCOL_ID).withSignalingRelays(java.util.List.of()).withStunServers(Collections.emptyList()),
+                RTCSettings
+                    .getDefault(APP_ID, PROTOCOL_ID)
+                    .withSignalingRelays(java.util.List.of())
+                    .withStunServers(Collections.emptyList()),
                 NostrKeyPairSigner.generate(),
                 "room-broadcast-local",
                 roomKeys,
                 null
             );
-            room = new NostrRTCRoom(RTCSettings.getDefault(APP_ID, PROTOCOL_ID).withSignalingRelays(java.util.List.of()), local, roomKeys, new NostrPool(), turnPool);
+            room =
+                new NostrRTCRoom(
+                    RTCSettings.getDefault(APP_ID, PROTOCOL_ID).withSignalingRelays(java.util.List.of()),
+                    local,
+                    roomKeys,
+                    new NostrPool(),
+                    turnPool
+                );
 
             NostrRTCPeer readyPeer = new NostrRTCPeer(
                 org.ngengine.platform.NGEUtils.awaitNoThrow(NostrKeyPairSigner.generate().getPublicKey()),
@@ -534,6 +570,17 @@ public class TestRtcPendingSendRecovery {
         field.setAccessible(true);
         Map<NostrRTCPeer, NostrRTCSocket> connections = (Map<NostrRTCPeer, NostrRTCSocket>) field.get(room);
         connections.put(peer, socket);
+        java.lang.reflect.Field owner = NostrRTCRoom.class.getDeclaredField("physicalConnections");
+        owner.setAccessible(true);
+        PhysicalConnectionManager manager = (PhysicalConnectionManager) owner.get(room);
+        manager.evaluate(new java.util.ArrayList<>(connections.keySet()));
+        assertNotNull(
+            manager.admit(
+                peer,
+                org.ngengine.platform.NGEUtils.bytesToHex(org.ngengine.platform.NGEPlatform.get().randomBytes(16)),
+                false
+            )
+        );
     }
 
     @SuppressWarnings("unchecked")
@@ -557,7 +604,14 @@ public class TestRtcPendingSendRecovery {
     private static NostrRTCSocket newSocket(NostrRTCRoom room, NostrRTCPeer remote) throws Exception {
         java.lang.reflect.Method method = NostrRTCRoom.class.getDeclaredMethod("newSocket", NostrRTCPeer.class);
         method.setAccessible(true);
-        return (NostrRTCSocket) method.invoke(room, remote);
+        NostrRTCSocket socket = (NostrRTCSocket) method.invoke(room, remote);
+        // Queue tests inject a committed native channel rather than negotiating a transport.
+        socket.setPhysicalLinkEnabled(true);
+        socket.setPhysicalLinkCommitted(true);
+        java.lang.reflect.Field connected = NostrRTCSocket.class.getDeclaredField("connected");
+        connected.setAccessible(true);
+        connected.setBoolean(socket, true);
+        return socket;
     }
 
     @SuppressWarnings("unchecked")
