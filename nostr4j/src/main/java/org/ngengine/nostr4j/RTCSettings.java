@@ -186,7 +186,9 @@ public final class RTCSettings implements Cloneable, Serializable {
         return connectionRetryInitialDelay;
     }
 
-    /** Returns a copy with {@code connectionRetryInitialDelay} changed. */
+    /**
+     * Returns a copy with {@code connectionRetryInitialDelay} changed.
+     */
     public RTCSettings withConnectionRetryInitialDelay(Duration connectionRetryInitialDelay) {
         return new RTCSettings(
             signalingLoopInterval,
@@ -214,7 +216,9 @@ public final class RTCSettings implements Cloneable, Serializable {
         return connectionRetryMaxDelay;
     }
 
-    /** Returns a copy with {@code connectionRetryMaxDelay} changed. */
+    /**
+     * Returns a copy with {@code connectionRetryMaxDelay} changed.
+     */
     public RTCSettings withConnectionRetryMaxDelay(Duration connectionRetryMaxDelay) {
         return new RTCSettings(
             signalingLoopInterval,
@@ -242,7 +246,9 @@ public final class RTCSettings implements Cloneable, Serializable {
         return connectionRetryMultiplier;
     }
 
-    /** Returns a copy with {@code connectionRetryMultiplier} changed. */
+    /**
+     * Returns a copy with {@code connectionRetryMultiplier} changed.
+     */
     public RTCSettings withConnectionRetryMultiplier(float connectionRetryMultiplier) {
         return new RTCSettings(
             signalingLoopInterval,
@@ -270,7 +276,9 @@ public final class RTCSettings implements Cloneable, Serializable {
         return connectionRetryJitter;
     }
 
-    /** Returns a copy with {@code connectionRetryJitter} changed. */
+    /**
+     * Returns a copy with {@code connectionRetryJitter} changed.
+     */
     public RTCSettings withConnectionRetryJitter(float connectionRetryJitter) {
         return new RTCSettings(
             signalingLoopInterval,
@@ -298,7 +306,9 @@ public final class RTCSettings implements Cloneable, Serializable {
         return maxConcurrentConnectionAttempts;
     }
 
-    /** Returns a copy with {@code maxConcurrentConnectionAttempts} changed. */
+    /**
+     * Returns a copy with {@code maxConcurrentConnectionAttempts} changed.
+     */
     public RTCSettings withMaxConcurrentConnectionAttempts(int maxConcurrentConnectionAttempts) {
         return new RTCSettings(
             signalingLoopInterval,
@@ -326,7 +336,9 @@ public final class RTCSettings implements Cloneable, Serializable {
         return connectionMinimumLifetime;
     }
 
-    /** Returns a copy with {@code connectionMinimumLifetime} changed. */
+    /**
+     * Returns a copy with {@code connectionMinimumLifetime} changed.
+     */
     public RTCSettings withConnectionMinimumLifetime(Duration connectionMinimumLifetime) {
         return new RTCSettings(
             signalingLoopInterval,

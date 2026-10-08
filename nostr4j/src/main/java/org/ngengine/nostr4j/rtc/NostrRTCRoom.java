@@ -1258,7 +1258,9 @@ public final class NostrRTCRoom implements Closeable {
         scheduleTopologyRefresh();
     }
 
-    /** Bounded read-only snapshot of physical reservations, retry state and attested routing topology. */
+    /**
+     * Bounded read-only snapshot of physical reservations, retry state and attested routing topology.
+     */
     public RTCConnectionDiagnostics getConnectionDiagnostics() {
         return physicalConnections.snapshot(routingGraph, topologyEvaluatedAt, topologyControl.getSnapshots(Instant.now()));
     }

@@ -13,7 +13,9 @@ import org.ngengine.nostr4j.signer.NostrSigner;
 import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEUtils;
 
-/** Small authenticated and encrypted reservation request/response, negotiated by presence. */
+/**
+ * Small authenticated and encrypted reservation request/response, negotiated by presence.
+ */
 public final class NostrRTCLinkSignal extends NostrRTCSignal {
 
     public enum Command {

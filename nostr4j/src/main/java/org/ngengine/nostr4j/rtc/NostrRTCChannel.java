@@ -526,7 +526,9 @@ public final class NostrRTCChannel {
         );
     }
 
-    /** Direct bidirectional readiness, without consulting routed delivery. */
+    /**
+     * Direct bidirectional readiness, without consulting routed delivery.
+     */
     boolean isPhysicalReady() {
         if (closed || !socket.isPhysicalLinkEnabled()) return false;
         if (!socket.isForceTURN() && socket.isRTCConnected() && channel != null) return true;

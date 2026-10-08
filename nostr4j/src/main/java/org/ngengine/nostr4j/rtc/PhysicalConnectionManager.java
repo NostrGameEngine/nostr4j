@@ -24,7 +24,9 @@ import org.ngengine.nostr4j.utils.ExponentialBackoff;
 import org.ngengine.platform.NGEPlatform;
 import org.ngengine.platform.NGEUtils;
 
-/** State only. Transport calls and application callbacks never run under this monitor. */
+/**
+ * State only. Transport calls and application callbacks never run under this monitor.
+ */
 final class PhysicalConnectionManager {
 
     static final int MAX_CANDIDATES = 2048;
@@ -179,7 +181,9 @@ final class PhysicalConnectionManager {
         ++policyEpoch;
     }
 
-    /** Snapshot, evaluate outside the monitor, then apply only to the same epoch. */
+    /**
+     * Snapshot, evaluate outside the monitor, then apply only to the same epoch.
+     */
     boolean evaluate(List<NostrRTCPeer> peers) {
         DiscoveryPriority callback;
         long epoch;
@@ -496,7 +500,9 @@ final class PhysicalConnectionManager {
         return result;
     }
 
-    /** Capacity remains charged until the transport owner has completed cleanup. */
+    /**
+     * Capacity remains charged until the transport owner has completed cleanup.
+     */
     synchronized void released(Attempt a) {
         Candidate c = candidates.get(a.peer);
         if (c == null || c.attempt != a || c.state != State.CLOSING) return;

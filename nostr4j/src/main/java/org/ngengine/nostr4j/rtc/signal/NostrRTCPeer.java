@@ -155,7 +155,9 @@ public class NostrRTCPeer {
         return nipDcVersion;
     }
 
-    /** True only when the remote authenticated presence advertised link-admission v1. */
+    /**
+     * True only when the remote authenticated presence advertised link-admission v1.
+     */
     public boolean supportsLinkAdmission() {
         return linkAdmission;
     }

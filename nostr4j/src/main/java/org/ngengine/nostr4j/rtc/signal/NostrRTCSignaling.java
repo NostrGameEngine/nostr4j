@@ -574,7 +574,9 @@ public class NostrRTCSignaling implements Closeable {
             });
     }
 
-    /** Recheck the attempt after asynchronous signing, before handing a signal to the relay pool. */
+    /**
+     * Recheck the attempt after asynchronous signing, before handing a signal to the relay pool.
+     */
     public AsyncTask<List<AsyncTask<NostrMessageAck>>> sendBoundSignal(
         NostrRTCSignal signal,
         NostrPublicKey recipient,

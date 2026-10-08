@@ -39,7 +39,9 @@ import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
 import org.ngengine.nostr4j.turn.ref.TurnServer;
 import org.ngengine.platform.AsyncTask;
 
-/** Actual native RTC and encrypted signaling; the relay delivery is an in-process bus. */
+/**
+ * Actual native RTC and encrypted signaling; the relay delivery is an in-process bus.
+ */
 public class TestNostrRTCResilienceIntegration {
 
     private static final String APP = "resilience-native", PROTO = "resilience-v1";

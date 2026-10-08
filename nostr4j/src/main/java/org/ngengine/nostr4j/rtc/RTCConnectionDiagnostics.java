@@ -12,7 +12,9 @@ import org.ngengine.nostr4j.rtc.routing.topology.TopologyGraph;
 import org.ngengine.nostr4j.rtc.routing.topology.TopologySnapshot;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCPeer;
 
-/** Immutable bounded snapshot. Retry delays use monotonic time; topology freshness uses UTC. */
+/**
+ * Immutable bounded snapshot. Retry delays use monotonic time; topology freshness uses UTC.
+ */
 public final class RTCConnectionDiagnostics {
 
     private final int maxDirectPeers, occupiedResources, establishedLinks;
@@ -46,7 +48,9 @@ public final class RTCConnectionDiagnostics {
         return maxDirectPeers;
     }
 
-    /** Includes pending reservations, probes and resources still being closed. */
+    /**
+     * Includes pending reservations, probes and resources still being closed.
+     */
     public int getOccupiedResources() {
         return occupiedResources;
     }
@@ -124,7 +128,9 @@ public final class RTCConnectionDiagnostics {
             return peer;
         }
 
-        /** Null means this candidate has never had a valid evaluation. */
+        /**
+         * Null means this candidate has never had a valid evaluation.
+         */
         public Float getPriority() {
             return priority;
         }
@@ -149,7 +155,9 @@ public final class RTCConnectionDiagnostics {
             return routedReady;
         }
 
-        /** Ring, repair and graph-bridge protection prevents preference-only eviction. */
+        /**
+         * Ring, repair and graph-bridge protection prevents preference-only eviction.
+         */
         public boolean isProtectedLink() {
             return protectedLink;
         }
