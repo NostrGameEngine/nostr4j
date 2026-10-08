@@ -47,6 +47,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BooleanSupplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.NostrFilter;
@@ -311,7 +312,9 @@ public class NostrRTCSignaling implements Closeable {
         }
     }
 
-    /** Finish a stored discovery batch; subsequent relay batches still cannot roll state backwards. */
+    /**
+     * Finish a stored discovery batch; subsequent relay batches still cannot roll state backwards.
+     */
     protected void onDiscoveryEose() {
         storedPresenceReady = true;
         flushStoredPresence();
@@ -552,6 +555,27 @@ public class NostrRTCSignaling implements Closeable {
             .toEvent(recipient)
             .compose(ev -> {
                 return pool.publish(ev);
+            });
+    }
+
+    /**
+     * Recheck the attempt after asynchronous signing, before handing a signal to the relay pool.
+     */
+    public AsyncTask<List<AsyncTask<NostrMessageAck>>> sendBoundSignal(
+        NostrRTCSignal signal,
+        NostrPublicKey recipient,
+        BooleanSupplier active
+    ) {
+        if (closed || !isSignalingStarted() || !active.getAsBoolean()) {
+            return AsyncTask.failed(new IllegalStateException("Inactive signaling attempt"));
+        }
+        return signal
+            .toEvent(recipient)
+            .compose(event -> {
+                if (closed || !active.getAsBoolean()) return AsyncTask.failed(
+                    new IllegalStateException("Obsolete signaling attempt")
+                );
+                return pool.publish(event);
             });
     }
 

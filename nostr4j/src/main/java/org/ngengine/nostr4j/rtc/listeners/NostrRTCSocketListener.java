@@ -43,6 +43,15 @@ public interface NostrRTCSocketListener {
         @Nullable String turnServer
     );
 
+    default void onRTCSocketRouteUpdate(
+        NostrRTCSocket socket,
+        Collection<RTCTransportIceCandidate> candidates,
+        @Nullable String turnServer,
+        long transportGeneration
+    ) {
+        onRTCSocketRouteUpdate(socket, candidates, turnServer);
+    }
+
     void onRTCSocketClose(NostrRTCSocket socket);
 
     void onRTCChannelReady(NostrRTCChannel channel);

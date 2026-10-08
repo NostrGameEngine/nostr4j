@@ -39,6 +39,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BooleanSupplier;
 import java.util.function.LongSupplier;
 import java.util.logging.Level;
@@ -47,6 +48,8 @@ import org.ngengine.nostr4j.NostrPool;
 import org.ngengine.nostr4j.RTCSettings;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
+import org.ngengine.nostr4j.rtc.PhysicalConnectionManager.Attempt;
+import org.ngengine.nostr4j.rtc.PhysicalConnectionManager.Phase;
 import org.ngengine.nostr4j.rtc.delivery.DeliveryFailures;
 import org.ngengine.nostr4j.rtc.listeners.NostrRTCChannelListener;
 import org.ngengine.nostr4j.rtc.listeners.NostrRTCPeerSocketAvailableListener;
@@ -66,10 +69,14 @@ import org.ngengine.nostr4j.rtc.routing.RoutingScope;
 import org.ngengine.nostr4j.rtc.routing.broadcast.BroadcastAck;
 import org.ngengine.nostr4j.rtc.routing.broadcast.BroadcastContext;
 import org.ngengine.nostr4j.rtc.routing.broadcast.BroadcastEngine;
+import org.ngengine.nostr4j.rtc.routing.topology.BoundedOverlaySelector;
+import org.ngengine.nostr4j.rtc.routing.topology.DesiredDirectEdge;
 import org.ngengine.nostr4j.rtc.routing.topology.DirectNeighborManager;
 import org.ngengine.nostr4j.rtc.routing.topology.MutualTopologyGraphBuilder;
+import org.ngengine.nostr4j.rtc.routing.topology.OverlayEdgePriority;
 import org.ngengine.nostr4j.rtc.routing.topology.OverlayPlan;
 import org.ngengine.nostr4j.rtc.routing.topology.TopologyControlPlane;
+import org.ngengine.nostr4j.rtc.routing.topology.TopologyEdge;
 import org.ngengine.nostr4j.rtc.routing.topology.TopologyGraph;
 import org.ngengine.nostr4j.rtc.routing.topology.TopologyNeighbor;
 import org.ngengine.nostr4j.rtc.routing.topology.TopologySnapshot;
@@ -80,6 +87,7 @@ import org.ngengine.nostr4j.rtc.signal.NostrRTCLocalPeer;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCOfferSignal;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCPeer;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCRouteSignal;
+import org.ngengine.nostr4j.rtc.signal.NostrRTCSignal;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCSignaling;
 import org.ngengine.platform.AsyncExecutor;
 import org.ngengine.platform.AsyncTask;
@@ -124,6 +132,10 @@ public final class NostrRTCRoom implements Closeable {
     private final Map<String, TopologyGraph> recentRoutingGraphs = new LinkedHashMap<String, TopologyGraph>();
     private volatile boolean topologyRefreshScheduled;
     private volatile boolean closed;
+    private volatile boolean started;
+    private final PhysicalConnectionManager physicalConnections;
+    private final AtomicBoolean directRefreshRunning = new AtomicBoolean();
+    private volatile Instant topologyEvaluatedAt = Instant.EPOCH;
 
     private void drainQueue(NostrRTCChannel channel) {
         BlockingPacketQueue<NostrRTCChannel.PreparedPacket> queue = pendingSends.get(channel);
@@ -140,6 +152,13 @@ public final class NostrRTCRoom implements Closeable {
             }
         } catch (ReflectiveOperationException ignored) {}
         return DEFAULT_QUEUED_SEND_TIMEOUT_MS;
+    }
+
+    private BlockingPacketQueue<NostrRTCChannel.PreparedPacket> pendingSendQueue(NostrRTCChannel channel) {
+        synchronized (this) {
+            if (closed) throw new IllegalStateException("Room is closed");
+            return pendingSends.computeIfAbsent(channel, ignored -> newPendingSendQueue(channel));
+        }
     }
 
     private BlockingPacketQueue<NostrRTCChannel.PreparedPacket> newPendingSendQueue(NostrRTCChannel chan) {
@@ -226,7 +245,17 @@ public final class NostrRTCRoom implements Closeable {
             Collection<RTCTransportIceCandidate> candidates,
             String turnServer
         ) {
-            NostrRTCRoom.this.onRTCSocketLocalIceCandidate(socket, candidates, turnServer);
+            NostrRTCRoom.this.onRTCSocketLocalIceCandidate(socket, candidates, turnServer, socket.getRtcTransportGeneration());
+        }
+
+        @Override
+        public void onRTCSocketRouteUpdate(
+            NostrRTCSocket socket,
+            Collection<RTCTransportIceCandidate> candidates,
+            String turnServer,
+            long generation
+        ) {
+            NostrRTCRoom.this.onRTCSocketLocalIceCandidate(socket, candidates, turnServer, generation);
         }
 
         @Override
@@ -239,6 +268,7 @@ public final class NostrRTCRoom implements Closeable {
         public void onRTCChannelReady(NostrRTCChannel channel) {
             // channel.addListener(this);
             drainQueue(channel);
+            scheduleTopologyRefresh();
         }
 
         @Override
@@ -263,6 +293,7 @@ public final class NostrRTCRoom implements Closeable {
             if (remotePeer == null || remotePeer.getPubkey() == null) return;
             if (InternalRoutingChannels.isReserved(channel.getName())) {
                 NodeId previous = NodeId.derive(routingScope, remotePeer.getPubkey(), remotePeer.getSessionId());
+                if (!physicalConnections.committed(remotePeer)) return;
                 if (InternalRoutingChannels.CONTROL.equals(channel.getName())) {
                     routingEngine.onDirectControl(previous, bbf);
                 } else if (channel.getName().startsWith(InternalRoutingChannels.BROADCAST_PREFIX)) {
@@ -364,6 +395,16 @@ public final class NostrRTCRoom implements Closeable {
         this.settings = Objects.requireNonNull(settings, "Settings cannot be null");
         this.queuedSendClock = Objects.requireNonNull(queuedSendClock, "Queued send clock cannot be null");
         this.localPeer = Objects.requireNonNull(localPeer, "Local peer cannot be null");
+        this.physicalConnections =
+            new PhysicalConnectionManager(
+                settings,
+                localPeer.getPubkey(),
+                () -> TimeUnit.NANOSECONDS.toMillis(System.nanoTime()),
+                () -> {
+                    byte[] bytes = NGEPlatform.get().randomBytes(2);
+                    return ((bytes[0] & 255) * 256 + (bytes[1] & 255)) / 65535d;
+                }
+            );
         this.turnPool = turnPool;
         NostrPool checkedPool = Objects.requireNonNull(signalingPool, "Signaling pool cannot be null");
         for (String relay : settings.getSignalingRelays()) checkedPool.ensureRelay(relay);
@@ -420,9 +461,9 @@ public final class NostrRTCRoom implements Closeable {
                     public boolean hasUsableDirectTurn(NostrRTCChannel channel) {
                         NostrRTCSocket socket = channel.getSocket();
                         return (
-                            socket.isPhysicalLinkEnabled() &&
+                            socket.canUsePhysicalChannel(channel.getName()) &&
                             socket.getActiveTransportPath() == NostrRTCSocket.TransportPath.TURN &&
-                            channel.isTurnReady()
+                            channel.isPhysicalReady()
                         );
                     }
 
@@ -470,6 +511,7 @@ public final class NostrRTCRoom implements Closeable {
                     @Override
                     public TopologyGraph graphBySnapshotId(String snapshotId) {
                         synchronized (NostrRTCRoom.this) {
+                            if (closed) return null;
                             return recentRoutingGraphs.get(snapshotId);
                         }
                     }
@@ -513,6 +555,8 @@ public final class NostrRTCRoom implements Closeable {
 
     private NostrRTCSocket newSocket(NostrRTCPeer remotePeer) {
         NostrRTCSocket socket = new NostrRTCSocket(executor, remotePeer, roomKeyPair, localPeer, settings, turnPool);
+        socket.setPhysicalLinkCommitted(false);
+        socket.setPhysicalLinkEnabled(false);
         socket.setForceTURN(forceTURN.get());
         socket.setRoutedTransport(routingEngine);
         return socket;
@@ -539,17 +583,17 @@ public final class NostrRTCRoom implements Closeable {
         ByteBuffer payload
     ) {
         NostrRTCSocket socket = socketForNode(neighbor);
-        if (socket == null || socket.isClosed() || !socket.isPhysicalLinkEnabled()) {
+        if (socket == null || socket.isClosed() || !physicalConnections.committed(socket.getRemotePeer())) {
             return AsyncTask.completed(Boolean.FALSE);
         }
-        NostrRTCChannel channel = socket.createChannel(
+        NostrRTCChannel channel = socket.createPhysicalChannel(
             internalChannel,
             profile.isOrdered(),
             profile.isReliable(),
             profile.getMaxRetransmits(),
             profile.getMaxPacketLifeTime()
         );
-        return channel.write(payload.asReadOnlyBuffer());
+        return channel == null ? AsyncTask.completed(Boolean.FALSE) : channel.write(payload.asReadOnlyBuffer());
     }
 
     private void drainAllPendingSends() {
@@ -559,7 +603,7 @@ public final class NostrRTCRoom implements Closeable {
     }
 
     private NostrRTCSocket ensureLogicalSocket(NostrRTCPeer remotePeer) {
-        if (remotePeer == null || remotePeer.getPubkey() == null) {
+        if (closed || remotePeer == null || remotePeer.getPubkey() == null) {
             return null;
         }
         if (
@@ -575,79 +619,131 @@ public final class NostrRTCRoom implements Closeable {
         if (existing != null && !existing.isClosed()) {
             return existing;
         }
+        NostrRTCSocket created;
         synchronized (this) {
+            if (closed || bannedPeers.contains(remotePeer.getPubkey())) return null;
             existing = connections.get(remotePeer);
-            if (existing != null && !existing.isClosed()) {
-                return existing;
-            }
-            if (existing != null) {
-                connections.remove(remotePeer, existing);
-            }
-            NostrRTCSocket created = newSocket(remotePeer);
+            if (existing != null && !existing.isClosed()) return existing;
+            if (connections.size() >= PhysicalConnectionManager.MAX_CANDIDATES) return null;
+            if (existing != null) connections.remove(remotePeer, existing);
+            created = newSocket(remotePeer);
             created.addInternalListener(listener);
             connections.put(remotePeer, created);
-            refreshDirectNeighbors();
-            onSocketAvailable(remotePeer, created);
-            return created;
+        }
+        // Logical channels allocate no transport until capacity is reserved.
+        created.createLogicalChannelIfOpen(InternalRoutingChannels.CONTROL, true, true, null, null);
+        onSocketAvailable(remotePeer, created);
+        refreshDirectNeighbors();
+        return closed || connections.get(remotePeer) != created || created.isClosed() ? null : created;
+    }
+
+    private void refreshDirectNeighbors() {
+        if (closed) return;
+        if (Thread.holdsLock(this)) {
+            scheduleTopologyRefresh();
+            return;
+        }
+        if (!directRefreshRunning.compareAndSet(false, true)) {
+            scheduleTopologyRefresh();
+            return;
+        }
+        try {
+            refreshPhysicalConnections();
+        } finally {
+            directRefreshRunning.set(false);
         }
     }
 
-    private synchronized void refreshDirectNeighbors() {
-        if (closed) return;
-        Map<NodeId, NostrRTCSocket> socketsByNode = new HashMap<NodeId, NostrRTCSocket>();
-        List<NodeId> membership = new ArrayList<NodeId>(connections.size() + 1);
+    private void refreshPhysicalConnections() {
+        Map<NodeId, NostrRTCSocket> socketsByNode = new HashMap<>();
+        List<NodeId> membership = new ArrayList<>();
+        List<NostrRTCPeer> peers = new ArrayList<>();
         membership.add(localNodeId);
         for (Map.Entry<NostrRTCPeer, NostrRTCSocket> entry : connections.entrySet()) {
             NostrRTCPeer peer = entry.getKey();
             NostrRTCSocket socket = entry.getValue();
-            if (peer == null || peer.getPubkey() == null || socket == null || socket.isClosed()) {
-                continue;
-            }
+            if (socket.isClosed() || isBannedPeer(peer.getPubkey())) continue;
             NodeId node = NodeId.derive(routingScope, peer.getPubkey(), peer.getSessionId());
             membership.add(node);
+            peers.add(peer);
             socketsByNode.put(node, socket);
+        }
+        if (!physicalConnections.evaluate(peers)) {
+            scheduleTopologyRefresh();
+            return;
         }
         Instant now = Instant.now();
         Collection<NostrRTCConnectSignal> announces = signaling.getAnnounces();
         topologyControl.updatePresences(announces, now);
-        List<NostrRTCPeer> routedPresences = new ArrayList<NostrRTCPeer>();
+        List<NostrRTCPeer> routedPresences = new ArrayList<>();
         routedPresences.add(localPeer);
         for (NostrRTCConnectSignal announce : announces) {
-            if (announce.supportsRouting() && !announce.isExpired(now)) {
-                routedPresences.add(announce.getPeer());
-            }
+            if (announce.supportsRouting() && !announce.isExpired(now)) routedPresences.add(announce.getPeer());
         }
         TopologyGraph graph = graphBuilder.build(routingScope, routedPresences, topologyControl.getSnapshots(now), now);
         String previousGraphId = routingGraph.getSnapshotId();
-        routingGraph = graph;
-        recentRoutingGraphs.put(graph.getSnapshotId(), graph);
-        while (recentRoutingGraphs.size() > 2) {
-            recentRoutingGraphs.remove(recentRoutingGraphs.keySet().iterator().next());
+        synchronized (this) {
+            if (closed) return;
+            routingGraph = graph;
+            topologyEvaluatedAt = now;
+            recentRoutingGraphs.put(graph.getSnapshotId(), graph);
+            while (recentRoutingGraphs.size() > 2) recentRoutingGraphs.remove(recentRoutingGraphs.keySet().iterator().next());
         }
         OverlayPlan plan = neighborManager.update(routingScope, membership, settings.getMaxDirectPeers(), graph, now);
-        Set<NodeId> desiredNeighbors = plan.getNeighbors(localNodeId);
-        for (Map.Entry<NodeId, NostrRTCSocket> entry : socketsByNode.entrySet()) {
-            boolean enabled = desiredNeighbors.contains(entry.getKey());
-            entry.getValue().setPhysicalLinkEnabled(enabled);
-            if (enabled) {
-                entry.getValue().createChannel(InternalRoutingChannels.CONTROL, true, true, null, null);
-                ensureInternalProfileChannels(entry.getValue(), RouteTransportProfile.RELIABLE_ORDERED);
-                ensureInternalProfileChannels(entry.getValue(), RouteTransportProfile.UNRELIABLE_UNORDERED);
-            }
+        // A common two-neighbor ring is independent of the local K. Full-mesh
+        // BACKBONE labels below the cap must not freeze every optional link.
+        Set<NodeId> minimum = new BoundedOverlaySelector().select(routingScope, membership, 2).getNeighbors(localNodeId);
+        Map<NostrRTCPeer, Integer> roles = new HashMap<>();
+        Set<NostrRTCPeer> protectedPeers = new HashSet<>();
+        for (DesiredDirectEdge edge : plan.getEdges()) {
+            if (!edge.contains(localNodeId)) continue;
+            NostrRTCSocket socket = socketsByNode.get(edge.other(localNodeId));
+            if (socket == null) continue;
+            int role = edge.getPriority() == OverlayEdgePriority.REPAIR
+                ? 1
+                : edge.getPriority() == OverlayEdgePriority.BACKBONE ? 0 : 2;
+            if (physicalConnections.hasPriority() && role == 0 && !minimum.contains(edge.other(localNodeId))) role = 2;
+            roles.put(socket.getRemotePeer(), role);
+            if (role < 2) protectedPeers.add(socket.getRemotePeer());
         }
-        List<TopologyNeighbor> publishedNeighbors = new ArrayList<TopologyNeighbor>();
+        Map<NostrRTCPeer, PhysicalConnectionManager.LinkState> links = new HashMap<>();
         for (Map.Entry<NodeId, NostrRTCSocket> entry : socketsByNode.entrySet()) {
             NostrRTCSocket socket = entry.getValue();
-            if (
-                !desiredNeighbors.contains(entry.getKey()) ||
-                !socket.isPhysicalLinkEnabled() ||
-                !socket.hasUsableTransport() ||
-                !supportsRouting(socket.getRemotePeer(), announces)
-            ) {
-                continue;
-            }
             NostrRTCPeer peer = socket.getRemotePeer();
-            publishedNeighbors.add(
+            if (minimum.contains(entry.getKey())) {
+                roles.put(peer, 0);
+                protectedPeers.add(peer);
+            }
+            if (isBridge(graph, localNodeId, entry.getKey())) protectedPeers.add(peer);
+            NostrRTCChannel channel = socket.getChannel(NostrRTCSocket.DEFAULT_CHANNEL_NAME);
+            Attempt reservation = physicalConnections.attempt(peer);
+            links.put(
+                peer,
+                new PhysicalConnectionManager.LinkState(
+                    socket.hasBidirectionalPhysicalTransport() &&
+                    (socket.isRTCConnected() || (reservation != null && reservation.peerRouteReceived)),
+                    channel != null && routingEngine.isRouteReady(channel),
+                    socket.getActiveTransportPath().name(),
+                    socket.getTurnPool() != null && socket.hasCompleteTurnConfiguration(),
+                    socket.hasProvenPhysicalTransport()
+                )
+            );
+        }
+        physicalConnections.reconcile(links, roles, protectedPeers);
+        cleanupPhysicalConnections();
+        if (started && signaling.isSignalingStarted()) {
+            for (Attempt attempt : physicalConnections.fill()) beginPhysicalConnection(attempt);
+        }
+        if (signaling.isSignalingStarted()) advancePhysicalConnections();
+        List<TopologyNeighbor> published = new ArrayList<>();
+        for (Map.Entry<NodeId, NostrRTCSocket> entry : socketsByNode.entrySet()) {
+            NostrRTCSocket socket = entry.getValue();
+            socket.setPhysicalLinkCommitted(physicalConnections.committed(socket.getRemotePeer()));
+            if (
+                !physicalConnections.committed(socket.getRemotePeer()) || !supportsRouting(socket.getRemotePeer(), announces)
+            ) continue;
+            NostrRTCPeer peer = socket.getRemotePeer();
+            published.add(
                 new TopologyNeighbor(
                     entry.getKey(),
                     peer.getPubkey(),
@@ -657,10 +753,26 @@ public final class NostrRTCRoom implements Closeable {
                 )
             );
         }
-        topologyControl.requestPublish(publishedNeighbors);
-        if (!previousGraphId.equals(graph.getSnapshotId())) {
-            drainAllPendingSends();
+        topologyControl.requestPublish(published);
+        if (!previousGraphId.equals(graph.getSnapshotId())) drainAllPendingSends();
+    }
+
+    static boolean isBridge(TopologyGraph graph, NodeId local, NodeId neighbor) {
+        if (graph.findEdge(local, neighbor) == null) return false;
+        Set<NodeId> visited = new HashSet<>();
+        java.util.ArrayDeque<NodeId> pending = new java.util.ArrayDeque<>();
+        pending.add(local);
+        while (!pending.isEmpty()) {
+            NodeId node = pending.removeFirst();
+            if (!visited.add(node)) continue;
+            if (node.equals(neighbor)) return false;
+            for (TopologyEdge edge : graph.getEdges(node)) {
+                NodeId other = edge.other(node);
+                if ((node.equals(local) && other.equals(neighbor)) || (node.equals(neighbor) && other.equals(local))) continue;
+                pending.add(other);
+            }
         }
+        return true;
     }
 
     private static boolean supportsRouting(NostrRTCPeer peer, Collection<NostrRTCConnectSignal> announces) {
@@ -677,14 +789,14 @@ public final class NostrRTCRoom implements Closeable {
     }
 
     private static void ensureInternalProfileChannels(NostrRTCSocket socket, RouteTransportProfile profile) {
-        socket.createChannel(
+        socket.createPhysicalChannel(
             InternalRoutingChannels.data(profile),
             profile.isOrdered(),
             profile.isReliable(),
             profile.getMaxRetransmits(),
             profile.getMaxPacketLifeTime()
         );
-        socket.createChannel(
+        socket.createPhysicalChannel(
             InternalRoutingChannels.broadcast(profile),
             profile.isOrdered(),
             profile.isReliable(),
@@ -712,9 +824,17 @@ public final class NostrRTCRoom implements Closeable {
     }
 
     @Override
-    public synchronized void close() {
-        if (closed) return;
-        closed = true;
+    public void close() {
+        final List<NostrRTCSocket> socketsToClose;
+        final List<BlockingPacketQueue<NostrRTCChannel.PreparedPacket>> queuesToClose;
+        synchronized (this) {
+            if (closed) return;
+            closed = true;
+            socketsToClose = new ArrayList<>(connections.values());
+            queuesToClose = new ArrayList<>(pendingSends.values());
+        }
+        physicalConnections.close();
+        cleanupPhysicalConnections();
         try {
             this.broadcastEngine.close();
         } catch (Exception e) {
@@ -736,7 +856,7 @@ public final class NostrRTCRoom implements Closeable {
             logger.log(Level.WARNING, "Error destroying ephemeral routing key", e);
         }
         // close everything
-        for (NostrRTCSocket socket : connections.values()) {
+        for (NostrRTCSocket socket : socketsToClose) {
             try {
                 socket.close();
             } catch (Exception e) {
@@ -744,7 +864,7 @@ public final class NostrRTCRoom implements Closeable {
             }
         }
         connections.clear();
-        for (BlockingPacketQueue<NostrRTCChannel.PreparedPacket> queue : pendingSends.values()) {
+        for (BlockingPacketQueue<NostrRTCChannel.PreparedPacket> queue : queuesToClose) {
             try {
                 queue.close();
             } catch (Exception e) {
@@ -752,8 +872,10 @@ public final class NostrRTCRoom implements Closeable {
             }
         }
         pendingSends.clear();
-        recentRoutingGraphs.clear();
-        routingGraph = new TopologyGraph(Collections.emptySet(), Collections.emptySet());
+        synchronized (this) {
+            recentRoutingGraphs.clear();
+            routingGraph = new TopologyGraph(Collections.emptySet(), Collections.emptySet());
+        }
         bannedPeers.clear();
         onSocketAvailable.clear();
         onDisconnectionListeners.clear();
@@ -835,8 +957,9 @@ public final class NostrRTCRoom implements Closeable {
     }
 
     private void onSocketAvailable(NostrRTCPeer peer, NostrRTCSocket socket) {
-        socket.createChannel(NostrRTCSocket.DEFAULT_CHANNEL_NAME);
+        if (closed || connections.get(peer) != socket || socket.createInitialDefaultChannel() == null) return;
         for (NostrRTCPeerSocketAvailableListener listener : onSocketAvailable) {
+            if (closed || connections.get(peer) != socket || socket.isClosed()) return;
             try {
                 listener.onRoomPeerSocketAvailable(peer, socket);
             } catch (Throwable e) {
@@ -847,77 +970,24 @@ public final class NostrRTCRoom implements Closeable {
 
     private void loop() {
         if (closed) return;
-        this.executor.runLater(
-                () -> {
-                    if (closed) return null;
-                    try {
-                        // try to connect to every announced peer
-                        Collection<NostrRTCConnectSignal> announces = this.signaling.getAnnounces();
-                        for (NostrRTCConnectSignal announce : announces) {
-                            NostrRTCPeer remotePeer = announce.getPeer();
-                            NostrPublicKey remotePubkey = remotePeer.getPubkey();
-
-                            NostrRTCSocket socket = ensureLogicalSocket(remotePeer);
-                            if (socket == null || !socket.isPhysicalLinkEnabled()) continue;
-
-                            if (shouldDeferRtcAttempt(socket)) continue;
-                            synchronized (this) {
-                                socket = connections.get(remotePeer); // make sure we have a fresh reference to the socket
-                                // it could have changed while we were waiting for the lock
-                                if (shouldDeferRtcAttempt(socket)) continue;
-                                if (socket != null && socket.isClosed()) {
-                                    logger.fine("Dropping closed socket for peer: " + remotePubkey);
-                                    connections.remove(remotePeer, socket);
-                                    socket = null;
-                                }
-
-                                if (isBannedPeer(remotePubkey)) {
-                                    logger.fine("Skipping connection to banned peer: " + remotePubkey);
-                                    if (socket != null && connections.remove(remotePeer, socket)) {
-                                        socket.close();
-                                    }
-                                    continue;
-                                }
-
-                                if (!shouldOfferConnection(remotePubkey)) continue;
-
-                                logger.fine("Initiating connection to: " + remotePubkey);
-                                if (socket == null) {
-                                    socket = ensureLogicalSocket(remotePeer);
-                                } else {
-                                    socket.prepareRtcTransportAttempt();
-                                }
-
-                                // send offer to remote peer
-                                socket
-                                    .listen()
-                                    .then(offer -> {
-                                        try {
-                                            logger.fine("Sending offer to remote peer: " + remotePubkey);
-                                            this.signaling.sendOffer(offer.getOfferString(), remotePubkey);
-                                        } catch (Exception e) {
-                                            // e.printStackTrace();
-                                            logger.log(Level.WARNING, "Error sending offer", e);
-                                        }
-                                        return null;
-                                    });
-                            }
-                        }
-                    } catch (Exception e) {
-                        logger.warning("Error in loop: " + e.getMessage());
-                    }
-
-                    if (!closed) this.loop();
-                    return null;
-                },
-                settings.getRoomLoopInterval().toMillis(),
-                TimeUnit.MILLISECONDS
-            );
+        executor.runLater(
+            () -> {
+                if (closed) return null;
+                try {
+                    for (NostrRTCConnectSignal announce : signaling.getAnnounces()) ensureLogicalSocket(announce.getPeer());
+                    refreshDirectNeighbors();
+                } catch (Throwable error) {
+                    logger.log(Level.WARNING, "RTC room maintenance failed", error);
+                }
+                if (!closed) loop();
+                return null;
+            },
+            settings.getRoomLoopInterval().toMillis(),
+            TimeUnit.MILLISECONDS
+        );
     }
 
-    // Check precedence of local peer over remote peer. Only one should initiate the connection to the other.
-    // Doesn't really matter the approach as long as both peers are running the same logic. \
-    // Here for simplicity we just compare the hex values of the pubkeys.
+    // Resolve simultaneous offers by public key. Either endpoint can initiate independently.
     private boolean shouldOfferConnection(NostrPublicKey pubkey) {
         if (isBannedPeer(pubkey)) {
             logger.fine("Not offering connection to banned peer: " + pubkey);
@@ -954,8 +1024,12 @@ public final class NostrRTCRoom implements Closeable {
     }
 
     public AsyncTask<Void> start() {
-        this.topologyControl.start();
-        this.loop();
+        if (closed) return AsyncTask.failed(new IllegalStateException("Room is closed"));
+        if (!started) {
+            started = true;
+            this.topologyControl.start();
+            this.loop();
+        }
         return this.signaling.start(true);
     }
 
@@ -984,6 +1058,10 @@ public final class NostrRTCRoom implements Closeable {
             return;
         }
         logger.fine("Kicking peer: " + peer);
+        closeDisconnectedSockets(sockets);
+    }
+
+    private void closeDisconnectedSockets(List<NostrRTCSocket> sockets) {
         for (NostrRTCSocket socket : sockets) {
             socket.close();
             for (NostrRTCRoomPeerDisconnectListener listener : onDisconnectionListeners) {
@@ -1042,6 +1120,7 @@ public final class NostrRTCRoom implements Closeable {
      * @param peer the peer to ban
      */
     public void ban(NostrPublicKey peer) {
+        final List<NostrRTCSocket> sockets;
         synchronized (this) {
             if (!bannedPeers.contains(peer)) {
                 logger.fine("Banning peer: " + peer);
@@ -1049,8 +1128,9 @@ public final class NostrRTCRoom implements Closeable {
             } else {
                 logger.fine("Peer already banned: " + peer);
             }
-            kick(peer);
+            sockets = removeSocketsForPubkey(peer);
         }
+        closeDisconnectedSockets(sockets);
     }
 
     /**
@@ -1069,9 +1149,11 @@ public final class NostrRTCRoom implements Closeable {
     }
 
     private void onAddAnnounce(NostrRTCConnectSignal announce) {
+        if (closed) return;
         mergeSocketAdvertisedVersion(announce);
         ensureLogicalSocket(announce.getPeer());
         for (NostrRTCRoomPeerDiscoveredListener listener : onPeerDiscoveredListeners) {
+            if (closed) return;
             try {
                 listener.onRoomPeerDiscovered(
                     announce.getPeer(),
@@ -1085,9 +1167,11 @@ public final class NostrRTCRoom implements Closeable {
     }
 
     private void onUpdateAnnounce(NostrRTCConnectSignal announce) {
+        if (closed) return;
         mergeSocketAdvertisedVersion(announce);
         ensureLogicalSocket(announce.getPeer());
         for (NostrRTCRoomPeerDiscoveredListener listener : onPeerDiscoveredListeners) {
+            if (closed) return;
             try {
                 listener.onRoomPeerDiscovered(
                     announce.getPeer(),
@@ -1180,121 +1264,278 @@ public final class NostrRTCRoom implements Closeable {
         return Collections.unmodifiableList(new ArrayList<TopologySnapshot>(topologyControl.getSnapshots(Instant.now())));
     }
 
-    private void onReceiveOffer(NostrRTCOfferSignal offer) {
-        synchronized (this) {
-            NostrRTCPeer remotePeer = offer.getPeer();
-            if (isBannedPeer(remotePeer.getPubkey())) {
-                logger.fine("Ignoring offer from banned peer: " + remotePeer);
-                return;
-            }
-            // offer received from remote peer
-            NostrRTCSocket existing = ensureLogicalSocket(remotePeer);
-            if (existing == null || !existing.isPhysicalLinkEnabled()) {
-                logger.fine("Ignoring offer from peer outside the selected direct-neighbor set: " + remotePeer);
-                return;
-            }
-            NostrRTCSocket socket = null;
-            if (existing != null && existing.isPendingConnection() && !shouldOfferConnection(remotePeer.getPubkey())) {
-                // if there is already a connection initiated to this peer, forfeit it if the
-                // remote has precedence over local.
-                logger.fine(
-                    "Forfeiting connection to peer: " +
-                    remotePeer +
-                    " because remote peer has precedence over local peer and is initiating the connection"
-                );
-                existing.prepareRtcTransportAttempt();
-                socket = existing;
-            } else if (existing != null && existing.isRTCConnected()) {
-                logger.fine("Socket already exists for peer: " + remotePeer + ", ignoring offer");
-                return;
-            } else if (existing != null && !existing.isClosed()) {
-                socket = existing;
-                socket.prepareRtcTransportAttempt();
-            }
+    /**
+     * Replace the local physical-neighbor preference and reevaluate known peers.
+     * Null disables preference-driven swaps. Zero is admitted; a negative value
+     * retires physical resources while preserving the logical endpoint and routing
+     * metadata. Invalid results retain the peer's last valid evaluation.
+     */
+    public void setDiscoveryPriority(DiscoveryPriority priority) {
+        physicalConnections.setPriority(priority);
+        scheduleTopologyRefresh();
+    }
 
-            logger.fine("Connecting to peer: " + remotePeer);
+    /**
+     * Bounded read-only snapshot of physical reservations, retry state and attested routing topology.
+     */
+    public RTCConnectionDiagnostics getConnectionDiagnostics() {
+        return physicalConnections.snapshot(routingGraph, topologyEvaluatedAt, topologyControl.getSnapshots(Instant.now()));
+    }
+
+    private boolean isAttemptCurrent(Attempt a) {
+        NostrRTCSocket socket = connections.get(a.peer);
+        return (
+            !closed &&
+            !isBannedPeer(a.peer.getPubkey()) &&
+            socket != null &&
+            !socket.isClosed() &&
+            physicalConnections.active(a)
+        );
+    }
+
+    private void cleanupPhysicalConnections() {
+        for (Attempt a : physicalConnections.takeClosures()) {
+            NostrRTCSocket socket = connections.get(a.peer);
+            if (socket != null) socket.setPhysicalLinkEnabled(false);
+            physicalConnections.released(a);
+        }
+    }
+
+    private NostrRTCSocket preparePhysicalConnection(Attempt a) {
+        NostrRTCSocket socket = connections.get(a.peer);
+        if (socket == null || !isAttemptCurrent(a)) return null;
+        if (!socket.enablePhysicalAttempt(() -> isAttemptCurrent(a))) return null;
+        socket.createPhysicalChannel(InternalRoutingChannels.CONTROL, true, true, null, null);
+        ensureInternalProfileChannels(socket, RouteTransportProfile.RELIABLE_ORDERED);
+        ensureInternalProfileChannels(socket, RouteTransportProfile.UNRELIABLE_UNORDERED);
+        return socket;
+    }
+
+    private void beginPhysicalConnection(Attempt a) {
+        try {
+            NostrRTCSocket socket = preparePhysicalConnection(a);
             if (socket == null) {
-                socket = ensureLogicalSocket(remotePeer);
+                physicalConnections.fail(a, "socket-unavailable");
+                return;
             }
+            a.turnOnly = forceTURN.get();
+            if (a.turnOnly) activateAttemptTurn(a, socket); else createPhysicalOffer(a, socket);
+        } catch (Throwable error) {
+            physicalConnections.fail(a, "attempt-start-failed");
+        }
+        scheduleTopologyRefresh();
+    }
 
-            // send answer to remote peer
+    private void createPhysicalOffer(Attempt a, NostrRTCSocket socket) {
+        if (!isAttemptCurrent(a)) return;
+        try {
+            NostrRTCSocket.PreparedRtcAttempt nativeAttempt = socket.reserveRtcTransportAttempt(() -> isAttemptCurrent(a));
+            if (nativeAttempt == null) return;
+            nativeAttempt.cleanup();
             socket
-                .connect(offer)
-                .then(answer -> {
-                    try {
-                        logger.fine("Sending answer to remote peer: " + remotePeer);
-                        if (answer != null) {
-                            this.signaling.sendAnswer(answer.getSdp(), remotePeer.getPubkey());
-                        }
-                    } catch (Exception e) {
-                        logger.log(Level.WARNING, "Error sending answer", e);
+                .listen(nativeAttempt)
+                .then(offer -> {
+                    if (isAttemptCurrent(a)) {
+                        a.localDescription = offer;
+                        sendAttemptSignal(a, offer);
                     }
                     return null;
+                })
+                .catchException(error -> {
+                    physicalConnections.fail(a, "offer-failed");
+                    scheduleTopologyRefresh();
                 });
+        } catch (Throwable error) {
+            physicalConnections.fail(a, "offer-failed");
+            scheduleTopologyRefresh();
+        }
+    }
+
+    private void sendAttemptSignal(Attempt a, NostrRTCSignal signal) {
+        signaling
+            .sendBoundSignal(signal, a.peer.getPubkey(), () -> isAttemptCurrent(a))
+            .catchException(error -> {
+                physicalConnections.fail(a, "signaling-failed");
+                scheduleTopologyRefresh();
+            });
+    }
+
+    private void resendAttemptSignals(Attempt a) {
+        if (!isAttemptCurrent(a) || !physicalConnections.controlDue(a) || !physicalConnections.responseAllowed()) return;
+        if (a.localDescription != null) sendAttemptSignal(a, a.localDescription);
+        if (a.localRoute != null) sendAttemptSignal(a, a.localRoute);
+    }
+
+    private void activateAttemptTurn(Attempt a, NostrRTCSocket socket) {
+        socket.activatePhysicalTurnFallback();
+        a.localRoute =
+            new NostrRTCRouteSignal(
+                localPeer.getSigner(),
+                roomKeyPair,
+                localPeer,
+                Collections.emptyList(),
+                socket.resolveReceiveTurnUrl()
+            );
+        sendAttemptSignal(a, a.localRoute);
+    }
+
+    private void onReceiveOffer(NostrRTCOfferSignal offer) {
+        if (closed || isBannedPeer(offer.getPeer().getPubkey())) return;
+        NostrRTCSocket socket = connections.get(offer.getPeer());
+        if (socket == null) socket = ensureLogicalSocket(offer.getPeer());
+        if (socket == null) return;
+        refreshDirectNeighbors();
+        Attempt a = physicalConnections.attempt(socket.getRemotePeer());
+        if (a != null && a.phase == Phase.ESTABLISHED) {
+            // A peer still waiting for our route must not tear down working TURN.
+            if (!socket.isRTCConnected()) resendAttemptSignals(a);
+            return;
+        }
+        boolean yielded = false;
+        if (a != null && a.outgoing) {
+            // Either endpoint can initiate. Only simultaneous offers use the public-key tie-break.
+            if (shouldOfferConnection(offer.getPeer().getPubkey()) || a.answerReceived) return;
+            a = physicalConnections.yieldToOffer(a);
+            if (a == null) return;
+            yielded = true;
+        }
+        if (a == null) a = physicalConnections.admit(socket.getRemotePeer());
+        if (a == null || !isAttemptCurrent(a)) return;
+        if (!physicalConnections.claimDescription(a, true)) {
+            if (offer.getOfferString().equals(a.remoteDescription)) resendAttemptSignals(a);
+            return;
+        }
+        a.remoteDescription = offer.getOfferString();
+        a.turnOnly = forceTURN.get();
+        final Attempt current = a;
+        try {
+            NostrRTCSocket.PreparedRtcAttempt nativeAttempt = null;
+            if (yielded) {
+                nativeAttempt = socket.reserveRtcTransportAttempt(() -> isAttemptCurrent(current));
+                if (nativeAttempt == null) return;
+                nativeAttempt.cleanup();
+            }
+            if (preparePhysicalConnection(current) == null) return;
+            if (current.turnOnly) {
+                activateAttemptTurn(current, socket);
+                return;
+            }
+            if (nativeAttempt == null) {
+                nativeAttempt = socket.reserveRtcTransportAttempt(() -> isAttemptCurrent(current), false);
+                if (nativeAttempt == null) {
+                    physicalConnections.fail(current, "native-attempt-unavailable");
+                    scheduleTopologyRefresh();
+                    return;
+                }
+                nativeAttempt.cleanup();
+            }
+            socket
+                .connect(offer, nativeAttempt)
+                .then(answer -> {
+                    if (answer != null && isAttemptCurrent(current)) {
+                        current.localDescription = answer;
+                        sendAttemptSignal(current, answer);
+                    }
+                    return null;
+                })
+                .catchException(error -> {
+                    physicalConnections.fail(current, "answer-failed");
+                    scheduleTopologyRefresh();
+                });
+        } catch (Throwable error) {
+            physicalConnections.fail(current, "inbound-offer-failed");
+            scheduleTopologyRefresh();
         }
     }
 
     private void onReceiveAnswer(NostrRTCAnswerSignal answer) {
-        synchronized (this) {
-            // answer received from remote peer
-            NostrRTCPeer remotePeer = answer.getPeer();
-
-            NostrRTCSocket socket = connections.get(remotePeer);
-            if (
-                socket != null &&
-                socket.isPhysicalLinkEnabled() &&
-                socket.isPendingConnection() &&
-                shouldOfferConnection(remotePeer.getPubkey())
-            ) {
-                logger.fine("Received answer, finalizing connection to peer: " + remotePeer);
-                // complete the connection
-                socket
-                    .connect(answer)
-                    .then(ignored -> {
-                        logger.fine("Connected to peer: " + remotePeer);
-                        // connection completed
-                        return null;
-                    });
-            } else {
-                // if there is no pending connection, just ignore it
-                logger.fine("No pending connection for peer: " + remotePeer);
-            }
+        refreshDirectNeighbors();
+        Attempt a = physicalConnections.attempt(answer.getPeer());
+        if (a == null || !isAttemptCurrent(a) || !a.outgoing || a.turnOnly) return;
+        NostrRTCSocket socket = connections.get(a.peer);
+        if (socket.isRTCConnected() || !physicalConnections.claimDescription(a, false)) return;
+        try {
+            socket
+                .connect(answer, () -> isAttemptCurrent(a))
+                .catchException(error -> {
+                    physicalConnections.fail(a, "connect-failed");
+                    scheduleTopologyRefresh();
+                });
+        } catch (Throwable error) {
+            physicalConnections.fail(a, "connect-failed");
+            scheduleTopologyRefresh();
         }
     }
 
     private void onReceiveCandidates(NostrRTCRouteSignal candidate) {
-        logger.fine("Received ICE candidate: " + candidate);
-        NostrRTCPeer remotePeer = candidate.getPeer();
-
-        if (isBannedPeer(remotePeer.getPubkey())) {
-            logger.fine("Ignoring ICE candidate from banned peer: " + remotePeer);
-            return;
+        if (closed || isBannedPeer(candidate.getPeer().getPubkey())) return;
+        NostrRTCSocket socket = connections.get(candidate.getPeer());
+        if (socket == null) socket = ensureLogicalSocket(candidate.getPeer());
+        if (socket == null) return;
+        refreshDirectNeighbors();
+        Attempt a = physicalConnections.attempt(candidate.getPeer());
+        if (a == null) {
+            if (candidate.getTurnServer() == null) return;
+            a = physicalConnections.admit(socket.getRemotePeer());
+            if (a == null || preparePhysicalConnection(a) == null) return;
+            a.turnOnly = forceTURN.get();
+            if (a.turnOnly) activateAttemptTurn(a, socket);
         }
-
-        // receive remote candidate, add it to the socket
-        NostrRTCSocket socket = connections.get(remotePeer);
-        if (socket != null && socket.isPhysicalLinkEnabled()) {
-            socket.mergeRemoteRTCIceCandidate(candidate);
-        } else {
-            logger.fine("No socket found for peer: " + remotePeer);
-        }
+        if (!isAttemptCurrent(a)) return;
+        if (candidate.getTurnServer() != null) a.peerRouteReceived = true;
+        final Attempt current = a;
+        socket.mergeRemoteRTCIceCandidate(candidate, () -> isAttemptCurrent(current));
+        scheduleTopologyRefresh();
     }
 
     private void onRTCSocketLocalIceCandidate(
         NostrRTCSocket socket,
         Collection<RTCTransportIceCandidate> candidates,
-        String turn
+        String turn,
+        long transportGeneration
     ) {
+        Attempt a = physicalConnections.attempt(socket.getRemotePeer());
+        if (a == null || !isAttemptCurrent(a) || socket.getRtcTransportGeneration() != transportGeneration) return;
         try {
-            NostrRTCPeer remotePeer = socket.getRemotePeer();
-            if (remotePeer == null) return;
-            NostrPublicKey pubkey = remotePeer.getPubkey();
-            if (pubkey == null) return;
-            // receive local candidate, send it to the remote peer
-            this.signaling.sendRoutes(candidates, turn, pubkey);
-        } catch (Exception e) {
-            logger.log(Level.WARNING, "Error sending local ICE candidate", e);
+            NostrRTCRouteSignal signal = new NostrRTCRouteSignal(
+                localPeer.getSigner(),
+                roomKeyPair,
+                localPeer,
+                candidates,
+                turn
+            );
+            a.localRoute = signal;
+            signaling
+                .sendBoundSignal(
+                    signal,
+                    a.peer.getPubkey(),
+                    () -> isAttemptCurrent(a) && socket.getRtcTransportGeneration() == transportGeneration
+                )
+                .catchException(error -> {
+                    if (
+                        isAttemptCurrent(a) && socket.getRtcTransportGeneration() == transportGeneration
+                    ) physicalConnections.fail(a, "candidate-send-failed");
+                    scheduleTopologyRefresh();
+                });
+        } catch (Throwable error) {
+            physicalConnections.fail(a, "candidate-send-failed");
+            scheduleTopologyRefresh();
         }
+    }
+
+    private void advancePhysicalConnections() {
+        for (Attempt a : physicalConnections.pending()) {
+            if (!isAttemptCurrent(a)) continue;
+            NostrRTCSocket socket = connections.get(a.peer);
+            // Route-only TURN setup uses the existing transport timeout, without allocating ICE.
+            if (
+                a.localRoute == null &&
+                socket.hasCompleteTurnConfiguration() &&
+                System.nanoTime() / 1_000_000L - a.startedAt >= settings.getP2pAttemptTimeout().toMillis()
+            ) activateAttemptTurn(a, socket);
+            if (!physicalConnections.commit(a)) resendAttemptSignals(a);
+        }
+        cleanupPhysicalConnections();
     }
 
     /**
@@ -1309,6 +1550,7 @@ public final class NostrRTCRoom implements Closeable {
     }
 
     public AsyncTask<Void> send(String channel, NostrRTCPeer peer, ByteBuffer bbf) {
+        if (closed) throw new IllegalStateException("Room is closed");
         requireApplicationChannelName(channel);
         NostrRTCSocket socket = connections.get(peer);
         if (socket == null) {
@@ -1321,10 +1563,7 @@ public final class NostrRTCRoom implements Closeable {
                 "No channel named " + channel + " found for peer: " + peer + " use createChannel method to create it first"
             );
         }
-        BlockingPacketQueue<NostrRTCChannel.PreparedPacket> q = pendingSends.computeIfAbsent(
-            chan,
-            ignored -> newPendingSendQueue(chan)
-        );
+        BlockingPacketQueue<NostrRTCChannel.PreparedPacket> q = pendingSendQueue(chan);
         return NGEUtils
             .getPlatform()
             .wrapPromise((rs, rj) -> {
@@ -1334,6 +1573,7 @@ public final class NostrRTCRoom implements Closeable {
     }
 
     public AsyncTask<Void> send(NostrRTCChannel chan, ByteBuffer bbf) {
+        if (closed) throw new IllegalStateException("Room is closed");
         requireApplicationChannelName(chan.getName());
         NostrRTCPeer peer = chan.getSocket().getRemotePeer();
         NostrRTCSocket socket = connections.get(peer);
@@ -1341,10 +1581,7 @@ public final class NostrRTCRoom implements Closeable {
             logger.warning("No socket found for peer: " + peer);
             throw new IllegalStateException("No socket found for peer: " + peer);
         }
-        BlockingPacketQueue<NostrRTCChannel.PreparedPacket> q = pendingSends.computeIfAbsent(
-            chan,
-            ignored -> newPendingSendQueue(chan)
-        );
+        BlockingPacketQueue<NostrRTCChannel.PreparedPacket> q = pendingSendQueue(chan);
         return NGEUtils
             .getPlatform()
             .wrapPromise((rs, rj) -> {
@@ -1365,10 +1602,13 @@ public final class NostrRTCRoom implements Closeable {
     // }
 
     public NostrRTCChannel createChannel(NostrRTCPeer peer, String channel) {
+        if (closed) throw new IllegalStateException("Room is closed");
         requireApplicationChannelName(channel);
         NostrRTCSocket socket = connections.get(peer);
         if (socket != null) {
-            return socket.createChannel(channel);
+            NostrRTCChannel created = socket.createLogicalChannelIfOpen(channel, true, true, null, null);
+            if (created == null) throw new IllegalStateException("Socket is closed");
+            return created;
         } else {
             logger.warning("No socket found for peer: " + peer);
             throw new IllegalStateException("No socket found for peer: " + peer);
@@ -1388,9 +1628,17 @@ public final class NostrRTCRoom implements Closeable {
         @Nullable Duration maxPacketLifeTime
     ) {
         requireApplicationChannelName(channel);
+        if (closed) throw new IllegalStateException("Room is closed");
         NostrRTCSocket socket = connections.get(peer);
         if (socket != null) {
-            NostrRTCChannel created = socket.createChannel(channel, ordered, reliable, maxRetransmits, maxPacketLifeTime);
+            NostrRTCChannel created = socket.createLogicalChannelIfOpen(
+                channel,
+                ordered,
+                reliable,
+                maxRetransmits,
+                maxPacketLifeTime
+            );
+            if (created == null) throw new IllegalStateException("Socket is closed");
             RouteTransportProfile profile = new RouteTransportProfile(
                 ordered,
                 reliable,
@@ -1424,6 +1672,7 @@ public final class NostrRTCRoom implements Closeable {
     }
 
     public AsyncTask<Void> broadcast(String channel, ByteBuffer bbf) {
+        if (closed) return AsyncTask.failed(new IllegalStateException("Room is closed"));
         requireApplicationChannelName(channel);
         if (connections.isEmpty()) return AsyncTask.completed(null);
         TopologyGraph graph = routingGraph;

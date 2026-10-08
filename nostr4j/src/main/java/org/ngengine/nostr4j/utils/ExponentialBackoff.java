@@ -61,7 +61,7 @@ public final class ExponentialBackoff {
         if (maxDelay.compareTo(initialDelay) < 0) {
             throw new IllegalArgumentException("Max delay must be >= initial delay");
         }
-        if (multiplier <= 1.0f) {
+        if (!Float.isFinite(multiplier) || multiplier <= 1.0f) {
             throw new IllegalArgumentException("Multiplier must be > 1.0");
         }
         if (cooldown.isZero() || cooldown.isNegative()) {
@@ -104,6 +104,21 @@ public final class ExponentialBackoff {
     public synchronized void registerAttempt(Instant now) {
         cooldownStartAt = null;
         nextAttemptAt = now.plus(currentDelay);
+        currentDelay = minDuration(multiply(currentDelay, multiplier), maxDelay);
+    }
+
+    /**
+     * Schedule from a terminal failure, with bounded jitter. The random sample
+     * must be in [0, 1]. Neither jitter nor growth can exceed the configured cap.
+     */
+    public synchronized void registerAttempt(Instant now, float jitter, double sample) {
+        if (!Float.isFinite(jitter) || jitter < 0f || jitter > 0.5f || !Double.isFinite(sample) || sample < 0d || sample > 1d) {
+            throw new IllegalArgumentException("Invalid backoff jitter or sample");
+        }
+        getDelay(now);
+        cooldownStartAt = null;
+        Duration delay = Duration.ofNanos(Math.round(currentDelay.toNanos() * (1d + jitter * (2d * sample - 1d))));
+        nextAttemptAt = now.plus(minDuration(delay, maxDelay));
         currentDelay = minDuration(multiply(currentDelay, multiplier), maxDelay);
     }
 

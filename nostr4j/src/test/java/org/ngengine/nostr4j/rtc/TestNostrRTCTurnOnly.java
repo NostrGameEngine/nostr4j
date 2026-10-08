@@ -75,14 +75,20 @@ public class TestNostrRTCTurnOnly {
         try {
             NostrKeyPair roomKeyPair = new NostrKeyPair();
             NostrRTCLocalPeer localA = new NostrRTCLocalPeer(
-                RTCSettings.getDefault(APPLICATION_ID, PROTOCOL_ID).withSignalingRelays(java.util.List.of()).withStunServers(Collections.emptyList()),
+                RTCSettings
+                    .getDefault(APPLICATION_ID, PROTOCOL_ID)
+                    .withSignalingRelays(java.util.List.of())
+                    .withStunServers(Collections.emptyList()),
                 NostrKeyPairSigner.generate(),
                 "ready-peer-a",
                 roomKeyPair,
                 turnUrl
             );
             NostrRTCLocalPeer localB = new NostrRTCLocalPeer(
-                RTCSettings.getDefault(APPLICATION_ID, PROTOCOL_ID).withSignalingRelays(java.util.List.of()).withStunServers(Collections.emptyList()),
+                RTCSettings
+                    .getDefault(APPLICATION_ID, PROTOCOL_ID)
+                    .withSignalingRelays(java.util.List.of())
+                    .withStunServers(Collections.emptyList()),
                 NostrKeyPairSigner.generate(),
                 "ready-peer-b",
                 roomKeyPair,
@@ -168,14 +174,20 @@ public class TestNostrRTCTurnOnly {
         try {
             NostrKeyPair roomKeyPair = new NostrKeyPair();
             NostrRTCLocalPeer localA = new NostrRTCLocalPeer(
-                RTCSettings.getDefault(APPLICATION_ID, PROTOCOL_ID).withSignalingRelays(java.util.List.of()).withStunServers(Collections.emptyList()),
+                RTCSettings
+                    .getDefault(APPLICATION_ID, PROTOCOL_ID)
+                    .withSignalingRelays(java.util.List.of())
+                    .withStunServers(Collections.emptyList()),
                 NostrKeyPairSigner.generate(),
                 "peer-a",
                 roomKeyPair,
                 turnUrl
             );
             NostrRTCLocalPeer localB = new NostrRTCLocalPeer(
-                RTCSettings.getDefault(APPLICATION_ID, PROTOCOL_ID).withSignalingRelays(java.util.List.of()).withStunServers(Collections.emptyList()),
+                RTCSettings
+                    .getDefault(APPLICATION_ID, PROTOCOL_ID)
+                    .withSignalingRelays(java.util.List.of())
+                    .withStunServers(Collections.emptyList()),
                 NostrKeyPairSigner.generate(),
                 "peer-b",
                 roomKeyPair,
@@ -259,14 +271,20 @@ public class TestNostrRTCTurnOnly {
         try {
             NostrKeyPair roomKeyPair = new NostrKeyPair();
             NostrRTCLocalPeer localA = new NostrRTCLocalPeer(
-                RTCSettings.getDefault(APPLICATION_ID, PROTOCOL_ID).withSignalingRelays(java.util.List.of()).withStunServers(Collections.emptyList()),
+                RTCSettings
+                    .getDefault(APPLICATION_ID, PROTOCOL_ID)
+                    .withSignalingRelays(java.util.List.of())
+                    .withStunServers(Collections.emptyList()),
                 NostrKeyPairSigner.generate(),
                 "queue-peer-a",
                 roomKeyPair,
                 turnUrl
             );
             NostrRTCLocalPeer localB = new NostrRTCLocalPeer(
-                RTCSettings.getDefault(APPLICATION_ID, PROTOCOL_ID).withSignalingRelays(java.util.List.of()).withStunServers(Collections.emptyList()),
+                RTCSettings
+                    .getDefault(APPLICATION_ID, PROTOCOL_ID)
+                    .withSignalingRelays(java.util.List.of())
+                    .withStunServers(Collections.emptyList()),
                 NostrKeyPairSigner.generate(),
                 "queue-peer-b",
                 roomKeyPair,
@@ -350,22 +368,42 @@ public class TestNostrRTCTurnOnly {
         try {
             NostrKeyPair roomKeyPair = new NostrKeyPair();
             NostrRTCLocalPeer localA = new NostrRTCLocalPeer(
-                RTCSettings.getDefault(APPLICATION_ID, PROTOCOL_ID).withSignalingRelays(java.util.List.of()).withStunServers(Collections.emptyList()),
+                RTCSettings
+                    .getDefault(APPLICATION_ID, PROTOCOL_ID)
+                    .withSignalingRelays(java.util.List.of())
+                    .withStunServers(Collections.emptyList()),
                 NostrKeyPairSigner.generate(),
                 "room-peer-a",
                 roomKeyPair,
                 turnUrl
             );
             NostrRTCLocalPeer localB = new NostrRTCLocalPeer(
-                RTCSettings.getDefault(APPLICATION_ID, PROTOCOL_ID).withSignalingRelays(java.util.List.of()).withStunServers(Collections.emptyList()),
+                RTCSettings
+                    .getDefault(APPLICATION_ID, PROTOCOL_ID)
+                    .withSignalingRelays(java.util.List.of())
+                    .withStunServers(Collections.emptyList()),
                 NostrKeyPairSigner.generate(),
                 "room-peer-b",
                 roomKeyPair,
                 turnUrl
             );
 
-            roomA = new NostrRTCRoom(RTCSettings.getDefault(APPLICATION_ID, PROTOCOL_ID).withSignalingRelays(java.util.List.of()), localA, roomKeyPair, new NostrPool(), turnPoolA);
-            roomB = new NostrRTCRoom(RTCSettings.getDefault(APPLICATION_ID, PROTOCOL_ID).withSignalingRelays(java.util.List.of()), localB, roomKeyPair, new NostrPool(), turnPoolB);
+            roomA =
+                new NostrRTCRoom(
+                    RTCSettings.getDefault(APPLICATION_ID, PROTOCOL_ID).withSignalingRelays(java.util.List.of()),
+                    localA,
+                    roomKeyPair,
+                    new NostrPool(),
+                    turnPoolA
+                );
+            roomB =
+                new NostrRTCRoom(
+                    RTCSettings.getDefault(APPLICATION_ID, PROTOCOL_ID).withSignalingRelays(java.util.List.of()),
+                    localB,
+                    roomKeyPair,
+                    new NostrPool(),
+                    turnPoolB
+                );
             roomA.setForceTURN(true);
             roomB.setForceTURN(true);
 
@@ -417,7 +455,11 @@ public class TestNostrRTCTurnOnly {
     private static NostrRTCSocket invokeNewSocket(NostrRTCRoom room, NostrRTCPeer peer) throws Exception {
         java.lang.reflect.Method method = NostrRTCRoom.class.getDeclaredMethod("newSocket", NostrRTCPeer.class);
         method.setAccessible(true);
-        return (NostrRTCSocket) method.invoke(room, peer);
+        NostrRTCSocket socket = (NostrRTCSocket) method.invoke(room, peer);
+        // This fixture bypasses discovery and admission to test room-level TURN inheritance.
+        socket.setPhysicalLinkEnabled(true);
+        socket.setPhysicalLinkCommitted(true);
+        return socket;
     }
 
     private static NostrRTCPeer asRemotePeer(NostrRTCLocalPeer local, NostrKeyPair roomKeyPair) {

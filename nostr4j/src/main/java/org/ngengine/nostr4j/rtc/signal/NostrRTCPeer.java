@@ -114,7 +114,9 @@ public class NostrRTCPeer {
         }
     }
 
-    /** Merges version metadata obtained from a verified presence announcement. */
+    /**
+     * Merges version metadata obtained from a verified presence announcement.
+     */
     public void mergeAuthenticatedAnnouncement(NostrRTCPeer other) {
         merge(other);
         this.nipDcVersion = other.nipDcVersion;

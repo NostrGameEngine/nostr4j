@@ -50,7 +50,9 @@ public final class NostrRTCConnectSignal extends NostrRTCSignal {
     public static final int ROUTING_HASH_VERSION = NostrRTCProtocolVersion.ROUTING_HASH_VERSION;
     public static final int MIN_SUPPORTED_NIP_DC_VERSION = NostrRTCProtocolVersion.MIN_SUPPORTED_NIP_DC_VERSION;
 
-    /** @deprecated Use {@link #CURRENT_NIP_DC_VERSION}. */
+    /**
+     * @deprecated Use {@link #CURRENT_NIP_DC_VERSION}.
+     */
     @Deprecated
     public static final String PROTOCOL_VERSION = "dc" + CURRENT_NIP_DC_VERSION;
 
