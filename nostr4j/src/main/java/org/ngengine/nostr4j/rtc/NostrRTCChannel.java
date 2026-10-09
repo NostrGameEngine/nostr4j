@@ -80,6 +80,8 @@ public final class NostrRTCChannel {
 
     private volatile NostrTURNChannel turnReceive;
     private volatile NostrTURNChannel turnSend;
+    private volatile NostrTURNChannel confirmedTurnSend;
+    private volatile long confirmedTurnGeneration = Long.MIN_VALUE;
     // private volatile boolean turnBootstrapInProgress = false;
     private volatile boolean resurrecting = false;
     private final AtomicLong nextPacketId = new AtomicLong(1L);
@@ -207,7 +209,9 @@ public final class NostrRTCChannel {
         return channel == expected;
     }
 
-    /** State-only part, called under the owning socket monitor. */
+    /**
+     * State-only part, called under the owning socket monitor.
+     */
     void updateNativeChannelState(RTCDataChannel chan) {
         boolean replaced = this.channel != chan;
         this.channel = chan;
@@ -215,7 +219,9 @@ public final class NostrRTCChannel {
         this.resurrecting = false;
     }
 
-    /** Native/application calls run after releasing the owning socket monitor. */
+    /**
+     * Native/application calls run after releasing the owning socket monitor.
+     */
     void finishNativeChannelChange(RTCDataChannel chan, BooleanSupplier ownerActive) {
         // TURN/native connectivity checks can call provider code, so obtain this snapshot outside the socket monitor.
         boolean turnReady = isTurnReady();
@@ -309,7 +315,9 @@ public final class NostrRTCChannel {
         return chain;
     }
 
-    /** Returns the maximum application bytes carried by one Payload Envelope fragment. */
+    /**
+     * Returns the maximum application bytes carried by one Payload Envelope fragment.
+     */
     public int getMaxFragmentSize() {
         return MAX_APPLICATION_FRAGMENT_SIZE;
     }
@@ -374,7 +382,28 @@ public final class NostrRTCChannel {
         }
         NostrTURNChannel currentTurnSend = this.turnSend;
         if (currentTurnSend != null) {
-            return currentTurnSend.write(payload);
+            long generation = getWriteGeneration();
+            long turnGeneration = currentTurnSend.getConnectionGeneration();
+            return currentTurnSend
+                .write(payload)
+                .then(delivered -> {
+                    // Reliable TURN completion requires the existing authenticated peer receipt.
+                    synchronized (socket) {
+                        if (
+                            Boolean.TRUE.equals(delivered) &&
+                            reliable &&
+                            turnSend == currentTurnSend &&
+                            generation == getWriteGeneration() &&
+                            !closed &&
+                            socket.isPhysicalLinkEnabled() &&
+                            currentTurnSend.getConnectionGeneration() == turnGeneration
+                        ) {
+                            confirmedTurnGeneration = turnGeneration;
+                            confirmedTurnSend = currentTurnSend;
+                        }
+                    }
+                    return delivered;
+                });
         }
         return AsyncTask.completed(Boolean.FALSE);
     }
@@ -535,6 +564,18 @@ public final class NostrRTCChannel {
         NostrTURNChannel send = turnSend;
         NostrTURNChannel receive = turnReceive;
         return send != null && receive != null && send.isReady() && receive.isReady();
+    }
+
+    /**
+     * Replacing a healthy link requires RTC readiness or a confirmed delivery to the TURN peer.
+     */
+    boolean isReplacementReady() {
+        if (!isPhysicalReady()) return false;
+        NostrTURNChannel send = turnSend;
+        return (
+            (!socket.isForceTURN() && socket.isRTCConnected() && channel != null) ||
+            (send != null && confirmedTurnSend == send && confirmedTurnGeneration == send.getConnectionGeneration())
+        );
     }
 
     public boolean isClosed() {
@@ -756,7 +797,9 @@ public final class NostrRTCChannel {
         cleanup.run();
     }
 
-    /** State-only detach under the socket monitor; the returned action closes captured handles only. */
+    /**
+     * State-only detach under the socket monitor; the returned action closes captured handles only.
+     */
     Runnable detachPhysicalTransports() {
         RTCDataChannel previousChannel = channel;
         updateNativeChannelState(null);
@@ -788,12 +831,16 @@ public final class NostrRTCChannel {
         cleanup.run();
     }
 
-    /** Caller holds the socket monitor. No provider or application code runs here. */
+    /**
+     * Caller holds the socket monitor. No provider or application code runs here.
+     */
     private Runnable detachTurn() {
         NostrTURNChannel receive = turnReceive;
         NostrTURNChannel send = turnSend;
         turnReceive = null;
         turnSend = null;
+        confirmedTurnSend = null;
+        confirmedTurnGeneration = Long.MIN_VALUE;
         return () -> {
             if (receive != null) receive.close("rtc-p2p-established");
             if (send != null && send != receive) send.close("rtc-p2p-established");

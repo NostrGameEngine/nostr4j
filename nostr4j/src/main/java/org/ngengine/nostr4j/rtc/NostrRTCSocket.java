@@ -369,7 +369,9 @@ public final class NostrRTCSocket {
 
     private final NostrRTCListener rtcListener = new NostrRTCListener(this);
 
-    /** Native callbacks can already be queued when an obsolete transport is closed. */
+    /**
+     * Native callbacks can already be queued when an obsolete transport is closed.
+     */
     private final class BoundRTCListener implements RTCTransportListener {
 
         private final RTCTransport owner;
@@ -742,11 +744,11 @@ public final class NostrRTCSocket {
     }
 
     void activatePhysicalTurnFallback() {
-        ensureTurnForDownChannels("link-admission-turn");
+        ensureTurnForDownChannels("physical-turn-fallback");
     }
 
     boolean canUsePhysicalChannel(String name) {
-        return physicalLinkEnabled && (physicalLinkCommitted || InternalRoutingChannels.LINK_ADMISSION.equals(name));
+        return physicalLinkEnabled && (physicalLinkCommitted || !InternalRoutingChannels.isReserved(name));
     }
 
     void setPhysicalLinkCommitted(boolean committed) {
@@ -778,6 +780,13 @@ public final class NostrRTCSocket {
     boolean hasBidirectionalPhysicalTransport() {
         for (NostrRTCChannel channel : channels.values()) {
             if (channel.isPhysicalReady()) return true;
+        }
+        return false;
+    }
+
+    boolean hasProvenPhysicalTransport() {
+        for (NostrRTCChannel channel : channels.values()) {
+            if (channel.isReplacementReady()) return true;
         }
         return false;
     }

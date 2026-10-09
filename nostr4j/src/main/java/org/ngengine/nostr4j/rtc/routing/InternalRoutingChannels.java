@@ -11,7 +11,6 @@ public final class InternalRoutingChannels {
 
     public static final String RESERVED_PREFIX = "__nipdc_dc4_route/";
     public static final String CONTROL = RESERVED_PREFIX + "control";
-    public static final String LINK_ADMISSION = RESERVED_PREFIX + "link-admission-v1";
     public static final String BROADCAST_PREFIX = RESERVED_PREFIX + "broadcast/";
 
     public static boolean isReserved(String label) {
@@ -40,7 +39,7 @@ public final class InternalRoutingChannels {
     }
 
     public static RouteTransportProfile profile(String label) {
-        if (CONTROL.equals(label) || LINK_ADMISSION.equals(label)) return RouteTransportProfile.RELIABLE_ORDERED;
+        if (CONTROL.equals(label)) return RouteTransportProfile.RELIABLE_ORDERED;
         if (label == null || !isReserved(label)) return null;
         String encoded;
         if (label.startsWith(BROADCAST_PREFIX)) {

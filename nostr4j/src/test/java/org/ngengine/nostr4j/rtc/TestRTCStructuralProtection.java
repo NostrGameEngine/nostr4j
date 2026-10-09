@@ -58,13 +58,21 @@ public class TestRTCStructuralProtection {
             Instant now = Instant.now();
             manager.update(scope, membership, 16, actual, now);
             OverlayPlan plan = manager.update(scope, membership, 16, actual, now.plusSeconds(6));
-            int repairs = 0;
+            List<DesiredDirectEdge> repairs = new PartitionRepairPlanner().plan(scope, actual);
+            assertTrue(repairs.size() >= 2);
+            for (DesiredDirectEdge repair : repairs) {
+                assertTrue(
+                    "Every repair must remain mandatory, including an existing backbone edge",
+                    plan
+                        .getEdges()
+                        .stream()
+                        .anyMatch(candidate -> candidate.equals(repair) && candidate.getPriority() != OverlayEdgePriority.CHORD)
+                );
+            }
             for (DesiredDirectEdge candidate : plan.getEdges()) {
-                if (candidate.getPriority() != OverlayEdgePriority.REPAIR) continue;
-                repairs++;
+                if (candidate.getPriority() == OverlayEdgePriority.CHORD) continue;
                 edges.add(edge(scope, candidate.getFirst(), candidate.getSecond()));
             }
-            assertTrue(repairs >= 2);
             for (NodeId member : membership) assertTrue(plan.degree(member) <= 16);
             assertEquals(
                 "Planned repairs can reconnect all components",

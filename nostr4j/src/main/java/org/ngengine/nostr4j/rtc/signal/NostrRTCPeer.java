@@ -55,7 +55,6 @@ public class NostrRTCPeer {
     private final NostrPublicKey roomPubkey;
     private String turnServer;
     private volatile int nipDcVersion;
-    private volatile boolean linkAdmission;
 
     /**
      * Creates a new peer with the given information.
@@ -115,11 +114,12 @@ public class NostrRTCPeer {
         }
     }
 
-    /** Merges version metadata obtained from a verified presence announcement. */
+    /**
+     * Merges version metadata obtained from a verified presence announcement.
+     */
     public void mergeAuthenticatedAnnouncement(NostrRTCPeer other) {
         merge(other);
         this.nipDcVersion = other.nipDcVersion;
-        this.linkAdmission = other.linkAdmission;
     }
 
     public void setTurnServer(String turnServer) {
@@ -153,17 +153,6 @@ public class NostrRTCPeer {
 
     public int getNipDcVersion() {
         return nipDcVersion;
-    }
-
-    /**
-     * True only when the remote authenticated presence advertised link-admission v1.
-     */
-    public boolean supportsLinkAdmission() {
-        return linkAdmission;
-    }
-
-    void setLinkAdmission(boolean supported) {
-        this.linkAdmission = supported;
     }
 
     public void setNipDcVersion(int nipDcVersion) {

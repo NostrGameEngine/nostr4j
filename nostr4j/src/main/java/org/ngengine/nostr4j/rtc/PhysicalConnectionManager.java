@@ -21,7 +21,6 @@ import org.ngengine.nostr4j.RTCSettings;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCPeer;
 import org.ngengine.nostr4j.utils.ExponentialBackoff;
-import org.ngengine.platform.NGEPlatform;
 import org.ngengine.platform.NGEUtils;
 
 /**
@@ -42,56 +41,45 @@ final class PhysicalConnectionManager {
     }
 
     enum Phase {
-        REQUESTED,
-        ACCEPTED,
-        READY,
-        COMMIT_SENT,
-        COMMIT_ACKED,
+        CONNECTING,
         ESTABLISHED,
     }
 
     static final class Attempt {
 
         final NostrRTCPeer peer;
-        final String id;
         final long generation;
         final boolean outgoing;
-        final boolean admission;
         final boolean probe;
         final NostrRTCPeer victim;
         Attempt victimAttempt;
         final long startedAt;
-        final String challenge = NGEUtils.bytesToHex(NGEPlatform.get().randomBytes(8));
-        volatile String remoteChallenge;
-        volatile Phase phase;
+        volatile Phase phase = Phase.CONNECTING;
         volatile boolean turnOnly;
+        volatile boolean peerRouteReceived;
         boolean offerReceived;
         boolean answerReceived;
-        volatile boolean remoteReady;
-        volatile boolean localReady;
+        volatile String remoteDescription;
+        volatile org.ngengine.nostr4j.rtc.signal.NostrRTCSignal localDescription;
+        volatile org.ngengine.nostr4j.rtc.signal.NostrRTCRouteSignal localRoute;
         long lastControlAt = Long.MIN_VALUE;
 
         Attempt(
             NostrRTCPeer peer,
-            String id,
             long generation,
             boolean outgoing,
-            boolean admission,
             boolean probe,
             NostrRTCPeer victim,
             Attempt victimAttempt,
             long now
         ) {
             this.peer = peer;
-            this.id = id;
             this.generation = generation;
             this.outgoing = outgoing;
-            this.admission = admission;
             this.probe = probe;
             this.victim = victim;
             this.victimAttempt = victimAttempt;
             this.startedAt = now;
-            this.phase = outgoing ? Phase.REQUESTED : Phase.ACCEPTED;
         }
     }
 
@@ -104,6 +92,7 @@ final class PhysicalConnectionManager {
         boolean protectedLink;
         boolean present = true;
         boolean physicalReady;
+        boolean replacementReady;
         boolean routedReady;
         String transport = "NONE";
         State state = State.DISCOVERED;
@@ -132,12 +121,18 @@ final class PhysicalConnectionManager {
         final boolean routed;
         final String transport;
         final boolean fallbackAvailable;
+        final boolean replacementReady;
 
         LinkState(boolean ready, boolean routed, String transport) {
             this(ready, routed, transport, false);
         }
 
         LinkState(boolean ready, boolean routed, String transport, boolean fallbackAvailable) {
+            this(ready, routed, transport, fallbackAvailable, ready && "RTC".equals(transport));
+        }
+
+        LinkState(boolean ready, boolean routed, String transport, boolean fallbackAvailable, boolean replacementReady) {
+            this.replacementReady = replacementReady;
             this.ready = ready;
             this.routed = routed;
             this.transport = transport;
@@ -248,6 +243,7 @@ final class PhysicalConnectionManager {
             c.protectedLink = protectedPeers.contains(c.peer);
             LinkState link = links.get(c.peer);
             c.physicalReady = link != null && link.ready;
+            c.replacementReady = link != null && link.replacementReady;
             c.routedReady = link != null && link.routed;
             c.transport = link == null ? "NONE" : link.transport;
             Attempt a = c.attempt;
@@ -267,10 +263,6 @@ final class PhysicalConnectionManager {
                     c.degradedAt = Long.MIN_VALUE;
                     c.backoff.getDelay(instant(now));
                 }
-            } else if (!a.admission && c.physicalReady) {
-                establish(c, now);
-            } else if (a.admission && !c.peer.supportsLinkAdmission()) {
-                retire(c, "capability-changed", true);
             } else if (
                 now -
                 a.startedAt >=
@@ -296,37 +288,40 @@ final class PhysicalConnectionManager {
         for (Candidate c : eligible) {
             if (result.size() >= limit || pendingOrdinary() >= limit || !rateAvailable(now)) break;
             if (served.contains(c.peer)) continue;
-            // Legacy peers retain their deterministic offer initiator. Negotiated
-            // peers request admission regardless of which public key is smaller.
-            if (!c.peer.supportsLinkAdmission() && localKey.asHex().compareTo(c.peer.getPubkey().asHex()) >= 0) continue;
-            Attempt a = reserve(c, true, newAttemptId(), now);
+            Attempt a = reserve(c, true, now);
             served.add(c.peer);
             if (a != null) result.add(a);
         }
         return result;
     }
 
-    synchronized Attempt admit(NostrRTCPeer peer, String id, boolean admission) {
+    synchronized Attempt admit(NostrRTCPeer peer) {
         Candidate c = candidates.get(peer);
         long now = clock.getAsLong();
         if (closed || evaluatedEpoch != policyEpoch || c == null || !eligible(c) || !rateAvailable(now)) return null;
-        if (admission != peer.supportsLinkAdmission()) return null;
-        return reserve(c, false, id, now);
+        return reserve(c, false, now);
     }
 
-    synchronized boolean coolingDown(NostrRTCPeer peer) {
-        Candidate c = candidates.get(peer);
-        return c != null && (delay(c) > 0L || clock.getAsLong() < identityRetry.getOrDefault(peer.getPubkey(), Long.MIN_VALUE));
+    /**
+     * Transfer a simultaneous outgoing reservation to the winning offer without freeing its slot.
+     */
+    synchronized Attempt yieldToOffer(Attempt a) {
+        if (!active(a) || !a.outgoing || a.answerReceived || a.phase != Phase.CONNECTING) return null;
+        Candidate c = candidates.get(a.peer);
+        Attempt incoming = new Attempt(a.peer, ++c.generation, false, a.probe, a.victim, a.victimAttempt, a.startedAt);
+        c.attempt = incoming;
+        c.outcome = "offer-collision-yielded";
+        return incoming;
     }
 
-    private Attempt reserve(Candidate c, boolean outgoing, String id, long now) {
+    private Attempt reserve(Candidate c, boolean outgoing, long now) {
         if (resources() >= settings.getMaxDirectPeers() + 1) return null;
         int ordinary = ordinaryResources();
         Candidate victim = null;
         if (ordinary < settings.getMaxDirectPeers() && hasProbe()) return null;
         boolean probe = ordinary >= settings.getMaxDirectPeers();
         if (probe) {
-            if (!c.peer.supportsLinkAdmission() || hasProbe() || established() < settings.getMaxDirectPeers()) return null;
+            if (hasProbe() || established() < settings.getMaxDirectPeers()) return null;
             victim = victimFor(c, now);
             if (victim == null) return null;
         } else if (pendingOrdinary() >= Math.min(settings.getMaxConcurrentConnectionAttempts(), settings.getMaxDirectPeers())) {
@@ -334,10 +329,8 @@ final class PhysicalConnectionManager {
         }
         Attempt a = new Attempt(
             c.peer,
-            id,
             ++c.generation,
             outgoing,
-            c.peer.supportsLinkAdmission(),
             probe,
             victim == null ? null : victim.peer,
             victim == null ? null : victim.attempt,
@@ -379,70 +372,47 @@ final class PhysicalConnectionManager {
         return true;
     }
 
-    synchronized boolean accepted(Attempt a) {
-        if (!active(a) || a.phase != Phase.REQUESTED) return false;
-        a.phase = Phase.ACCEPTED;
-        return true;
-    }
-
-    synchronized boolean ready(Attempt a, boolean remote) {
-        if (!active(a) || a.phase == Phase.REQUESTED || a.phase == Phase.ESTABLISHED) return false;
-        if (remote) a.remoteReady = true; else a.localReady = true;
-        if (a.phase == Phase.ACCEPTED && a.localReady && a.remoteReady) a.phase = Phase.READY;
-        return true;
-    }
-
-    synchronized boolean prepareCommit(Attempt a) {
-        if (!active(a) || !a.localReady || !a.remoteReady || !commitAllowed(a)) return false;
-        a.phase = a.outgoing ? Phase.COMMIT_SENT : Phase.COMMIT_ACKED;
-        return true;
-    }
-
     synchronized boolean commit(Attempt a) {
-        if (!active(a) || !a.localReady || !a.remoteReady || !commitAllowed(a)) return false;
+        if (!active(a) || closed || evaluatedEpoch != policyEpoch) return false;
         Candidate c = candidates.get(a.peer);
+        if (c.priority == null || c.priority < 0f || !c.physicalReady) return false;
+        if (a.phase == Phase.ESTABLISHED) return true;
         if (ordinaryResourcesExcluding(a) >= settings.getMaxDirectPeers()) {
             Candidate victim = replacementVictim(a);
-            if (victim == null) return false;
+            if (victim == null) {
+                retire(c, "probe-obsolete", false);
+                return false;
+            }
+            if (!c.replacementReady && victim.physicalReady) return false;
             retire(victim, "swap-committed", false);
         }
         establish(c, clock.getAsLong());
         return true;
     }
 
-    private boolean commitAllowed(Attempt a) {
-        if (closed || evaluatedEpoch != policyEpoch) return false;
-        Candidate c = candidates.get(a.peer);
-        if (c == null || !c.present || c.priority == null || c.priority < 0f || !c.physicalReady) return false;
-        return ordinaryResourcesExcluding(a) < settings.getMaxDirectPeers() || replacementVictim(a) != null;
-    }
-
     private Candidate replacementVictim(Attempt a) {
         Candidate candidate = candidates.get(a.peer);
         Candidate captured = candidates.get(a.victim);
-        if (
-            captured != null &&
-            captured.attempt == a.victimAttempt &&
-            captured.state == State.ESTABLISHED &&
-            !captured.physicalReady &&
-            !captured.protectedLink &&
-            captured.priority != null &&
+        long now = clock.getAsLong();
+        if (captured == null || captured.attempt != a.victimAttempt || !replaceable(captured, candidate, now)) return null;
+        if (!captured.physicalReady) return captured;
+        Candidate best = victimFor(candidate, now);
+        // A newly eligible equal-priority neighbor must not invalidate a still-safe captured victim.
+        return best != null && captured.priority <= best.priority ? captured : null;
+    }
+
+    private boolean replaceable(Candidate victim, Candidate candidate, long now) {
+        return (
+            victim.state == State.ESTABLISHED &&
+            !victim.peer.equals(candidate.peer) &&
+            !victim.protectedLink &&
+            victim.priority != null &&
+            (candidate.role < 2 || now - victim.establishedAt >= settings.getConnectionMinimumLifetime().toMillis()) &&
             (
-                candidate.role < 2 ||
-                clock.getAsLong() - captured.establishedAt >= settings.getConnectionMinimumLifetime().toMillis()
-            ) &&
-            (
-                (candidate.role < 2 && candidate.role < captured.role) ||
-                (priority != null && candidate.priority != null && candidate.priority > captured.priority)
+                (candidate.role < 2 && candidate.role < victim.role) ||
+                (priority != null && candidate.priority != null && candidate.priority > victim.priority)
             )
-        ) {
-            // The reserved optional victim lost its usable transport while the
-            // new link was being proved. Retire that resource at commit rather
-            // than waiting for its recovery grace or evicting a different peer.
-            return captured;
-        }
-        Candidate victim = victimFor(candidate, clock.getAsLong());
-        return victim != null && victim.peer.equals(a.victim) && victim.attempt == a.victimAttempt ? victim : null;
+        );
     }
 
     private void establish(Candidate c, long now) {
@@ -459,16 +429,7 @@ final class PhysicalConnectionManager {
         return candidates
             .values()
             .stream()
-            .filter(v -> v.state == State.ESTABLISHED && v.physicalReady)
-            .filter(v -> !v.peer.equals(candidate.peer) && !v.protectedLink)
-            .filter(v -> (candidate.role < 2 || now - v.establishedAt >= settings.getConnectionMinimumLifetime().toMillis()))
-            .filter(v ->
-                v.priority != null &&
-                (
-                    (candidate.role < 2 && candidate.role < v.role) ||
-                    (priority != null && candidate.priority != null && candidate.priority > v.priority)
-                )
-            )
+            .filter(v -> v.physicalReady && replaceable(v, candidate, now))
             .min(Comparator.comparing((Candidate v) -> v.priority).thenComparing(v -> stableRank(v.peer)))
             .orElse(null);
     }
@@ -680,9 +641,5 @@ final class PhysicalConnectionManager {
         byte[] bytes = new byte[value.length() / 2];
         for (int i = 0; i < bytes.length; i++) bytes[i] = (byte) Integer.parseInt(value.substring(i * 2, i * 2 + 2), 16);
         return bytes;
-    }
-
-    private static String newAttemptId() {
-        return NGEUtils.bytesToHex(NGEPlatform.get().randomBytes(16));
     }
 }

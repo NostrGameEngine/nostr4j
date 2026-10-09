@@ -48,7 +48,7 @@ public class TestPhysicalConnectionManager {
                 .withConnectionMinimumLifetime(Duration.ofMillis(500));
             manager = new PhysicalConnectionManager(settings, keys.getPublicKey(), clock::get, () -> 0.5d);
             for (int i = 0; i < count; i++) {
-                NostrRTCPeer peer = peer("s" + i, keys.getPublicKey(), true);
+                NostrRTCPeer peer = peer("s" + i, keys.getPublicKey());
                 peers.add(peer);
                 priorities.put(peer, (float) (count - i));
             }
@@ -72,12 +72,8 @@ public class TestPhysicalConnectionManager {
 
         void establish(Attempt a) {
             assertNotNull(a);
-            if (a.outgoing) assertTrue(manager.accepted(a));
             links.put(a.peer, new LinkState(true, false, "RTC"));
             update();
-            manager.ready(a, false);
-            manager.ready(a, true);
-            assertTrue(manager.prepareCommit(a));
             assertTrue(manager.commit(a));
         }
 
@@ -100,13 +96,8 @@ public class TestPhysicalConnectionManager {
         }
     }
 
-    private static NostrRTCPeer peer(String session, NostrPublicKey room, boolean capable) {
-        return new NostrRTCPeer(new NostrKeyPair().getPublicKey(), "app", "proto", session, room, null) {
-            @Override
-            public boolean supportsLinkAdmission() {
-                return capable;
-            }
-        };
+    private static NostrRTCPeer peer(String session, NostrPublicKey room) {
+        return new NostrRTCPeer(new NostrKeyPair().getPublicKey(), "app", "proto", session, room, null);
     }
 
     @Test
@@ -168,7 +159,7 @@ public class TestPhysicalConnectionManager {
     public void firstInvalidEvaluationDoesNotAttemptPeer() {
         Fixture f = new Fixture(2, 0);
         f.manager.setPriority(peer -> Float.NaN);
-        NostrRTCPeer added = peer("new", f.keys.getPublicKey(), true);
+        NostrRTCPeer added = peer("new", f.keys.getPublicKey());
         f.peers.add(added);
         f.update();
         assertNull(f.diagnostic(added).getPriority());
@@ -247,13 +238,10 @@ public class TestPhysicalConnectionManager {
     }
 
     @Test
-    public void physicalReadinessAndRemoteAdmissionAreRequiredForCommit() {
+    public void routedReadinessDoesNotCommitAPhysicalReservation() {
         Fixture f = new Fixture(2, 3);
         f.policy();
         Attempt a = f.manager.fill().get(0);
-        f.manager.accepted(a);
-        f.manager.ready(a, false);
-        f.manager.ready(a, true);
         assertFalse(f.manager.commit(a));
         f.links.put(a.peer, new LinkState(false, true, "NONE"));
         f.update();
@@ -299,7 +287,7 @@ public class TestPhysicalConnectionManager {
         f.peers.remove(old.get(0).peer);
         f.update();
         f.release();
-        assertNull(f.manager.admit(probe.peer, "f".repeat(32), true));
+        assertNull(f.manager.admit(probe.peer));
     }
 
     @Test
@@ -358,11 +346,8 @@ public class TestPhysicalConnectionManager {
         Attempt probe = f.manager.fill().get(0);
         f.priorities.put(probe.peer, 0f);
         f.update();
-        f.manager.accepted(probe);
         f.links.put(probe.peer, new LinkState(true, false, "RTC"));
         f.update();
-        f.manager.ready(probe, true);
-        f.manager.ready(probe, false);
         assertFalse(f.manager.commit(probe));
         assertTrue(f.manager.committed(probe.victim));
     }
@@ -410,7 +395,7 @@ public class TestPhysicalConnectionManager {
                 } catch (InterruptedException error) {
                     throw new AssertionError(error);
                 }
-                if (f.manager.admit(peer, "e".repeat(32), true) != null) accepted.incrementAndGet();
+                if (f.manager.admit(peer) != null) accepted.incrementAndGet();
             });
             threads.add(t);
             t.start();
@@ -468,9 +453,9 @@ public class TestPhysicalConnectionManager {
     public void admissionUsesEachEndpointsOwnPolicyAndCapacity() {
         Fixture f = new Fixture(2, 4);
         f.policy();
-        assertNotNull(f.manager.admit(f.peers.get(3), "c".repeat(32), true));
-        assertNotNull(f.manager.admit(f.peers.get(2), "d".repeat(32), true));
-        assertNull(f.manager.admit(f.peers.get(0), "e".repeat(32), true));
+        assertNotNull(f.manager.admit(f.peers.get(3)));
+        assertNotNull(f.manager.admit(f.peers.get(2)));
+        assertNull(f.manager.admit(f.peers.get(0)));
         assertEquals(2, f.manager.resources());
     }
 
@@ -482,7 +467,6 @@ public class TestPhysicalConnectionManager {
         f.priorities.put(a.peer, -1f);
         f.update();
         assertFalse(f.manager.active(a));
-        assertFalse(f.manager.accepted(a));
         assertFalse(f.manager.commit(a));
         f.release();
         f.priorities.put(a.peer, 3f);
@@ -513,16 +497,11 @@ public class TestPhysicalConnectionManager {
         Attempt a = f.manager.fill().get(0);
         f.manager.fail(a, "failure");
         f.release();
-        NostrRTCPeer changed = new NostrRTCPeer(a.peer.getPubkey(), "app", "proto", "new", f.keys.getPublicKey(), null) {
-            @Override
-            public boolean supportsLinkAdmission() {
-                return true;
-            }
-        };
+        NostrRTCPeer changed = new NostrRTCPeer(a.peer.getPubkey(), "app", "proto", "new", f.keys.getPublicKey(), null);
         f.peers.clear();
         f.peers.add(changed);
         f.update();
-        assertNull(f.manager.admit(changed, "e".repeat(32), true));
+        assertNull(f.manager.admit(changed));
         assertFalse(f.manager.active(a));
     }
 
@@ -535,13 +514,98 @@ public class TestPhysicalConnectionManager {
         f.release();
         List<NostrRTCPeer> remaining = new ArrayList<>(f.peers);
         first.forEach(a -> remaining.remove(a.peer));
-        assertNotNull(f.manager.admit(remaining.get(0), "1".repeat(32), true));
-        assertNull(f.manager.admit(remaining.get(1), "2".repeat(32), true));
+        assertNotNull(f.manager.admit(remaining.get(0)));
+        assertNull(f.manager.admit(remaining.get(1)));
         for (int i = 0; i < 32; i++) assertTrue(f.manager.responseAllowed());
         assertFalse(f.manager.responseAllowed());
         f.advance(1000);
-        assertNotNull(f.manager.admit(remaining.get(1), "2".repeat(32), true));
+        assertNotNull(f.manager.admit(remaining.get(1)));
         assertTrue(f.manager.responseAllowed());
+    }
+
+    @Test
+    public void incomingReservationsCannotBeStolenByHigherPriorityOffers() {
+        Fixture f = new Fixture(2, 5);
+        f.policy();
+        Attempt first = f.manager.admit(f.peers.get(4));
+        Attempt second = f.manager.admit(f.peers.get(3));
+        assertNotNull(first);
+        assertNotNull(second);
+        assertNull(f.manager.admit(f.peers.get(0)));
+        assertSame(first, f.manager.attempt(first.peer));
+        assertSame(second, f.manager.attempt(second.peer));
+        assertEquals(2, f.manager.resources());
+    }
+
+    @Test
+    public void yieldingASimultaneousOfferKeepsItsSlotAndInvalidatesOldCallbacks() {
+        Fixture f = new Fixture(2, 4);
+        Attempt outgoing = f.manager.fill().get(0);
+        int occupied = f.manager.resources();
+        Attempt incoming = f.manager.yieldToOffer(outgoing);
+        assertNotNull(incoming);
+        assertFalse(incoming.outgoing);
+        assertFalse(f.manager.active(outgoing));
+        assertTrue(f.manager.active(incoming));
+        assertTrue(incoming.generation > outgoing.generation);
+        assertEquals(occupied, f.manager.resources());
+        f.manager.fail(outgoing, "obsolete-offer-failed");
+        assertEquals(0, f.diagnostic(incoming.peer).getFailureCount());
+        assertSame(incoming, f.manager.attempt(incoming.peer));
+        f.establish(incoming);
+    }
+
+    @Test
+    public void aNewlyMaturedEqualPriorityVictimDoesNotInvalidateTheCapturedVictim() {
+        Fixture f = new Fixture(2, 4);
+        List<Attempt> initial = f.manager.fill();
+        Attempt youngerPreferred = initial.get(0), older = initial.get(1);
+        f.establish(older);
+        f.advance(750);
+        f.establish(youngerPreferred);
+        f.policy();
+        initial.forEach(a -> f.priorities.put(a.peer, 0f));
+        f.advance(300);
+        Attempt probe = f.manager.fill().get(0);
+        assertEquals(older.peer, probe.victim);
+        f.advance(250);
+        f.establish(probe);
+        assertTrue(f.manager.committed(youngerPreferred.peer));
+        assertFalse(f.manager.committed(older.peer));
+        assertTrue(f.manager.committed(probe.peer));
+    }
+
+    @Test
+    public void anAcceptedAnswerPreventsYieldingToALaterOffer() {
+        Fixture f = new Fixture(2, 4);
+        Attempt outgoing = f.manager.fill().get(0);
+        int occupied = f.manager.resources();
+        assertTrue(f.manager.claimDescription(outgoing, false));
+        assertNull(f.manager.yieldToOffer(outgoing));
+        assertTrue(f.manager.active(outgoing));
+        assertSame(outgoing, f.manager.attempt(outgoing.peer));
+        assertEquals(occupied, f.manager.resources());
+        f.establish(outgoing);
+    }
+
+    @Test
+    public void turnRegistrationCannotReplaceAHealthyVictimUntilDeliveryIsProved() {
+        Fixture f = new Fixture(2, 4);
+        List<Attempt> old = f.fillEstablished();
+        f.policy();
+        old.forEach(a -> f.priorities.put(a.peer, 0f));
+        f.advance(1000);
+        Attempt probe = f.manager.fill().get(0);
+        f.links.put(probe.peer, new LinkState(true, false, "TURN", true, false));
+        f.update();
+        assertFalse(f.manager.commit(probe));
+        assertTrue(f.manager.committed(probe.victim));
+        assertEquals(3, f.manager.resources());
+        f.links.put(probe.peer, new LinkState(true, false, "TURN", true, true));
+        f.update();
+        assertTrue(f.manager.commit(probe));
+        assertFalse(f.manager.committed(probe.victim));
+        assertEquals(2, f.manager.established());
     }
 
     @Test

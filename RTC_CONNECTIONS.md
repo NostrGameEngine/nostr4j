@@ -76,73 +76,75 @@ finish after the RTC watchdog. A briefly degraded established link has that same
 bounded recovery interval. A usable TURN link is kept; it is not repeatedly torn down
 to retry RTC. A routed circuit does not count as a successful physical neighbor.
 
-## Admission and replacement
+## Local admission and replacement
 
-Negotiated peers can initiate regardless of public-key ordering. Simultaneous
-intentions use the public-key tie-break before ICE starts. Intentions are retransmitted
-with the same attempt ID at a bounded rate, until accepted, refused or timed out.
-While a recipient is in its short per-identity backoff, it defers the intent without
-starting ICE. The existing request retransmission resumes admission when eligible,
-avoiding reciprocal BUSY/backoff loops. Capacity and policy refusals still return BUSY.
+Either endpoint can initiate an ordinary offer. Public-key ordering only resolves
+simultaneous offers: the smaller public key keeps its outgoing attempt, while the
+other endpoint transfers its existing reservation to the incoming offer. The slot
+remains charged during transport cleanup. A recipient checks its own capacity and
+policy and reserves a slot before creating an answer; it need not have selected the
+same peer for its outbound scan. A full or excluded recipient can ignore an offer.
+The sender advances through timeout, shared backoff and other eligible candidates.
 
-With full established ordinary capacity K, a replacement can reserve one additional
-physical resource. Both endpoints enforce their own ordinary capacity, concurrent
-attempt budget, callback, backoff and unique supplementary slot. An incoming request
-can be accepted without already appearing in the recipient's outbound selection.
-Capacity refusal is a normal retryable result, and does not ban or remove membership.
+Pending attempts retransmit their existing offer, answer and route at a bounded rate.
+Retransmission does not allocate another transport or reset the deadline. Equivalent
+incoming offers reuse the reservation and cached answer. Local attempt and native
+transport generations invalidate obsolete callbacks and asynchronous signing.
 
-The previous neighbor remains until the new link has bidirectional physical readiness
-and the remote endpoint confirms its admission decision. Direct readiness and commit
-frames use an internal reliable ordered channel, which cannot route through another
-peer. The provisional link carries no third-party forwarding and is not advertised
-as a topology edge. Only committed usable ordinary neighbors are published, never
-65 neighbors when K is 64.
+Replacement keeps the old physical neighbor until the new candidate is usable and
+current local policy still permits the change. A routed circuit is not evidence of
+a working physical link. An offer, answer or successful relay publication alone is
+also insufficient. RTC requires the connection and a native data channel to be ready.
+TURN requires both local directional registrations and an authenticated route from
+the peer for ordinary establishment. Server registration alone does not prove peer
+reachability. Replacing a healthy neighbor through TURN additionally requires a
+successful reliable delivery acknowledged by the peer, using existing TURN receipts.
+Ordinary application traffic can use a reserved provisional link to obtain this
+evidence; no new probe payload or handshake is sent. If no evidence arrives, the probe
+expires and the old healthy link remains.
 
-At commit, the room checks the current policy, sessions, captured victim reservation,
-structural protection and actual capacity. If an ordinary slot became available, the
-probe takes it without evicting another peer. Otherwise a strictly better optional
-candidate can replace the captured victim. Equal scores do not cause preference swaps.
-If the captured optional victim loses physical readiness during the probe, a proved
-replacement can retire that unusable resource at commit without waiting for its
-recovery grace or choosing another victim. Current structural protection still applies.
-Failed, refused or obsolete probes retire themselves and preserve the old neighbor.
-Resources remain charged until local transport cleanup completes.
+Immediately before local promotion, capacity, priority, victim identity, session,
+minimum age and structural protection are rechecked. If an ordinary slot became
+available, the probe takes it without evicting another peer. Otherwise a strictly
+better optional candidate can replace the captured victim. Equal scores do not cause
+preference swaps. A captured optional victim that loses physical readiness can be
+retired in favor of a usable replacement during its recovery grace. Current structural
+protection still applies. Failed, refused or obsolete probes preserve the old neighbor.
+Resources remain charged until transport cleanup completes. Provisional links do not
+forward third-party traffic or enter the published ordinary topology.
 
 Preference swaps respect minimum connection age. Structural repair can displace an
 optional link without waiting for that optimization cooldown. The common minimum
 ring, selected repair links and bridges in the current mutually attested graph are
-protected. With application priorities, the selector's full-mesh BACKBONE labels are
-reduced to the necessary ring protection so that optional links remain replaceable.
-Structural links consume K, and failed structural candidates can yield unused slots
-to reachable alternatives while repair continues.
+protected. With application priorities, full-mesh BACKBONE labels are reduced to the
+necessary ring protection so that optional links remain replaceable. Structural links
+consume K; failed structural candidates can yield unused slots to reachable alternatives.
 
-Admission is a bounded bilateral handshake, not an atomic global topology transaction.
-A later failure, security revocation, membership change or local policy update can
-still invalidate a connection. Attestations converge through the existing control
-plane. Packets already in flight may be lost; existing reliable delivery and
-end-to-end deduplication retain responsibility for retries. A physical replacement
-emits transport changes and does not emit a room membership departure.
+Admission and replacement are best effort decisions made independently at each
+endpoint. There is no bilateral swap commit or promise that the remote policy will
+keep a newly established link. Remote rejection or later closure is handled through
+bounded retry and topology convergence. Packets already in flight may be lost; existing
+reliable delivery and end-to-end deduplication retain responsibility for retries.
+A physical replacement emits transport changes, not a room membership departure.
 
 ## Wire compatibility
 
-NIP-DC versions remain dc3/dc4. An authenticated dc4 presence advertises the optional
-`["link-admission", "1"]` capability. Only mutually capable endpoints use the new
-`link` signals, encrypted commands `REQUEST`, `TURN_REQUEST`, `ACCEPT`, `TURN_ACCEPT`,
-`BUSY` and `ABORT`, and the reserved `__nipdc_dc4_route/link-admission-v1` channel.
-Direct channel frames are `READY`, `COMMIT`, `COMMITTED` and `FINAL`, bounded to
-96 bytes and correlated by attempt ID. Fresh direct-only nonces are echoed during
-commit to prove that both physical directions work, including when an earlier READY
-frame is lost during channel startup. All new signaling binds source identity/scope, a 128-bit random attempt ID
-and the recipient's session. Room proofs bind this context as well as encrypted content.
+NIP-DC versions and wire formats remain dc3/dc4. Presence, offer, answer, route,
+room proofs, routing frames and TURN receipts keep their existing formats. No new
+capability, signaling command, attempt binding or reserved channel is introduced.
+The library changes local selection, reservations and lifecycle behavior only.
 
-Peers without the capability keep the legacy offer/answer/route format and the
-smaller-public-key offer initiator. They can fill ordinary slots subject to local
-admission, but cannot be targets of supplementary probes. Asymmetric legacy selection
-can still wait for the old initiator; there is no claim that an old implementation
-supports negotiated independent admission. The library supports the legacy wire
-fallback; use mixed deployment testing for the specific older binary being deployed.
+Without a wire attempt identifier, an incoming signaling event from a prior retry
+cannot always be correlated perfectly within the same remote session. Existing
+signature, scope, presence, expiration and native SDP/ICE validation still apply.
+Local generations protect callbacks and sends, but do not create a remote transaction
+identifier. Retry tests and mixed deployments must account for delayed signaling.
 
-Production source targets Java 11 and uses the existing platform executor and transport
+Older peers retain their own admission and collision policies; unchanged wire formats
+do not make them support the new local selection behavior. Validate the specific
+older binary used in a mixed deployment.
+
+Production source targets Java 11 and uses existing platform executor and transport
 APIs. This feature introduces no JVM-only transport dependency.
 
 ## Read-only connection diagnostics
@@ -163,4 +165,4 @@ No private keys, SDP, ICE candidates or application payloads are included. Peer
 metadata remains accessible through the existing peer API.
 
 Maintaining K useful links is an objective constrained by reachable candidates and
-remote admission, not a guarantee of K established links or global reachability.
+independent remote acceptance, not a guarantee of K established links or global reachability.

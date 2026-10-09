@@ -96,7 +96,7 @@ public final class NostrTURNChannel {
     private final long vSocketId;
     private volatile int state = 0;
     // Guarded by this; invalidates delayed encoding, send completions and ACK timers.
-    private long connectAttempt = 0L;
+    private volatile long connectAttempt = 0L;
     private volatile boolean resurrecting = false;
     private volatile boolean closed = false;
     private volatile long nextResurrectionAttemptAtMs = 0L;
@@ -262,6 +262,13 @@ public final class NostrTURNChannel {
 
     boolean isUsingTransport(TURNTransport expected) {
         return !closed && this.transport == expected && !expected.isClosed();
+    }
+
+    /**
+     * Local registration epoch, including reconnects of the same channel handle.
+     */
+    long getConnectionGeneration() {
+        return connectAttempt;
     }
 
     boolean isReady() {
@@ -713,7 +720,10 @@ public final class NostrTURNChannel {
                     sentData
                         .decodeDeliveryReceipt(receipts.get(0))
                         .then(receipt -> {
-                            if (expected == null || isUsingTransport(expected)) completePendingWrite(envelopeMessageId, receipt);
+                            if (expected == null || isUsingTransport(expected)) completePendingWrite(
+                                envelopeMessageId,
+                                receipt
+                            );
                             return null;
                         })
                         .catchException(error -> logger.fine("Ignoring invalid TURN delivery receipt"));

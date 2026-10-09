@@ -90,8 +90,6 @@ public class NostrRTCSignaling implements Closeable {
         void onReceiveAnswer(NostrRTCAnswerSignal answer);
 
         void onReceiveCandidates(NostrRTCRouteSignal candidate);
-
-        default void onReceiveLinkSignal(NostrRTCLinkSignal signal) {}
     }
 
     private static final Logger logger = Logger.getLogger(NostrRTCSignaling.class.getName());
@@ -224,22 +222,6 @@ public class NostrRTCSignaling implements Closeable {
                     // handle offers and routes
                     NGEPlatform platform = NGEUtils.getPlatform();
                     switch (type) {
-                        case "link":
-                            {
-                                if (!isDirectedToLocalPeer(event)) return null;
-                                NostrRTCLinkSignal link = new NostrRTCLinkSignal(localPeer.getSigner(), roomKeyPair, event);
-                                link.await();
-                                mergeAdvertisedVersion(link);
-                                if (!link.getPeer().supportsLinkAdmission()) return null;
-                                for (Listener listener : listeners) {
-                                    try {
-                                        listener.onReceiveLinkSignal(link);
-                                    } catch (Throwable error) {
-                                        logger.fine("Invalid link admission signal");
-                                    }
-                                }
-                                return null;
-                            }
                         case "offer":
                             {
                                 if (!isDirectedToLocalPeer(event)) return null;
@@ -330,7 +312,9 @@ public class NostrRTCSignaling implements Closeable {
         }
     }
 
-    /** Finish a stored discovery batch; subsequent relay batches still cannot roll state backwards. */
+    /**
+     * Finish a stored discovery batch; subsequent relay batches still cannot roll state backwards.
+     */
     protected void onDiscoveryEose() {
         storedPresenceReady = true;
         flushStoredPresence();
@@ -430,7 +414,7 @@ public class NostrRTCSignaling implements Closeable {
             NostrPublicKey localpk = this.localPeer.getPubkey();
             NostrFilter signalingFilter = new NostrFilter()
                 .withKind(25050)
-                .withTag("t", "offer", "answer", "route", "link")
+                .withTag("t", "offer", "answer", "route")
                 .withTag("P", this.roomKeyPair.getPublicKey().asHex())
                 .withTag("p", localpk.asHex())
                 .since(Instant.now().minus(1, ChronoUnit.SECONDS)) // only listen for new events

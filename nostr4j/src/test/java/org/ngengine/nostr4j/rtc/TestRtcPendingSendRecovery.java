@@ -574,13 +574,7 @@ public class TestRtcPendingSendRecovery {
         owner.setAccessible(true);
         PhysicalConnectionManager manager = (PhysicalConnectionManager) owner.get(room);
         manager.evaluate(new java.util.ArrayList<>(connections.keySet()));
-        assertNotNull(
-            manager.admit(
-                peer,
-                org.ngengine.platform.NGEUtils.bytesToHex(org.ngengine.platform.NGEPlatform.get().randomBytes(16)),
-                false
-            )
-        );
+        assertNotNull(manager.admit(peer));
     }
 
     @SuppressWarnings("unchecked")

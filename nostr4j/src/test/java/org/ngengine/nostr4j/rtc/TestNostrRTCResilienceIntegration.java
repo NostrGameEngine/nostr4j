@@ -27,7 +27,6 @@ import org.junit.Test;
 import org.ngengine.nostr4j.NostrPool;
 import org.ngengine.nostr4j.RTCSettings;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
-import org.ngengine.nostr4j.event.UnsignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
 import org.ngengine.nostr4j.proto.NostrMessageAck;
 import org.ngengine.nostr4j.rtc.routing.topology.DirectNeighborManager;
@@ -58,9 +57,11 @@ public class TestNostrRTCResilienceIntegration {
 
     private static final class Bus extends NostrPool {
 
-        volatile boolean legacyPresence;
         volatile boolean deliverTopology;
-        final AtomicBoolean dropFirstLink = new AtomicBoolean();
+        final AtomicBoolean dropFirstOffer = new AtomicBoolean();
+        final AtomicBoolean dropFirstAnswer = new AtomicBoolean();
+        volatile boolean holdOffers;
+        final List<SignedNostrEvent> heldOffers = new CopyOnWriteArrayList<>();
         final Map<String, NostrRTCLocalPeer> locals = new ConcurrentHashMap<>();
         final List<NostrRTCSignaling> subscribers = new CopyOnWriteArrayList<>();
         final List<NostrRTCRoom> rooms = new CopyOnWriteArrayList<>();
@@ -79,22 +80,24 @@ public class TestNostrRTCResilienceIntegration {
 
         @Override
         public AsyncTask<List<AsyncTask<NostrMessageAck>>> publish(SignedNostrEvent event) {
-            if (legacyPresence && "connect".equals(event.getFirstTagFirstValue("t"))) {
-                NostrRTCLocalPeer source = locals.get(event.getPubkey().asHex());
-                UnsignedNostrEvent legacy = new UnsignedNostrEvent().withKind(event.getKind());
-                legacy.createdAt(event.getCreatedAt());
-                legacy.withContent(event.getContent());
-                for (List<String> row : event.getTagRows()) if (!row.get(0).equals("link-admission")) legacy.withTag(
-                    row.get(0),
-                    row.subList(1, row.size())
+            if (event.getKind() == 25050) {
+                assertTrue(
+                    java.util.Set
+                        .of("connect", "disconnect", "offer", "answer", "route")
+                        .contains(event.getFirstTagFirstValue("t"))
                 );
-                try {
-                    event = source.getSigner().sign(legacy).await();
-                } catch (Exception error) {
-                    return AsyncTask.failed(error);
-                }
+                for (String tag : List.of("link-admission", "link-attempt", "target-session")) assertNull(
+                    event.getFirstTagFirstValue(tag)
+                );
             }
-            if ("link".equals(event.getFirstTagFirstValue("t")) && dropFirstLink.compareAndSet(true, false)) {
+            if ("offer".equals(event.getFirstTagFirstValue("t")) && dropFirstOffer.compareAndSet(true, false)) {
+                return AsyncTask.completed(Collections.emptyList());
+            }
+            if (
+                "answer".equals(event.getFirstTagFirstValue("t")) && dropFirstAnswer.compareAndSet(true, false)
+            ) return AsyncTask.completed(Collections.emptyList());
+            if (holdOffers && "offer".equals(event.getFirstTagFirstValue("t"))) {
+                heldOffers.add(event);
                 return AsyncTask.completed(Collections.emptyList());
             }
             if (event.getKind() == 25050) for (NostrRTCSignaling subscriber : subscribers) {
@@ -136,9 +139,10 @@ public class TestNostrRTCResilienceIntegration {
     public void asymmetricSelectionAndPubkeyPrecedenceConnectOverNativeRtc() throws Exception {
         try (NostrKeyPair roomKeys = new NostrKeyPair()) {
             Bus bus = new Bus();
-            bus.dropFirstLink.set(true);
+            bus.dropFirstOffer.set(true);
+            bus.dropFirstAnswer.set(true);
             NostrRTCLocalPeer left = local(roomKeys, "left"), right = local(roomKeys, "right");
-            // Only the larger public key makes an outbound request; the other end admits it independently.
+            // Only the larger public key sends offers; the other endpoint reserves capacity independently.
             NostrRTCLocalPeer initiator = left.getPubkey().asHex().compareTo(right.getPubkey().asHex()) > 0 ? left : right;
             NostrRTCLocalPeer acceptor = initiator == left ? right : left;
             NostrRTCRoom a = new NostrRTCRoom(settings(2), initiator, roomKeys, bus, null);
@@ -167,10 +171,10 @@ public class TestNostrRTCResilienceIntegration {
                 b.addMessageListener((peer, socket, channel, data, turn) -> {
                     byte[] bytes = new byte[data.remaining()];
                     data.get(bytes);
-                    if ("after-admission".equals(new String(bytes, StandardCharsets.UTF_8))) delivered.incrementAndGet();
+                    if ("after-offer-answer".equals(new String(bytes, StandardCharsets.UTF_8))) delivered.incrementAndGet();
                 });
                 NostrRTCPeer target = a.getPeers().iterator().next();
-                a.send(target, ByteBuffer.wrap("after-admission".getBytes(StandardCharsets.UTF_8))).await();
+                a.send(target, ByteBuffer.wrap("after-offer-answer".getBytes(StandardCharsets.UTF_8))).await();
                 await(() -> delivered.get() == 1, 5000);
                 assertEquals(1, delivered.get());
                 assertEquals("RTC", a.getConnectionDiagnostics().getCandidates().get(0).getPhysicalTransport());
@@ -379,10 +383,10 @@ public class TestNostrRTCResilienceIntegration {
     }
 
     @Test
-    public void legacyDc4WireConnectsWithoutAdmissionCapability() throws Exception {
+    public void simultaneousNativeOffersConvergeWithoutProtocolExtensions() throws Exception {
         try (NostrKeyPair roomKeys = new NostrKeyPair()) {
             Bus bus = new Bus();
-            bus.legacyPresence = true;
+            bus.holdOffers = true;
             NostrRTCRoom a = new NostrRTCRoom(settings(2), local(roomKeys, "legacy-a"), roomKeys, bus, null);
             NostrRTCRoom b = new NostrRTCRoom(settings(2), local(roomKeys, "legacy-b"), roomKeys, bus, null);
             NostrRTCSignaling sa = bus.add(a), sb = bus.add(b);
@@ -391,13 +395,17 @@ public class TestNostrRTCResilienceIntegration {
                 b.start().await();
                 sa.sendAnnounce("").await();
                 sb.sendAnnounce("").await();
+                await(() -> bus.heldOffers.stream().map(e -> e.getPubkey().asHex()).distinct().count() == 2, 5000);
+                assertEquals(1, a.getConnectionDiagnostics().getOccupiedResources());
+                assertEquals(1, b.getConnectionDiagnostics().getOccupiedResources());
+                bus.holdOffers = false;
+                for (SignedNostrEvent event : bus.heldOffers) bus.publish(event).await();
                 await(
                     () ->
                         a.getConnectionDiagnostics().getEstablishedLinks() == 1 &&
                         b.getConnectionDiagnostics().getEstablishedLinks() == 1,
                     15_000
                 );
-                assertFalse(a.getPeers().iterator().next().supportsLinkAdmission());
                 assertEquals("RTC", a.getConnectionDiagnostics().getCandidates().get(0).getPhysicalTransport());
             } finally {
                 a.close();
@@ -408,7 +416,7 @@ public class TestNostrRTCResilienceIntegration {
     }
 
     @Test
-    public void forcedTurnAdmissionUsesBidirectionalTurnWithoutIce() throws Exception {
+    public void forcedTurnUsesExistingRouteSignalingAndBidirectionalTurn() throws Exception {
         int port;
         try (ServerSocket socket = new ServerSocket(0)) {
             port = socket.getLocalPort();
@@ -424,8 +432,8 @@ public class TestNostrRTCResilienceIntegration {
             String url = "ws://127.0.0.1:" + server.getPort() + "/turn";
             NostrRTCLocalPeer pa = new NostrRTCLocalPeer(settings(2), NostrKeyPairSigner.generate(), "turn-a", roomKeys, url);
             NostrRTCLocalPeer pb = new NostrRTCLocalPeer(settings(2), NostrKeyPairSigner.generate(), "turn-b", roomKeys, url);
-            NostrRTCRoom a = new NostrRTCRoom(settings(2), pa, roomKeys, bus, ta);
-            NostrRTCRoom b = new NostrRTCRoom(settings(2), pb, roomKeys, bus, tb);
+            NostrRTCRoom a = new NostrRTCRoom(settings(2).withP2pAttemptTimeout(Duration.ofSeconds(5)), pa, roomKeys, bus, ta);
+            NostrRTCRoom b = new NostrRTCRoom(settings(2).withP2pAttemptTimeout(Duration.ofSeconds(1)), pb, roomKeys, bus, tb);
             NostrRTCSignaling sa = bus.add(a), sb = bus.add(b);
             a.setForceTURN(true);
             try {
@@ -441,12 +449,34 @@ public class TestNostrRTCResilienceIntegration {
                 );
                 assertEquals("TURN", a.getConnectionDiagnostics().getCandidates().get(0).getPhysicalTransport());
                 assertFalse(a.getSockets().iterator().next().isRTCConnected());
+                assertFalse(
+                    "Server registration is not a delivery proof",
+                    a.getSockets().iterator().next().hasProvenPhysicalTransport()
+                );
                 AtomicInteger delivered = new AtomicInteger();
                 b.addMessageListener((p, s, c, data, turn) -> {
                     if (turn) delivered.incrementAndGet();
                 });
                 a.send(a.getPeers().iterator().next(), ByteBuffer.wrap(new byte[] { 1, 2, 3 })).await();
                 await(() -> delivered.get() == 1, 5000);
+                assertTrue(a.getSockets().iterator().next().hasProvenPhysicalTransport());
+
+                NostrRTCChannel application = a.getSockets().iterator().next().getChannel(NostrRTCSocket.DEFAULT_CHANNEL_NAME);
+                Field turnSend = NostrRTCChannel.class.getDeclaredField("turnSend");
+                turnSend.setAccessible(true);
+                NostrTURNChannel send = (NostrTURNChannel) turnSend.get(application);
+                long registration = send.getConnectionGeneration();
+                send.redirectTo(url);
+                java.lang.reflect.Method resurrect =
+                    NostrTURNPool.class.getDeclaredMethod("resurrectChannel", NostrTURNChannel.class);
+                resurrect.setAccessible(true);
+                resurrect.invoke(ta, send);
+                await(() -> application.isPhysicalReady() && send.getConnectionGeneration() != registration, 5000);
+                assertSame("Reconnect must exercise the same handle", send, turnSend.get(application));
+                assertFalse("A receipt from the previous registration is stale", application.isReplacementReady());
+                a.send(a.getPeers().iterator().next(), ByteBuffer.wrap(new byte[] { 4, 5, 6 })).await();
+                await(() -> delivered.get() == 2, 5000);
+                assertTrue(application.isReplacementReady());
             } finally {
                 a.close();
                 b.close();
@@ -491,7 +521,7 @@ public class TestNostrRTCResilienceIntegration {
                 (
                     phase == null
                         ? ""
-                        : phase.phase + " outgoing=" + phase.outgoing + " ready=" + phase.localReady + "/" + phase.remoteReady
+                        : phase.phase + " outgoing=" + phase.outgoing + " ready=" + phase.answerReceived + "/" + phase.outgoing
                 )
             );
         }
@@ -500,6 +530,6 @@ public class TestNostrRTCResilienceIntegration {
     private static void await(BooleanSupplier condition, long timeout) throws Exception {
         long deadline = System.nanoTime() + timeout * 1_000_000L;
         while (!condition.getAsBoolean() && System.nanoTime() < deadline) Thread.sleep(25);
-        assertTrue("Timed out awaiting RTC admission", condition.getAsBoolean());
+        assertTrue("Timed out awaiting physical connection convergence", condition.getAsBoolean());
     }
 }
