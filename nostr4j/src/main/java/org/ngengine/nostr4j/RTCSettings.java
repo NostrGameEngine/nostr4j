@@ -39,6 +39,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import org.ngengine.nostr4j.rtc.RTCSessionLimits;
 
 public final class RTCSettings implements Cloneable, Serializable {
 
@@ -102,6 +103,7 @@ public final class RTCSettings implements Cloneable, Serializable {
     private final List<String> signalingRelays;
     private final String applicationId;
     private final String protocolId;
+    private final RTCSessionLimits sessionLimits;
 
     private RTCSettings(
         Duration announceInterval,
@@ -121,7 +123,8 @@ public final class RTCSettings implements Cloneable, Serializable {
         Collection<String> stunServers,
         Collection<String> signalingRelays,
         String applicationId,
-        String protocolId
+        String protocolId,
+        RTCSessionLimits sessionLimits
     ) {
         if (maxDirectPeers < MIN_MAX_DIRECT_PEERS) {
             throw new IllegalArgumentException("maxDirectPeers must be at least " + MIN_MAX_DIRECT_PEERS);
@@ -173,6 +176,41 @@ public final class RTCSettings implements Cloneable, Serializable {
         }
         this.applicationId = applicationId;
         this.protocolId = protocolId;
+        this.sessionLimits = Objects.requireNonNull(sessionLimits, "sessionLimits");
+    }
+
+    /**
+     * Returns local session-admission limits. Older serialized settings use the defaults.
+     */
+    public RTCSessionLimits getSessionLimits() {
+        return sessionLimits == null ? RTCSessionLimits.getDefault() : sessionLimits;
+    }
+
+    /**
+     * Returns an immutable copy with the specified local session-admission limits.
+     */
+    public RTCSettings withSessionLimits(RTCSessionLimits sessionLimits) {
+        return new RTCSettings(
+            signalingLoopInterval,
+            peerExpiration,
+            delayedCandidatesInterval,
+            roomLoopInterval,
+            p2pAttemptTimeout,
+            queuedSendTimeout,
+            signalingAnnounceExpiration,
+            maxDirectPeers,
+            connectionRetryInitialDelay,
+            connectionRetryMaxDelay,
+            connectionRetryMultiplier,
+            connectionRetryJitter,
+            maxConcurrentConnectionAttempts,
+            connectionMinimumLifetime,
+            stunServers,
+            signalingRelays,
+            applicationId,
+            protocolId,
+            sessionLimits
+        );
     }
 
     private static void requirePositiveMillis(Duration value, String name) {
@@ -208,7 +246,8 @@ public final class RTCSettings implements Cloneable, Serializable {
             stunServers,
             signalingRelays,
             applicationId,
-            protocolId
+            protocolId,
+            getSessionLimits()
         );
     }
 
@@ -238,7 +277,8 @@ public final class RTCSettings implements Cloneable, Serializable {
             stunServers,
             signalingRelays,
             applicationId,
-            protocolId
+            protocolId,
+            getSessionLimits()
         );
     }
 
@@ -268,7 +308,8 @@ public final class RTCSettings implements Cloneable, Serializable {
             stunServers,
             signalingRelays,
             applicationId,
-            protocolId
+            protocolId,
+            getSessionLimits()
         );
     }
 
@@ -298,7 +339,8 @@ public final class RTCSettings implements Cloneable, Serializable {
             stunServers,
             signalingRelays,
             applicationId,
-            protocolId
+            protocolId,
+            getSessionLimits()
         );
     }
 
@@ -328,7 +370,8 @@ public final class RTCSettings implements Cloneable, Serializable {
             stunServers,
             signalingRelays,
             applicationId,
-            protocolId
+            protocolId,
+            getSessionLimits()
         );
     }
 
@@ -358,7 +401,8 @@ public final class RTCSettings implements Cloneable, Serializable {
             stunServers,
             signalingRelays,
             applicationId,
-            protocolId
+            protocolId,
+            getSessionLimits()
         );
     }
 
@@ -444,7 +488,8 @@ public final class RTCSettings implements Cloneable, Serializable {
             new ArrayList<String>(stunServers),
             signalingRelays,
             applicationId,
-            protocolId
+            protocolId,
+            getSessionLimits()
         );
     }
 
@@ -473,7 +518,8 @@ public final class RTCSettings implements Cloneable, Serializable {
             new ArrayList<String>(stunServers),
             signalingRelays,
             applicationId,
-            protocolId
+            protocolId,
+            getSessionLimits()
         );
     }
 
@@ -504,7 +550,8 @@ public final class RTCSettings implements Cloneable, Serializable {
             new ArrayList<String>(stunServers),
             signalingRelays,
             applicationId,
-            protocolId
+            protocolId,
+            getSessionLimits()
         );
     }
 
@@ -533,7 +580,8 @@ public final class RTCSettings implements Cloneable, Serializable {
             new ArrayList<String>(stunServers),
             signalingRelays,
             applicationId,
-            protocolId
+            protocolId,
+            getSessionLimits()
         );
     }
 
@@ -562,7 +610,8 @@ public final class RTCSettings implements Cloneable, Serializable {
             new ArrayList<String>(stunServers),
             signalingRelays,
             applicationId,
-            protocolId
+            protocolId,
+            getSessionLimits()
         );
     }
 
@@ -593,7 +642,8 @@ public final class RTCSettings implements Cloneable, Serializable {
             new ArrayList<String>(stunServers),
             signalingRelays,
             applicationId,
-            protocolId
+            protocolId,
+            getSessionLimits()
         );
     }
 
@@ -622,7 +672,8 @@ public final class RTCSettings implements Cloneable, Serializable {
             new ArrayList<String>(stunServers),
             signalingRelays,
             applicationId,
-            protocolId
+            protocolId,
+            getSessionLimits()
         );
     }
 
@@ -653,7 +704,8 @@ public final class RTCSettings implements Cloneable, Serializable {
             new ArrayList<String>(stunServers),
             signalingRelays,
             applicationId,
-            protocolId
+            protocolId,
+            getSessionLimits()
         );
     }
 
@@ -685,7 +737,8 @@ public final class RTCSettings implements Cloneable, Serializable {
             new ArrayList<String>(stunServers),
             signalingRelays,
             applicationId,
-            protocolId
+            protocolId,
+            getSessionLimits()
         );
     }
 
@@ -719,7 +772,8 @@ public final class RTCSettings implements Cloneable, Serializable {
             stunServers,
             signalingRelays,
             applicationId,
-            protocolId
+            protocolId,
+            getSessionLimits()
         );
     }
 
@@ -751,7 +805,8 @@ public final class RTCSettings implements Cloneable, Serializable {
             stunServers,
             signalingRelays,
             applicationId,
-            protocolId
+            protocolId,
+            getSessionLimits()
         );
     }
 
@@ -830,7 +885,8 @@ public final class RTCSettings implements Cloneable, Serializable {
         PUBLIC_STUN_SERVERS,
         DEFAULT_SIGNALING_RELAYS,
         null,
-        null
+        null,
+        RTCSessionLimits.getDefault()
     );
 
     /**
@@ -881,7 +937,8 @@ public final class RTCSettings implements Cloneable, Serializable {
             Objects.equals(stunServers, that.stunServers) &&
             Objects.equals(signalingRelays, that.signalingRelays) &&
             Objects.equals(applicationId, that.applicationId) &&
-            Objects.equals(protocolId, that.protocolId)
+            Objects.equals(protocolId, that.protocolId) &&
+            Objects.equals(getSessionLimits(), that.getSessionLimits())
         );
     }
 
@@ -905,7 +962,8 @@ public final class RTCSettings implements Cloneable, Serializable {
             stunServers,
             signalingRelays,
             applicationId,
-            protocolId
+            protocolId,
+            getSessionLimits()
         );
     }
 

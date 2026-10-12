@@ -60,6 +60,7 @@ import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.listeners.sub.NostrSubEoseListener;
 import org.ngengine.nostr4j.listeners.sub.NostrSubEventListener;
 import org.ngengine.nostr4j.proto.NostrMessageAck;
+import org.ngengine.nostr4j.rtc.RTCSessionLimits;
 import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
 import org.ngengine.platform.AsyncExecutor;
 import org.ngengine.platform.AsyncTask;
@@ -287,9 +288,30 @@ public class NostrRTCSignaling implements Closeable {
         synchronized (presenceLock) {
             if (closed || !event.isCurrent()) return;
             NostrRTCPeer peer = signal.getPeer();
+            if (!RTCSessionLimits.isValidSessionId(peer.getSessionId())) return;
             PresenceState next = new PresenceState(event, signal, stored);
             PresenceState previous = latestPresence.get(peer);
             if (previous != null && !next.supersedes(previous)) return;
+            if (previous == null) {
+                long sameIdentity = latestPresence
+                    .keySet()
+                    .stream()
+                    .filter(candidate -> candidate.getPubkey().equals(peer.getPubkey()))
+                    .count();
+                if (sameIdentity >= settings.getSessionLimits().getMaxPresenceRecordsPerIdentity()) {
+                    Set<NostrRTCPeer> active = new HashSet<>();
+                    for (NostrRTCConnectSignal announce : seenAnnounces) active.add(announce.getPeer());
+                    NostrRTCPeer inactive = latestPresence
+                        .keySet()
+                        .stream()
+                        .filter(candidate -> candidate.getPubkey().equals(peer.getPubkey()))
+                        .filter(candidate -> !latestPresence.get(candidate).pending && !active.contains(candidate))
+                        .findFirst()
+                        .orElse(null);
+                    if (inactive == null) return;
+                    latestPresence.remove(inactive);
+                }
+            }
             if (previous == null && latestPresence.size() >= MAX_PRESENCE_PEERS) {
                 // Evict an inactive watermark rather than retaining unbounded session history.
                 Set<NostrRTCPeer> active = new HashSet<>();
@@ -343,6 +365,11 @@ public class NostrRTCSignaling implements Closeable {
             NostrRTCConnectSignal received = (NostrRTCConnectSignal) signal;
             if (current == null) {
                 if (seenAnnounces.size() >= MAX_PRESENCE_PEERS) return;
+                long sameIdentity = seenAnnounces
+                    .stream()
+                    .filter(announce -> announce.getPeer().getPubkey().equals(received.getPeer().getPubkey()))
+                    .count();
+                if (sameIdentity >= settings.getSessionLimits().getMaxAnnouncedSessionsPerIdentity()) return;
                 seenAnnounces.add(received);
                 for (Listener listener : listeners) {
                     try {
@@ -454,20 +481,7 @@ public class NostrRTCSignaling implements Closeable {
                     }
 
                     synchronized (presenceLock) {
-                        // remove all expired announce
-                        Instant now = Instant.now();
-                        for (NostrRTCConnectSignal announce : seenAnnounces) {
-                            if (announce.getExpireAt().isBefore(now)) {
-                                seenAnnounces.remove(announce);
-                                for (Listener listener : listeners) {
-                                    try {
-                                        listener.onRemoveAnnounce(announce, Listener.RemoveReason.EXPIRED);
-                                    } catch (Throwable e) {
-                                        logger.log(Level.WARNING, "Error in onRemoveAnnounce", e);
-                                    }
-                                }
-                            }
-                        }
+                        pruneExpiredPresences(Instant.now());
                     }
                     this.loop();
                     return null;
@@ -475,6 +489,23 @@ public class NostrRTCSignaling implements Closeable {
                 settings.getSignalingLoopInterval().toMillis(),
                 TimeUnit.MILLISECONDS
             );
+    }
+
+    /**
+     * Called under presenceLock; the explicit time also supports deterministic expiry qualification.
+     */
+    private void pruneExpiredPresences(Instant now) {
+        for (NostrRTCConnectSignal announce : new ArrayList<>(seenAnnounces)) {
+            if (!announce.isExpired(now)) continue;
+            seenAnnounces.remove(announce);
+            for (Listener listener : listeners) {
+                try {
+                    listener.onRemoveAnnounce(announce, Listener.RemoveReason.EXPIRED);
+                } catch (Throwable error) {
+                    logger.log(Level.WARNING, "Error in onRemoveAnnounce", error);
+                }
+            }
+        }
     }
 
     public AsyncTask<List<AsyncTask<NostrMessageAck>>> sendAnnounce(String message) {

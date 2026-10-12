@@ -133,6 +133,8 @@ public final class NostrRTCRoom implements Closeable {
     private volatile boolean topologyRefreshScheduled;
     private volatile boolean closed;
     private volatile boolean started;
+    private boolean maintenanceStarted;
+    private final ProvisionalPeerSignals provisionalSignals;
     private final PhysicalConnectionManager physicalConnections;
     // Provider ownership stays here; the state-only capacity manager never owns transports.
     private final Map<Attempt, NostrRTCSocket> physicalAttemptSockets = new ConcurrentHashMap<>();
@@ -396,6 +398,7 @@ public final class NostrRTCRoom implements Closeable {
     ) {
         this.roomKeyPair = Objects.requireNonNull(roomKeyPair, "Room key pair cannot be null");
         this.settings = Objects.requireNonNull(settings, "Settings cannot be null");
+        this.provisionalSignals = new ProvisionalPeerSignals(() -> System.nanoTime() / 1_000_000L, settings.getSessionLimits());
         this.queuedSendClock = Objects.requireNonNull(queuedSendClock, "Queued send clock cannot be null");
         this.localPeer = Objects.requireNonNull(localPeer, "Local peer cannot be null");
         this.physicalConnections =
@@ -607,7 +610,8 @@ public final class NostrRTCRoom implements Closeable {
     }
 
     private NostrRTCSocket ensureLogicalSocket(NostrRTCPeer remotePeer) {
-        if (closed || remotePeer == null || remotePeer.getPubkey() == null) {
+        if (closed || remotePeer == null || remotePeer.getPubkey() == null ||
+            !RTCSessionLimits.isValidSessionId(remotePeer.getSessionId())) {
             return null;
         }
         if (
@@ -629,6 +633,10 @@ public final class NostrRTCRoom implements Closeable {
             existing = connections.get(remotePeer);
             if (existing != null && !existing.isClosed()) return existing;
             if (connections.size() >= PhysicalConnectionManager.MAX_CANDIDATES) return null;
+            long sameIdentity = connections.entrySet().stream()
+                .filter(entry -> !entry.getValue().isClosed())
+                .filter(entry -> entry.getKey().getPubkey().equals(remotePeer.getPubkey())).count();
+            if (sameIdentity >= settings.getSessionLimits().getMaxAnnouncedSessionsPerIdentity()) return null;
             if (existing != null) connections.remove(remotePeer, existing);
             created = newSocket(remotePeer);
             created.addInternalListener(listener);
@@ -639,6 +647,37 @@ public final class NostrRTCRoom implements Closeable {
         onSocketAvailable(remotePeer, created);
         refreshDirectNeighbors();
         return closed || connections.get(remotePeer) != created || created.isClosed() ? null : created;
+    }
+
+    private NostrRTCSocket announcedSocketOrRetain(NostrRTCSignal signal) {
+        NostrRTCPeer peer = signal.getPeer();
+        NostrRTCSocket existing = connections.get(peer);
+        if (existing != null && !existing.isClosed()) return existing;
+        // No decoding/future wait under the ownership-publication monitor.
+        if (!ProvisionalPeerSignals.retainable(signal)) return null;
+        synchronized (this) {
+            if (closed || isBannedPeer(peer.getPubkey()) || localPeer.getPubkey().equals(peer.getPubkey())) return null;
+            existing = connections.get(peer);
+            if (existing != null && !existing.isClosed()) return existing;
+            provisionalSignals.retain(signal);
+            return null;
+        }
+    }
+
+    private void replayProvisionalSignals(NostrRTCPeer peer, NostrRTCSocket socket) {
+        final ProvisionalPeerSignals.Pending pending;
+        synchronized (this) {
+            if (closed || socket == null || connections.get(peer) != socket || socket.isClosed()) return;
+            pending = provisionalSignals.take(peer);
+        }
+        if (pending == null) return;
+        // Only verified presence promotes a session. Replay uses normal guarded ingress outside the room monitor.
+        if (pending.offer != null) processAnnouncedOffer(pending.offer, socket);
+        for (NostrRTCRouteSignal route : pending.routes) processAnnouncedCandidates(route, socket);
+    }
+
+    private void expireProvisionalSignals() {
+        synchronized (this) { provisionalSignals.expire(); }
     }
 
     private void refreshDirectNeighbors() {
@@ -659,6 +698,7 @@ public final class NostrRTCRoom implements Closeable {
     }
 
     private void refreshPhysicalConnections() {
+        expireProvisionalSignals();
         Map<NodeId, NostrRTCSocket> socketsByNode = new HashMap<>();
         List<NodeId> membership = new ArrayList<>();
         List<NostrRTCPeer> peers = new ArrayList<>();
@@ -834,6 +874,7 @@ public final class NostrRTCRoom implements Closeable {
         synchronized (this) {
             if (closed) return;
             closed = true;
+            provisionalSignals.clear();
             socketsToClose = new ArrayList<>(connections.values());
             queuesToClose = new ArrayList<>(pendingSends.values());
         }
@@ -978,7 +1019,12 @@ public final class NostrRTCRoom implements Closeable {
             () -> {
                 if (closed) return null;
                 try {
-                    for (NostrRTCConnectSignal announce : signaling.getAnnounces()) ensureLogicalSocket(announce.getPeer());
+                    expireProvisionalSignals();
+                    for (NostrRTCConnectSignal announce : signaling.getAnnounces()) {
+                        if (announce.isExpired(Instant.now())) continue;
+                        NostrRTCSocket socket = ensureLogicalSocket(announce.getPeer());
+                        replayProvisionalSignals(announce.getPeer(), socket);
+                    }
                     refreshDirectNeighbors();
                 } catch (Throwable error) {
                     logger.log(Level.WARNING, "RTC room maintenance failed", error);
@@ -1023,7 +1069,17 @@ public final class NostrRTCRoom implements Closeable {
         return socket.isPendingConnection() || socket.isTurnFallbackAllowed();
     }
 
+    private void startRoomMaintenance() {
+        synchronized (this) {
+            if (closed || maintenanceStarted) return;
+            maintenanceStarted = true;
+        }
+        loop();
+    }
+
     public AsyncTask<Void> discover() {
+        if (closed) return AsyncTask.failed(new IllegalStateException("Room is closed"));
+        startRoomMaintenance();
         return this.signaling.start(false);
     }
 
@@ -1032,8 +1088,8 @@ public final class NostrRTCRoom implements Closeable {
         if (!started) {
             started = true;
             this.topologyControl.start();
-            this.loop();
         }
+        startRoomMaintenance();
         return this.signaling.start(true);
     }
 
@@ -1084,7 +1140,11 @@ public final class NostrRTCRoom implements Closeable {
      * @param peer
      */
     public void disconnect(NostrRTCPeer peer) {
-        NostrRTCSocket socket = connections.remove(peer);
+        final NostrRTCSocket socket;
+        synchronized (this) {
+            provisionalSignals.remove(peer);
+            socket = connections.remove(peer);
+        }
         if (socket != null) {
             socket.close();
             for (NostrRTCRoomPeerDisconnectListener listener : onDisconnectionListeners) {
@@ -1154,8 +1214,10 @@ public final class NostrRTCRoom implements Closeable {
 
     private void onAddAnnounce(NostrRTCConnectSignal announce) {
         if (closed) return;
+        if (announce.isExpired(Instant.now())) return;
         mergeSocketAdvertisedVersion(announce);
-        ensureLogicalSocket(announce.getPeer());
+        NostrRTCSocket socket = ensureLogicalSocket(announce.getPeer());
+        replayProvisionalSignals(announce.getPeer(), socket);
         for (NostrRTCRoomPeerDiscoveredListener listener : onPeerDiscoveredListeners) {
             if (closed) return;
             try {
@@ -1172,8 +1234,10 @@ public final class NostrRTCRoom implements Closeable {
 
     private void onUpdateAnnounce(NostrRTCConnectSignal announce) {
         if (closed) return;
+        if (announce.isExpired(Instant.now())) return;
         mergeSocketAdvertisedVersion(announce);
-        ensureLogicalSocket(announce.getPeer());
+        NostrRTCSocket socket = ensureLogicalSocket(announce.getPeer());
+        replayProvisionalSignals(announce.getPeer(), socket);
         for (NostrRTCRoomPeerDiscoveredListener listener : onPeerDiscoveredListeners) {
             if (closed) return;
             try {
@@ -1199,6 +1263,7 @@ public final class NostrRTCRoom implements Closeable {
         // we use the announce as keep alive signaling. If the announce is not updated in a while
         // the peer is considered offline and the logical socket is closed.
         NostrRTCPeer remotePeer = announce.getPeer();
+        synchronized (this) { provisionalSignals.remove(remotePeer); }
         logger.fine("Remove announce: " + announce + " reason: " + reason);
         for (NostrRTCRoomPeerDiscoveredListener listener : onPeerDiscoveredListeners) {
             try {
@@ -1489,9 +1554,13 @@ public final class NostrRTCRoom implements Closeable {
 
     private void onReceiveOffer(NostrRTCOfferSignal offer) {
         if (closed || isBannedPeer(offer.getPeer().getPubkey())) return;
-        NostrRTCSocket socket = connections.get(offer.getPeer());
-        if (socket == null) socket = ensureLogicalSocket(offer.getPeer());
-        if (socket == null) return;
+        NostrRTCSocket socket = announcedSocketOrRetain(offer);
+        if (socket != null) processAnnouncedOffer(offer, socket);
+    }
+
+    private void processAnnouncedOffer(NostrRTCOfferSignal offer, NostrRTCSocket socket) {
+        if (closed || isBannedPeer(offer.getPeer().getPubkey()) || socket.isClosed() ||
+            connections.get(offer.getPeer()) != socket) return;
         refreshDirectNeighbors();
         Attempt a = physicalConnections.attempt(socket.getRemotePeer());
         if (a != null && a.phase == Phase.ESTABLISHED) {
@@ -1574,9 +1643,13 @@ public final class NostrRTCRoom implements Closeable {
 
     private void onReceiveCandidates(NostrRTCRouteSignal candidate) {
         if (closed || isBannedPeer(candidate.getPeer().getPubkey())) return;
-        NostrRTCSocket socket = connections.get(candidate.getPeer());
-        if (socket == null) socket = ensureLogicalSocket(candidate.getPeer());
-        if (socket == null) return;
+        NostrRTCSocket socket = announcedSocketOrRetain(candidate);
+        if (socket != null) processAnnouncedCandidates(candidate, socket);
+    }
+
+    private void processAnnouncedCandidates(NostrRTCRouteSignal candidate, NostrRTCSocket socket) {
+        if (closed || isBannedPeer(candidate.getPeer().getPubkey()) || socket.isClosed() ||
+            connections.get(candidate.getPeer()) != socket) return;
         refreshDirectNeighbors();
         Attempt a = physicalConnections.attempt(candidate.getPeer());
         if (a == null) {
@@ -1831,7 +1904,8 @@ public final class NostrRTCRoom implements Closeable {
             });
     }
 
-    private List<NostrRTCSocket> removeSocketsForPubkey(NostrPublicKey peer) {
+    private synchronized List<NostrRTCSocket> removeSocketsForPubkey(NostrPublicKey peer) {
+        provisionalSignals.removeIdentity(peer);
         List<NostrRTCSocket> removed = new ArrayList<>();
         for (Map.Entry<NostrRTCPeer, NostrRTCSocket> entry : new ArrayList<>(connections.entrySet())) {
             NostrRTCPeer key = entry.getKey();

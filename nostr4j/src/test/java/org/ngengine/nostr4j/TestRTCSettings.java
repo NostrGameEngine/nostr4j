@@ -15,6 +15,63 @@ import org.junit.Test;
 public class TestRTCSettings {
 
     @Test
+    public void sessionLimitsSurviveSettingsCopiesAndSerialization() throws Exception {
+        org.ngengine.nostr4j.rtc.RTCSessionLimits limits = new org.ngengine.nostr4j.rtc.RTCSessionLimits(
+            64,
+            4,
+            16,
+            64,
+            java.time.Duration.ofSeconds(20)
+        );
+        RTCSettings original = RTCSettings.getDefault("test.app", "test.protocol");
+        RTCSettings settings = original
+            .withSessionLimits(limits)
+            .withMaxDirectPeers(7)
+            .withApplicationId("other.app")
+            .withSignalingRelays(java.util.List.of());
+        assertNotEquals(original.getSessionLimits(), settings.getSessionLimits());
+        assertEquals(limits, settings.getSessionLimits());
+        assertEquals(limits, settings.clone().getSessionLimits());
+        java.io.ByteArrayOutputStream bytes = new java.io.ByteArrayOutputStream();
+        try (java.io.ObjectOutputStream output = new java.io.ObjectOutputStream(bytes)) {
+            output.writeObject(settings);
+        }
+        try (
+            java.io.ObjectInputStream input = new java.io.ObjectInputStream(
+                new java.io.ByteArrayInputStream(bytes.toByteArray())
+            )
+        ) {
+            RTCSettings restored = (RTCSettings) input.readObject();
+            assertEquals(settings, restored);
+            assertEquals(settings.hashCode(), restored.hashCode());
+        }
+        java.lang.reflect.Field field = RTCSettings.class.getDeclaredField("sessionLimits");
+        field.setAccessible(true);
+        field.set(original, null);
+        assertEquals(org.ngengine.nostr4j.rtc.RTCSessionLimits.getDefault(), original.getSessionLimits());
+    }
+
+    @Test
+    public void invalidSessionQuotasAndLifetimesAreRejected() {
+        org.junit.Assert.assertThrows(
+            IllegalArgumentException.class,
+            () -> new org.ngengine.nostr4j.rtc.RTCSessionLimits(0, 1, 1, 1, java.time.Duration.ofSeconds(1))
+        );
+        org.junit.Assert.assertThrows(
+            IllegalArgumentException.class,
+            () -> new org.ngengine.nostr4j.rtc.RTCSessionLimits(1, 1, 2, 1, java.time.Duration.ofSeconds(1))
+        );
+        org.junit.Assert.assertThrows(
+            IllegalArgumentException.class,
+            () -> new org.ngengine.nostr4j.rtc.RTCSessionLimits(1, 1, 1, 1, java.time.Duration.ZERO)
+        );
+        org.junit.Assert.assertThrows(
+            IllegalArgumentException.class,
+            () -> new org.ngengine.nostr4j.rtc.RTCSessionLimits(1, 1, 1, 1, java.time.Duration.ofSeconds(Long.MAX_VALUE))
+        );
+    }
+
+    @Test
     public void testFactoryRequiresBothIdsAndUsesDefaultMaxDirectPeers() {
         assertEquals(16, RTCSettings.DEFAULT_MAX_DIRECT_PEERS);
         RTCSettings settings = RTCSettings.getDefault("test.app", "test.protocol");
