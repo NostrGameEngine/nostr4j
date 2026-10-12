@@ -610,8 +610,12 @@ public final class NostrRTCRoom implements Closeable {
     }
 
     private NostrRTCSocket ensureLogicalSocket(NostrRTCPeer remotePeer) {
-        if (closed || remotePeer == null || remotePeer.getPubkey() == null ||
-            !RTCSessionLimits.isValidSessionId(remotePeer.getSessionId())) {
+        if (
+            closed ||
+            remotePeer == null ||
+            remotePeer.getPubkey() == null ||
+            !RTCSessionLimits.isValidSessionId(remotePeer.getSessionId())
+        ) {
             return null;
         }
         if (
@@ -633,9 +637,12 @@ public final class NostrRTCRoom implements Closeable {
             existing = connections.get(remotePeer);
             if (existing != null && !existing.isClosed()) return existing;
             if (connections.size() >= PhysicalConnectionManager.MAX_CANDIDATES) return null;
-            long sameIdentity = connections.entrySet().stream()
+            long sameIdentity = connections
+                .entrySet()
+                .stream()
                 .filter(entry -> !entry.getValue().isClosed())
-                .filter(entry -> entry.getKey().getPubkey().equals(remotePeer.getPubkey())).count();
+                .filter(entry -> entry.getKey().getPubkey().equals(remotePeer.getPubkey()))
+                .count();
             if (sameIdentity >= settings.getSessionLimits().getMaxAnnouncedSessionsPerIdentity()) return null;
             if (existing != null) connections.remove(remotePeer, existing);
             created = newSocket(remotePeer);
@@ -677,7 +684,9 @@ public final class NostrRTCRoom implements Closeable {
     }
 
     private void expireProvisionalSignals() {
-        synchronized (this) { provisionalSignals.expire(); }
+        synchronized (this) {
+            provisionalSignals.expire();
+        }
     }
 
     private void refreshDirectNeighbors() {
@@ -1263,7 +1272,9 @@ public final class NostrRTCRoom implements Closeable {
         // we use the announce as keep alive signaling. If the announce is not updated in a while
         // the peer is considered offline and the logical socket is closed.
         NostrRTCPeer remotePeer = announce.getPeer();
-        synchronized (this) { provisionalSignals.remove(remotePeer); }
+        synchronized (this) {
+            provisionalSignals.remove(remotePeer);
+        }
         logger.fine("Remove announce: " + announce + " reason: " + reason);
         for (NostrRTCRoomPeerDiscoveredListener listener : onPeerDiscoveredListeners) {
             try {
@@ -1559,8 +1570,12 @@ public final class NostrRTCRoom implements Closeable {
     }
 
     private void processAnnouncedOffer(NostrRTCOfferSignal offer, NostrRTCSocket socket) {
-        if (closed || isBannedPeer(offer.getPeer().getPubkey()) || socket.isClosed() ||
-            connections.get(offer.getPeer()) != socket) return;
+        if (
+            closed ||
+            isBannedPeer(offer.getPeer().getPubkey()) ||
+            socket.isClosed() ||
+            connections.get(offer.getPeer()) != socket
+        ) return;
         refreshDirectNeighbors();
         Attempt a = physicalConnections.attempt(socket.getRemotePeer());
         if (a != null && a.phase == Phase.ESTABLISHED) {
@@ -1648,8 +1663,12 @@ public final class NostrRTCRoom implements Closeable {
     }
 
     private void processAnnouncedCandidates(NostrRTCRouteSignal candidate, NostrRTCSocket socket) {
-        if (closed || isBannedPeer(candidate.getPeer().getPubkey()) || socket.isClosed() ||
-            connections.get(candidate.getPeer()) != socket) return;
+        if (
+            closed ||
+            isBannedPeer(candidate.getPeer().getPubkey()) ||
+            socket.isClosed() ||
+            connections.get(candidate.getPeer()) != socket
+        ) return;
         refreshDirectNeighbors();
         Attempt a = physicalConnections.attempt(candidate.getPeer());
         if (a == null) {
@@ -1874,7 +1893,9 @@ public final class NostrRTCRoom implements Closeable {
                 sample.getMaxRetransmits(),
                 sample.getMaxPacketLifeTime()
             );
-            return broadcastEngine.broadcast(channel, profile, bbf.asReadOnlyBuffer(), Instant.now()).then(ignored -> null);
+            return broadcastEngine
+                .broadcast(channel, profile, bbf.asReadOnlyBuffer(), Instant.now(), graph)
+                .then(ignored -> null);
         }
         if (connections.size() > settings.getMaxDirectPeers()) {
             return AsyncTask.failed(new IllegalStateException("No connected mutually attested graph for broadcast"));

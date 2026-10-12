@@ -85,8 +85,28 @@ public final class BroadcastEngine implements Closeable {
 
     public AsyncTask<Boolean> broadcast(String logicalChannel, RouteTransportProfile profile, ByteBuffer payload, Instant now) {
         if (closed) return AsyncTask.failed(new IllegalStateException("Broadcast engine is closed"));
-        TopologyGraph graph = context.currentGraph();
-        BroadcastTree tree = trees.build(graph, localNode);
+        return broadcast(logicalChannel, profile, payload, now, context.currentGraph());
+    }
+
+    /**
+     * Use the same immutable topology snapshot that the caller qualified for this broadcast.
+     */
+    public AsyncTask<Boolean> broadcast(
+        String logicalChannel,
+        RouteTransportProfile profile,
+        ByteBuffer payload,
+        Instant now,
+        TopologyGraph graph
+    ) {
+        if (closed) return AsyncTask.failed(new IllegalStateException("Broadcast engine is closed"));
+        final BroadcastTree tree;
+        try {
+            tree = trees.build(graph, localNode);
+        } catch (IllegalArgumentException failure) {
+            // Topology can lose connectivity during ordinary peer churn. Report
+            // failure through the send task rather than terminating its caller.
+            return AsyncTask.failed(failure);
+        }
         CircuitId id = CircuitId.random();
         int maximumDepth = 1;
         for (NodeId node : tree.getNodes()) maximumDepth = Math.max(maximumDepth, tree.getDepth(node));

@@ -34,6 +34,92 @@ import org.ngengine.platform.NGEUtils;
 public class TestBroadcastEngine {
 
     @Test
+    public void disconnectedGraphFailsAsynchronouslyAndNextConnectedBroadcastStillWorks() throws Exception {
+        TestNetwork network = new TestNetwork(5, 50L);
+        try {
+            NodeId root = network.nodes.get(0);
+            TopologyGraph connected = network.current;
+            network.current = new TopologyGraph(new HashSet<NodeId>(network.nodes), Set.of());
+            AsyncTask<Boolean> failed = network.engines
+                .get(root)
+                .broadcast("churn", RouteTransportProfile.RELIABLE_ORDERED, ByteBuffer.wrap(new byte[] { 1 }), Instant.now());
+            org.junit.Assert.assertThrows(IllegalArgumentException.class, failed::await);
+            assertEquals(0, network.payloadForwards.get());
+            assertEquals(0, network.ackCount.get());
+            network.current = connected;
+            assertTrue(
+                network.engines
+                    .get(root)
+                    .broadcast(
+                        "churn",
+                        RouteTransportProfile.RELIABLE_ORDERED,
+                        ByteBuffer.wrap(new byte[] { 2 }),
+                        Instant.now()
+                    )
+                    .await()
+            );
+            assertEquals(network.nodes.size() - 1, network.payloadForwards.get());
+            assertEquals(network.nodes.size() - 1, network.ackCount.get());
+        } finally {
+            network.close();
+        }
+    }
+
+    @Test
+    public void qualifiedSnapshotSurvivesCurrentGraphDisconnectingBeforeTreeBuild() throws Exception {
+        TestNetwork network = new TestNetwork(5, 50L);
+        try {
+            NodeId root = network.nodes.get(0);
+            TopologyGraph qualified = network.current;
+            network.previous.put(qualified.getSnapshotId(), qualified);
+            network.current = new TopologyGraph(new HashSet<NodeId>(network.nodes), Set.of());
+            assertTrue(
+                network.engines
+                    .get(root)
+                    .broadcast(
+                        "snapshot",
+                        RouteTransportProfile.UNRELIABLE_UNORDERED,
+                        ByteBuffer.wrap(new byte[] { 3 }),
+                        Instant.now(),
+                        qualified
+                    )
+                    .await()
+            );
+            assertEquals(network.nodes.size() - 1, network.payloadForwards.get());
+            BroadcastFrame frame = BroadcastFrame.decode(network.lastFrame, Instant.now());
+            assertEquals(qualified.getSnapshotId(), frame.getGraphSnapshotId());
+            for (NodeId node : network.nodes) {
+                assertEquals(node.equals(root) ? 0 : 1, network.deliveries.get(node).get());
+            }
+        } finally {
+            network.close();
+        }
+    }
+
+    @Test
+    public void absentBroadcastRootFailsThroughTaskWithoutSending() {
+        TestNetwork network = new TestNetwork(5, 50L);
+        try {
+            NodeId root = network.nodes.get(0);
+            Set<NodeId> membership = new HashSet<NodeId>(network.nodes);
+            membership.remove(root);
+            network.current = new TopologyGraph(membership, Set.of());
+            AsyncTask<Boolean> failed = network.engines
+                .get(root)
+                .broadcast(
+                    "churn",
+                    RouteTransportProfile.UNRELIABLE_UNORDERED,
+                    ByteBuffer.wrap(new byte[] { 1 }),
+                    Instant.now()
+                );
+            org.junit.Assert.assertThrows(IllegalArgumentException.class, failed::await);
+            assertEquals(0, network.payloadForwards.get());
+        } finally {
+            network.close();
+        }
+    }
+
+    @Test
     public void testStableTreeUsesNMinusOneForwardsAndRpfDropsNonParentDuplicate() {
         TestNetwork network = new TestNetwork(8, 50L);
         try {
