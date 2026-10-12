@@ -1794,7 +1794,11 @@ public final class NostrRTCSocket {
         }
         if (currentTransport != null) {
             RTCDataChannel existingChannel = currentTransport.getDataChannel(channelName);
-            if (existingChannel != null) setChannelFromTransport(source, chan, existingChannel, null);
+            // Providers may publish a handle before opening it. Keep TURN until native readiness;
+            // the owner-bound ready callback performs the later adoption if this lookup is early.
+            if (existingChannel != null && existingChannel.ready().isSuccess()) {
+                setChannelFromTransport(source, chan, existingChannel, null);
+            }
         }
         chan.activateFallbackIfNeeded();
         return chan;
