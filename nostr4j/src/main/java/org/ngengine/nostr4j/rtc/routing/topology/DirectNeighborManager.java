@@ -84,8 +84,21 @@ public final class DirectNeighborManager {
             }
         }
 
-        if (graph != null && graph.connectedComponents().size() > 1 && !now.isBefore(membershipChangedAt.plus(repairGrace))) {
-            for (DesiredDirectEdge repair : repairPlanner.plan(scope, graph)) {
+        if (graph != null && !now.isBefore(membershipChangedAt.plus(repairGrace))) {
+            TopologyGraph repairGraph = graph;
+            if (!graph.getNodes().equals(membershipSet)) {
+                // Routing announcements can include peers without an admitted physical socket.
+                // Repair only the membership represented by this overlay, including members
+                // whose topology announcement has not arrived yet.
+                Set<TopologyEdge> memberEdges = new HashSet<TopologyEdge>();
+                for (TopologyEdge edge : graph.getEdges()) {
+                    if (membershipSet.contains(edge.getFirst()) && membershipSet.contains(edge.getSecond())) {
+                        memberEdges.add(edge);
+                    }
+                }
+                repairGraph = new TopologyGraph(membershipSet, memberEdges);
+            }
+            for (DesiredDirectEdge repair : repairPlanner.plan(scope, repairGraph)) {
                 installMandatory(desired, repair, maxDirectPeers);
             }
         }
