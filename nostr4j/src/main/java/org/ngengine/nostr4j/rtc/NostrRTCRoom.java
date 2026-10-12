@@ -134,6 +134,9 @@ public final class NostrRTCRoom implements Closeable {
     private volatile boolean closed;
     private volatile boolean started;
     private final PhysicalConnectionManager physicalConnections;
+    // Provider ownership stays here; the state-only capacity manager never owns transports.
+    private final Map<Attempt, NostrRTCSocket> physicalAttemptSockets = new ConcurrentHashMap<>();
+    private final Map<Attempt, PhysicalResourceRetirement> physicalRetirements = new ConcurrentHashMap<>();
     private final AtomicBoolean directRefreshRunning = new AtomicBoolean();
     private volatile Instant topologyEvaluatedAt = Instant.EPOCH;
 
@@ -555,6 +558,7 @@ public final class NostrRTCRoom implements Closeable {
 
     private NostrRTCSocket newSocket(NostrRTCPeer remotePeer) {
         NostrRTCSocket socket = new NostrRTCSocket(executor, remotePeer, roomKeyPair, localPeer, settings, turnPool);
+        socket.setPhysicalRetirementOwner(() -> retireSocketPhysicalResources(socket));
         socket.setPhysicalLinkCommitted(false);
         socket.setPhysicalLinkEnabled(false);
         socket.setForceTURN(forceTURN.get());
@@ -1284,26 +1288,127 @@ public final class NostrRTCRoom implements Closeable {
 
     private boolean isAttemptCurrent(Attempt a) {
         NostrRTCSocket socket = connections.get(a.peer);
+        NostrRTCSocket capturedOwner = physicalAttemptSockets.get(a);
         return (
             !closed &&
             !isBannedPeer(a.peer.getPubkey()) &&
+            !physicalRetirements.containsKey(a) &&
             socket != null &&
+            (capturedOwner == null || capturedOwner == socket) &&
             !socket.isClosed() &&
             physicalConnections.active(a)
         );
     }
 
+    private void retireSocketPhysicalResources(NostrRTCSocket socket) {
+        synchronized (this) {
+            for (Map.Entry<Attempt, NostrRTCSocket> entry : physicalAttemptSockets.entrySet()) {
+                if (entry.getValue() == socket) physicalConnections.abort(entry.getKey(), "logical-socket-closed");
+            }
+        }
+        cleanupPhysicalConnections();
+    }
+
     private void cleanupPhysicalConnections() {
-        for (Attempt a : physicalConnections.takeClosures()) {
-            NostrRTCSocket socket = connections.get(a.peer);
-            if (socket != null) socket.setPhysicalLinkEnabled(false);
-            physicalConnections.released(a);
+        List<PhysicalResourceRetirement> starts = new ArrayList<>();
+        synchronized (this) {
+            // The same state lock publishes attempt ownership and consumes closures.
+            // Reconcile may retire an attempt meanwhile, but cannot observe an owner-publication gap here.
+            for (Attempt a : physicalConnections.takeClosures()) {
+                if (physicalRetirements.containsKey(a)) continue;
+                NostrRTCSocket socket = physicalAttemptSockets.get(a);
+                final PhysicalResourceRetirement retirement;
+                try {
+                    retirement =
+                        socket == null
+                            ? new PhysicalResourceRetirement(Collections.emptyList(), done -> finishPhysicalRetirement(a, done))
+                            : socket.capturePhysicalRetirement(done -> finishPhysicalRetirement(a, done));
+                } catch (Throwable error) {
+                    logger.warning(
+                        "Physical retirement capture failed; reservation quarantined (" + error.getClass().getSimpleName() + ")"
+                    );
+                    continue;
+                }
+                physicalRetirements.put(a, retirement);
+                starts.add(retirement);
+            }
+        }
+        // No provider or application callback inherits the ownership-publication lock.
+        for (PhysicalResourceRetirement retirement : starts) retirement.start();
+    }
+
+    private void finishPhysicalRetirement(Attempt a, PhysicalResourceRetirement retirement) {
+        synchronized (this) {
+            if (retirement.isSuccessful()) {
+                physicalConnections.released(a);
+                physicalRetirements.remove(a, retirement);
+                physicalAttemptSockets.remove(a);
+            } else {
+                // A failed close may have partially disposed a provider. Keep ownership and charged capacity.
+                logger.warning(
+                    "Physical resource close failed; reservation quarantined (" +
+                    retirement.getFailure().getClass().getSimpleName() +
+                    ")"
+                );
+            }
+        }
+        if (retirement.isSuccessful()) scheduleTopologyRefresh();
+    }
+
+    private PhysicalResourceRetirement yieldPhysicalConnectionToOffer(
+        Attempt outgoing,
+        NostrRTCSocket socket,
+        NostrRTCOfferSignal offer
+    ) {
+        synchronized (this) {
+            if (closed) return null;
+            Attempt incoming = physicalConnections.yieldToOffer(outgoing);
+            if (incoming == null) return null;
+            NostrRTCSocket capturedOwner = physicalAttemptSockets.remove(outgoing);
+            physicalAttemptSockets.put(incoming, capturedOwner == null ? socket : capturedOwner);
+            if (!physicalConnections.claimDescription(incoming, true)) return null;
+            incoming.remoteDescription = offer.getOfferString();
+            incoming.turnOnly = forceTURN.get();
+            // Replacement is also owned retirement: old provider failure must never allow a new allocation.
+            PhysicalResourceRetirement retirement = socket.capturePhysicalRetirement(done ->
+                finishOfferCollisionRetirement(incoming, socket, offer, done)
+            );
+            physicalRetirements.put(incoming, retirement);
+            return retirement;
         }
     }
 
+    private void finishOfferCollisionRetirement(
+        Attempt incoming,
+        NostrRTCSocket socket,
+        NostrRTCOfferSignal offer,
+        PhysicalResourceRetirement retirement
+    ) {
+        boolean resume;
+        synchronized (this) {
+            if (!retirement.isSuccessful()) {
+                physicalConnections.fail(incoming, "offer-collision-cleanup-failed");
+                // Retain both failed handles and the incoming reservation; cleanup skips this existing ledger entry.
+                return;
+            }
+            physicalRetirements.remove(incoming, retirement);
+            resume = isAttemptCurrent(incoming);
+            if (!resume) {
+                physicalConnections.released(incoming);
+                physicalAttemptSockets.remove(incoming);
+            }
+        }
+        if (resume) connectIncomingOffer(incoming, socket, offer); else scheduleTopologyRefresh();
+    }
+
     private NostrRTCSocket preparePhysicalConnection(Attempt a) {
-        NostrRTCSocket socket = connections.get(a.peer);
-        if (socket == null || !isAttemptCurrent(a)) return null;
+        final NostrRTCSocket socket;
+        synchronized (this) {
+            socket = connections.get(a.peer);
+            if (socket == null || !isAttemptCurrent(a)) return null;
+            NostrRTCSocket owner = physicalAttemptSockets.putIfAbsent(a, socket);
+            if (owner != null && owner != socket) return null;
+        }
         if (!socket.enablePhysicalAttempt(() -> isAttemptCurrent(a))) return null;
         socket.createPhysicalChannel(InternalRoutingChannels.CONTROL, true, true, null, null);
         ensureInternalProfileChannels(socket, RouteTransportProfile.RELIABLE_ORDERED);
@@ -1329,7 +1434,10 @@ public final class NostrRTCRoom implements Closeable {
     private void createPhysicalOffer(Attempt a, NostrRTCSocket socket) {
         if (!isAttemptCurrent(a)) return;
         try {
-            NostrRTCSocket.PreparedRtcAttempt nativeAttempt = socket.reserveRtcTransportAttempt(() -> isAttemptCurrent(a));
+            NostrRTCSocket.PreparedRtcAttempt nativeAttempt = socket.reserveRtcTransportAttempt(
+                () -> isAttemptCurrent(a),
+                false
+            );
             if (nativeAttempt == null) return;
             nativeAttempt.cleanup();
             socket
@@ -1391,13 +1499,12 @@ public final class NostrRTCRoom implements Closeable {
             if (!socket.isRTCConnected()) resendAttemptSignals(a);
             return;
         }
-        boolean yielded = false;
         if (a != null && a.outgoing) {
             // Either endpoint can initiate. Only simultaneous offers use the public-key tie-break.
             if (shouldOfferConnection(offer.getPeer().getPubkey()) || a.answerReceived) return;
-            a = physicalConnections.yieldToOffer(a);
-            if (a == null) return;
-            yielded = true;
+            PhysicalResourceRetirement retirement = yieldPhysicalConnectionToOffer(a, socket, offer);
+            if (retirement != null) retirement.start();
+            return;
         }
         if (a == null) a = physicalConnections.admit(socket.getRemotePeer());
         if (a == null || !isAttemptCurrent(a)) return;
@@ -1407,14 +1514,12 @@ public final class NostrRTCRoom implements Closeable {
         }
         a.remoteDescription = offer.getOfferString();
         a.turnOnly = forceTURN.get();
-        final Attempt current = a;
+        connectIncomingOffer(a, socket, offer);
+    }
+
+    private void connectIncomingOffer(Attempt current, NostrRTCSocket socket, NostrRTCOfferSignal offer) {
         try {
             NostrRTCSocket.PreparedRtcAttempt nativeAttempt = null;
-            if (yielded) {
-                nativeAttempt = socket.reserveRtcTransportAttempt(() -> isAttemptCurrent(current));
-                if (nativeAttempt == null) return;
-                nativeAttempt.cleanup();
-            }
             if (preparePhysicalConnection(current) == null) return;
             if (current.turnOnly) {
                 activateAttemptTurn(current, socket);

@@ -35,6 +35,7 @@ import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -812,6 +813,29 @@ public final class NostrRTCChannel {
             }
             turnCleanup.run();
         };
+    }
+
+    /**
+     * State-only capture; the retirement owner observes every close result independently.
+     */
+    void capturePhysicalRetirement(List<PhysicalResourceRetirement.Operation> operations) {
+        RTCDataChannel previousChannel = channel;
+        NostrTURNChannel receive = turnReceive;
+        NostrTURNChannel send = turnSend;
+        updateNativeChannelState(null);
+        turnReceive = null;
+        turnSend = null;
+        confirmedTurnSend = null;
+        confirmedTurnGeneration = Long.MIN_VALUE;
+        if (previousChannel != null) operations.add(previousChannel::close);
+        if (receive != null) operations.add(() -> {
+            receive.close("physical-attempt-retired");
+            return AsyncTask.completed(null);
+        });
+        if (send != null && send != receive) operations.add(() -> {
+            send.close("physical-attempt-retired");
+            return AsyncTask.completed(null);
+        });
     }
 
     private void disposeTurn() {

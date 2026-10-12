@@ -61,7 +61,6 @@ import org.ngengine.nostr4j.rtc.signal.NostrRTCRouteSignal;
 import org.ngengine.nostr4j.rtc.signal.NostrRTCSignal;
 import org.ngengine.platform.AsyncExecutor;
 import org.ngengine.platform.AsyncTask;
-import org.ngengine.platform.NGEPlatform;
 import org.ngengine.platform.NGEUtils;
 import org.ngengine.platform.SafeFlag;
 import org.ngengine.platform.transport.RTCDataChannel;
@@ -150,6 +149,30 @@ public final class NostrRTCSocket {
     private volatile java.util.function.BooleanSupplier physicalAttemptGuard = () -> true;
     private volatile InternalRoutedTransport routedTransport;
     private volatile Instant lastRtcAttemptSince;
+    private volatile Runnable physicalRetirementOwner = () -> {};
+    private final List<NativeAllocation> nativeAllocations = new ArrayList<>();
+
+    /**
+     * A generation-bound factory witness owns a possible late handle until transfer or certain disposal.
+     */
+    private static final class NativeAllocation {
+
+        final long generation;
+        boolean retired;
+        RTCTransport uncertainHandle;
+        java.util.function.Consumer<Void> resolve;
+        java.util.function.Consumer<Throwable> reject;
+        final AsyncTask<Void> disposal;
+
+        NativeAllocation(long generation) {
+            this.generation = generation;
+            disposal =
+                AsyncTask.create((accept, fail) -> {
+                    resolve = accept;
+                    reject = fail;
+                });
+        }
+    }
 
     private class NostrRTCListener implements RTCTransportListener {
 
@@ -457,31 +480,90 @@ public final class NostrRTCSocket {
         return true;
     }
 
+    private BoundRTCListener createAndInstallRtcTransport(
+        long generation,
+        boolean offerInitiator,
+        BooleanSupplier ownerActive
+    ) {
+        // Promise construction and the provider factory execute outside lifecycle monitors.
+        NativeAllocation allocation = new NativeAllocation(generation);
+        synchronized (this) {
+            if (
+                stopped ||
+                !physicalLinkEnabled ||
+                rtcTransportGeneration != generation ||
+                !physicalAttemptGuard.getAsBoolean() ||
+                !ownerActive.getAsBoolean()
+            ) {
+                throw new IllegalStateException("RTC transport attempt was superseded");
+            }
+            nativeAllocations.add(allocation);
+        }
+        final RTCTransport next;
+        try {
+            next =
+                Objects.requireNonNull(
+                    NGEUtils
+                        .getPlatform()
+                        .newRTCTransport(settings.getP2pAttemptTimeout(), localPeer.getSessionId(), localPeer.getStunServers()),
+                    "RTC transport factory returned null"
+                );
+        } catch (RuntimeException | Error error) {
+            synchronized (this) {
+                nativeAllocations.remove(allocation);
+            }
+            // No handle escaped the factory. A captured witness can now settle without freeing early.
+            allocation.resolve.accept(null);
+            throw error;
+        }
+        return installRtcTransport(next, generation, offerInitiator, ownerActive, allocation);
+    }
+
     private BoundRTCListener installRtcTransport(
         RTCTransport next,
         long expectedGeneration,
         boolean offerInitiator,
-        BooleanSupplier ownerActive
+        BooleanSupplier ownerActive,
+        NativeAllocation allocation
     ) {
         BoundRTCListener bound = null;
         synchronized (this) {
             if (
                 !stopped &&
+                !allocation.retired &&
+                allocation.generation == expectedGeneration &&
                 physicalLinkEnabled &&
                 physicalAttemptGuard.getAsBoolean() &&
                 ownerActive.getAsBoolean() &&
                 transport == null &&
                 rtcTransportGeneration == expectedGeneration
             ) {
+                // Transfer from the factory witness to the socket atomically with retirement capture.
+                nativeAllocations.remove(allocation);
                 transport = next;
                 bound = new BoundRTCListener(next, offerInitiator, ownerActive);
                 currentRtcListener = bound;
+            } else {
+                allocation.retired = true;
+                allocation.uncertainHandle = next;
             }
         }
         if (bound == null) {
-            next.close();
+            try {
+                next.close();
+                synchronized (this) {
+                    allocation.uncertainHandle = null;
+                    nativeAllocations.remove(allocation);
+                }
+                allocation.resolve.accept(null);
+            } catch (RuntimeException | Error error) {
+                // The failed late handle stays owned by the witness and any captured retirement.
+                allocation.reject.accept(error);
+                throw error;
+            }
             throw new IllegalStateException("RTC transport attempt was superseded");
         }
+        allocation.resolve.accept(null);
         next.addListener(bound);
         List<RTCTransportIceCandidate> pending;
         synchronized (this) {
@@ -749,6 +831,56 @@ public final class NostrRTCSocket {
             for (Runnable cleanup : physicalCleanup) cleanup.run();
             emitTransportChange(change);
         }
+    }
+
+    /**
+     * Capture once under the socket monitor. Disposal is started by the room
+     * after this method returns, and owns only these detached handles.
+     */
+    synchronized PhysicalResourceRetirement capturePhysicalRetirement(
+        java.util.function.Consumer<PhysicalResourceRetirement> settled
+    ) {
+        List<PhysicalResourceRetirement.Operation> operations = new ArrayList<>();
+        for (NativeAllocation allocation : nativeAllocations) {
+            allocation.retired = true;
+            operations.add(() -> allocation.disposal);
+        }
+        physicalLinkEnabled = false;
+        physicalLinkCommitted = false;
+        connected = false;
+        turnFallbackAllowed = false;
+        ++rtcConnectAttempt;
+        AsyncTask<Void> previousConnectDeadline = rtcConnectDeadlineTask;
+        rtcConnectDeadlineTask = null;
+        pendingConnectionSince = null;
+        ++rtcTransportGeneration;
+        RTCTransport previousTransport = transport;
+        transport = null;
+        currentRtcListener = null;
+        pendingRemoteIceCandidates.clear();
+        AsyncTask<Void> previousCandidateEmission = delayedCandidateEmission;
+        delayedCandidateEmission = null;
+        ++candidateEmissionGeneration;
+        localIceCandidates.clear();
+        if (previousTransport != null) operations.add(() -> {
+            previousTransport.close();
+            return AsyncTask.completed(null);
+        });
+        if (previousConnectDeadline != null) operations.add(() -> {
+            previousConnectDeadline.cancel();
+            return AsyncTask.completed(null);
+        });
+        if (previousCandidateEmission != null) operations.add(() -> {
+            previousCandidateEmission.cancel();
+            return AsyncTask.completed(null);
+        });
+        for (NostrRTCChannel channel : channels.values()) channel.capturePhysicalRetirement(operations);
+        TransportChange change = updateTransportPath(TransportPath.NONE, "physical-link-disabled");
+        operations.add(() -> {
+            emitTransportChange(change);
+            return AsyncTask.completed(null);
+        });
+        return new PhysicalResourceRetirement(operations, settled);
     }
 
     void activatePhysicalTurnFallback() {
@@ -1025,14 +1157,21 @@ public final class NostrRTCSocket {
         return stopped;
     }
 
+    void setPhysicalRetirementOwner(Runnable owner) {
+        physicalRetirementOwner = Objects.requireNonNull(owner, "owner");
+    }
+
     /**
      * Close the socket.
      */
     void close() {
         synchronized (this) {
+            if (stopped) return;
             stopped = true;
             channelRegistrations.clear();
         }
+        // The room captures its charged physical handles before logical close can dispose them unobserved.
+        physicalRetirementOwner.run();
         logger.fine("Closing RTC Socket");
 
         for (NostrRTCChannel channel : channels.values()) {
@@ -1310,15 +1449,9 @@ public final class NostrRTCSocket {
             logger.fine("Listening for RTC connections on connection ID: " + localPeer.getSessionId());
             // useTURN(false);
 
-            NGEPlatform platform = NGEUtils.getPlatform();
             logger.fine("Creating RTC transport for connection ID: " + localPeer.getSessionId());
-
-            RTCTransport currentTransport = platform.newRTCTransport(
-                settings.getP2pAttemptTimeout(),
-                localPeer.getSessionId(),
-                localPeer.getStunServers()
-            );
-            BoundRTCListener source = installRtcTransport(currentTransport, generation, true, attemptActive);
+            BoundRTCListener source = createAndInstallRtcTransport(generation, true, attemptActive);
+            RTCTransport currentTransport = source.owner;
 
             logger.fine("Initiating RTC channel for connection ID: " + localPeer.getSessionId());
             scheduleRtcConnectTimeout("listen", source);
@@ -1389,16 +1522,13 @@ public final class NostrRTCSocket {
         logger.fine("Connecting to RTC socket");
         // useTURN(false);
 
-        NGEPlatform platform = NGEUtils.getPlatform();
-
         String connectString;
         RTCTransport currentTransport;
         BoundRTCListener source;
         if (offerOrAnswer instanceof NostrRTCOfferSignal) {
             if (this.transport != null) throw new IllegalStateException("Already connected");
-            currentTransport =
-                platform.newRTCTransport(settings.getP2pAttemptTimeout(), localPeer.getSessionId(), localPeer.getStunServers());
-            source = installRtcTransport(currentTransport, generation, false, attemptActive);
+            source = createAndInstallRtcTransport(generation, false, attemptActive);
+            currentTransport = source.owner;
             logger.fine("Use offer to connect");
             this.remotePeer.merge(((NostrRTCOfferSignal) offerOrAnswer).getPeer());
             // this.remotePeer =
