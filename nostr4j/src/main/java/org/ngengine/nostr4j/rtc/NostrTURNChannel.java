@@ -41,6 +41,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BooleanSupplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
@@ -385,6 +386,17 @@ public final class NostrTURNChannel {
     }
 
     void close(String reason) {
+        close(reason, null);
+    }
+
+    /**
+     * Retires a physical TURN handle while its owning logical endpoint remains live.
+     */
+    void closeForTransportReplacement(String reason, BooleanSupplier logicalEndpointActive) {
+        close(reason, Objects.requireNonNull(logicalEndpointActive));
+    }
+
+    private void close(String reason, BooleanSupplier logicalEndpointActive) {
         if (closed) {
             return;
         }
@@ -403,7 +415,12 @@ public final class NostrTURNChannel {
         }
         closed = true;
         cancelConnectAckTimeout();
-        failPendingWrites(new IllegalStateException("TURN channel closed: " + reason));
+        // Full endpoint close may win after the owner detached us, including during control submission.
+        failPendingWrites(
+            logicalEndpointActive != null && logicalEndpointActive.getAsBoolean()
+                ? new DeliveryTransportReplacedException("TURN")
+                : new IllegalStateException("TURN channel closed: " + reason)
+        );
         for (NostrTURNChannelListener l : listeners) {
             try {
                 l.onTurnChannelClosed(this, reason);

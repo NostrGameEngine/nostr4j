@@ -861,13 +861,16 @@ public final class NostrRTCChannel {
     private Runnable detachTurn() {
         NostrTURNChannel receive = turnReceive;
         NostrTURNChannel send = turnSend;
+        NostrTURNPool owningPool = socket.getTurnPool();
         turnReceive = null;
         turnSend = null;
         confirmedTurnSend = null;
         confirmedTurnGeneration = Long.MIN_VALUE;
         return () -> {
-            if (receive != null) receive.close("rtc-p2p-established");
-            if (send != null && send != receive) send.close("rtc-p2p-established");
+            BooleanSupplier logicalEndpointActive = () -> !closed && !socket.isClosed()
+                && (owningPool == null || !owningPool.isClosed());
+            if (receive != null) receive.closeForTransportReplacement("rtc-p2p-established", logicalEndpointActive);
+            if (send != null && send != receive) send.closeForTransportReplacement("rtc-p2p-established", logicalEndpointActive);
         };
     }
 
