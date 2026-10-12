@@ -822,6 +822,8 @@ public final class NostrRTCChannel {
         RTCDataChannel previousChannel = channel;
         NostrTURNChannel receive = turnReceive;
         NostrTURNChannel send = turnSend;
+        // A TURN-only retirement must invalidate queued writes even though native state stays null -> null.
+        if (previousChannel == null && (receive != null || send != null)) writeGeneration.incrementAndGet();
         updateNativeChannelState(null);
         turnReceive = null;
         turnSend = null;
@@ -867,10 +869,13 @@ public final class NostrRTCChannel {
         confirmedTurnSend = null;
         confirmedTurnGeneration = Long.MIN_VALUE;
         return () -> {
-            BooleanSupplier logicalEndpointActive = () -> !closed && !socket.isClosed()
-                && (owningPool == null || !owningPool.isClosed());
+            BooleanSupplier logicalEndpointActive = () ->
+                !closed && !socket.isClosed() && (owningPool == null || !owningPool.isClosed());
             if (receive != null) receive.closeForTransportReplacement("rtc-p2p-established", logicalEndpointActive);
-            if (send != null && send != receive) send.closeForTransportReplacement("rtc-p2p-established", logicalEndpointActive);
+            if (send != null && send != receive) send.closeForTransportReplacement(
+                "rtc-p2p-established",
+                logicalEndpointActive
+            );
         };
     }
 

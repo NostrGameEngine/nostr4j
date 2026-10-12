@@ -30,8 +30,8 @@
  */
 package org.ngengine.nostr4j.rtc;
 
-import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -41,9 +41,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -51,8 +51,8 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.LongSupplier;
 import org.junit.Test;
-import org.ngengine.nostr4j.RTCSettings;
 import org.ngengine.nostr4j.NostrPool;
+import org.ngengine.nostr4j.RTCSettings;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
 import org.ngengine.nostr4j.rtc.NostrTURNPool.TURNTransport;
@@ -68,8 +68,8 @@ import org.ngengine.platform.AsyncExecutor;
 import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEPlatform;
 import org.ngengine.platform.jvm.JVMAsyncPlatform;
-import org.ngengine.platform.transport.WebsocketTransport;
 import org.ngengine.platform.transport.RTCDataChannel;
+import org.ngengine.platform.transport.WebsocketTransport;
 import org.ngengine.platform.transport.WebsocketTransportListener;
 
 public class TestNostrTURNAckRetry {
@@ -158,12 +158,35 @@ public class TestNostrTURNAckRetry {
             assertEquals(2, fixture.receivedPacketIds.size());
             assertEquals(fixture.receivedPacketIds.get(0), fixture.receivedPacketIds.get(1));
             assertArrayEquals(fixture.receivedFrames.get(0), fixture.receivedFrames.get(1));
-            assertFalse("each retry needs a fresh transport message", fixture.out.messageIds.get(0).equals(fixture.out.messageIds.get(1)));
-            assertEquals("exactly one pause/retry epoch, no premature watchdog restart", originalEpoch + 1L, longField(fixture.queue, "epoch"));
-            assertEquals("actual retry must use the original prepared packet", originalPacket, fixture.sentPreparedPackets.get(0));
-            assertEquals("actual retry must use the original prepared packet", originalPacket, fixture.sentPreparedPackets.get(1));
-            assertEquals("actual retry must preserve the original lifetime", Long.valueOf(originalTime), fixture.sentEnqueuedTimes.get(0));
-            assertEquals("actual retry must preserve the original lifetime", Long.valueOf(originalTime), fixture.sentEnqueuedTimes.get(1));
+            assertFalse(
+                "each retry needs a fresh transport message",
+                fixture.out.messageIds.get(0).equals(fixture.out.messageIds.get(1))
+            );
+            assertEquals(
+                "exactly one pause/retry epoch, no premature watchdog restart",
+                originalEpoch + 1L,
+                longField(fixture.queue, "epoch")
+            );
+            assertEquals(
+                "actual retry must use the original prepared packet",
+                originalPacket,
+                fixture.sentPreparedPackets.get(0)
+            );
+            assertEquals(
+                "actual retry must use the original prepared packet",
+                originalPacket,
+                fixture.sentPreparedPackets.get(1)
+            );
+            assertEquals(
+                "actual retry must preserve the original lifetime",
+                Long.valueOf(originalTime),
+                fixture.sentEnqueuedTimes.get(0)
+            );
+            assertEquals(
+                "actual retry must preserve the original lifetime",
+                Long.valueOf(originalTime),
+                fixture.sentEnqueuedTimes.get(1)
+            );
             assertEquals(1, fixture.applicationDeliveries.get());
             assertEquals(1, fixture.successes.get());
             assertEquals(0, fixture.failures.get());
@@ -359,7 +382,10 @@ public class TestNostrTURNAckRetry {
             assertArrayEquals(fixture.receivedFrames.get(0), fixture.receivedFrames.get(1));
             assertEquals("successor cannot overtake pending head", 2, fixture.out.dataFrames.get());
             fixture.back.releaseAck(0); // Authenticated, but belongs to the detached handle/attempt.
-            assertFalse("stale detached receipt cannot complete replacement", fixture.completed.await(150L, TimeUnit.MILLISECONDS));
+            assertFalse(
+                "stale detached receipt cannot complete replacement",
+                fixture.completed.await(150L, TimeUnit.MILLISECONDS)
+            );
             assertEquals(2, fixture.queue.size());
             fixture.back.releaseAck(1);
             waitUntil(() -> fixture.successes.get() == 1 && fixture.back.heldAcks.size() == 3, 3000L);
@@ -387,10 +413,12 @@ public class TestNostrTURNAckRetry {
             waitUntil(() -> field(fixture.queue, "executionQueue") == null, 3000L);
             assertEquals(0, fixture.failures.get());
             assertEquals(originalEntry, queueHead(fixture.queue));
-            clock.addAndGet(9_999L); fixture.queue.loop();
+            clock.addAndGet(9_999L);
+            fixture.queue.loop();
             assertEquals(0, fixture.failures.get());
             assertEquals(originalEntry, queueHead(fixture.queue));
-            clock.incrementAndGet(); fixture.queue.loop();
+            clock.incrementAndGet();
+            fixture.queue.loop();
             waitUntil(() -> fixture.failures.get() == 1, 3000L);
             assertEquals(0, fixture.successes.get());
             assertEquals(0, fixture.queue.size());
@@ -407,12 +435,23 @@ public class TestNostrTURNAckRetry {
             waitUntil(() -> fixture.back.heldAcks.size() == 1, 3000L);
             assertTrue(fixture.sender == fixture.companion);
             AtomicInteger closes = new AtomicInteger();
-            fixture.sender.addListener(new NostrTURNChannelListener() {
-                @Override public void onTurnChannelReady(NostrTURNChannel channel) {}
-                @Override public void onTurnChannelMessage(NostrTURNChannel channel, ByteBuffer payload) {}
-                @Override public void onTurnChannelError(NostrTURNChannel channel, Throwable error) {}
-                @Override public void onTurnChannelClosed(NostrTURNChannel channel, String reason) { closes.incrementAndGet(); }
-            });
+            fixture.sender.addListener(
+                new NostrTURNChannelListener() {
+                    @Override
+                    public void onTurnChannelReady(NostrTURNChannel channel) {}
+
+                    @Override
+                    public void onTurnChannelMessage(NostrTURNChannel channel, ByteBuffer payload) {}
+
+                    @Override
+                    public void onTurnChannelError(NostrTURNChannel channel, Throwable error) {}
+
+                    @Override
+                    public void onTurnChannelClosed(NostrTURNChannel channel, String reason) {
+                        closes.incrementAndGet();
+                    }
+                }
+            );
             detachOwnedTurns(fixture).run();
             waitUntil(() -> field(fixture.queue, "executionQueue") == null, 3000L);
             assertEquals(1, closes.get());
@@ -434,23 +473,28 @@ public class TestNostrTURNAckRetry {
                 fixture.sender.write(ByteBuffer.wrap(new byte[] { 10 })).catchException(transportFailure::set);
                 waitUntil(() -> fixture.back.heldAcks.size() == 2, 3000L);
                 Runnable capturedCleanup = closeKind == 0 ? detachOwnedTurns(fixture) : null;
-                if (closeKind == 0 || closeKind == 1) fixture.aliceLogical.close();
-                else if (closeKind == 2) fixture.aliceSocket.close();
-                else if (closeKind == 3) fixture.turnPool.close();
-                else fixture.room.close();
+                if (closeKind == 0 || closeKind == 1) fixture.aliceLogical.close(); else if (
+                    closeKind == 2
+                ) fixture.aliceSocket.close(); else if (closeKind == 3) fixture.turnPool.close(); else fixture.room.close();
                 if (capturedCleanup != null) capturedCleanup.run();
                 waitUntil(() -> transportFailure.get() != null, 3000L);
                 assertTrue(transportFailure.get() instanceof IllegalStateException);
-                assertFalse("full owner close must reject the transport write hard", DeliveryFailures.isRetryable(transportFailure.get()));
+                assertFalse(
+                    "full owner close must reject the transport write hard",
+                    DeliveryFailures.isRetryable(transportFailure.get())
+                );
                 // A closed logical channel invalidates the existing in-flight generation; its queue still has finite TTL.
-                clock.addAndGet(30_000L); fixture.queue.loop();
+                clock.addAndGet(30_000L);
+                fixture.queue.loop();
                 waitUntil(() -> fixture.failures.get() == 1, 3000L);
                 assertFalse(DeliveryFailures.isRetryable(fixture.lastFailure.get()));
                 assertEquals(0, fixture.successes.get());
                 assertEquals(0, fixture.queue.size());
                 assertTrue(fixture.sender.isClosed());
                 assertTrue(fixture.companion.isClosed());
-                fixture.back.releaseAck(0); fixture.back.releaseAck(1); fixture.queue.loop();
+                fixture.back.releaseAck(0);
+                fixture.back.releaseAck(1);
+                fixture.queue.loop();
                 assertEquals(1, fixture.failures.get());
                 assertEquals(2, fixture.out.dataFrames.get());
             }
@@ -480,7 +524,8 @@ public class TestNostrTURNAckRetry {
                 assertEquals(0, fixture.pendingReceipts());
                 assertTrue(fixture.sender.isClosed());
                 assertTrue(fixture.companion.isClosed());
-                fixture.back.releaseAck(0); fixture.queue.loop();
+                fixture.back.releaseAck(0);
+                fixture.queue.loop();
                 assertEquals(1, fixture.failures.get());
             }
         }
@@ -504,9 +549,14 @@ public class TestNostrTURNAckRetry {
             waitUntil(() -> fixture.successes.get() == 1, 3000L);
             assertEquals(1, nativeChannel.frames.size());
             assertArrayEquals(fixture.receivedFrames.get(0), nativeChannel.frames.get(0));
-            assertEquals("cross-transport retry must not duplicate application delivery", 1, fixture.applicationDeliveries.get());
+            assertEquals(
+                "cross-transport retry must not duplicate application delivery",
+                1,
+                fixture.applicationDeliveries.get()
+            );
             assertTrue(oldSender.isClosed());
-            fixture.back.releaseAck(0); fixture.queue.loop();
+            fixture.back.releaseAck(0);
+            fixture.queue.loop();
             assertEquals(1, fixture.successes.get());
             assertEquals(0, fixture.failures.get());
             assertEquals(0, fixture.queue.size());
@@ -529,10 +579,101 @@ public class TestNostrTURNAckRetry {
         }
     }
 
+    @Test(timeout = 10_000L)
+    public void turnOnlyPhysicalRetirementPreservesPendingHeadAndAuthenticatedReplacementOrder() throws Exception {
+        AtomicLong clock = new AtomicLong(1_000_000L);
+        try (RoomTurnFixture fixture = new RoomTurnFixture(clock::get, true, false)) {
+            fixture.back.holdDeliveryAcks.set(true);
+            fixture.send(ByteBuffer.wrap(new byte[] { 13 }));
+            waitUntil(() -> fixture.back.heldAcks.size() == 1 && fixture.applicationDeliveries.get() == 1, 3000L);
+            fixture.send(ByteBuffer.wrap(new byte[] { 14 }));
+            Object originalEntry = queueHead(fixture.queue);
+            Object originalPacket = field(originalEntry, "packet");
+            long originalTime = longField(originalEntry, "enqueuedAtMs");
+            long generation = fixture.aliceLogical.getWriteGeneration();
+            NostrTURNChannel oldSender = fixture.sender;
+            assertEquals(null, field(fixture.aliceLogical, "channel"));
+            clock.addAndGet(20_000L);
+            PhysicalResourceRetirement retirement = fixture.aliceSocket.capturePhysicalRetirement(ignored -> {});
+            retirement.start();
+            waitUntil(retirement::isSettled, 3000L);
+            fixture.queue.loop();
+            waitUntil(() -> field(fixture.queue, "executionQueue") == null, 3000L);
+            assertEquals("physical replacement must not reject a live logical caller", 0, fixture.failures.get());
+            assertEquals(originalEntry, queueHead(fixture.queue));
+            assertEquals(2, fixture.queue.size());
+            assertTrue(retirement.isSuccessful());
+            assertFalse(fixture.aliceSocket.isClosed());
+            assertFalse(fixture.aliceLogical.isClosed());
+            assertTrue(
+                "captured TURN attempt must lose its write generation",
+                generation != fixture.aliceLogical.getWriteGeneration()
+            );
+            assertTrue(oldSender.isClosed());
+            assertEquals(0, fixture.pendingReceipts());
+            fixture.aliceSocket.setPhysicalLinkEnabled(true);
+            setField(fixture.aliceSocket, "turnFallbackAllowed", Boolean.TRUE);
+            fixture.reconnectOwnedPair();
+            fixture.queue.loop();
+            waitUntil(() -> fixture.back.heldAcks.size() == 2, 3000L);
+            assertEquals(originalEntry, queueHead(fixture.queue));
+            assertEquals(originalPacket, fixture.sentPreparedPackets.get(1));
+            assertEquals(Long.valueOf(originalTime), fixture.sentEnqueuedTimes.get(1));
+            assertArrayEquals(fixture.receivedFrames.get(0), fixture.receivedFrames.get(1));
+            assertEquals("successor must remain behind unacknowledged original head", 2, fixture.out.dataFrames.get());
+            oldSender.onBinaryMessage(fixture.back.heldAcks.get(0).asReadOnlyBuffer());
+            fixture.back.releaseAck(0);
+            assertFalse("retired receipt cannot acknowledge replacement", fixture.completed.await(150L, TimeUnit.MILLISECONDS));
+            fixture.back.releaseAck(1);
+            waitUntil(() -> fixture.successes.get() == 1 && fixture.back.heldAcks.size() == 3, 3000L);
+            assertEquals(1, fixture.queue.size());
+            fixture.back.releaseAck(2);
+            waitUntil(() -> fixture.successes.get() == 2, 3000L);
+            assertEquals(2, fixture.applicationDeliveries.get());
+            assertEquals(0, fixture.failures.get());
+            assertEquals(0, fixture.queue.size());
+            assertEquals(0, fixture.pendingReceipts());
+        }
+    }
+
+    @Test(timeout = 10_000L)
+    public void turnOnlyPhysicalRetirementCannotRenewOriginalQueueDeadline() throws Exception {
+        AtomicLong clock = new AtomicLong(1_000_000L);
+        try (RoomTurnFixture fixture = new RoomTurnFixture(clock::get, true, false)) {
+            fixture.back.holdDeliveryAcks.set(true);
+            fixture.send(ByteBuffer.wrap(new byte[] { 15 }));
+            waitUntil(() -> fixture.back.heldAcks.size() == 1, 3000L);
+            Object originalEntry = queueHead(fixture.queue);
+            assertEquals(null, field(fixture.aliceLogical, "channel"));
+            clock.addAndGet(20_000L);
+            PhysicalResourceRetirement retirement = fixture.aliceSocket.capturePhysicalRetirement(ignored -> {});
+            retirement.start();
+            waitUntil(retirement::isSettled, 3000L);
+            fixture.queue.loop();
+            waitUntil(() -> field(fixture.queue, "executionQueue") == null, 3000L);
+            assertEquals(0, fixture.failures.get());
+            assertEquals(originalEntry, queueHead(fixture.queue));
+            clock.addAndGet(9_999L);
+            fixture.queue.loop();
+            assertEquals(0, fixture.failures.get());
+            assertEquals(originalEntry, queueHead(fixture.queue));
+            clock.incrementAndGet();
+            fixture.queue.loop();
+            waitUntil(() -> fixture.failures.get() == 1, 3000L);
+            fixture.back.releaseAck(0);
+            fixture.queue.loop();
+            assertEquals(0, fixture.successes.get());
+            assertEquals(1, fixture.out.dataFrames.get());
+            assertEquals(0, fixture.queue.size());
+        }
+    }
+
     private static Runnable detachOwnedTurns(RoomTurnFixture fixture) throws Exception {
         java.lang.reflect.Method detach = NostrRTCChannel.class.getDeclaredMethod("detachTurn");
         detach.setAccessible(true);
-        synchronized (fixture.aliceSocket) { return (Runnable) detach.invoke(fixture.aliceLogical); }
+        synchronized (fixture.aliceSocket) {
+            return (Runnable) detach.invoke(fixture.aliceLogical);
+        }
     }
 
     private static void assertProductionLimits(RoomTurnFixture fixture) throws Exception {
@@ -549,6 +690,7 @@ public class TestNostrTURNAckRetry {
     }
 
     private static final class RoomTurnFixture implements AutoCloseable {
+
         private final AsyncExecutor aliceExecutor = NGEPlatform.get().newAsyncExecutor("room-ack-alice");
         private final AsyncExecutor bobExecutor = NGEPlatform.get().newAsyncExecutor("room-ack-bob");
         private final LinkedWebsocketTransport out = new LinkedWebsocketTransport();
@@ -583,11 +725,17 @@ public class TestNostrTURNAckRetry {
 
         private RoomTurnFixture(LongSupplier clock, boolean ownedTurns, boolean sharedTurns) throws Exception {
             keys = new NostrKeyPair();
-            alice = localPeer("room-alice", keys, ownedTurns && !sharedTurns ? "ws://linked.test/receive" : "ws://linked.test/turn");
+            alice =
+                localPeer(
+                    "room-alice",
+                    keys,
+                    ownedTurns && !sharedTurns ? "ws://linked.test/receive" : "ws://linked.test/turn"
+                );
             bob = localPeer("room-bob", keys, ownedTurns && !sharedTurns ? "ws://linked.test/send" : "ws://linked.test/turn");
             turnPool = ownedTurns ? newPausedTurnPool() : null;
             if (turnPool != null) {
-                out.dropControl.set(true); back.dropControl.set(true);
+                out.dropControl.set(true);
+                back.dropControl.set(true);
                 turnTransports(turnPool).put(bob.getTurnServer(), AsyncTask.completed(new TURNTransport(out)));
                 if (!sharedTurns) {
                     LinkedWebsocketTransport inbound = new LinkedWebsocketTransport();
@@ -595,8 +743,10 @@ public class TestNostrTURNAckRetry {
                     turnTransports(turnPool).put(alice.getTurnServer(), AsyncTask.completed(new TURNTransport(inbound)));
                 }
             }
-            RTCSettings settings = RTCSettings.getDefault(APPLICATION_ID, PROTOCOL_ID)
-                .withSignalingRelays(Collections.emptyList()).withStunServers(Collections.emptyList());
+            RTCSettings settings = RTCSettings
+                .getDefault(APPLICATION_ID, PROTOCOL_ID)
+                .withSignalingRelays(Collections.emptyList())
+                .withStunServers(Collections.emptyList());
             room = new NostrRTCRoom(settings, alice, keys, new NostrPool(), null, clock);
             aliceSocket = new NostrRTCSocket(aliceExecutor, remotePeer(bob, keys), keys, alice, settings, turnPool);
             bobSocket = new NostrRTCSocket(bobExecutor, remotePeer(alice, keys), keys, bob, settings, null);
@@ -625,39 +775,58 @@ public class TestNostrTURNAckRetry {
             setIntField(sender, "state", 2);
             setIntField(receiver, "state", 2);
             connections(room).put(aliceSocket.getRemotePeer(), aliceSocket);
-            out.dataObserver = () -> {
-                try {
-                    Object entry = queueHead(pendingSends(room).get(aliceLogical));
-                    sentPreparedPackets.add(field(entry, "packet"));
-                    sentEnqueuedTimes.add(Long.valueOf(longField(entry, "enqueuedAtMs")));
-                } catch (Exception error) {
-                    throw new IllegalStateException("could not observe production queue entry", error);
+            out.dataObserver =
+                () -> {
+                    try {
+                        Object entry = queueHead(pendingSends(room).get(aliceLogical));
+                        sentPreparedPackets.add(field(entry, "packet"));
+                        sentEnqueuedTimes.add(Long.valueOf(longField(entry, "enqueuedAtMs")));
+                    } catch (Exception error) {
+                        throw new IllegalStateException("could not observe production queue entry", error);
+                    }
+                };
+            bobLogical.addListener(
+                new NostrRTCChannelListener() {
+                    @Override
+                    public void onRTCSocketMessage(NostrRTCChannel channel, ByteBuffer payload, boolean turn) {
+                        applicationDeliveries.incrementAndGet();
+                    }
+
+                    @Override
+                    public void onRTCChannelError(NostrRTCChannel channel, Throwable error) {}
+
+                    @Override
+                    public void onRTCChannelClosed(NostrRTCChannel channel) {}
+
+                    @Override
+                    public void onRTCBufferedAmountLow(NostrRTCChannel channel) {}
                 }
-            };
-            bobLogical.addListener(new NostrRTCChannelListener() {
-                @Override public void onRTCSocketMessage(NostrRTCChannel channel, ByteBuffer payload, boolean turn) {
-                    applicationDeliveries.incrementAndGet();
-                }
-                @Override public void onRTCChannelError(NostrRTCChannel channel, Throwable error) {}
-                @Override public void onRTCChannelClosed(NostrRTCChannel channel) {}
-                @Override public void onRTCBufferedAmountLow(NostrRTCChannel channel) {}
-            });
+            );
             attachReceiverListener();
         }
 
         private void attachReceiverListener() {
-            receiver.addListener(new NostrTURNChannelListener() {
-                @Override public void onTurnChannelReady(NostrTURNChannel channel) {}
-                @Override public void onTurnChannelMessage(NostrTURNChannel channel, ByteBuffer payload) {
-                    receivedPacketIds.add(NostrRTCChannel.tryExtractPacketId(payload));
-                    byte[] bytes = new byte[payload.remaining()];
-                    payload.duplicate().get(bytes);
-                    receivedFrames.add(bytes);
-                    bobLogical.onTURNSocketMessage(payload);
+            receiver.addListener(
+                new NostrTURNChannelListener() {
+                    @Override
+                    public void onTurnChannelReady(NostrTURNChannel channel) {}
+
+                    @Override
+                    public void onTurnChannelMessage(NostrTURNChannel channel, ByteBuffer payload) {
+                        receivedPacketIds.add(NostrRTCChannel.tryExtractPacketId(payload));
+                        byte[] bytes = new byte[payload.remaining()];
+                        payload.duplicate().get(bytes);
+                        receivedFrames.add(bytes);
+                        bobLogical.onTURNSocketMessage(payload);
+                    }
+
+                    @Override
+                    public void onTurnChannelError(NostrTURNChannel channel, Throwable error) {}
+
+                    @Override
+                    public void onTurnChannelClosed(NostrTURNChannel channel, String reason) {}
                 }
-                @Override public void onTurnChannelError(NostrTURNChannel channel, Throwable error) {}
-                @Override public void onTurnChannelClosed(NostrTURNChannel channel, String reason) {}
-            });
+            );
         }
 
         private void reconnectOwnedPair() throws Exception {
@@ -668,18 +837,27 @@ public class TestNostrTURNAckRetry {
             waitUntil(() -> field(sender, "transport") != null && field(companion, "transport") != null, 3000L);
             receiver = new NostrTURNChannel(bob, remotePeer(alice, keys), bob.getTurnServer(), keys, CHANNEL, true, 32);
             setLongField(receiver, "vSocketId", sender.getRoutingVsocketId());
-            out.target = receiver; back.target = sender;
+            out.target = receiver;
+            back.target = sender;
             receiver.setTransport(new TURNTransport(back));
-            setIntField(sender, "state", 2); setIntField(companion, "state", 2); setIntField(receiver, "state", 2);
+            setIntField(sender, "state", 2);
+            setIntField(companion, "state", 2);
+            setIntField(receiver, "state", 2);
             attachReceiverListener();
         }
 
         private void send(ByteBuffer payload) throws Exception {
-            room.send(aliceLogical, payload).then(done -> {
-                successes.incrementAndGet();
-                completed.countDown();
-                return null;
-            }).catchException(error -> { lastFailure.set(error); failures.incrementAndGet(); });
+            room
+                .send(aliceLogical, payload)
+                .then(done -> {
+                    successes.incrementAndGet();
+                    completed.countDown();
+                    return null;
+                })
+                .catchException(error -> {
+                    lastFailure.set(error);
+                    failures.incrementAndGet();
+                });
             queue = pendingSends(room).get(aliceLogical);
         }
 
@@ -687,7 +865,8 @@ public class TestNostrTURNAckRetry {
             return ((AcknowledgedDeliveryTracker) field(sender, "deliveryTracker")).size();
         }
 
-        @Override public void close() {
+        @Override
+        public void close() {
             room.close();
             out.connected.set(false);
             back.connected.set(false);
@@ -709,23 +888,37 @@ public class TestNostrTURNAckRetry {
         platformField.setAccessible(true);
         Object previous = platformField.get(null);
         try {
-            platformField.set(null, new JVMAsyncPlatform() {
-                @Override public AsyncExecutor newAsyncExecutor(Object key) {
-                    if (key != NostrTURNPool.class) return super.newAsyncExecutor(key);
-                    return new AsyncExecutor() {
-                        @Override public <T> AsyncTask<T> runLater(Callable<T> callback, long delay, TimeUnit unit) {
-                            return AsyncTask.create((resolve, reject) -> {});
-                        }
-                        @Override public <T> AsyncTask<T> run(Callable<T> callback) {
-                            try { return AsyncTask.completed(callback.call()); }
-                            catch (Exception error) { return AsyncTask.failed(error); }
-                        }
-                        @Override public void close() {}
-                    };
+            platformField.set(
+                null,
+                new JVMAsyncPlatform() {
+                    @Override
+                    public AsyncExecutor newAsyncExecutor(Object key) {
+                        if (key != NostrTURNPool.class) return super.newAsyncExecutor(key);
+                        return new AsyncExecutor() {
+                            @Override
+                            public <T> AsyncTask<T> runLater(Callable<T> callback, long delay, TimeUnit unit) {
+                                return AsyncTask.create((resolve, reject) -> {});
+                            }
+
+                            @Override
+                            public <T> AsyncTask<T> run(Callable<T> callback) {
+                                try {
+                                    return AsyncTask.completed(callback.call());
+                                } catch (Exception error) {
+                                    return AsyncTask.failed(error);
+                                }
+                            }
+
+                            @Override
+                            public void close() {}
+                        };
+                    }
                 }
-            });
+            );
             return new NostrTURNPool();
-        } finally { platformField.set(null, previous); }
+        } finally {
+            platformField.set(null, previous);
+        }
     }
 
     @SuppressWarnings("unchecked")
@@ -739,7 +932,8 @@ public class TestNostrTURNAckRetry {
     }
 
     @SuppressWarnings("unchecked")
-    private static Map<NostrRTCChannel, BlockingPacketQueue<NostrRTCChannel.PreparedPacket>> pendingSends(NostrRTCRoom room) throws Exception {
+    private static Map<NostrRTCChannel, BlockingPacketQueue<NostrRTCChannel.PreparedPacket>> pendingSends(NostrRTCRoom room)
+        throws Exception {
         return (Map<NostrRTCChannel, BlockingPacketQueue<NostrRTCChannel.PreparedPacket>>) field(room, "pendingSends");
     }
 
@@ -766,7 +960,9 @@ public class TestNostrTURNAckRetry {
     }
 
     @FunctionalInterface
-    private interface Check { boolean ok() throws Exception; }
+    private interface Check {
+        boolean ok() throws Exception;
+    }
 
     private static void waitUntil(Check check, long timeoutMs) throws Exception {
         long deadline = System.currentTimeMillis() + timeoutMs;
@@ -815,23 +1011,53 @@ public class TestNostrTURNAckRetry {
     }
 
     private static final class MemoryRTCDataChannel extends RTCDataChannel {
+
         private final NostrRTCChannel receiver;
         private final List<byte[]> frames = new CopyOnWriteArrayList<byte[]>();
+
         private MemoryRTCDataChannel(NostrRTCChannel receiver) {
             super(CHANNEL, PROTOCOL_ID, true, true, 0, null);
             this.receiver = receiver;
         }
-        @Override public AsyncTask<RTCDataChannel> ready() { return AsyncTask.completed(this); }
-        @Override public AsyncTask<Void> write(ByteBuffer data) {
-            byte[] bytes = new byte[data.remaining()]; data.duplicate().get(bytes); frames.add(bytes);
+
+        @Override
+        public AsyncTask<RTCDataChannel> ready() {
+            return AsyncTask.completed(this);
+        }
+
+        @Override
+        public AsyncTask<Void> write(ByteBuffer data) {
+            byte[] bytes = new byte[data.remaining()];
+            data.duplicate().get(bytes);
+            frames.add(bytes);
             receiver.onRTCSocketMessage(ByteBuffer.wrap(bytes));
             return AsyncTask.completed(null);
         }
-        @Override public AsyncTask<Number> getMaxMessageSize() { return AsyncTask.completed(Integer.valueOf(262_144)); }
-        @Override public AsyncTask<Number> getAvailableAmount() { return AsyncTask.completed(Integer.valueOf(262_144)); }
-        @Override public AsyncTask<Number> getBufferedAmount() { return AsyncTask.completed(Integer.valueOf(0)); }
-        @Override public AsyncTask<Void> setBufferedAmountLowThreshold(int threshold) { return AsyncTask.completed(null); }
-        @Override public AsyncTask<Void> close() { return AsyncTask.completed(null); }
+
+        @Override
+        public AsyncTask<Number> getMaxMessageSize() {
+            return AsyncTask.completed(Integer.valueOf(262_144));
+        }
+
+        @Override
+        public AsyncTask<Number> getAvailableAmount() {
+            return AsyncTask.completed(Integer.valueOf(262_144));
+        }
+
+        @Override
+        public AsyncTask<Number> getBufferedAmount() {
+            return AsyncTask.completed(Integer.valueOf(0));
+        }
+
+        @Override
+        public AsyncTask<Void> setBufferedAmountLowThreshold(int threshold) {
+            return AsyncTask.completed(null);
+        }
+
+        @Override
+        public AsyncTask<Void> close() {
+            return AsyncTask.completed(null);
+        }
     }
 
     private static final class LinkedWebsocketTransport implements WebsocketTransport {
