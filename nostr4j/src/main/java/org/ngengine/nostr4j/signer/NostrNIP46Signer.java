@@ -339,12 +339,11 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
 
         connectUrl = new NostrconnectUrl(this.transportPubkey, relays, secret, this.metadata);
 
-        onUrl.accept(connectUrl);
         logger.fine("Listening for nostrconnect");
 
         AsyncTask<NostrNIP46Signer> out = check()
             .compose(r -> {
-                return waitForResponse(
+                AsyncTask<String> response = waitForResponse(
                     "connect",
                     "nostrconnect",
                     payload -> {
@@ -353,22 +352,24 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
                         return v;
                     },
                     timeout
-                )
-                    .then(s -> {
-                        logger.fine("Received nostrconnect response");
-                        connected = true;
-                        // cancel every other remaining connect attempt
-                        Iterator<Entry<String, ResponseListener>> it = listeners.entrySet().iterator();
-                        while (it.hasNext()) {
-                            Entry<String, ResponseListener> entry = it.next();
-                            if (entry.getValue().method.equals("connect")) {
-                                logger.finer("Cancelling other connect request: " + entry.getValue());
-                                entry.getValue().cancel("connected via nostrconnect");
-                                it.remove();
-                            }
+                );
+                // Only expose the connection URL after its response listener and relay subscription exist.
+                onUrl.accept(connectUrl);
+                return response.then(s -> {
+                    logger.fine("Received nostrconnect response");
+                    connected = true;
+                    // cancel every other remaining connect attempt
+                    Iterator<Entry<String, ResponseListener>> it = listeners.entrySet().iterator();
+                    while (it.hasNext()) {
+                        Entry<String, ResponseListener> entry = it.next();
+                        if (entry.getValue().method.equals("connect")) {
+                            logger.finer("Cancelling other connect request: " + entry.getValue());
+                            entry.getValue().cancel("connected via nostrconnect");
+                            it.remove();
                         }
-                        return this;
-                    });
+                    }
+                    return this;
+                });
             });
         return out;
     }
@@ -725,9 +726,18 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
                             AsyncTask<String> res = this.waitForResponse(method, requestId, timeout);
 
                             this.transportSigner.sign(event)
-                                .then(signed -> {
-                                    this.pool.publish(signed);
+                                .compose(signed -> this.pool.publish(signed))
+                                .then(acknowledgements -> {
+                                    if (acknowledgements.isEmpty()) throw new IllegalStateException(
+                                        "No signer relay is connected"
+                                    );
                                     return null;
+                                })
+                                .catchException(error -> {
+                                    ResponseListener listener = this.listeners.remove(requestId);
+                                    if (listener != null) listener.onError.accept(
+                                        new IllegalStateException("Could not deliver signer request", error)
+                                    );
                                 });
                             return res;
                         });
