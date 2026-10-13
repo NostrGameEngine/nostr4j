@@ -92,6 +92,7 @@ public class NostrNIP07Signer implements NostrSigner {
         switch (algo) {
             case NIP04:
                 fun = fun + "nip04";
+                break;
             default:
             case NIP44:
                 fun = fun + "nip44";
