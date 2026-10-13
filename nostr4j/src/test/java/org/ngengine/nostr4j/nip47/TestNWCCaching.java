@@ -40,6 +40,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.function.Consumer;
 import org.junit.Test;
 import org.ngengine.nostr4j.NostrFilter;
 import org.ngengine.nostr4j.NostrPool;
@@ -186,6 +187,8 @@ public class TestNWCCaching {
         private final NostrPublicKey clientPublicKey;
         private final NostrSigner.EncryptAlgo expectedAlgorithm;
         private SignedNostrEvent publishedRequest;
+        private Consumer<SignedNostrEvent> publishRequest;
+        private final AsyncTask<SignedNostrEvent> published = AsyncTask.create((resolve, reject) -> publishRequest = resolve);
         private int infoFetches;
 
         private NegotiatingPool(
@@ -207,7 +210,8 @@ public class TestNWCCaching {
                 return AsyncTask.completed(List.of(infoEvent));
             }
 
-            try {
+            // Subscribe first, then answer only after publication, like a real wallet relay.
+            return published.compose(request -> { try {
                 String requestJson = walletSigner
                     .decrypt(publishedRequest.getContent(), clientPublicKey, expectedAlgorithm)
                     .await();
@@ -226,12 +230,13 @@ public class TestNWCCaching {
                 return AsyncTask.completed(List.of(response));
             } catch (Throwable error) {
                 return AsyncTask.failed(error);
-            }
+            }});
         }
 
         @Override
         public AsyncTask<List<AsyncTask<NostrMessageAck>>> publish(SignedNostrEvent event) {
             publishedRequest = event;
+            publishRequest.accept(event);
             return AsyncTask.completed(Collections.emptyList());
         }
 

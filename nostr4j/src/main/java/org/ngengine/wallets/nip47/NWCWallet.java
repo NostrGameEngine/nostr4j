@@ -35,8 +35,6 @@ import static org.ngengine.platform.NGEUtils.safeMSats;
 
 import jakarta.annotation.Nonnull;
 import jakarta.annotation.Nullable;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -223,19 +221,23 @@ public class NWCWallet implements Wallet {
         return signer
             .getPublicKey()
             .compose(pubkey -> {
-                return pool
-                    .fetch(
-                        new NostrFilter()
-                            .withKind(NWCWallet.RESPONSE_KIND)
-                            .withAuthor(uri.getPubkey().asHex())
-                            .withTag("e", ev.getId())
-                            .withTag("p", pubkey.asHex()),
-                        1,
-                        null
-                    )
-                    .then(r -> {
-                        return r.get(0);
-                    });
+                AsyncTask<List<SignedNostrEvent>> response = pool.fetch(
+                    new NostrFilter()
+                        .withKind(NWCWallet.RESPONSE_KIND)
+                        .withAuthor(uri.getPubkey().asHex())
+                        .withTag("e", ev.getId())
+                        .withTag("p", pubkey.asHex()),
+                    1,
+                    Duration.ofSeconds(60)
+                );
+                // The public key continuation must finish before submitting an ephemeral request.
+                pool.publish(ev);
+                return response.then(r -> {
+                    if (r.isEmpty()) throw new IllegalStateException(
+                        "Wallet response timed out; check payment status before retrying"
+                    );
+                    return r.get(0);
+                });
             })
             .compose(response -> {
                 String content = response.getContent();
@@ -268,13 +270,7 @@ public class NWCWallet implements Wallet {
                 if (!info.supportedMethods.contains(method)) {
                     throw new IllegalArgumentException("Method " + method + " is not supported by this wallet");
                 }
-                logger.finest(
-                    "Making request " +
-                    method +
-                    " with params: " +
-                    params +
-                    (expiresAt != null ? " expiring at " + expiresAt : "")
-                );
+                logger.finest("Making wallet request " + method);
                 Map<String, Object> content = new HashMap<>();
                 content.put("method", method);
                 content.put("params", params);
@@ -299,9 +295,9 @@ public class NWCWallet implements Wallet {
                     })
                     .compose(sev -> {
                         logger.finest("Sending request event: " + sev);
-                        pool.publish(sev);
-                        logger.finest("Request event sent, waiting for reply...");
+                        // Install the response subscription before publishing; fast wallets may reply immediately.
                         AsyncTask<Map<String, Object>> res = waitForReply(method, sev, info.encryptionAlgorithm);
+                        logger.finest("Request event sent, waiting for reply...");
                         return res;
                     });
             });
@@ -414,7 +410,7 @@ public class NWCWallet implements Wallet {
                 "description_hash",
                 req.descriptionHash() != null ? NGEUtils.safeString(req.descriptionHash()) : null,
                 "expiry",
-                req.expiry() != null ? NGEUtils.safeDurationInSeconds(req.expiry()) : null
+                req.expiry() != null ? req.expiry().getSeconds() : null
             ),
             expireRequestAt
         )
@@ -471,13 +467,7 @@ public class NWCWallet implements Wallet {
                     (Map<String, Object>) res.get("metadata")
                 );
 
-                if (
-                    paymentHash != null &&
-                    !MessageDigest.isEqual(
-                        paymentHash.getBytes(StandardCharsets.US_ASCII),
-                        invoiceData.paymentHash().getBytes(StandardCharsets.US_ASCII)
-                    )
-                ) {
+                if (paymentHash != null && !paymentHash.equals(invoiceData.paymentHash())) {
                     throw new IllegalStateException("Mismatched payment_hash");
                 }
 
