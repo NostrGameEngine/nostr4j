@@ -135,6 +135,17 @@ public final class ExponentialBackoff {
     }
 
     /**
+     * Clears the retry schedule after an intentional lifecycle change.
+     * Failed network attempts should continue through the existing backoff sequence;
+     * callers use this reset only when an explicit action should start a new sequence.
+     */
+    public synchronized void reset() {
+        currentDelay = initialDelay;
+        nextAttemptAt = null;
+        cooldownStartAt = null;
+    }
+
+    /**
      * Returns how long to wait before the next attempt (zero if you can try now).
      */
     public Duration getDelay() {

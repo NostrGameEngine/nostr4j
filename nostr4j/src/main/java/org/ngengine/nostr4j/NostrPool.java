@@ -41,6 +41,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -89,6 +90,19 @@ public class NostrPool {
     private final Supplier<EventTracker> defaultEventTracker;
     private final Map<String, ReadPlan> readPlans = new ConcurrentHashMap<>();
     private volatile Duration priorityTimeout = Duration.ofSeconds(2);
+    private final NostrPoolConnections connections = new NostrPoolConnections(() -> relays);
+
+    /**
+     * Sets the target number of automatically selected network connections.
+     * Higher connection priorities are preferred, with existing selections winning ties.
+     * Zero preserves unlimited connections. Required relay hints may exceed this target,
+     * and in-process cache relays do not consume the network budget.
+     *
+     * @param budget non-negative connection target; zero means unlimited
+     * @throws IllegalArgumentException if the budget is negative
+     */
+    public void setConnectionBudget(int budget) { connections.setBudget(budget); }
+    public int getConnectionBudget() { return connections.getBudget(); }
 
     /**
      * Sets how long a read waits for one query-priority tier before starting the next.
@@ -106,19 +120,21 @@ public class NostrPool {
     private final class ReadPlan {
         final NostrSubscription sub;
         final List<NostrRelay> targets = new ArrayList<>();
+        final Set<NostrRelay> hints;
         final Set<NostrRelay> started = new HashSet<>();
         final Set<NostrRelay> finished = new HashSet<>();
         final Set<NostrRelay> eosed = new HashSet<>();
         AsyncTask<Void> deadline;
 
-        ReadPlan(NostrSubscription sub) {
+        ReadPlan(NostrSubscription sub, Set<NostrRelay> hints) {
             this.sub = sub;
+            this.hints = hints;
             for (NostrRelay relay : relays) if (accepts(relay)) targets.add(relay);
             targets.sort(Comparator.comparingInt(NostrRelay::getQueryPriority).reversed());
         }
 
         boolean accepts(NostrRelay relay) {
-            return true;
+            return relay instanceof NostrCacheRelay || (hints.isEmpty() ? connections.wanted(relay) : hints.contains(relay));
         }
 
         synchronized boolean allFinished() {
@@ -161,6 +177,9 @@ public class NostrPool {
     }
 
     private NostrRelayComponent listener = new NostrRelayComponent() {
+        @Override public void onRelayPriorityChanged(NostrRelay relay) {
+            if (connections.getBudget() > 0) connections.refresh();
+        }
         @Override
         public boolean onRelayConnectRequest(NostrRelay relay) {
             return NostrPool.this.onRelayConnectRequest(relay);
@@ -286,7 +305,7 @@ public class NostrPool {
     protected List<AsyncTask<NostrMessageAck>> sendMessage(NostrMessage message) {
         List<AsyncTask<NostrMessageAck>> promises = new ArrayList<>();
         List<NostrRelay> targets = new ArrayList<>();
-        targets.addAll(relays);
+        for(NostrRelay relay:relays) if(connections.wanted(relay)) targets.add(relay);
         for (NostrRelay relay : targets) {
             relay.beforeSendMessage(message);
         }
@@ -308,7 +327,7 @@ public class NostrPool {
     public AsyncTask<NostrRelay> ensureRelay(String relay) {
         for (NostrRelay r : relays) {
             if (r.getUrl().equals(relay)) {
-                return r.connect();
+                return connections.getBudget() == 0 ? r.connect() : AsyncTask.completed(r);
             }
         }
         return addRelay(createRelay(relay));
@@ -317,12 +336,29 @@ public class NostrPool {
     protected NostrRelay createRelay(String url) { return new NostrRelay(url); }
 
     /**
-     * Adds a relay to this pool and connects to it if not already connected.
+     * Adds a relay to this pool. With an unlimited budget it connects immediately;
+     * otherwise it registers an automatic connection candidate.
      *
      * @param relay The relay to attach to this pool
-     * @return  A promise that resolves when the relay is connected and ready to use
+     * @return With an unlimited budget, a promise of connection; with a finite budget,
+     *         a completed registration task (use operation hints for required reads)
      */
     public AsyncTask<NostrRelay> addRelay(NostrRelay relay) {
+        registerRelay(relay);
+        if (relay instanceof NostrCacheRelay || connections.getBudget() == 0) return relay.connect();
+        connections.refresh();
+        return AsyncTask.completed(relay);
+    }
+
+    /**
+     * Registers a relay as a connection candidate without waiting for it to connect.
+     * The pool's connection budget and active read leases determine whether a network
+     * transport is selected; callers that require readiness must observe connection state.
+     *
+     * @param relay relay to add to this pool
+     * @return the registered relay
+     */
+    public NostrRelay registerRelay(NostrRelay relay) {
         if (!relays.contains(relay)) {
             relays.addIfAbsent(relay);
             if (relay.getComponent(NostrRelaySubManager.class) == null) {
@@ -336,7 +372,8 @@ public class NostrPool {
             }
             relay.addComponent(listener);
         }
-        return relay.connect();
+        if (connections.getBudget() > 0) connections.refresh();
+        return relay;
     }
 
     /**
@@ -351,6 +388,7 @@ public class NostrPool {
         if (relays.contains(relay)) {
             relay.removeComponent(listener);
             relays.remove(relay);
+            connections.remove(relay);
             for (ReadPlan plan : readPlans.values()) {
                 synchronized (plan) {
                     if (plan.started.remove(relay)) {
@@ -372,6 +410,14 @@ public class NostrPool {
 
     public NostrSubscription subscribe(NostrFilter filter) {
         return subscribe(Arrays.asList(filter), defaultEventTracker);
+    }
+
+    public NostrSubscription subscribe(NostrFilter filter, Collection<String> relayHints) {
+        return subscribe(Arrays.asList(filter), defaultEventTracker, relayHints);
+    }
+
+    public NostrSubscription subscribe(Collection<NostrFilter> filters, Collection<String> relayHints) {
+        return subscribe(filters, defaultEventTracker, relayHints);
     }
 
     /**
@@ -404,6 +450,27 @@ public class NostrPool {
     }
 
     public NostrSubscription subscribe(Collection<NostrFilter> filters, Supplier<EventTracker> eventTracker) {
+        return subscribe(filters, eventTracker, Collections.emptyList());
+    }
+
+    /**
+     * Creates a read restricted to the supplied relay hints and local cache relays.
+     * Opening the subscription acquires connection leases for the hints; closing it releases
+     * those leases. An empty hint set uses ordinary pool selection. Query priority controls
+     * the order in which eligible relay groups are asked for events.
+     *
+     * @param filters filters to send to the selected relays
+     * @param eventTracker supplier of the duplicate-event tracker for this subscription
+     * @param relayHints URLs of network relays required by this read
+     * @return a subscription that the caller must open and close
+     */
+    public NostrSubscription subscribe(Collection<NostrFilter> filters, Supplier<EventTracker> eventTracker, Collection<String> relayHints) {
+        Set<NostrRelay> hints = new LinkedHashSet<>();
+        for (String url : relayHints) {
+            NostrRelay relay = relays.stream().filter(r -> r.getUrl().equals(url)).findFirst().orElse(null);
+            if (relay == null) relay = registerRelay(createRelay(url));
+            hints.add(relay);
+        }
         String subId = UniqueId.getNext();
         EventTracker tracker;
         try {
@@ -423,7 +490,8 @@ public class NostrPool {
                 assert dbg(() -> {
                     logger.fine("opening subscription " + s.getId());
                 });
-                ReadPlan plan = new ReadPlan(s);
+                if (!hints.isEmpty()) connections.acquire(s.getId(), hints);
+                ReadPlan plan = new ReadPlan(s, hints);
                 readPlans.put(s.getId(), plan);
                 return plan.advance();
             },
@@ -434,6 +502,7 @@ public class NostrPool {
 
                 subscriptions.remove(subId);
                 ReadPlan plan = readPlans.remove(subId);
+                connections.release(subId);
                 if (plan == null) return Collections.emptyList();
                 plan.close();
                 List<AsyncTask<NostrMessageAck>> messages = new ArrayList<>();
@@ -510,6 +579,11 @@ public class NostrPool {
         return fetch(filters, () -> new NaiveEventTracker(), fetchPolicy);
     }
 
+    public AsyncTask<List<SignedNostrEvent>> fetch(Collection<NostrFilter> filters, NostrPoolFetchPolicy fetchPolicy,
+            Collection<String> relayHints) {
+        return fetch(filters, () -> new NaiveEventTracker(), fetchPolicy, relayHints);
+    }
+
     /**
      * Fetch events matching the given filters using the specified event tracker and fetch policy.
      * @param filters The filters to match events against
@@ -522,8 +596,13 @@ public class NostrPool {
         Supplier<EventTracker> eventTracker,
         NostrPoolFetchPolicy fetchPolicy
     ) {
+        return fetch(filters, eventTracker, fetchPolicy, Collections.emptyList());
+    }
+
+    public AsyncTask<List<SignedNostrEvent>> fetch(Collection<NostrFilter> filters, Supplier<EventTracker> eventTracker,
+            NostrPoolFetchPolicy fetchPolicy, Collection<String> relayHints) {
         NGEPlatform platform = NGEUtils.getPlatform();
-        NostrSubscription sub = subscribe(filters, eventTracker);
+        NostrSubscription sub = subscribe(filters, eventTracker, relayHints);
         AsyncTask<List<SignedNostrEvent>> task = platform.wrapPromise((res, rej) -> {
             List<SignedNostrEvent> events = Collections.synchronizedList(new ArrayList<>());
 
@@ -723,7 +802,9 @@ public class NostrPool {
 
     public List<NostrRelay> clean() {
         unsubscribeAll();
-        return removeAllRelays();
+        List<NostrRelay> removed = removeAllRelays();
+        connections.reset();
+        return removed;
     }
 
     public void unsubscribeAll() {
@@ -771,7 +852,7 @@ public class NostrPool {
     }
 
     protected boolean onRelayConnectRequest(NostrRelay relay) {
-        return true;
+        return connections.wanted(relay);
     }
 
     protected boolean onRelayDisconnect(NostrRelay relay, String reason, boolean byClient) {
@@ -783,6 +864,10 @@ public class NostrPool {
     }
 
     protected boolean onRelayDisconnectRequest(NostrRelay relay, String reason) {
+        if("Pool connection budget".equals(reason) && connections.wanted(relay)) {
+            relay.cancelBudgetDisconnection();
+            return false;
+        }
         return true;
     }
 

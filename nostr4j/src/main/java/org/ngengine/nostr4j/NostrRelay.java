@@ -146,6 +146,7 @@ public class NostrRelay {
     protected Status currentStatus = Status.NEW;
     protected Instant statusSince = Instant.now();
     protected Duration statusTimeout = Duration.ofSeconds(120);
+    private volatile int connectionPriority;
     private volatile int queryPriority;
     protected boolean reconnect = false;
     protected String markForDisconnection = null;
@@ -684,6 +685,31 @@ public class NostrRelay {
     }
 
     /**
+     * Returns the preference used when a pool selects network connections under a budget.
+     * Higher values are preferred; equal values preserve incumbent selections. This value
+     * is independent of the priority used to order subscription queries.
+     *
+     * @return connection selection priority
+     */
+    public int getConnectionPriority() {
+        return connectionPriority;
+    }
+
+    /**
+     * Changes the relay's network connection preference and notifies attached components.
+     * A pool with a connection budget can recompute its selection immediately; query
+     * priority and subscription ordering remain independent.
+     *
+     * @param connectionPriority new connection preference; higher values are preferred
+     * @return this relay
+     */
+    public NostrRelay setConnectionPriority(int connectionPriority) {
+        this.connectionPriority = connectionPriority;
+        for (NostrRelayComponent component : listeners) component.onRelayPriorityChanged(this);
+        return this;
+    }
+
+    /**
      * Returns the priority used to group and order subscription queries.
      * Higher values are queried first, allowing a local cache to precede network relays
      * without changing which network connections the pool prefers to keep open.
@@ -735,6 +761,18 @@ public class NostrRelay {
 
     public AsyncTask<NostrRelay> disconnect(String reason) {
         return disconnect(reason, false);
+    }
+
+    /**
+     * Cancels a pending disconnection that was requested only by the pool connection budget.
+     * A new lease may make the relay necessary again before the queued eviction runs.
+     * Call this on the relay executor; disconnections requested for other reasons are preserved.
+     */
+    void cancelBudgetDisconnection() {
+        if(!"Pool connection budget".equals(markForDisconnection)) return;
+        markForDisconnection=null;
+        ConnectionCallback callback;
+        while((callback=disconnectCallbacks.poll())!=null) callback.call(null);
     }
 
     public AsyncTask<NostrRelay> disconnect(String reason, boolean reconnect) {
@@ -1065,6 +1103,8 @@ public class NostrRelay {
                     }
                 }
                 if (canDisconnect) {
+                    // Healthy sockets rotated by the pool are not failed reconnection attempts.
+                    if ("Pool connection budget".equals(markForDisconnection)) reconnectionBackoff.reset();
                     try {
                         this.connector.close("client disconnect");
                     } catch (Throwable err) {

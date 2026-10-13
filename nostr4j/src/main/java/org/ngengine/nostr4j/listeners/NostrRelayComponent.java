@@ -34,6 +34,7 @@ import org.ngengine.nostr4j.NostrRelay;
 import org.ngengine.nostr4j.proto.NostrMessage;
 
 public interface NostrRelayComponent {
+    default void onRelayPriorityChanged(NostrRelay relay) {}
     boolean onRelayConnectRequest(NostrRelay relay);
 
     boolean onRelayConnect(NostrRelay relay);

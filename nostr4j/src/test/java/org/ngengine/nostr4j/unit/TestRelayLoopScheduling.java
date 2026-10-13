@@ -302,6 +302,27 @@ public class TestRelayLoopScheduling {
     }
 
     @Test
+    public void budgetRotationsUseRealConnectionLifecycleAndReleaseOnlyTheLastHint() throws Exception {
+        NostrPool pool=new NostrPool();
+        NostrRelay preferred=new NostrRelay("wss://preferred.test").setConnectionPriority(100);
+        NostrRelay required=new NostrRelay("wss://required.test");
+        try {
+            pool.setConnectionBudget(1);pool.addRelay(preferred);pool.addRelay(required);
+            awaitCondition(preferred::isConnected,2000,"Preferred relay did not connect");
+            for(int i=0;i<5;i++) {
+                NostrSubscription first=pool.subscribe(new NostrFilter().withKind(1),List.of(required.getUrl()));
+                NostrSubscription second=pool.subscribe(new NostrFilter().withKind(1),List.of(required.getUrl()));
+                first.open();second.open();
+                awaitCondition(()->required.isConnected() && !preferred.isConnected(),2000,"Required relay did not replace automatic relay");
+                first.close();Thread.sleep(30);assertTrue(required.isConnected());
+                second.close();
+                try {awaitCondition(()->preferred.isConnected() && !required.isConnected(),2000,"Automatic connection did not return after the last owner closed");}
+                catch(AssertionError failure) {throw new AssertionError("Rotation "+i+": preferred="+preferred.getStatus()+", required="+required.getStatus(),failure);}
+            }
+        }finally {for(NostrRelay relay:pool.clean()) relay.disconnect("Fixture complete",false).await();}
+    }
+
+    @Test
     public void testConnectTimeoutResetsRelayWithoutPollingLoop() throws Exception {
         testPlatform.setAutoOpen(false);
         NostrRelay relay = new NostrRelay(TEST_RELAY_URL);

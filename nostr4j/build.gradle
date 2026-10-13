@@ -39,6 +39,7 @@ tasks.register('cacheTest', Test) {
         includeTestsMatching 'org.ngengine.nostr4j.unit.TestEventCache'
         includeTestsMatching 'org.ngengine.nostr4j.unit.TestVStoreEventCache'
         includeTestsMatching 'org.ngengine.nostr4j.unit.TestPriorityCacheRelay'
+        includeTestsMatching 'org.ngengine.nostr4j.unit.TestConnectionBudget'
         includeTestsMatching 'org.ngengine.nostr4j.unit.TestRelayLoopScheduling'
         includeTestsMatching 'org.ngengine.nostr4j.unit.TestSignedEventEncodingCache'
         includeTestsMatching 'org.ngengine.nostr4j.unit.TestUnicodeCanonicalEvents'
