@@ -185,6 +185,17 @@ public interface Wallet {
     public AsyncTask<WalletInfo> getInfo(@Nullable Instant expireRequestAt);
 
     /**
+     * Checks whether this wallet can be used in the current environment without requesting permissions.
+     * The default assumes availability; adapters with environment requirements should override it.
+     * Availability does not imply readiness or support for every wallet method.
+     *
+     * @return a task resolving to whether the wallet is available
+     */
+    public default AsyncTask<Boolean> isAvailable() {
+        return AsyncTask.completed(true);
+    }
+
+    /**
      * Check if the wallet is ready to use.
      * @return true if the wallet is ready, false otherwise
      */
