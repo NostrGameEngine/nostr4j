@@ -41,10 +41,14 @@ import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.Test;
+import org.ngengine.nostr4j.event.SignedNostrEvent;
+import org.ngengine.nostr4j.event.UnsignedNostrEvent;
 import org.ngengine.nostr4j.event.tracker.PassthroughEventTracker;
 import org.ngengine.nostr4j.proto.NostrMessageAck;
+import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
 import org.ngengine.platform.AsyncTask;
 
 public class TestNostrSubscription {
@@ -57,6 +61,41 @@ public class TestNostrSubscription {
             sub -> Collections.<AsyncTask<NostrMessageAck>>emptyList(),
             (sub, closeMessage) -> Collections.<AsyncTask<NostrMessageAck>>emptyList()
         );
+    }
+
+    @Test
+    public void endOfStoredEventsWaitsForPreviouslyDispatchedEventListeners() throws Exception {
+        NostrSubscription sub = newSubscription();
+        CountDownLatch entered = new CountDownLatch(1), release = new CountDownLatch(1), eose = new CountDownLatch(1);
+        AtomicInteger received = new AtomicInteger();
+        sub.addEventListener((ignored, event, stored) -> {
+            entered.countDown();
+            try {
+                release.await(2, TimeUnit.SECONDS);
+            } catch (InterruptedException stopped) {
+                Thread.currentThread().interrupt();
+            }
+            received.incrementAndGet();
+        });
+        sub.addEoseListener((ignored, relay, all) -> eose.countDown());
+        NostrKeyPairSigner signer = NostrKeyPairSigner.generate();
+        try {
+            sub.open();
+            SignedNostrEvent event = signer
+                .sign(new UnsignedNostrEvent().withKind(1).withContent("EOSE barrier fixture"))
+                .await();
+            sub.callEventListeners(event, true);
+            assertTrue(entered.await(2, TimeUnit.SECONDS));
+            sub.callEoseListeners(null, true);
+            assertFalse("EOSE must not overtake an earlier event callback", eose.await(100, TimeUnit.MILLISECONDS));
+            release.countDown();
+            assertTrue(eose.await(2, TimeUnit.SECONDS));
+            assertEquals(1, received.get());
+        } finally {
+            release.countDown();
+            sub.close();
+            signer.getKeyPair().destroy();
+        }
     }
 
     @Test

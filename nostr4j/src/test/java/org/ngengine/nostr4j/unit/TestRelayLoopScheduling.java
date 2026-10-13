@@ -37,7 +37,9 @@ import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -47,13 +49,18 @@ import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import org.ngengine.nostr4j.NostrFilter;
+import org.ngengine.nostr4j.NostrPool;
 import org.ngengine.nostr4j.NostrRelay;
 import org.ngengine.nostr4j.NostrRelayLifecycleManager;
+import org.ngengine.nostr4j.NostrRelaySubManager;
 import org.ngengine.nostr4j.NostrRelayWatchdog;
+import org.ngengine.nostr4j.NostrSubscription;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.event.UnsignedNostrEvent;
 import org.ngengine.nostr4j.proto.NostrMessage;
 import org.ngengine.nostr4j.proto.NostrMessageAck;
+import org.ngengine.nostr4j.proto.impl.NostrClosedMessage;
 import org.ngengine.nostr4j.proto.impl.NostrNoticeMessage;
 import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
 import org.ngengine.platform.AsyncTask;
@@ -219,11 +226,11 @@ public class TestRelayLoopScheduling {
             null
         );
         for (boolean ownsPool : new boolean[] { true, false }) {
-            org.ngengine.nostr4j.NostrPool shared = ownsPool ? null : new org.ngengine.nostr4j.NostrPool();
+            NostrPool shared = ownsPool ? null : new NostrPool();
             org.ngengine.wallets.nip47.NWCWallet wallet = new org.ngengine.wallets.nip47.NWCWallet(shared, uri);
             Field poolField = org.ngengine.wallets.nip47.NWCWallet.class.getDeclaredField("pool");
             poolField.setAccessible(true);
-            org.ngengine.nostr4j.NostrPool pool = (org.ngengine.nostr4j.NostrPool) poolField.get(wallet);
+            NostrPool pool = (NostrPool) poolField.get(wallet);
             NostrRelay relay = new NostrRelay(TEST_RELAY_URL);
             pool.addRelay(relay).await();
             try {
@@ -242,7 +249,7 @@ public class TestRelayLoopScheduling {
 
     @Test
     public void signerShutdownDisconnectsItsOwnedRelayPool() throws Exception {
-        org.ngengine.nostr4j.NostrPool pool = new org.ngengine.nostr4j.NostrPool();
+        NostrPool pool = new NostrPool();
         NostrRelay relay = new NostrRelay(TEST_RELAY_URL);
         pool.addRelay(relay).await();
         org.ngengine.nostr4j.signer.NostrNIP46Signer signer = new org.ngengine.nostr4j.signer.NostrNIP46Signer(
@@ -304,6 +311,43 @@ public class TestRelayLoopScheduling {
         relay.connect();
 
         awaitCondition(() -> relay.getStatus() == NostrRelay.Status.DISCONNECTED, 500, "relay did not time out");
+    }
+
+    @Test
+    public void cancelledSubscriptionsDiscardLateEventsBeforeSignatureWorkButActiveReadsStillVerify() throws Exception {
+        NostrKeyPairSigner signer=NostrKeyPairSigner.generate();
+        NostrPool pool=new NostrPool();NostrRelay relay=new NostrRelay(TEST_RELAY_URL);
+        AtomicInteger delivered=new AtomicInteger();
+        try {
+            pool.addRelay(relay).await();
+            relay.addComponent(new NostrRelayLifecycleManager() {
+                @Override public boolean onRelayMessage(NostrRelay source,NostrMessage message) {
+                    if(message instanceof SignedNostrEvent) delivered.incrementAndGet();
+                    return true;
+                }
+            });
+            SignedNostrEvent event=signer.sign(new UnsignedNostrEvent().withKind(1).withContent("Late event fixture")).await();
+            NostrSubscription sub=pool.subscribe(new NostrFilter().withKind(1));sub.open();
+            NostrRelaySubManager manager=relay.getComponent(NostrRelaySubManager.class);
+            awaitCondition(()->manager.isActive(sub),2000,"Subscription must be registered before the relay replies");
+            ArrayList<Object> wire=new ArrayList<Object>(NostrMessage.toSerial(event));wire.add(1,sub.getSubId());
+            String body=testPlatform.toJSON(wire);RecordingWebsocketTransport transport=testPlatform.getLastTransport();
+            for(WebsocketTransportListener listener:transport.listeners) listener.onConnectionMessage(body);
+            awaitCondition(()->delivered.get()==1,2000,"Active reads still deliver verified events");
+            sub.close();awaitCondition(()->manager.isClosed(sub.getSubId()),2000,"Cancellation must retire the subscription locally");
+            int verified=testPlatform.verifications.get();
+            for(int i=0;i<100;i++) for(WebsocketTransportListener listener:transport.listeners) listener.onConnectionMessage(body);
+            Assert.assertEquals(verified,testPlatform.verifications.get());Assert.assertEquals(1,delivered.get());
+            manager.onRelayBeforeSend(relay,sub);Assert.assertFalse("Reusing a subscription ID clears its old tombstone",manager.isClosed(sub.getSubId()));
+            @SuppressWarnings("unchecked") LinkedHashMap<String, Object> invalid=new LinkedHashMap<String,Object>((Map<String,Object>)wire.get(2));
+            invalid.put("sig","0".repeat(128));wire.set(2,invalid);
+            for(WebsocketTransportListener listener:transport.listeners) listener.onConnectionMessage(testPlatform.toJSON(wire));
+            awaitCondition(()->testPlatform.verifications.get()>verified,2000,"Active events must not bypass signature verification");
+            Thread.sleep(50);Assert.assertEquals(1,delivered.get());
+            for(int i=0;i<2000;i++) manager.onRelayMessage(relay,new NostrClosedMessage("closed-"+i,"fixture"));
+            Field closures=manager.getClass().getDeclaredField("closedSubscriptions");closures.setAccessible(true);
+            Assert.assertEquals(1024,((Map<?,?>)closures.get(manager)).size());
+        } finally {for(NostrRelay peer:pool.clean()) peer.disconnect("Fixture complete",false).await();signer.getKeyPair().destroy();}
     }
 
     private static NGEPlatform getInstalledPlatform() throws Exception {
@@ -379,6 +423,11 @@ public class TestRelayLoopScheduling {
 
         private volatile boolean autoOpen = true;
         private volatile RecordingWebsocketTransport lastTransport;
+        private final AtomicInteger verifications=new AtomicInteger();
+
+        @Override public AsyncTask<Boolean> schnorrVerifyAsync(String data,String signature,byte[] publicKey) {
+            verifications.incrementAndGet();return super.schnorrVerifyAsync(data,signature,publicKey);
+        }
 
         public void setAutoOpen(boolean autoOpen) {
             this.autoOpen = autoOpen;

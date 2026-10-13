@@ -30,6 +30,8 @@
  */
 package org.ngengine.nostr4j;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import org.ngengine.nostr4j.listeners.NostrRelayComponent;
@@ -45,6 +47,26 @@ public class NostrRelaySubManager implements NostrRelayComponent {
     }
 
     private final Map<String, SubAttachment> subTracker = new ConcurrentHashMap<>();
+    private final Map<String, Boolean> closedSubscriptions = new ConcurrentHashMap<>();
+    private final Deque<String> closureOrder = new ArrayDeque<>();
+
+    /**
+     * Checks whether this relay recently retired the supplied subscription ID.
+     * Known late events can be discarded before signature verification. Unknown IDs are
+     * not treated as closed, and reopening an ID removes its closure record.
+     *
+     * @param subId wire subscription identifier
+     * @return whether the ID is present in the bounded recent-closure history
+     */
+    public boolean isClosed(String subId) {
+        return closedSubscriptions.containsKey(subId);
+    }
+
+    private synchronized void rememberClosed(String subId) {
+        subTracker.remove(subId);
+        if (closedSubscriptions.putIfAbsent(subId, Boolean.TRUE) == null) closureOrder.addLast(subId);
+        while (closureOrder.size() > 1024) closedSubscriptions.remove(closureOrder.removeFirst());
+    }
 
     @Override
     public boolean onRelayConnectRequest(NostrRelay relay) {
@@ -60,7 +82,7 @@ public class NostrRelaySubManager implements NostrRelayComponent {
     public boolean onRelayMessage(NostrRelay relay, NostrMessage rcv) {
         if (rcv instanceof NostrClosedMessage) {
             String subId = ((NostrClosedMessage) rcv).getSubId();
-            this.subTracker.remove(subId);
+            rememberClosed(subId);
         } else if (rcv instanceof NostrEOSEMessage) {
             String subId = ((NostrEOSEMessage) rcv).getSubId();
             SubAttachment attachment = this.subTracker.get(subId);
@@ -115,7 +137,13 @@ public class NostrRelaySubManager implements NostrRelayComponent {
     public boolean onRelayBeforeSend(NostrRelay relay, NostrMessage message) {
         if (message instanceof NostrSubscription) {
             String subId = ((NostrSubscription) message).getSubId();
+            synchronized (this) {
+                closedSubscriptions.remove(subId);
+                closureOrder.remove(subId);
+            }
             subTracker.computeIfAbsent(subId, k -> new SubAttachment());
+        } else if (message instanceof NostrSubscription.NostrSubCloseMessage) {
+            rememberClosed(((NostrSubscription.NostrSubCloseMessage) message).getId());
         }
         return true;
     }
@@ -129,7 +157,7 @@ public class NostrRelaySubManager implements NostrRelayComponent {
     public boolean onRelayAfterSend(NostrRelay relay, NostrMessage message) {
         if (message instanceof NostrSubscription.NostrSubCloseMessage) {
             String subId = ((NostrSubscription.NostrSubCloseMessage) message).getId();
-            subTracker.remove(subId);
+            rememberClosed(subId);
         }
         return true;
     }

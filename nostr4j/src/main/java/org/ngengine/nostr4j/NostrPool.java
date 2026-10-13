@@ -59,6 +59,7 @@ import org.ngengine.nostr4j.listeners.NostrNoticeListener;
 import org.ngengine.nostr4j.listeners.NostrRelayComponent;
 import org.ngengine.nostr4j.pool.ackpolicy.NostrPoolAckPolicy;
 import org.ngengine.nostr4j.pool.ackpolicy.NostrPoolAnyAckPolicy;
+import org.ngengine.nostr4j.pool.fetchpolicy.NostrFetchTask;
 import org.ngengine.nostr4j.pool.fetchpolicy.NostrPoolFetchPolicy;
 import org.ngengine.nostr4j.pool.fetchpolicy.NostrWaitForEventFetchPolicy;
 import org.ngengine.nostr4j.proto.NostrMessage;
@@ -411,7 +412,7 @@ public class NostrPool {
     ) {
         NGEPlatform platform = NGEUtils.getPlatform();
         NostrSubscription sub = subscribe(filters, eventTracker);
-        return platform.wrapPromise((res, rej) -> {
+        AsyncTask<List<SignedNostrEvent>> task = platform.wrapPromise((res, rej) -> {
             List<SignedNostrEvent> events = Collections.synchronizedList(new ArrayList<>());
 
             assert dbg(() -> {
@@ -456,6 +457,7 @@ public class NostrPool {
                 )
                 .open();
         });
+        return new NostrFetchTask<>(task, sub::close);
     }
 
     protected boolean onRelayMessage(NostrRelay relay, NostrMessage rcv) {

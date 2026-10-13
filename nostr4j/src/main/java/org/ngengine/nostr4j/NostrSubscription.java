@@ -87,6 +87,7 @@ public class NostrSubscription extends NostrMessage {
     private final Collection<NostrSubOpenListener> onOpenListeners = new CopyOnWriteArrayList<>();
 
     private volatile AsyncExecutor exc;
+    private final List<AsyncTask<Void>> pendingEventCallbacks = new ArrayList<>();
     private final Collection<NostrFilter> filters;
     private final Collection<NostrFilter> filtersRO;
 
@@ -210,6 +211,9 @@ public class NostrSubscription extends NostrMessage {
         opened = false;
         AsyncExecutor executor = this.exc;
         this.exc = null;
+        synchronized (pendingEventCallbacks) {
+            pendingEventCallbacks.clear();
+        }
         List<AsyncTask<NostrMessageAck>> out = this.onClose.apply(this, getCloseMessage());
         registerClosure("closed by client");
         if (executor != null) {
@@ -336,19 +340,48 @@ public class NostrSubscription extends NostrMessage {
     }
 
     protected void callEoseListeners(NostrRelay relay, boolean everyWhere) {
-        if (onEoseListeners.isEmpty()) return;
+        callEoseListeners(relay, everyWhere, () -> { });
+    }
+
+    /**
+     * Delivers EOSE after the event callbacks already registered for this subscription settle.
+     * Event callbacks remain parallel. After the EOSE listeners also settle, the completion
+     * action runs only if the same subscription executor is still active and the read is open.
+     *
+     * @param relay relay that reported the end of stored events
+     * @param everyWhere whether all participating relays have reported EOSE
+     * @param completed action to run after delivery and policy callbacks finish
+     */
+    protected void callEoseListeners(NostrRelay relay, boolean everyWhere, Runnable completed) {
         AsyncExecutor executor = this.exc;
         if (executor == null) return;
-        for (NostrSubEoseListener listener : onEoseListeners) {
-            executor.run(() -> {
-                try {
-                    listener.onSubEose(this, relay, everyWhere);
-                } catch (Throwable ex) {
-                    logger.warning("Error calling EOSE listener: " + listener + " " + ex);
+        List<AsyncTask<Void>> earlierEvents;
+        synchronized (pendingEventCallbacks) {
+            pendingEventCallbacks.removeIf(AsyncTask::isDone);
+            earlierEvents = new ArrayList<>(pendingEventCallbacks);
+        }
+        // Keep event callbacks parallel, but never close a historical fetch before those events are delivered.
+        AsyncTask
+            .allSettled(earlierEvents)
+            .then(ignored -> {
+                if (this.exc != executor) return null;
+                List<AsyncTask<Void>> callbacks = new ArrayList<>();
+                for (NostrSubEoseListener listener : onEoseListeners) {
+                    callbacks.add(executor.run(() -> {
+                        try {
+                            listener.onSubEose(this, relay, everyWhere);
+                        } catch (Throwable ex) {
+                            logger.warning("Error calling EOSE listener: " + listener + " " + ex);
+                        }
+                        return null;
+                    }));
                 }
+                AsyncTask.allSettled(callbacks).then(done -> {
+                    if (this.exc == executor && opened) completed.run();
+                    return null;
+                });
                 return null;
             });
-        }
     }
 
     private boolean matchesAnyFilter(SignedNostrEvent event) {
@@ -369,14 +402,18 @@ public class NostrSubscription extends NostrMessage {
             return;
         }
         for (NostrSubEventListener listener : onEventListeners) {
-            executor.run(() -> {
-                try {
-                    listener.onSubEvent(this, event, stored);
-                } catch (Throwable ex) {
-                    logger.warning("Error calling Event listener: " + listener + " " + ex);
-                }
-                return null;
-            });
+            synchronized (pendingEventCallbacks) {
+                pendingEventCallbacks.removeIf(AsyncTask::isDone);
+                AsyncTask<Void> callback = executor.run(() -> {
+                    try {
+                        listener.onSubEvent(this, event, stored);
+                    } catch (Throwable ex) {
+                        logger.warning("Error calling Event listener: " + listener + " " + ex);
+                    }
+                    return null;
+                });
+                pendingEventCallbacks.add(callback);
+            }
         }
     }
 

@@ -786,11 +786,15 @@ public final class NostrRelay {
     private void onConnectionMessage(String msg) {
         try {
             NGEPlatform platform = NGEUtils.getPlatform();
+            List<Object> data = platform.fromJSON(msg, List.class);
+            String prefix = NGEUtils.safeString(data.get(0));
+            // CLOSE is local state. Do not spend CPU verifying buffered events for a retired read.
+            // Untracked subscriptions retain their previous behavior; only known closures are suppressed.
+            NostrRelaySubManager manager = getComponent(NostrRelaySubManager.class);
+            if ("EVENT".equals(prefix) && data.size() > 1 && manager != null && manager.isClosed(NGEUtils.safeString(data.get(1)))) return;
             assert dbg(() -> {
                 logger.finest("Received message: " + msg);
             });
-            List<Object> data = platform.fromJSON(msg, List.class);
-            String prefix = NGEUtils.safeString(data.get(0));
 
             NostrMessage rcv = null;
             if (rcv == null) rcv = SignedNostrEvent.parse(data);
