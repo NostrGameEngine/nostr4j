@@ -51,6 +51,7 @@ import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.listeners.NostrRelayComponent;
 import org.ngengine.nostr4j.proto.NostrMessage;
 import org.ngengine.nostr4j.proto.NostrMessageAck;
+import org.ngengine.nostr4j.proto.impl.NostrAuthChallenge;
 import org.ngengine.nostr4j.proto.impl.NostrClosedMessage;
 import org.ngengine.nostr4j.proto.impl.NostrEOSEMessage;
 import org.ngengine.nostr4j.proto.impl.NostrNoticeMessage;
@@ -872,6 +873,7 @@ public class NostrRelay {
             if (rcv == null) rcv = NostrEOSEMessage.parse(data);
             if (rcv == null) rcv = NostrOKMessage.parse(data);
             if (rcv == null) rcv = NostrNoticeMessage.parse(data);
+            if (rcv == null) rcv = NostrAuthChallenge.parse(data);
             if (rcv == null) throw new Exception("Unknown message type: " + prefix);
             final NostrMessage message = rcv;
 
