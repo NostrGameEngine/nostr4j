@@ -127,7 +127,8 @@ public final class NostrRelay {
     protected final WebsocketTransport connector;
     protected final String url;
     protected final List<NostrRelayComponent> listeners = new CopyOnWriteArrayList<>();
-    protected final Map<String, NostrMessageAck> waitingEventsAck = new ConcurrentHashMap<>();
+    // Multiple callers may publish the same immutable event before its wire acknowledgement arrives.
+    protected final Map<String, List<NostrMessageAck>> waitingEventsAck = new ConcurrentHashMap<>();
     protected final AsyncExecutor executor;
     protected final ExecutionQueue excQueue;
 
@@ -206,19 +207,19 @@ public final class NostrRelay {
 
     protected void cleanupExpiredAcks() {
         long now = Instant.now().getEpochSecond();
-        Iterator<Map.Entry<String, NostrMessageAck>> it = waitingEventsAck.entrySet().iterator();
+        Iterator<Map.Entry<String, List<NostrMessageAck>>> it = waitingEventsAck.entrySet().iterator();
         while (it.hasNext()) {
             try {
-                Map.Entry<String, NostrMessageAck> entry = it.next();
-                NostrMessageAck ack = entry.getValue();
-                if (ack.getSentAt().getEpochSecond() + ackTimeoutS < now) {
-                    assert dbg(() -> {
-                        logger.finest("Event Ack timeout: " + ack.getId());
-                    });
-                    if (waitingEventsAck.remove(entry.getKey(), entry.getValue())) {
-                        ack.callFailureCallback("Event status timeout");
+                Map.Entry<String, List<NostrMessageAck>> entry = it.next();
+                for (NostrMessageAck ack : entry.getValue()) {
+                    if (ack.getSentAt().getEpochSecond() + ackTimeoutS < now) {
+                        assert dbg(() -> {
+                            logger.finest("Event Ack timeout: " + ack.getId());
+                        });
+                        if (entry.getValue().remove(ack)) ack.callFailureCallback("Event status timeout");
                     }
                 }
+                if (entry.getValue().isEmpty()) waitingEventsAck.remove(entry.getKey(), entry.getValue());
             } catch (Exception e) {
                 logger.log(Level.WARNING, "Error when cleaning ack", e);
             }
@@ -231,8 +232,9 @@ public final class NostrRelay {
             return;
         }
         long nextEpochSecond = Long.MAX_VALUE;
-        for (NostrMessageAck ack : this.waitingEventsAck.values()) {
-            nextEpochSecond = Math.min(nextEpochSecond, ack.getSentAt().getEpochSecond() + this.ackTimeoutS + 1);
+        for (List<NostrMessageAck> acknowledgements : this.waitingEventsAck.values()) {
+            for (NostrMessageAck ack : acknowledgements) nextEpochSecond =
+                Math.min(nextEpochSecond, ack.getSentAt().getEpochSecond() + this.ackTimeoutS + 1);
         }
         if (nextEpochSecond == Long.MAX_VALUE) {
             this.ackCleanupGeneration.incrementAndGet();
@@ -518,7 +520,11 @@ public final class NostrRelay {
                             Instant.now(),
                             (rr, msg) -> {
                                 if (eventId != null) {
-                                    this.waitingEventsAck.remove(eventId);
+                                    List<NostrMessageAck> acknowledgements = this.waitingEventsAck.get(eventId);
+                                    if (acknowledgements != null) {
+                                        acknowledgements.remove(rr);
+                                        if (acknowledgements.isEmpty()) this.waitingEventsAck.remove(eventId, acknowledgements);
+                                    }
                                     scheduleAckCleanupIfNeeded();
                                 }
                                 assert dbg(() -> {
@@ -528,7 +534,11 @@ public final class NostrRelay {
                             },
                             (rr, msg) -> {
                                 if (eventId != null) {
-                                    this.waitingEventsAck.remove(eventId);
+                                    List<NostrMessageAck> acknowledgements = this.waitingEventsAck.get(eventId);
+                                    if (acknowledgements != null) {
+                                        acknowledgements.remove(rr);
+                                        if (acknowledgements.isEmpty()) this.waitingEventsAck.remove(eventId, acknowledgements);
+                                    }
                                     scheduleAckCleanupIfNeeded();
                                 }
                                 assert dbg(() -> {
@@ -563,8 +573,13 @@ public final class NostrRelay {
                         }
 
                         if (eventId != null) {
-                            this.waitingEventsAck.put(eventId, result);
+                            List<NostrMessageAck> acknowledgements =
+                                this.waitingEventsAck.computeIfAbsent(eventId, id -> new CopyOnWriteArrayList<>());
+                            boolean alreadyPending = !acknowledgements.isEmpty();
+                            acknowledgements.add(result);
                             scheduleAckCleanupIfNeeded();
+                            // One wire event/OK suffices for all concurrent callers; a transport retry still sends.
+                            if (alreadyPending && failures == 0) return;
                         }
 
                         try {
@@ -573,10 +588,27 @@ public final class NostrRelay {
                                 .catchException(e -> {
                                     if (failures + 1 >= maxSendFailures) {
                                         logger.log(Level.WARNING, "Error sending message", e);
+                                        List<NostrMessageAck> acknowledgements = eventId == null ? null : waitingEventsAck.get(eventId);
+                                        if (
+                                            acknowledgements != null &&
+                                            acknowledgements.contains(result) &&
+                                            waitingEventsAck.remove(eventId, acknowledgements)
+                                        ) {
+                                            for (NostrMessageAck ack : acknowledgements) if (
+                                                ack != result
+                                            ) ack.callFailureCallback(e.getMessage());
+                                        }
                                         result.callFailureCallback(e.getMessage());
                                     } else {
                                         if (eventId != null) {
-                                            waitingEventsAck.remove(eventId);
+                                            List<NostrMessageAck> acknowledgements = waitingEventsAck.get(eventId);
+                                            if (acknowledgements != null) {
+                                                acknowledgements.remove(result);
+                                                if (acknowledgements.isEmpty()) waitingEventsAck.remove(
+                                                    eventId,
+                                                    acknowledgements
+                                                );
+                                            }
                                             scheduleAckCleanupIfNeeded();
                                         }
                                         logger.log(Level.WARNING, "Error sending message, will retry", e);
@@ -596,13 +628,27 @@ public final class NostrRelay {
                                 });
                         } catch (Throwable e) {
                             logger.log(Level.WARNING, "Error sending message (0)", e);
-                            if (eventId != null) {
-                                this.waitingEventsAck.remove(eventId);
-                                scheduleAckCleanupIfNeeded();
-                            }
                             if (failures + 1 >= maxSendFailures) {
+                                List<NostrMessageAck> acknowledgements = eventId == null ? null : waitingEventsAck.get(eventId);
+                                if (
+                                    acknowledgements != null &&
+                                    acknowledgements.contains(result) &&
+                                    waitingEventsAck.remove(eventId, acknowledgements)
+                                ) {
+                                    for (NostrMessageAck ack : acknowledgements) if (ack != result) ack.callFailureCallback(
+                                        e.getMessage()
+                                    );
+                                }
                                 result.callFailureCallback(e.getMessage());
                             } else {
+                                if (eventId != null) {
+                                    List<NostrMessageAck> acknowledgements = this.waitingEventsAck.get(eventId);
+                                    if (acknowledgements != null) {
+                                        acknowledgements.remove(result);
+                                        if (acknowledgements.isEmpty()) this.waitingEventsAck.remove(eventId, acknowledgements);
+                                    }
+                                    scheduleAckCleanupIfNeeded();
+                                }
                                 this.messageQueue.add(new QueuedMessage(message, ores, orej, failures + 1));
                                 loop();
                             }
@@ -770,8 +816,8 @@ public final class NostrRelay {
                             String eventId = ok.getEventId();
                             boolean success = ok.isSuccess();
                             String eventMessage = ok.getMessage();
-                            NostrMessageAck ack = this.waitingEventsAck.get(eventId);
-                            if (ack != null) {
+                            List<NostrMessageAck> acknowledgements = this.waitingEventsAck.get(eventId);
+                            if (acknowledgements != null) {
                                 assert dbg(() -> {
                                     logger.finest(
                                         "Received ack for event: " +
@@ -783,10 +829,10 @@ public final class NostrRelay {
                                     );
                                 });
 
-                                if (success) {
-                                    ack.callSuccessCallback(eventMessage);
-                                } else {
-                                    ack.callFailureCallback(eventMessage);
+                                for (NostrMessageAck ack : acknowledgements) {
+                                    if (success) ack.callSuccessCallback(eventMessage); else ack.callFailureCallback(
+                                        eventMessage
+                                    );
                                 }
                                 scheduleAckCleanupIfNeeded();
                             } else {
@@ -843,6 +889,8 @@ public final class NostrRelay {
             runInRelayExecutor(
                 (r0, rj0) -> {
                     try {
+                        // A queued close from the previous socket must not reset a reopened transport.
+                        if (connector.isConnected()) return;
                         Status oldStatus = getStatus();
                         if (oldStatus == Status.DISCONNECTED) {
                             return;
@@ -878,6 +926,7 @@ public final class NostrRelay {
             runInRelayExecutor(
                 (r0, rj0) -> {
                     try {
+                        if (connector.isConnected()) return;
                         for (NostrRelayComponent listener : this.listeners) {
                             try {
                                 if (!listener.onRelayDisconnect(this, reason, true)) {

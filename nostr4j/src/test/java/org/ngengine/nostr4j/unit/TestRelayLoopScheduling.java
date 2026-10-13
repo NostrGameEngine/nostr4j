@@ -32,21 +32,30 @@ package org.ngengine.nostr4j.unit;
 
 import static org.junit.Assert.assertTrue;
 
+import java.io.IOException;
 import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 import org.junit.After;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.ngengine.nostr4j.NostrRelay;
 import org.ngengine.nostr4j.NostrRelayLifecycleManager;
 import org.ngengine.nostr4j.NostrRelayWatchdog;
+import org.ngengine.nostr4j.event.SignedNostrEvent;
+import org.ngengine.nostr4j.event.UnsignedNostrEvent;
+import org.ngengine.nostr4j.proto.NostrMessage;
+import org.ngengine.nostr4j.proto.NostrMessageAck;
 import org.ngengine.nostr4j.proto.impl.NostrNoticeMessage;
+import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
 import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEPlatform;
 import org.ngengine.platform.jvm.JVMAsyncPlatform;
@@ -71,6 +80,133 @@ public class TestRelayLoopScheduling {
     public void tearDown() throws Exception {
         if (previousPlatform != null) {
             installPlatform(previousPlatform);
+        }
+    }
+
+    @Test
+    public void simultaneousPublicationsOfOneEventKeepEveryAcknowledgement() throws Exception {
+        NostrKeyPairSigner signer = NostrKeyPairSigner.generate();
+        try {
+            for (boolean accepted : new boolean[] { true, false }) {
+                NostrRelay relay = new NostrRelay(TEST_RELAY_URL);
+                relay.connect().await();
+                AtomicInteger attempts = new AtomicInteger();
+                relay.addComponent(
+                    new NostrRelayLifecycleManager() {
+                        @Override
+                        public boolean onRelaySend(NostrRelay ignored, NostrMessage message) {
+                            attempts.incrementAndGet();
+                            return true;
+                        }
+                    }
+                );
+                SignedNostrEvent event = signer
+                    .sign(
+                        new UnsignedNostrEvent()
+                            .withKind(30078)
+                            .withTag("d", "duplicate-ack-" + accepted)
+                            .withContent("Shared publication")
+                    )
+                    .await();
+                AsyncTask<NostrMessageAck> first = relay.sendMessage(event);
+                AsyncTask<NostrMessageAck> second = relay.sendMessage(event);
+                awaitCondition(() -> attempts.get() == 2, 2000, "Both callers must reach the relay send queue");
+                RecordingWebsocketTransport transport = testPlatform.getLastTransport();
+                Assert.assertEquals(
+                    "Concurrent callers share one wire publication",
+                    1,
+                    transport.sentMessages.size()
+                );
+                String response = "[\"OK\",\"" + event.getId() + "\"," + accepted + ",\"test acknowledgement\"]";
+                for (WebsocketTransportListener listener : transport.listeners) listener.onConnectionMessage(response);
+                awaitCondition(
+                    () -> first.isDone() && second.isDone(),
+                    2000,
+                    "Publishing the same signed event twice must not orphan the first ACK promise"
+                );
+                Assert.assertEquals(
+                    accepted,
+                    first.await().getStatus() == NostrMessageAck.Status.SUCCESS
+                );
+                Assert.assertEquals(
+                    accepted,
+                    second.await().getStatus() == NostrMessageAck.Status.SUCCESS
+                );
+                relay.disconnect("test-cleanup").await();
+            }
+        } finally {
+            signer.getKeyPair().destroy();
+        }
+    }
+
+    @Test
+    public void missingAcknowledgementTimesOutEveryConcurrentCaller() throws Exception {
+        NostrKeyPairSigner signer = NostrKeyPairSigner.generate();
+        NostrRelay relay = new NostrRelay(TEST_RELAY_URL);
+        try {
+            relay.connect().await();
+            relay.setAckTimeout(0, TimeUnit.SECONDS);
+            SignedNostrEvent event = signer
+                .sign(new UnsignedNostrEvent().withKind(1).withContent("Timeout fixture"))
+                .await();
+            AsyncTask<NostrMessageAck> first = relay.sendMessage(event);
+            AsyncTask<NostrMessageAck> second = relay.sendMessage(event);
+            awaitCondition(() -> first.isDone() && second.isDone(), 4000, "An expired shared ACK must settle every caller");
+            Assert.assertEquals(NostrMessageAck.Status.FAILURE, first.await().getStatus());
+            Assert.assertEquals(
+                NostrMessageAck.Status.FAILURE,
+                second.await().getStatus()
+            );
+        } finally {
+            relay.disconnect("test-cleanup").await();
+            signer.getKeyPair().destroy();
+        }
+    }
+
+    @Test
+    public void exhaustedTransportRetriesFailEverySharedPublication() throws Exception {
+        NostrKeyPairSigner signer = NostrKeyPairSigner.generate();
+        NostrRelay relay = new NostrRelay(TEST_RELAY_URL);
+        try {
+            relay.connect().await();
+            RecordingWebsocketTransport transport = testPlatform.getLastTransport();
+            transport.withholdWrites = true;
+            AtomicInteger attempts = new AtomicInteger();
+            relay.addComponent(
+                new NostrRelayLifecycleManager() {
+                    @Override
+                    public boolean onRelaySend(NostrRelay ignored, NostrMessage message) {
+                        attempts.incrementAndGet();
+                        return true;
+                    }
+                }
+            );
+            SignedNostrEvent event = signer
+                .sign(new UnsignedNostrEvent().withKind(1).withContent("Retry fixture"))
+                .await();
+            AsyncTask<NostrMessageAck> first = relay.sendMessage(event);
+            AsyncTask<NostrMessageAck> second = relay.sendMessage(event);
+            awaitCondition(
+                () -> attempts.get() == 2 && !transport.failedWrites.isEmpty(),
+                2000,
+                "Shared send was not registered"
+            );
+            long deadline = System.currentTimeMillis() + 3000;
+            while (!(first.isDone() && second.isDone()) && System.currentTimeMillis() < deadline) {
+                for (Consumer<Throwable> reject : new ArrayList<>(transport.failedWrites)) if (
+                    transport.failedWrites.remove(reject)
+                ) reject.accept(new IOException("Synthetic transport failure"));
+                Thread.sleep(20);
+            }
+            assertTrue("Both callers must settle when transport retries are exhausted", first.isDone() && second.isDone());
+            Assert.assertEquals(NostrMessageAck.Status.FAILURE, first.await().getStatus());
+            Assert.assertEquals(
+                NostrMessageAck.Status.FAILURE,
+                second.await().getStatus()
+            );
+        } finally {
+            relay.disconnect("test-cleanup").await();
+            signer.getKeyPair().destroy();
         }
     }
 
@@ -225,7 +361,7 @@ public class TestRelayLoopScheduling {
             AsyncTask<?> connected = relay.connect();
             awaitCondition(() -> relay.getStatus() == NostrRelay.Status.DISCONNECTED, 2000, "veto did not close relay");
             assertTrue(testPlatform.getLastTransport().sentMessages.isEmpty());
-            org.junit.Assert.assertThrows(Exception.class, () -> connected.await());
+            Assert.assertThrows(Exception.class, () -> connected.await());
         }
     }
 
@@ -265,6 +401,8 @@ public class TestRelayLoopScheduling {
         private final List<WebsocketTransportListener> listeners = new CopyOnWriteArrayList<WebsocketTransportListener>();
         private final List<String> sentMessages = new ArrayList<String>();
         private volatile boolean connected;
+        private volatile boolean withholdWrites;
+        private final List<Consumer<Throwable>> failedWrites = new CopyOnWriteArrayList<>();
 
         private RecordingWebsocketTransport(TestPlatform platform) {
             this.platform = platform;
@@ -293,6 +431,7 @@ public class TestRelayLoopScheduling {
         @Override
         public AsyncTask<Void> send(String message) {
             sentMessages.add(message);
+            if (withholdWrites) return AsyncTask.create((resolve, reject) -> failedWrites.add(reject));
             return AsyncTask.completed(null);
         }
 
