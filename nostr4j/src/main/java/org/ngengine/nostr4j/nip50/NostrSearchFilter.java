@@ -31,6 +31,7 @@
 package org.ngengine.nostr4j.nip50;
 
 import java.time.Instant;
+import java.util.Locale;
 import java.util.Map;
 import org.ngengine.nostr4j.NostrFilter;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
@@ -98,14 +99,12 @@ public class NostrSearchFilter extends NostrFilter {
         return (NostrSearchFilter) super.withTag(key, values);
     }
 
-    public boolean matches(SignedNostrEvent event, int count) {
-        boolean match = super.matches(event, count);
-        if (!match && search != null && !search.isEmpty()) {
-            String content = event.getContent();
-            if (content != null && !content.isEmpty()) {
-                match = content.toLowerCase().contains(search.toLowerCase());
-            }
-        }
-        return match;
+    @Override
+    public boolean matches(SignedNostrEvent event, int count, boolean anyTagValue) {
+        if (!super.matches(event, count, anyTagValue)) return false;
+        if (search == null || search.isEmpty()) return true;
+        // Client-side search uses a case-insensitive substring in addition to the NIP-01 restrictions.
+        String content = event.getContent();
+        return content != null && content.toLowerCase(Locale.ROOT).contains(search.toLowerCase(Locale.ROOT));
     }
 }

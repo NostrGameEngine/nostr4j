@@ -37,11 +37,14 @@ import static org.junit.Assert.assertTrue;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.function.Predicate;
 import org.junit.Test;
 import org.ngengine.nostr4j.NostrFilter;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
+import org.ngengine.nostr4j.nip50.NostrSearchFilter;
 import org.ngengine.platform.NGEPlatform;
 import org.ngengine.platform.NGEUtils;
 
@@ -237,5 +240,89 @@ public class TestNostrFilter {
         assertTrue(prepared.test(event));
         assertTrue(prepared.test(event));
         assertFalse(filter.matches(event, 1));
+    }
+
+    private SignedNostrEvent searchEvent(String content) {
+        return new SignedNostrEvent(
+            "0".repeat(64),
+            NostrPublicKey.fromHex("f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9"),
+            1,
+            content,
+            Instant.ofEpochSecond(1700000000),
+            "0".repeat(128),
+            List.of(List.of("t", "first", "second"))
+        );
+    }
+
+    @Test
+    public void searchMatchesTextThroughEveryOverloadAndPreparedSnapshot() {
+        SignedNostrEvent matching = searchEvent("An INDEX of events");
+        SignedNostrEvent missing = searchEvent("Other events");
+        NostrSearchFilter filter = new NostrSearchFilter().search("index");
+        Locale previous = Locale.getDefault();
+        try {
+            Locale.setDefault(Locale.forLanguageTag("tr-TR"));
+            assertTrue(filter.matches(matching));
+            assertTrue(filter.matches(matching, 0));
+            assertTrue(filter.matches(matching, true));
+            assertTrue(filter.matches(matching, 0, true));
+            assertFalse(filter.matches(missing));
+            assertFalse(filter.matches(missing, 0));
+            assertFalse(filter.matches(missing, true));
+            assertFalse(filter.matches(missing, 0, true));
+            Predicate<SignedNostrEvent> prepared = filter.prepare();
+            Predicate<SignedNostrEvent> anyValuePrepared = filter.prepare(true);
+            filter.search("other");
+            assertTrue(prepared.test(matching));
+            assertTrue(anyValuePrepared.test(matching));
+            assertFalse(prepared.test(missing));
+            assertFalse(anyValuePrepared.test(missing));
+            assertFalse(filter.matches(matching));
+            assertTrue(filter.matches(missing));
+        } finally {
+            Locale.setDefault(previous);
+        }
+    }
+
+    @Test
+    public void searchCannotOverrideOtherFilterRestrictions() {
+        SignedNostrEvent event = searchEvent("Matching text");
+        List<NostrSearchFilter> excluded = List.of(
+            new NostrSearchFilter().search("text").withId("1".repeat(64)),
+            new NostrSearchFilter().search("text").withAuthor("1".repeat(64)),
+            new NostrSearchFilter().search("text").withKind(2),
+            new NostrSearchFilter().search("text").withTag("t", "missing"),
+            new NostrSearchFilter().search("text").since(event.getCreatedAt().plusSeconds(1)),
+            new NostrSearchFilter().search("text").until(event.getCreatedAt().minusSeconds(1)),
+            new NostrSearchFilter().search("text").limit(0)
+        );
+        for (NostrSearchFilter filter : excluded) {
+            assertFalse(filter.matches(event));
+            assertFalse(filter.matches(event, 0, true));
+            assertFalse(filter.prepare().test(event));
+        }
+        NostrSearchFilter limited = new NostrSearchFilter().search("text").limit(1);
+        assertTrue(limited.matches(event, 0));
+        assertFalse(limited.matches(event, 1));
+        assertFalse(limited.matches(event, 1, true));
+        NostrSearchFilter secondTag = new NostrSearchFilter().search("text").withTag("t", "second");
+        assertFalse(secondTag.matches(event));
+        assertTrue(secondTag.matches(event, true));
+        assertTrue(secondTag.prepare(true).test(event));
+    }
+
+    @Test
+    public void absentOrEmptySearchKeepsOrdinaryMatching() {
+        SignedNostrEvent emptyContent = searchEvent("");
+        SignedNostrEvent event = searchEvent("Matching text");
+        for (String query : Arrays.asList(null, "")) {
+            NostrSearchFilter filter = new NostrSearchFilter().search(query).withKind(1);
+            assertTrue(filter.matches(emptyContent));
+            assertTrue(filter.matches(event));
+            assertFalse(filter.withKind(0).withTag("t", "missing").matches(event));
+        }
+        assertFalse(new NostrSearchFilter().search("text").matches(emptyContent));
+        assertTrue(new NostrSearchFilter(Map.of("search", "TEXT")).matches(event));
+        assertFalse(new NostrSearchFilter(Map.of("search", "absent")).matches(event));
     }
 }
