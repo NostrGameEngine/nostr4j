@@ -39,17 +39,23 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import org.ngengine.nostr4j.cache.NostrCacheRelay;
+import org.ngengine.nostr4j.cache.NostrEventCache;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.event.SignedNostrEvent.ReceivedSignedNostrEvent;
 import org.ngengine.nostr4j.event.tracker.EventTracker;
@@ -81,6 +87,78 @@ public class NostrPool {
     private final CopyOnWriteArrayList<NostrRelay> relays = new CopyOnWriteArrayList<>();
     private final List<NostrRelay> relaysRO = Collections.unmodifiableList(relays);
     private final Supplier<EventTracker> defaultEventTracker;
+    private final Map<String, ReadPlan> readPlans = new ConcurrentHashMap<>();
+    private volatile Duration priorityTimeout = Duration.ofSeconds(2);
+
+    /**
+     * Sets how long a read waits for one query-priority tier before starting the next.
+     * EOSE can advance the read earlier after its event and policy callbacks complete.
+     * This is a per-tier fallback timeout, independent of the fetch policy's overall deadline.
+     *
+     * @param timeout positive, non-null wait for each higher-priority tier
+     * @throws IllegalArgumentException if the duration is null, zero or negative
+     */
+    public void setPriorityTimeout(Duration timeout) {
+        if (timeout == null || timeout.isNegative() || timeout.isZero()) throw new IllegalArgumentException("Invalid priority timeout");
+        priorityTimeout = timeout;
+    }
+
+    private final class ReadPlan {
+        final NostrSubscription sub;
+        final List<NostrRelay> targets = new ArrayList<>();
+        final Set<NostrRelay> started = new HashSet<>();
+        final Set<NostrRelay> finished = new HashSet<>();
+        final Set<NostrRelay> eosed = new HashSet<>();
+        AsyncTask<Void> deadline;
+
+        ReadPlan(NostrSubscription sub) {
+            this.sub = sub;
+            for (NostrRelay relay : relays) if (accepts(relay)) targets.add(relay);
+            targets.sort(Comparator.comparingInt(NostrRelay::getQueryPriority).reversed());
+        }
+
+        boolean accepts(NostrRelay relay) {
+            return true;
+        }
+
+        synchronized boolean allFinished() {
+            return finished.containsAll(targets);
+        }
+
+        synchronized boolean allEosed() {
+            return eosed.containsAll(targets);
+        }
+
+        synchronized List<AsyncTask<NostrMessageAck>> advance() {
+            if (!sub.isOpened() || !finished.containsAll(started)) return Collections.emptyList();
+            if (deadline != null) { deadline.cancel(); deadline = null; }
+            List<NostrRelay> group = new ArrayList<>();
+            for (NostrRelay relay : targets) if (!started.contains(relay)) {
+                if (!group.isEmpty() && relay.getQueryPriority() != group.get(0).getQueryPriority()) break;
+                group.add(relay);
+            }
+            if (group.isEmpty()) return Collections.emptyList();
+            started.addAll(group);
+            if (started.size() < targets.size()) deadline = sub.getExecutor().runLater(() -> {
+                synchronized (ReadPlan.this) { finished.addAll(group); }
+                advance();
+                return null;
+            }, priorityTimeout.toMillis(), TimeUnit.MILLISECONDS);
+            List<AsyncTask<NostrMessageAck>> messages = new ArrayList<>();
+            for (NostrRelay relay : group) {
+                if (!sub.isOpened()) break;
+                relay.beforeSendMessage(sub);
+                messages.add(relay.sendMessage(sub));
+                relay.afterSendMessage(sub);
+            }
+            return messages;
+        }
+
+        synchronized void close() {
+            if (deadline != null) deadline.cancel();
+            deadline = null;
+        }
+    }
 
     private NostrRelayComponent listener = new NostrRelayComponent() {
         @Override
@@ -148,11 +226,14 @@ public class NostrPool {
     }
 
     public AsyncTask<List<AsyncTask<NostrMessageAck>>> publish(SignedNostrEvent ev) {
-        return ack(sendMessage(ev), NostrPoolAnyAckPolicy.get());
+        return publish(ev, NostrPoolAnyAckPolicy.get());
     }
 
     public AsyncTask<List<AsyncTask<NostrMessageAck>>> publish(SignedNostrEvent ev, NostrPoolAckPolicy ackPolicy) {
-        return ack(sendMessage(ev), ackPolicy);
+        List<AsyncTask<NostrMessageAck>> requests = sendMessage(ev);
+        if (requests.isEmpty() && relays.stream().anyMatch(relay -> relay instanceof NostrCacheRelay))
+            return AsyncTask.failed(new IllegalStateException("No network relays available for publication"));
+        return ack(requests, ackPolicy);
     }
 
     /**
@@ -204,16 +285,20 @@ public class NostrPool {
 
     protected List<AsyncTask<NostrMessageAck>> sendMessage(NostrMessage message) {
         List<AsyncTask<NostrMessageAck>> promises = new ArrayList<>();
-        for (NostrRelay relay : relays) {
+        List<NostrRelay> targets = new ArrayList<>();
+        targets.addAll(relays);
+        for (NostrRelay relay : targets) {
             relay.beforeSendMessage(message);
         }
-        for (NostrRelay relay : relays) {
+        for (NostrRelay relay : targets) {
+            // Local storage must never make a network publication appear acknowledged.
+            if (message instanceof SignedNostrEvent && relay instanceof NostrCacheRelay) continue;
             assert dbg(() -> {
                 logger.finer("sending message to relay " + relay.getUrl() + " " + message);
             });
             promises.add(relay.sendMessage(message));
         }
-        for (NostrRelay relay : relays) {
+        for (NostrRelay relay : targets) {
             relay.afterSendMessage(message);
         }
 
@@ -226,10 +311,10 @@ public class NostrPool {
                 return r.connect();
             }
         }
-        NostrRelay newRelay = new NostrRelay(relay);
-        addRelay(newRelay);
-        return newRelay.connect();
+        return addRelay(createRelay(relay));
     }
+
+    protected NostrRelay createRelay(String url) { return new NostrRelay(url); }
 
     /**
      * Adds a relay to this pool and connects to it if not already connected.
@@ -243,10 +328,10 @@ public class NostrPool {
             if (relay.getComponent(NostrRelaySubManager.class) == null) {
                 relay.addComponent(new NostrRelaySubManager());
             }
-            if (relay.getComponent(NostrRelayLifecycleManager.class) == null) {
+            if (!(relay instanceof NostrCacheRelay) && relay.getComponent(NostrRelayLifecycleManager.class) == null) {
                 relay.addComponent(new NostrRelayLifecycleManager());
             }
-            if (relay.getComponent(NostrRelayWatchdog.class) == null) {
+            if (!(relay instanceof NostrCacheRelay) && relay.getComponent(NostrRelayWatchdog.class) == null) {
                 relay.addComponent(new NostrRelayWatchdog());
             }
             relay.addComponent(listener);
@@ -266,6 +351,20 @@ public class NostrPool {
         if (relays.contains(relay)) {
             relay.removeComponent(listener);
             relays.remove(relay);
+            for (ReadPlan plan : readPlans.values()) {
+                synchronized (plan) {
+                    if (plan.started.remove(relay)) {
+                        NostrMessage close = new NostrSubscription.NostrSubCloseMessage(plan.sub.getId());
+                        relay.beforeSendMessage(close);
+                        relay.sendMessage(close);
+                        relay.afterSendMessage(close);
+                    }
+                    plan.targets.remove(relay);
+                    plan.finished.remove(relay);
+                    plan.eosed.remove(relay);
+                }
+                plan.advance();
+            }
             return relay;
         }
         return null;
@@ -324,7 +423,9 @@ public class NostrPool {
                 assert dbg(() -> {
                     logger.fine("opening subscription " + s.getId());
                 });
-                return this.sendMessage(s);
+                ReadPlan plan = new ReadPlan(s);
+                readPlans.put(s.getId(), plan);
+                return plan.advance();
             },
             (s, closeMessage) -> {
                 assert dbg(() -> {
@@ -332,7 +433,18 @@ public class NostrPool {
                 });
 
                 subscriptions.remove(subId);
-                return this.sendMessage(closeMessage);
+                ReadPlan plan = readPlans.remove(subId);
+                if (plan == null) return Collections.emptyList();
+                plan.close();
+                List<AsyncTask<NostrMessageAck>> messages = new ArrayList<>();
+                synchronized (plan) {
+                    for (NostrRelay relay : plan.started) {
+                        relay.beforeSendMessage(closeMessage);
+                        messages.add(relay.sendMessage(closeMessage));
+                        relay.afterSendMessage(closeMessage);
+                    }
+                }
+                return messages;
             }
         );
         tracker.tuneFor(sub);
@@ -475,9 +587,11 @@ public class NostrPool {
                 if (sub != null) {
                     // register that the subscription was closed for a reason
                     sub.registerClosure(reason);
+                    ReadPlan plan = readPlans.get(subId);
+                    if (plan != null) synchronized (plan) { plan.finished.add(relay); }
 
                     // check if it is closed in every relay
-                    boolean isClosedEverywhere = true;
+                    boolean isClosedEverywhere = plan == null || plan.allFinished();
                     for (NostrRelay r : relays) {
                         NostrRelaySubManager m = r.getComponent(NostrRelaySubManager.class);
                         if (m != null && m.isActive(sub)) {
@@ -500,8 +614,7 @@ public class NostrPool {
                     // if so, call the close listeners
                     if (isClosedEverywhere) {
                         sub.callCloseListeners();
-                        subscriptions.remove(subId);
-                    }
+                    } else if (plan != null) plan.advance();
                 } else {
                     logger.warning("received closed for unknown subscription " + subId);
                 }
@@ -515,14 +628,9 @@ public class NostrPool {
                         return true;
                     }
                     // check if it is eosed in every relay
-                    boolean isEOSEEverywhere = true;
-                    for (NostrRelay r : relays) {
-                        NostrRelaySubManager m = r.getComponent(NostrRelaySubManager.class);
-                        if (m != null && m.isActive(sub) && !m.isEose(sub)) {
-                            isEOSEEverywhere = false;
-                            break;
-                        }
-                    }
+                    ReadPlan plan = readPlans.get(subId);
+                    if (plan != null) synchronized (plan) { plan.finished.add(relay); plan.eosed.add(relay); }
+                    boolean isEOSEEverywhere = plan != null && plan.allEosed();
                     logger.fine(
                         "received eose for subscription " +
                         subId +
@@ -531,7 +639,7 @@ public class NostrPool {
                         " isEOSEEverywhere: " +
                         isEOSEEverywhere
                     );
-                    sub.callEoseListeners(relay, isEOSEEverywhere);
+                    sub.callEoseListeners(relay, isEOSEEverywhere, () -> { if (plan != null) plan.advance(); });
                 }
             } else if (rcv instanceof NostrNoticeMessage) {
                 NostrNoticeMessage msg = (NostrNoticeMessage) rcv;
@@ -546,9 +654,22 @@ public class NostrPool {
                 }
             } else if (rcv instanceof ReceivedSignedNostrEvent) {
                 ReceivedSignedNostrEvent e = (ReceivedSignedNostrEvent) rcv;
+                e.setRelayUrl(relay.getUrl());
+                if (e.isExpired()) return true;
+                List<AsyncTask<Boolean>> cachePolicies = new ArrayList<>();
+                for (NostrRelay target : relays) if (target instanceof NostrCacheRelay) {
+                    NostrEventCache cache = ((NostrCacheRelay) target).getCache();
+                    AsyncTask<Boolean> policy = target == relay ? cache.isDeleted(e).then(deleted -> !deleted)
+                        : cache.put(e.getId(), e, false).compose(ignored -> cache.isDeleted(e)).then(deleted -> !deleted);
+                    policy.catchException(error -> logger.log(Level.WARNING, "Local cache policy failed", error));
+                    cachePolicies.add(policy);
+                }
+                AsyncTask<Boolean> accepted = AsyncTask.all(cachePolicies).then(results -> results.stream().allMatch(Boolean::booleanValue));
                 String subId = e.getSubId();
                 NostrSubscription sub = subscriptions.get(subId);
                 if (sub != null) {
+                    ReadPlan plan = readPlans.get(subId);
+                    if (plan == null || !plan.accepts(relay)) return true;
                     if (!sub.isOpened()) {
                         logger.finer("ignoring event for non-open subscription " + subId + " from " + relay.getUrl());
                         return true;
@@ -556,34 +677,12 @@ public class NostrPool {
                     assert dbg(() -> {
                         logger.finer("received event for subscription " + subId);
                     });
-                    // if (verifyEvents && !e.verify()) throw new Exception(
-                    //     "Event signature is invalid"
-                    // );
-                    if (!sub.eventTracker.seen(e)) {
-                        assert dbg(() -> {
-                            logger.finest("Event not seen " + e.getId() + " for subscription " + subId);
-                        });
-
-                        boolean stored = false;
-
-                        // check if current relay reached EOSE
-                        NostrRelaySubManager m = relay.getComponent(NostrRelaySubManager.class);
-                        if (m != null && m.isActive(sub) && !m.isEose(sub)) {
-                            stored = true;
-                        }
-                        final boolean storedFinal = stored;
-                        // syncher.then((n)->{
-                        sub.callEventListeners(e, storedFinal);
-                        //     return null;
-                        // });
-
-                    } else {
-                        assert dbg(() -> {
-                            logger.finest("Event already seen " + e.getId() + " for subscription " + subId);
-                        });
-                    }
+                    boolean stored = false;
+                    NostrRelaySubManager manager = relay.getComponent(NostrRelaySubManager.class);
+                    if (manager != null && manager.isActive(sub) && !manager.isEose(sub)) stored = true;
+                    sub.callEventListeners(e, stored, accepted.then(deliver -> deliver && !sub.eventTracker.seen(e)));
                 } else {
-                    logger.finer("Received event for closed subscription " + subId + " " + rcv);
+                    logger.finer("Received event for closed subscription " + subId);
                 }
             }
         } catch (Throwable t) {
@@ -640,7 +739,22 @@ public class NostrPool {
     protected boolean onRelayConnect(NostrRelay relay) {
         // subscribe the relay to everything
         for (NostrSubscription sub : subscriptions.values()) {
-            relay.sendMessage(sub);
+            ReadPlan plan = readPlans.get(sub.getId());
+            if (plan != null) synchronized (plan) {
+                if (sub.isOpened() && plan.started.contains(relay)) {
+                    plan.finished.remove(relay);
+                    plan.eosed.remove(relay);
+                    relay.beforeSendMessage(sub);
+                    relay.sendMessage(sub);
+                    relay.afterSendMessage(sub);
+                } else if (sub.isOpened() && plan.accepts(relay) && !plan.targets.contains(relay)) {
+                    plan.targets.add(relay);
+                    plan.started.add(relay);
+                    relay.beforeSendMessage(sub);
+                    relay.sendMessage(sub);
+                    relay.afterSendMessage(sub);
+                }
+            }
         }
         return true;
     }

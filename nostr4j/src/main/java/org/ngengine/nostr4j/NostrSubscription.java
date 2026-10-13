@@ -394,6 +394,19 @@ public class NostrSubscription extends NostrMessage {
     }
 
     protected void callEventListeners(SignedNostrEvent event, boolean stored) {
+        callEventListeners(event, stored, AsyncTask.completed(true));
+    }
+
+    /**
+     * Registers delivery immediately while an asynchronous cache policy decides eligibility.
+     * EOSE waits for the combined policy and listener tasks, so persistent storage cannot
+     * make end-of-history overtake a preceding event. No relay thread blocks on storage IO.
+     *
+     * @param event event to deliver after policy completion
+     * @param stored whether it preceded EOSE on the source relay
+     * @param accepted task reporting whether the event may be delivered
+     */
+    protected void callEventListeners(SignedNostrEvent event, boolean stored, AsyncTask<Boolean> accepted) {
         if (onEventListeners.isEmpty()) return;
         AsyncExecutor executor = this.exc;
         if (executor == null) return;
@@ -404,14 +417,15 @@ public class NostrSubscription extends NostrMessage {
         for (NostrSubEventListener listener : onEventListeners) {
             synchronized (pendingEventCallbacks) {
                 pendingEventCallbacks.removeIf(AsyncTask::isDone);
-                AsyncTask<Void> callback = executor.run(() -> {
+                AsyncTask<Void> callback = accepted.compose(deliver -> executor.run(() -> {
+                    if (!deliver || this.exc != executor || !opened) return null;
                     try {
                         listener.onSubEvent(this, event, stored);
                     } catch (Throwable ex) {
                         logger.warning("Error calling Event listener: " + listener + " " + ex);
                     }
                     return null;
-                });
+                }));
                 pendingEventCallbacks.add(callback);
             }
         }
@@ -483,7 +497,11 @@ public class NostrSubscription extends NostrMessage {
         return fragments;
     }
 
-    static final class NostrSubCloseMessage extends NostrMessage {
+    /**
+     * Wire CLOSE message retiring one subscription without disconnecting its relay.
+     * Cache relays and other in-process transports use the same message as network relays.
+     */
+    public static final class NostrSubCloseMessage extends NostrMessage {
 
         private final String id;
 

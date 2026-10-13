@@ -40,6 +40,9 @@ import org.junit.Before;
 import org.junit.Test;
 import org.ngengine.nostr4j.event.NostrEvent;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
+import org.ngengine.nostr4j.event.SignedNostrEvent.ReceivedSignedNostrEvent;
+import org.ngengine.nostr4j.event.UnsignedNostrEvent;
+import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
 import org.ngengine.platform.NGEPlatform;
 import org.ngengine.platform.NGEUtils;
 import org.ngengine.platform.jvm.JVMAsyncPlatform;
@@ -53,6 +56,13 @@ public class TestSignedEventEncodingCache {
 
         int hashes;
         int encodings;
+        int verifications;
+
+        @Override
+        public boolean schnorrVerify(String data, String signature, byte[] pubkey) {
+            verifications++;
+            return super.schnorrVerify(data, signature, pubkey);
+        }
 
         @Override
         public String sha256(String value) {
@@ -148,6 +158,57 @@ public class TestSignedEventEncodingCache {
         assertEquals(json, event.toEventJSON());
         assertEquals(1, replacement.hashes);
         assertEquals(1, replacement.encodings);
+    }
+
+    @Test
+    public void asyncVerificationComputesAndCachesTheActualIdBeforeCheckingTheSignature() throws Exception {
+        SignedNostrEvent event = event();
+        assertFalse(event.verifyAsync().await());
+        assertEquals(1, platform.hashes);
+        String actualId = NostrEvent.computeEventId(event.getPubkey().asHex(), event);
+        assertNotEquals(event.getId(), actualId);
+        assertEquals(1, platform.hashes);
+        assertFalse(event.verifyAsync().await());
+        assertEquals(1, platform.hashes);
+    }
+
+    @Test
+    public void cachedDeliveriesPreserveVerifiedImmutableEventsWithoutRepeatingCryptography() throws Exception {
+        NostrKeyPairSigner signer = NostrKeyPairSigner.generate();
+        try {
+            SignedNostrEvent signed = signer.sign(new UnsignedNostrEvent()
+                .withKind(1).withContent("Already authenticated").withTag("t", "test")).await();
+            SignedNostrEvent source = new SignedNostrEvent(signed.toMap());
+            assertTrue(source.verifyAsync().await());
+            int hashes = platform.hashes, verifications = platform.verifications;
+            for (int i = 0; i < 50; i++) {
+                ReceivedSignedNostrEvent delivered = SignedNostrEvent.ReceivedSignedNostrEvent.forSubscription("view-" + i, source);
+                assertEquals(source.toMap(), delivered.toMap());
+                assertSame(source.getTagRows(), delivered.getTagRows());
+                assertEquals("view-" + i, delivered.getSubId());
+                assertTrue(delivered.verify());
+                assertTrue(delivered.verifyAsync().await());
+                source = delivered;
+            }
+            assertEquals(hashes, platform.hashes);
+            assertEquals(verifications, platform.verifications);
+        } finally {
+            signer.close();
+        }
+    }
+
+    @Test
+    public void subscriptionCopiesDoNotTrustSubclassClaimsOrUnverifiedDeclaredIds() throws Exception {
+        SignedNostrEvent original = event();
+        SignedNostrEvent custom = new SignedNostrEvent(original.toMap()) {
+            @Override public boolean verify() { return true; }
+        };
+        assertTrue(custom.verify());
+        ReceivedSignedNostrEvent copied = SignedNostrEvent.ReceivedSignedNostrEvent.forSubscription("custom", custom);
+        assertFalse(copied.verify());
+        assertNotSame(custom.getTagRows(), copied.getTagRows());
+        ReceivedSignedNostrEvent unverified = SignedNostrEvent.ReceivedSignedNostrEvent.forSubscription("unverified", original);
+        assertFalse(unverified.verifyAsync().await());
     }
 
     @Test

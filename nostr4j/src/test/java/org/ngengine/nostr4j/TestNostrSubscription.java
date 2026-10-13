@@ -99,6 +99,34 @@ public class TestNostrSubscription {
     }
 
     @Test
+    public void eoseWaitsForAsynchronousCachePolicyAndRejectedPolicyDoesNotDeliver() throws Exception {
+        for (boolean accepted : new boolean[] { true, false }) {
+            NostrSubscription sub = newSubscription();
+            NostrKeyPairSigner signer = NostrKeyPairSigner.generate();
+            AtomicReference<java.util.function.Consumer<Boolean>> policy = new AtomicReference<>();
+            AtomicInteger delivered = new AtomicInteger();
+            CountDownLatch eose = new CountDownLatch(1);
+            try {
+                sub.addEventListener((ignored, event, stored) -> delivered.incrementAndGet());
+                sub.addEoseListener((ignored, relay, all) -> eose.countDown());
+                sub.open();
+                SignedNostrEvent event = signer.sign(new UnsignedNostrEvent().withKind(1).withContent("Pending cache policy")).await();
+                AsyncTask<Boolean> pending = AsyncTask.create((resolve, reject) -> policy.set(resolve));
+                sub.callEventListeners(event, true, pending);
+                sub.callEoseListeners(null, true);
+                assertFalse(eose.await(100, TimeUnit.MILLISECONDS));
+                assertEquals(0, delivered.get());
+                policy.get().accept(accepted);
+                assertTrue(eose.await(2, TimeUnit.SECONDS));
+                assertEquals(accepted ? 1 : 0, delivered.get());
+            } finally {
+                sub.close();
+                signer.close();
+            }
+        }
+    }
+
+    @Test
     public void testCloseListenersReceiveImmutableReasonSnapshot() throws Exception {
         NostrSubscription sub = newSubscription();
         CountDownLatch latch = new CountDownLatch(1);

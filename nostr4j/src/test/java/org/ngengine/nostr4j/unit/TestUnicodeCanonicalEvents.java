@@ -34,6 +34,7 @@ public class TestUnicodeCanonicalEvents {
             assertEquals((String) vector.get("name"), vector.get("id"), NostrEvent.computeEventId(pubkey, event));
             UnsignedNostrEvent unsigned = new UnsignedNostrEvent(event.toMap());
             assertEquals((String) vector.get("name"), vector.get("id"), NostrEvent.computeEventId(pubkey, unsigned));
+            assertEquals((String) vector.get("name"), vector.get("id"), NostrEvent.computeEventIdAsyncUncached(pubkey, unsigned).await());
         }
     }
 

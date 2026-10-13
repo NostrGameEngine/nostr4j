@@ -234,6 +234,26 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
         this.tagRows = Collections.unmodifiableList(tagRows);
     }
 
+    /**
+     * Copies immutable event data for a subscription-specific delivery wrapper.
+     * The delivery factory checks the exact source type before sharing cached encodings,
+     * so subclasses with mutable getters cannot introduce stale serialized values.
+     */
+    private SignedNostrEvent(SignedNostrEvent source) {
+        this.kind = source.kind;
+        this.content = source.content;
+        this.signature = source.signature;
+        this.pubkey = source.pubkey;
+        this.identifier = source.identifier;
+        this.tagRows = source.tagRows;
+        this.encodingCacheAllowed = source.encodingCacheAllowed;
+        this.parsedPublicKey = source.parsedPublicKey;
+        this.verificationCached = source.verificationCached;
+        this.verificationResult = source.verificationResult;
+        this.eventIdCache = source.eventIdCache;
+        this.eventJsonCache = source.eventJsonCache;
+    }
+
     private LinkedHashMap<String, TagLookup> getTagsIndex() {
         LinkedHashMap<String, TagLookup> index = this.tags;
         if (index != null) return index;
@@ -358,15 +378,20 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
         if (this.verificationCached.get()) {
             return AsyncTask.completed(this.verificationResult.get());
         }
-        String computedId = NostrEvent.computeEventId(this.pubkey, this);
-        if (!this.identifier.id.equals(computedId)) {
-            this.verificationResult.set(false);
-            this.verificationCached.set(true);
-            return AsyncTask.completed(false);
-        }
-        return NGEUtils
-            .getPlatform()
-            .schnorrVerifyAsync(computedId, this.signature, this.getPubkey().asReadOnlyBuffer())
+        NGEPlatform platform = NGEUtils.getPlatform();
+        boolean canCache =
+            encodingCacheAllowed && (getClass() == SignedNostrEvent.class || getClass() == ReceivedSignedNostrEvent.class);
+        CachedEncoding cached = canCache ? eventIdCache : null;
+        AsyncTask<String> computedId =
+            cached != null && cached.platform == platform && Objects.equals(cached.pubkey, pubkey)
+            ? AsyncTask.completed(cached.value)
+            : NostrEvent.computeEventIdAsyncUncached(this.pubkey, this);
+        return computedId
+            .compose(id -> {
+                if (canCache && id != null) eventIdCache = new CachedEncoding(platform, pubkey, id);
+                if (!this.identifier.id.equals(id)) return AsyncTask.completed(false);
+                return platform.schnorrVerifyAsync(id, this.signature, this.getPubkey().asReadOnlyBuffer());
+            })
             .then(result -> {
                 this.verificationResult.set(result);
                 this.verificationCached.set(true);
@@ -411,12 +436,39 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
     }
 
     public static class ReceivedSignedNostrEvent extends SignedNostrEvent {
+        private transient String relayUrl;
+
+        /**
+         * Stores metadata about local cache delivery separately from the signed payload.
+         * The value is not included in the event ID, signature or serialized event JSON,
+         * and therefore cannot be used as authenticated information about the original author.
+         */
+        public String getRelayUrl() { return relayUrl; }
+
+        public void setRelayUrl(String url) { relayUrl = url; }
 
         protected final String subId;
 
         public ReceivedSignedNostrEvent(String subId, Map<String, Object> map) {
             super(map);
             this.subId = subId;
+        }
+
+        private ReceivedSignedNostrEvent(String subId, SignedNostrEvent source) {
+            super(source);
+            this.subId = subId;
+        }
+
+        /**
+         * Adds local subscription metadata without discarding an immutable event's verification.
+         * Custom subclasses and non-string tag models are snapshotted without inheriting verification.
+         */
+        public static ReceivedSignedNostrEvent forSubscription(String subId, SignedNostrEvent source) {
+            if (source.encodingCacheAllowed &&
+                (source.getClass() == SignedNostrEvent.class || source.getClass() == ReceivedSignedNostrEvent.class)) {
+                return new ReceivedSignedNostrEvent(subId, source);
+            }
+            return new ReceivedSignedNostrEvent(subId, source.toMap());
         }
 
         public String getSubId() {

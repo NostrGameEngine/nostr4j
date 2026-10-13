@@ -255,6 +255,22 @@ public interface NostrEvent extends Cloneable, Serializable {
         }
     }
 
+    static AsyncTask<String> computeEventIdAsyncUncached(String pubkey, NostrEvent event) {
+        try {
+            NGEPlatform platform = NGEUtils.getPlatform();
+            long createdAt = event.getCreatedAt().getEpochSecond();
+            if (platform.supportsMinimalJSONEscaping() && createdAt >= -9007199254740991L && createdAt <= 9007199254740991L) {
+                return platform.sha256JSONAsync(
+                    Arrays.asList(0, pubkey, createdAt, event.getKind(), event.getTagRows(), event.getContent())
+                );
+            }
+            return platform.sha256Async(NostrEventJson.canonical(pubkey, event));
+        } catch (Exception error) {
+            Logger.getLogger(NostrEvent.class.getName()).log(Level.WARNING, "Failed to compute event id", error);
+            return AsyncTask.completed(null);
+        }
+    }
+
     // nip40 expiration
     default Instant getExpiration() {
         try {

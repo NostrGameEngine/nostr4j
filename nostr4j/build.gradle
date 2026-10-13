@@ -28,4 +28,23 @@ tasks.named('test') {
         exceptionFormat "full"
     }
 }
+
+tasks.register('cacheTest', Test) {
+    description = 'Runs deterministic cache/priority/fetch regressions without relay or wallet services.'
+    group = 'verification'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnit()
+    filter {
+        includeTestsMatching 'org.ngengine.nostr4j.unit.TestEventCache'
+        includeTestsMatching 'org.ngengine.nostr4j.unit.TestVStoreEventCache'
+        includeTestsMatching 'org.ngengine.nostr4j.unit.TestPriorityCacheRelay'
+        includeTestsMatching 'org.ngengine.nostr4j.unit.TestRelayLoopScheduling'
+        includeTestsMatching 'org.ngengine.nostr4j.unit.TestSignedEventEncodingCache'
+        includeTestsMatching 'org.ngengine.nostr4j.unit.TestUnicodeCanonicalEvents'
+        includeTestsMatching 'org.ngengine.nostr4j.TestNostrPoolAckPolicy'
+        includeTestsMatching 'org.ngengine.nostr4j.TestNostrSubscription'
+        includeTestsMatching 'org.ngengine.nostr4j.nip47.TestNWCCaching'
+    }
+}
  

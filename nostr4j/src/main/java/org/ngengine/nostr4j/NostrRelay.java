@@ -65,7 +65,7 @@ import org.ngengine.platform.SafeFlag;
 import org.ngengine.platform.transport.WebsocketTransport;
 import org.ngengine.platform.transport.WebsocketTransportListener;
 
-public final class NostrRelay {
+public class NostrRelay {
 
     private static final Logger logger = Logger.getLogger(NostrRelay.class.getName());
 
@@ -146,6 +146,7 @@ public final class NostrRelay {
     protected Status currentStatus = Status.NEW;
     protected Instant statusSince = Instant.now();
     protected Duration statusTimeout = Duration.ofSeconds(120);
+    private volatile int queryPriority;
     protected boolean reconnect = false;
     protected String markForDisconnection = null;
 
@@ -190,10 +191,23 @@ public final class NostrRelay {
     }
 
     public NostrRelay(String url, AsyncExecutor executor) {
+        this(url, executor, false);
+    }
+
+    /**
+     * Creates a relay that can use a caller-supplied executor without a WebSocket transport.
+     * Subclasses that skip transport creation provide their own connection, delivery and
+     * acknowledgement behavior while retaining the relay component interfaces.
+     *
+     * @param url relay identifier
+     * @param executor executor used for relay work
+     * @param local whether WebSocket transport creation is omitted
+     */
+    protected NostrRelay(String url, AsyncExecutor executor, boolean local) {
         try {
             NGEPlatform platform = NGEUtils.getPlatform();
-            this.connector = platform.newTransport();
-            this.connector.addListener(listener);
+            this.connector = local ? null : platform.newTransport();
+            if (this.connector != null) this.connector.addListener(listener);
             this.messageQueue = platform.newConcurrentQueue(QueuedMessage.class);
             this.connectCallbacks = platform.newConcurrentQueue(ConnectionCallback.class);
             this.disconnectCallbacks = platform.newConcurrentQueue(ConnectionCallback.class);
@@ -668,6 +682,24 @@ public final class NostrRelay {
     public String getUrl() {
         return url;
     }
+
+    /**
+     * Returns the priority used to group and order subscription queries.
+     * Higher values are queried first, allowing a local cache to precede network relays
+     * without changing which network connections the pool prefers to keep open.
+     *
+     * @return query-tier priority
+     */
+    public int getQueryPriority() { return queryPriority; }
+
+    /**
+     * Changes the priority used to order query tiers for newly created read plans.
+     * This value does not acquire a connection lease or change the network budget.
+     *
+     * @param priority new query priority; higher values are queried first
+     * @return this relay
+     */
+    public NostrRelay setQueryPriority(int priority) { queryPriority = priority; return this; }
 
     public AsyncTask<NostrRelay> connect() {
         NGEPlatform platform = NGEUtils.getPlatform();
