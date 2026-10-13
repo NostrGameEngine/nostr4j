@@ -32,6 +32,7 @@
 package org.ngengine.nostr4j.nip57;
 
 import java.net.URISyntaxException;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
@@ -112,7 +113,7 @@ public final class ZapInvoice {
     }
 
     public Map<String, Object> toMap() {
-        Map<String, Object> map = zapRequest.toMap();
+        Map<String, Object> map = new LinkedHashMap<>(zapRequest.toMap());
         map.put("invoice", invoice);
         map.put("comment", comment);
         map.put("request", zapRequest.toMap());

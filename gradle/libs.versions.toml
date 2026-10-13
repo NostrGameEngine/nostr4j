@@ -1,7 +1,7 @@
 [versions]
 bech32Snapshot = "1.2.1"
 bolt11Snapshot = "0.0.2"
-lnurlSnapshot = "0.0.5"
+lnurlSnapshot = "0.3.0-SNAPSHOT"
 ngePlatformSnapshot = "0.3.0-SNAPSHOT"
 bech32 = "1.2.1"
 bolt11 = "0.0.2"

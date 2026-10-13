@@ -33,8 +33,6 @@ package org.ngengine.nostr4j.nip57;
 
 import jakarta.annotation.Nullable;
 import java.net.URISyntaxException;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -267,14 +265,15 @@ public final class Nip57 {
                 "Bolt11 runtime dependency issue while validating receipt description hash: " + e.getClass().getSimpleName()
             );
         }
-        if (
-            bolt11DescriptionHash == null ||
-            bolt11DescriptionHash.isEmpty() ||
-            !MessageDigest.isEqual(
-                descriptionHash.getBytes(StandardCharsets.US_ASCII),
-                bolt11DescriptionHash.getBytes(StandardCharsets.US_ASCII)
-            )
-        ) {
+        boolean descriptionMatches =
+            bolt11DescriptionHash != null && descriptionHash.length() == bolt11DescriptionHash.length();
+        if (descriptionMatches) {
+            int difference = 0;
+            for (int i = 0; i < descriptionHash.length(); i++) difference |=
+                descriptionHash.charAt(i) ^ bolt11DescriptionHash.charAt(i);
+            descriptionMatches = difference == 0;
+        }
+        if (!descriptionMatches) {
             throw new InvalidZapException("Description hash does not match");
         }
 
@@ -579,8 +578,7 @@ public final class Nip57 {
                         if (nostrPubkeyRaw == null || nostrPubkeyRaw.isEmpty()) {
                             throw new MalformedZapTargetException("LNURL-Pay service does not provide a nostrPubkey");
                         }
-                        // Some LNURL providers may expose nostrPubkey but serialize allowsNostr in a non-standard way.
-                        boolean isNostrAllowed = pay.isNostrAllowed() || !nostrPubkeyRaw.isEmpty();
+                        boolean isNostrAllowed = pay.isNostrAllowed();
                         NostrPublicKey providerPubkey = NostrPublicKey.fromHex(nostrPubkeyRaw);
                         if (!isNostrAllowed) {
                             throw new MalformedZapTargetException("LNURL-Pay service does not allow Nostr zap requests");
