@@ -36,6 +36,7 @@ tasks.register('cacheTest', Test) {
     classpath = sourceSets.test.runtimeClasspath
     useJUnit()
     filter {
+        includeTestsMatching 'org.ngengine.nostr4j.unit.TestAnonSigner'
         includeTestsMatching 'org.ngengine.nostr4j.unit.TestEventCache'
         includeTestsMatching 'org.ngengine.nostr4j.unit.TestVStoreEventCache'
         includeTestsMatching 'org.ngengine.nostr4j.unit.TestPriorityCacheRelay'
