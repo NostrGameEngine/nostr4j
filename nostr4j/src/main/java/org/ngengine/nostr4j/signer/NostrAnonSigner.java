@@ -1,5 +1,8 @@
 package org.ngengine.nostr4j.signer;
 
+import java.io.IOException;
+import java.io.NotSerializableException;
+import java.io.ObjectOutputStream;
 import java.util.function.Function;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.event.UnsignedNostrEvent;
@@ -14,6 +17,16 @@ import org.ngengine.platform.AsyncTask;
 public final class NostrAnonSigner implements NostrSigner {
 
     private static final long serialVersionUID = 1L;
+
+    /**
+     * Create an ephemeral signer whose identity remains stable across a compound operation.
+     * Close the action when signing, encryption and receipt binding are complete.
+     *
+     * @return a new action with its own non-persistent key pair
+     */
+    public Action newAction() {
+        return new Action();
+    }
 
     @Override
     public AsyncTask<SignedNostrEvent> sign(UnsignedNostrEvent event) {
@@ -65,5 +78,61 @@ public final class NostrAnonSigner implements NostrSigner {
     @Override
     public AsyncTask<NostrSigner> close() {
         return AsyncTask.completed(this);
+    }
+
+    /**
+     * An ephemeral signing identity for operations that need to reuse one key pair.
+     * Closing the action destroys its secret and prevents further operations.
+     * Serialization is rejected so the private key cannot be persisted accidentally.
+     */
+    public static final class Action implements NostrSigner {
+
+        private static final long serialVersionUID = 1L;
+        private transient NostrKeyPairSigner signer = NostrKeyPairSigner.generate();
+
+        private Action() {}
+
+        private synchronized NostrKeyPairSigner active() {
+            if (signer == null) throw new IllegalStateException("Anonymous action is closed");
+            return signer;
+        }
+
+        @Override
+        public AsyncTask<SignedNostrEvent> sign(UnsignedNostrEvent event) {
+            return active().sign(event);
+        }
+
+        @Override
+        public AsyncTask<NostrPublicKey> getPublicKey() {
+            return active().getPublicKey();
+        }
+
+        @Override
+        public AsyncTask<String> encrypt(String text, NostrPublicKey peer, EncryptAlgo algo) {
+            return active().encrypt(text, peer, algo);
+        }
+
+        @Override
+        public AsyncTask<String> decrypt(String text, NostrPublicKey peer, EncryptAlgo algo) {
+            return active().decrypt(text, peer, algo);
+        }
+
+        @Override
+        public synchronized AsyncTask<NostrSigner> close() {
+            if (signer != null) {
+                signer.getKeyPair().destroy();
+                signer = null;
+            }
+            return AsyncTask.completed(this);
+        }
+
+        private void writeObject(ObjectOutputStream output) throws IOException {
+            throw new NotSerializableException("Anonymous action keys must never be persisted");
+        }
+
+        @Override
+        public String toString() {
+            return "Anonymous action (ephemeral)";
+        }
     }
 }

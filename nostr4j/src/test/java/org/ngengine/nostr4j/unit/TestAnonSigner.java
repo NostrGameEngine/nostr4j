@@ -4,14 +4,61 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
+import java.io.ByteArrayOutputStream;
+import java.io.NotSerializableException;
+import java.io.ObjectOutputStream;
 import org.junit.Test;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.event.UnsignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
+import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.signer.NostrAnonSigner;
+import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
 
 public class TestAnonSigner {
+
+    @Test
+    public void actionKeepsOneKeyForCompoundProtocolsThenDisposesIt() throws Exception {
+        NostrAnonSigner factory = new NostrAnonSigner();
+        NostrAnonSigner.Action action = factory.newAction();
+        NostrKeyPairSigner other = NostrKeyPairSigner.generate();
+        try {
+            NostrPublicKey key = action.getPublicKey().await();
+            SignedNostrEvent signed = action.sign(new UnsignedNostrEvent().withKind(9734)).await();
+            assertEquals(key, signed.getPubkey());
+            String encrypted = action.encrypt("Only one action", other.getPublicKey().await()).await();
+            assertEquals("Only one action", other.decrypt(encrypted, key).await());
+            String reply = other.encrypt("Reply", key).await();
+            assertEquals("Reply", action.decrypt(reply, other.getPublicKey().await()).await());
+            try (
+                ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+                ObjectOutputStream output = new ObjectOutputStream(bytes)
+            ) {
+                try {
+                    output.writeObject(action);
+                    fail("Ephemeral action cannot be serialized");
+                } catch (NotSerializableException expected) {}
+            }
+            action.close().await();
+            action.close().await();
+            try {
+                action.sign(new UnsignedNostrEvent());
+                fail("Closed action cannot sign");
+            } catch (IllegalStateException expected) {}
+            try (
+                ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+                ObjectOutputStream output = new ObjectOutputStream(bytes)
+            ) {
+                output.writeObject(factory);
+                assertTrue(bytes.size() < 256);
+            }
+        } finally {
+            action.close();
+            other.getKeyPair().destroy();
+        }
+    }
 
     @Test
     public void eachSignUsesANewKeyWithoutPublishingMetadata() throws Exception {
