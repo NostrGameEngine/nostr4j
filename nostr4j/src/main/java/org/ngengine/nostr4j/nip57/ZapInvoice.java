@@ -44,9 +44,23 @@ public final class ZapInvoice {
     private final String invoice;
     private final String comment;
     private final ZapRequest zapRequest;
+    private final String zapRequestJson;
     private final NostrPublicKey providerPubkey;
 
     public ZapInvoice(String invoice, String comment, SignedNostrEvent zapRequest, NostrPublicKey providerPubkey) {
+        this(invoice, comment, zapRequest, providerPubkey, NGEUtils.getPlatform().toJSON(zapRequest.toMap()));
+    }
+
+    /**
+     * Preserve the exact LNURL callback payload: its bytes, not a reserialization, commit the invoice.
+     */
+    public ZapInvoice(
+        String invoice,
+        String comment,
+        SignedNostrEvent zapRequest,
+        NostrPublicKey providerPubkey,
+        String zapRequestJson
+    ) {
         this.invoice = Objects.requireNonNull(invoice, "invoice");
         if (this.invoice.isEmpty()) {
             throw new IllegalArgumentException("invoice must not be empty");
@@ -55,6 +69,7 @@ public final class ZapInvoice {
         Objects.requireNonNull(zapRequest, "zapRequest");
         this.zapRequest = zapRequest instanceof ZapRequest ? (ZapRequest) zapRequest : new ZapRequest(zapRequest.toMap());
         this.providerPubkey = Objects.requireNonNull(providerPubkey, "providerPubkey");
+        this.zapRequestJson = checkedRequestJson(zapRequestJson, this.zapRequest);
     }
 
     @SuppressWarnings("unchecked")
@@ -68,6 +83,13 @@ public final class ZapInvoice {
         Map<String, Object> zapRequestMap = (Map<String, Object>) map.get("request");
         Objects.requireNonNull(zapRequestMap, "request");
         this.zapRequest = new ZapRequest(zapRequestMap);
+        this.zapRequestJson =
+            checkedRequestJson(
+                map.get("request_json") instanceof String
+                    ? (String) map.get("request_json")
+                    : NGEUtils.getPlatform().toJSON(zapRequest.toMap()),
+                zapRequest
+            );
         String providerPubkeyHex = NGEUtils.safeString(map.get("provider_pubkey"));
         if (providerPubkeyHex.isEmpty()) {
             throw new IllegalArgumentException("provider_pubkey must not be empty");
@@ -85,6 +107,26 @@ public final class ZapInvoice {
 
     public ZapRequest getZapRequest() {
         return zapRequest;
+    }
+
+    public String getZapRequestJson() {
+        return zapRequestJson;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static String checkedRequestJson(String json, ZapRequest request) {
+        Objects.requireNonNull(json, "zapRequestJson");
+        if (json.length() > 65536) throw new IllegalArgumentException("Zap request JSON is too large");
+        Map<String, Object> raw = NGEUtils.getPlatform().fromJSON(json, Map.class);
+        // SignedNostrEvent.equals compares only IDs; compare every signed field instead.
+        if (
+            raw == null ||
+            !raw.keySet().equals(request.toMap().keySet()) ||
+            !new ZapRequest(raw).toMap().equals(request.toMap())
+        ) {
+            throw new IllegalArgumentException("Zap request JSON differs from the signed request");
+        }
+        return json;
     }
 
     public String getInvoice() {
@@ -117,6 +159,7 @@ public final class ZapInvoice {
         map.put("invoice", invoice);
         map.put("comment", comment);
         map.put("request", zapRequest.toMap());
+        map.put("request_json", zapRequestJson);
         map.put("provider_pubkey", providerPubkey.asHex());
         return map;
     }

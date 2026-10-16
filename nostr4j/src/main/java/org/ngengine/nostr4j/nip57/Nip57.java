@@ -628,7 +628,13 @@ public final class Nip57 {
                                         } catch (NoClassDefFoundError ignored) {
                                             // Ignore optional runtime linkage issues and continue with best-effort validation.
                                         }
-                                        return new ZapInvoice(invoice.getPr(), zapComment, signedZapRequest, providerPubkey);
+                                        return new ZapInvoice(
+                                            invoice.getPr(),
+                                            zapComment,
+                                            signedZapRequest,
+                                            providerPubkey,
+                                            signedJson
+                                        );
                                     });
                             });
                     });

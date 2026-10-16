@@ -39,6 +39,7 @@ import static org.junit.Assert.fail;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.TreeMap;
 import org.junit.Test;
 import org.ngengine.nostr4j.event.NostrEvent;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
@@ -121,6 +122,44 @@ public class TestNip57ZapRequest {
 
         assertTrue(invoice.getZapRequest() instanceof ZapRequest);
         assertEquals("lnurl1example", invoice.getZapRequest().getLnurl());
+    }
+
+    @Test
+    public void testInvoicePreservesExactDescriptionAcrossTransport() throws Exception {
+        SignedNostrEvent request = new SignedNostrEvent(buildZapRequestMap());
+        TreeMap<String, Object> ordered = new TreeMap<>(request.toMap());
+        String json = " \n" + NGEPlatform.get().toJSON(ordered) + "\n";
+        ZapInvoice invoice = new ZapInvoice("lnbc1example", "", request, NostrPublicKey.fromHex(PROVIDER), json);
+        Map<String, Object> transport = NGEPlatform.get().fromJSON(NGEPlatform.get().toJSON(invoice.toMap()), Map.class);
+        ZapInvoice restored = new ZapInvoice(transport);
+        assertEquals(json, restored.getZapRequestJson());
+        assertEquals(invoice.getZapRequest().toMap(), restored.getZapRequest().toMap());
+        // An attacker retaining the original ID cannot substitute a different payload or signature.
+        for (String field : Arrays.asList("content", "sig", "tags", "created_at")) {
+            LinkedHashMap<String, Object> changed = new LinkedHashMap<String, Object>(ordered);
+            changed.put(
+                field,
+                field.equals("tags")
+                    ? Arrays.asList(Arrays.asList("p", SENDER))
+                    : field.equals("created_at") ? 1742147458L : "substituted"
+            );
+            try {
+                new ZapInvoice(
+                    "lnbc1example",
+                    "",
+                    request,
+                    NostrPublicKey.fromHex(PROVIDER),
+                    NGEPlatform.get().toJSON(changed)
+                );
+                fail("Changed signed field accepted: " + field);
+            } catch (IllegalArgumentException expected) {}
+        }
+        LinkedHashMap<String, Object> changedTransport = new LinkedHashMap<String, Object>(invoice.toMap());
+        changedTransport.put("request_json", json.replace("Zap!", "Not the reviewed zap"));
+        try {
+            new ZapInvoice(changedTransport);
+            fail("Mismatched transport JSON accepted");
+        } catch (IllegalArgumentException expected) {}
     }
 
     @Test
