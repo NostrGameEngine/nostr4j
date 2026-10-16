@@ -340,7 +340,7 @@ public class NostrSubscription extends NostrMessage {
     }
 
     protected void callEoseListeners(NostrRelay relay, boolean everyWhere) {
-        callEoseListeners(relay, everyWhere, () -> { });
+        callEoseListeners(relay, everyWhere, () -> {});
     }
 
     /**
@@ -367,26 +367,31 @@ public class NostrSubscription extends NostrMessage {
                 if (this.exc != executor) return null;
                 List<AsyncTask<Void>> callbacks = new ArrayList<>();
                 for (NostrSubEoseListener listener : onEoseListeners) {
-                    callbacks.add(executor.run(() -> {
-                        try {
-                            listener.onSubEose(this, relay, everyWhere);
-                        } catch (Throwable ex) {
-                            logger.warning("Error calling EOSE listener: " + listener + " " + ex);
-                        }
-                        return null;
-                    }));
+                    callbacks.add(
+                        executor.run(() -> {
+                            try {
+                                listener.onSubEose(this, relay, everyWhere);
+                            } catch (Throwable ex) {
+                                logger.warning("Error calling EOSE listener: " + listener + " " + ex);
+                            }
+                            return null;
+                        })
+                    );
                 }
-                AsyncTask.allSettled(callbacks).then(done -> {
-                    if (this.exc == executor && opened) completed.run();
-                    return null;
-                });
+                AsyncTask
+                    .allSettled(callbacks)
+                    .then(done -> {
+                        if (this.exc == executor && opened) completed.run();
+                        return null;
+                    });
                 return null;
             });
     }
 
-    private boolean matchesAnyFilter(SignedNostrEvent event) {
+    private boolean matchesAnyFilter(SignedNostrEvent event, boolean stored) {
         for (NostrFilter filter : filters) {
-            if (filter.matches(event)) {
+            // NIP-01 limit applies only to stored history, never to live delivery (including limit:0).
+            if (filter.matches(event, stored ? 0 : -1)) {
                 return true;
             }
         }
@@ -410,22 +415,24 @@ public class NostrSubscription extends NostrMessage {
         if (onEventListeners.isEmpty()) return;
         AsyncExecutor executor = this.exc;
         if (executor == null) return;
-        if (verifyMatchLocally.get() && !matchesAnyFilter(event)) {
+        if (verifyMatchLocally.get() && !matchesAnyFilter(event, stored)) {
             logger.fine("Received event that does not match any filter: " + event.getId());
             return;
         }
         for (NostrSubEventListener listener : onEventListeners) {
             synchronized (pendingEventCallbacks) {
                 pendingEventCallbacks.removeIf(AsyncTask::isDone);
-                AsyncTask<Void> callback = accepted.compose(deliver -> executor.run(() -> {
-                    if (!deliver || this.exc != executor || !opened) return null;
-                    try {
-                        listener.onSubEvent(this, event, stored);
-                    } catch (Throwable ex) {
-                        logger.warning("Error calling Event listener: " + listener + " " + ex);
-                    }
-                    return null;
-                }));
+                AsyncTask<Void> callback = accepted.compose(deliver ->
+                    executor.run(() -> {
+                        if (!deliver || this.exc != executor || !opened) return null;
+                        try {
+                            listener.onSubEvent(this, event, stored);
+                        } catch (Throwable ex) {
+                            logger.warning("Error calling Event listener: " + listener + " " + ex);
+                        }
+                        return null;
+                    })
+                );
                 pendingEventCallbacks.add(callback);
             }
         }

@@ -43,6 +43,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 import org.junit.Test;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.event.UnsignedNostrEvent;
@@ -61,6 +62,40 @@ public class TestNostrSubscription {
             sub -> Collections.<AsyncTask<NostrMessageAck>>emptyList(),
             (sub, closeMessage) -> Collections.<AsyncTask<NostrMessageAck>>emptyList()
         );
+    }
+
+    @Test
+    public void zeroHistoryLimitStillAcceptsLiveMatchingEvents() throws Exception {
+        NostrFilter filter = new NostrFilter().withKind(1).limit(0);
+        NostrSubscription sub = new NostrSubscription(
+            "live-only",
+            List.of(filter),
+            new PassthroughEventTracker(),
+            ignored -> Collections.emptyList(),
+            (ignored, close) -> Collections.emptyList()
+        );
+        AtomicInteger received = new AtomicInteger();
+        CountDownLatch live = new CountDownLatch(1);
+        sub.addEventListener((ignored, event, stored) -> {
+            received.incrementAndGet();
+            live.countDown();
+        });
+        NostrKeyPairSigner signer = NostrKeyPairSigner.generate();
+        try {
+            SignedNostrEvent event = signer.sign(new UnsignedNostrEvent().withKind(1)).await();
+            assertFalse(filter.matches(event, 0));
+            assertTrue(filter.matches(event, -1));
+            sub.open();
+            sub.callEventListeners(event, true);
+            SignedNostrEvent wrongKind = signer.sign(new UnsignedNostrEvent().withKind(2)).await();
+            sub.callEventListeners(wrongKind, false);
+            sub.callEventListeners(event, false);
+            assertTrue(live.await(2, TimeUnit.SECONDS));
+            assertEquals(1, received.get());
+        } finally {
+            sub.close();
+            signer.close();
+        }
     }
 
     @Test
@@ -103,14 +138,16 @@ public class TestNostrSubscription {
         for (boolean accepted : new boolean[] { true, false }) {
             NostrSubscription sub = newSubscription();
             NostrKeyPairSigner signer = NostrKeyPairSigner.generate();
-            AtomicReference<java.util.function.Consumer<Boolean>> policy = new AtomicReference<>();
+            AtomicReference<Consumer<Boolean>> policy = new AtomicReference<>();
             AtomicInteger delivered = new AtomicInteger();
             CountDownLatch eose = new CountDownLatch(1);
             try {
                 sub.addEventListener((ignored, event, stored) -> delivered.incrementAndGet());
                 sub.addEoseListener((ignored, relay, all) -> eose.countDown());
                 sub.open();
-                SignedNostrEvent event = signer.sign(new UnsignedNostrEvent().withKind(1).withContent("Pending cache policy")).await();
+                SignedNostrEvent event = signer
+                    .sign(new UnsignedNostrEvent().withKind(1).withContent("Pending cache policy"))
+                    .await();
                 AsyncTask<Boolean> pending = AsyncTask.create((resolve, reject) -> policy.set(resolve));
                 sub.callEventListeners(event, true, pending);
                 sub.callEoseListeners(null, true);

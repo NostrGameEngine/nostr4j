@@ -33,10 +33,12 @@ package org.ngengine.nostr4j;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Predicate;
 import org.ngengine.nostr4j.event.NostrEvent.TagValue;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
@@ -170,7 +172,7 @@ public class NostrFilter extends NostrMessageFragment implements Cloneable {
     }
 
     public NostrFilter withTag(String key, String... values) {
-        if (tags == null) tags = new java.util.HashMap<>();
+        if (tags == null) tags = new HashMap<>();
         tags.put(key, Arrays.asList(values));
         return this;
     }
@@ -225,7 +227,7 @@ public class NostrFilter extends NostrMessageFragment implements Cloneable {
     /**
      * Checks if the given event matches this filter according to NIP-01 specs
      * @param event the event to check
-     * @param count the number of events already matched by this filter (used for limit)
+     * @param count the number of events already matched by this filter (used for limit); negative ignores the historical limit
      * @return true if the event matches the filter, false otherwise
      */
     public boolean matches(SignedNostrEvent event, int count) {
@@ -254,7 +256,7 @@ public class NostrFilter extends NostrMessageFragment implements Cloneable {
      * Like {@link #matches(SignedNostrEvent)}, each call uses count zero; the predicate
      * does not maintain a cumulative match count for the limit.
      */
-    public java.util.function.Predicate<SignedNostrEvent> prepare() {
+    public Predicate<SignedNostrEvent> prepare() {
         return prepare(false);
     }
 
@@ -263,13 +265,13 @@ public class NostrFilter extends NostrMessageFragment implements Cloneable {
      * Each call uses count zero. Use {@link #matches(SignedNostrEvent, int, boolean)}
      * when applying a limit to a running count of matched events.
      */
-    public java.util.function.Predicate<SignedNostrEvent> prepare(boolean anyTagValue) {
+    public Predicate<SignedNostrEvent> prepare(boolean anyTagValue) {
         NostrFilter snapshot = clone();
         if (getClass() != NostrFilter.class) {
             return anyTagValue ? event -> snapshot.matches(event, true) : snapshot::matches;
         }
         List<Map.Entry<String, List<String>>> rules = snapshot.tags == null
-            ? java.util.Collections.emptyList()
+            ? Collections.emptyList()
             : new ArrayList<>(snapshot.tags.entrySet());
         return event -> {
             if (!snapshot.matchesFields(event, 0)) return false;
@@ -282,7 +284,7 @@ public class NostrFilter extends NostrMessageFragment implements Cloneable {
     }
 
     private boolean matchesFields(SignedNostrEvent event, int count) {
-        if (limit != null && count >= limit) {
+        if (count >= 0 && limit != null && count >= limit) {
             return false;
         }
         if (ids != null && !ids.contains(event.getId())) {
