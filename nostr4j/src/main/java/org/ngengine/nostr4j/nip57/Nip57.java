@@ -32,8 +32,13 @@
 package org.ngengine.nostr4j.nip57;
 
 import jakarta.annotation.Nullable;
+import java.net.URI;
 import java.net.URISyntaxException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -65,6 +70,67 @@ import org.ngengine.platform.NGEPlatform;
 import org.ngengine.platform.NGEUtils;
 
 public final class Nip57 {
+
+    private static final class PayEndpoint extends LnUrlPay {
+
+        PayEndpoint(Map<String, Object> data) {
+            super(data);
+        }
+
+        @Override
+        public URI getCallback(long amount, String comment, LnUrlPayerData payerData, String requestJson) {
+            URI callback = super.getCallback(amount, comment, payerData, requestJson);
+            if (
+                requestJson == null ||
+                requestJson.isEmpty() ||
+                callback.getRawQuery() != null &&
+                Arrays.stream(callback.getRawQuery().split("&")).anyMatch(part -> part.startsWith("lnurl="))
+            ) return callback;
+            @SuppressWarnings("unchecked")
+            Map<String, Object> data = NGEPlatform.get().fromJSON(requestJson, Map.class);
+            String lnurl = new SignedNostrEvent(data).getFirstTagFirstValue("lnurl");
+            if (lnurl == null || lnurl.isEmpty()) return callback;
+            return URI.create(callback + "&lnurl=" + URLEncoder.encode(lnurl, StandardCharsets.UTF_8));
+        }
+    }
+
+    /**
+     * Decode an LNURL-Pay endpoint without requesting an invoice.
+     * Endpoints that allow Nostr payments must advertise a valid public key.
+     *
+     * @param data the provider response containing LNURL-Pay capabilities
+     * @return the decoded endpoint
+     * @throws IllegalArgumentException if the response is not an LNURL-Pay endpoint or its Nostr public key is invalid
+     */
+    public static LnUrlPay parsePayEndpoint(Map<String, Object> data) {
+        if (!"payRequest".equals(data.get("tag"))) throw new IllegalArgumentException("Expected an LNURL-Pay endpoint");
+        LnUrlPay endpoint = new PayEndpoint(data);
+        if (endpoint.isNostrAllowed()) NostrPublicKey.fromHex(endpoint.getNostrPubkey());
+        return endpoint;
+    }
+
+    /**
+     * Fetch LNURL-Pay capabilities using the supplied timeout.
+     * Responses larger than the metadata limit are rejected before decoding.
+     *
+     * @param address the LNURL address to resolve
+     * @param timeout the maximum duration of the HTTP request
+     * @return a task resolving to the validated payment endpoint
+     */
+    public static AsyncTask<LnUrlPay> fetchPayEndpoint(LnUrl address, Duration timeout) {
+        Objects.requireNonNull(address, "address");
+        return NGEPlatform
+            .get()
+            .httpGet(address.toURI().toString(), timeout, null)
+            .then(body -> {
+                if (body.length() > LnUrlPay.MAX_METADATA_SIZE) throw new IllegalArgumentException(
+                    "LNURL endpoint response is too large"
+                );
+                @SuppressWarnings("unchecked")
+                Map<String, Object> data = NGEPlatform.get().fromJSON(body, Map.class);
+                return parsePayEndpoint(data);
+            });
+    }
 
     public static AsyncTask<List<SignedNostrEvent>> getZaps(
         NostrPool pool,
