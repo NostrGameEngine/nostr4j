@@ -47,6 +47,7 @@ tasks.register('cacheTest', Test) {
         includeTestsMatching 'org.ngengine.nostr4j.TestNostrPoolAckPolicy'
         includeTestsMatching 'org.ngengine.nostr4j.TestNostrSubscription'
         includeTestsMatching 'org.ngengine.nostr4j.nip47.TestNWCCaching'
+        includeTestsMatching 'org.ngengine.wallets.nip47.TestNWCAuth'
     }
 }
  

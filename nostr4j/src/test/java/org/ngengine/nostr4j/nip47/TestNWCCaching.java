@@ -40,6 +40,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import org.junit.Test;
 import org.ngengine.nostr4j.NostrFilter;
@@ -53,10 +54,58 @@ import org.ngengine.nostr4j.proto.NostrMessageAck;
 import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
 import org.ngengine.nostr4j.signer.NostrSigner;
 import org.ngengine.platform.AsyncTask;
+import org.ngengine.wallets.Wallet.Methods;
+import org.ngengine.wallets.WalletInfo;
 import org.ngengine.wallets.nip47.NWCUri;
 import org.ngengine.wallets.nip47.NWCWallet;
 
 public class TestNWCCaching {
+
+    @Test
+    public void testConnectionPermissionsOverrideThePublicServiceCapabilities() throws Exception {
+        NostrPrivateKey key = NostrPrivateKey.generate();
+        SignedNostrEvent event = new SignedNostrEvent(
+            "info",
+            key.getPublicKey(),
+            NWCWallet.INFO_KIND,
+            "pay_invoice get_info get_balance list_transactions",
+            Instant.now(),
+            "sig",
+            List.of()
+        );
+        NostrPool pool = new NostrPool() {
+            @Override
+            public AsyncTask<List<SignedNostrEvent>> fetch(NostrFilter filter, int limit, Duration timeout) {
+                return AsyncTask.completed(List.of(event));
+            }
+
+            @Override
+            public AsyncTask<NostrRelay> ensureRelay(String relay) {
+                return AsyncTask.completed(null);
+            }
+        };
+        AtomicInteger calls = new AtomicInteger();
+        NWCWallet wallet = new NWCWallet(
+            pool,
+            new NWCUri(key.getPublicKey(), List.of("wss://wallet.example"), key.asHex(), null)
+        ) {
+            @Override
+            public AsyncTask<WalletInfo> getInfo(Instant deadline) {
+                calls.incrementAndGet();
+                return AsyncTask.completed(new WalletInfo(null, null, null, null, 0, null, List.of("pay_invoice"), List.of()));
+            }
+        };
+        try {
+            assertTrue(wallet.isMethodSupported(Methods.payInvoice).await());
+            assertEquals(false, wallet.isMethodSupported(Methods.getBalance).await());
+            assertEquals(false, wallet.isMethodSupported(Methods.listTransactions).await());
+            assertEquals(1, calls.get());
+        } finally {
+            wallet.close();
+            pool.close();
+            key.destroy();
+        }
+    }
 
     @Test
     public void testNwcUriSnapshotsRelayList() throws Exception {
@@ -211,26 +260,28 @@ public class TestNWCCaching {
             }
 
             // Subscribe first, then answer only after publication, like a real wallet relay.
-            return published.compose(request -> { try {
-                String requestJson = walletSigner
-                    .decrypt(publishedRequest.getContent(), clientPublicKey, expectedAlgorithm)
-                    .await();
-                assertTrue(requestJson.contains("\"method\":\"get_balance\""));
-                String responseJson = "{\"result_type\":\"get_balance\",\"error\":null,\"result\":{\"balance\":123}}";
-                String encryptedResponse = walletSigner.encrypt(responseJson, clientPublicKey, expectedAlgorithm).await();
-                SignedNostrEvent response = new SignedNostrEvent(
-                    "response",
-                    walletSigner.getPublicKey().await(),
-                    NWCWallet.RESPONSE_KIND,
-                    encryptedResponse,
-                    Instant.ofEpochSecond(1742147458L),
-                    "sig",
-                    List.of(List.of("e", publishedRequest.getId()), List.of("p", clientPublicKey.asHex()))
-                );
-                return AsyncTask.completed(List.of(response));
-            } catch (Throwable error) {
-                return AsyncTask.failed(error);
-            }});
+            return published.compose(request -> {
+                try {
+                    String requestJson = walletSigner
+                        .decrypt(publishedRequest.getContent(), clientPublicKey, expectedAlgorithm)
+                        .await();
+                    assertTrue(requestJson.contains("\"method\":\"get_balance\""));
+                    String responseJson = "{\"result_type\":\"get_balance\",\"error\":null,\"result\":{\"balance\":123}}";
+                    String encryptedResponse = walletSigner.encrypt(responseJson, clientPublicKey, expectedAlgorithm).await();
+                    SignedNostrEvent response = new SignedNostrEvent(
+                        "response",
+                        walletSigner.getPublicKey().await(),
+                        NWCWallet.RESPONSE_KIND,
+                        encryptedResponse,
+                        Instant.ofEpochSecond(1742147458L),
+                        "sig",
+                        List.of(List.of("e", publishedRequest.getId()), List.of("p", clientPublicKey.asHex()))
+                    );
+                    return AsyncTask.completed(List.of(response));
+                } catch (Throwable error) {
+                    return AsyncTask.failed(error);
+                }
+            });
         }
 
         @Override

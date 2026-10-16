@@ -49,6 +49,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.NostrFilter;
 import org.ngengine.nostr4j.NostrPool;
+import org.ngengine.nostr4j.NostrRelay;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.event.UnsignedNostrEvent;
 import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
@@ -123,7 +124,7 @@ public class NWCWallet implements Wallet {
                     .registerFinalizer(
                         this,
                         () -> {
-                            for (org.ngengine.nostr4j.NostrRelay relay : newPool.clean()) {
+                            for (NostrRelay relay : newPool.clean()) {
                                 relay.disconnect("NWC wallet closed");
                             }
                         }
@@ -203,7 +204,39 @@ public class NWCWallet implements Wallet {
         if (supportedMethods == null) {
             synchronized (this) {
                 if (supportedMethods == null) {
-                    supportedMethods = getCapabilities().then(info -> info.supportedMethods);
+                    // The public info event describes the service, not the permissions
+                    // granted to this connection. Never advertise optional private reads
+                    // merely because another connection could perform them.
+                    supportedMethods =
+                        getCapabilities()
+                            .compose(info -> {
+                                if (!info.supportedMethods.contains("get_info")) {
+                                    return AsyncTask.completed(info.supportedMethods);
+                                }
+                                return AsyncTask.<List<String>>create((resolve, reject) ->
+                                    getInfo()
+                                        .then(connection -> {
+                                            resolve.accept(List.copyOf(connection.methods()));
+                                            return null;
+                                        })
+                                        .catchException(error -> {
+                                            // Some legacy wallets restrict get_info itself. Payment
+                                            // remains usable; optional reads must not be assumed granted.
+                                            if (
+                                                error instanceof NWCException &&
+                                                List
+                                                    .of("RESTRICTED", "NOT_IMPLEMENTED")
+                                                    .contains(((NWCException) error).getCode())
+                                            ) {
+                                                resolve.accept(
+                                                    info.supportedMethods.contains("pay_invoice")
+                                                        ? List.of("pay_invoice")
+                                                        : List.of()
+                                                );
+                                            } else reject.accept(error);
+                                        })
+                                );
+                            });
                 }
             }
         }
@@ -545,7 +578,7 @@ public class NWCWallet implements Wallet {
                     resA.containsKey("color") ? NGEUtils.safeString(resA.get("color")) : null,
                     resA.containsKey("pubkey") ? NGEUtils.safeString(resA.get("pubkey")) : null,
                     resA.containsKey("network") ? NGEUtils.safeString(resA.get("network")) : null,
-                    resA.containsKey("block_height") ? NGEUtils.safeInt(resA.get("block_height")) : null,
+                    resA.containsKey("block_height") ? NGEUtils.safeInt(resA.get("block_height")) : 0,
                     resA.containsKey("block_hash") ? NGEUtils.safeString(resA.get("block_hash")) : null,
                     resA.containsKey("methods") ? NGEUtils.safeStringList(resA.get("methods")) : List.of(),
                     resA.containsKey("notifications") ? NGEUtils.safeStringList(resA.get("notifications")) : List.of()
