@@ -809,7 +809,11 @@ public class NostrPool {
                     AsyncTask<Boolean> policy = target == relay
                         ? cache.isDeleted(e).then(deleted -> !deleted)
                         : cache.put(e.getId(), e, false).compose(ignored -> cache.isDeleted(e)).then(deleted -> !deleted);
-                    policy.catchException(error -> logger.log(Level.WARNING, "Local cache policy failed", error));
+                    policy.catchException(error -> {
+                        if (error instanceof IllegalArgumentException) {
+                            logger.warning("Rejected cached relay event: kind=" + e.getKind() + ", id=" + e.getId());
+                        } else logger.log(Level.WARNING, "Local cache policy failed", error);
+                    });
                     cachePolicies.add(policy);
                 }
                 AsyncTask<Boolean> accepted = AsyncTask
