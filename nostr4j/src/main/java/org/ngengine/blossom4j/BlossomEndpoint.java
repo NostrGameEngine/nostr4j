@@ -42,11 +42,11 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
@@ -62,7 +62,7 @@ public class BlossomEndpoint {
     private static final Logger logger = Logger.getLogger(BlossomEndpoint.class.getName());
     private final String url;
     private final SafeFlag verifyBlobs = new SafeFlag(true);
-    private final Set<String> unsupported = ConcurrentHashMap.newKeySet();
+    private final Set<String> unsupported = Collections.synchronizedSet(new HashSet<>());
 
     public String getUrl() {
         return url;
