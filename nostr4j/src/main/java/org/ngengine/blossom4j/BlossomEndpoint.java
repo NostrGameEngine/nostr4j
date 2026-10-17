@@ -42,11 +42,9 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
@@ -62,10 +60,44 @@ public class BlossomEndpoint {
     private static final Logger logger = Logger.getLogger(BlossomEndpoint.class.getName());
     private final String url;
     private final SafeFlag verifyBlobs = new SafeFlag(true);
-    private final Set<String> unsupported = Collections.synchronizedSet(new HashSet<>());
+    private final Map<String, Boolean> capabilities = Collections.synchronizedMap(new HashMap<>());
 
     public String getUrl() {
         return url;
+    }
+
+    /**
+     * Checks an endpoint with an unauthenticated OPTIONS request and caches either result.
+     * Authorization requirements still indicate an available endpoint. Transport failures,
+     * rate limits and temporary server errors fail the task without caching a negative result.
+     * Actual operation responses update the cache if a server changes or uses generic preflight handling.
+     *
+     * @param operation endpoint name, such as mirror or media
+     * @return whether the endpoint is available according to the probe or a previous operation
+     */
+    public AsyncTask<Boolean> supports(String operation) {
+        Objects.requireNonNull(operation, "operation");
+        if (!operation.matches("[a-z][a-z0-9_-]*")) {
+            throw new IllegalArgumentException("Invalid Blossom operation");
+        }
+        Boolean cached = capabilities.get(operation);
+        if (cached != null) {
+            return AsyncTask.completed(cached);
+        }
+        return httpRequest(operation, "OPTIONS", null, null)
+            .then(response -> {
+                int code = response.statusCode();
+                boolean available = !isUnsupported(code);
+                if (available && code != 401 && code != 403) {
+                    handleError(response);
+                }
+                capabilities.putIfAbsent(operation, available);
+                return capabilities.get(operation);
+            });
+    }
+
+    private static boolean isUnsupported(int statusCode) {
+        return statusCode == 404 || statusCode == 405 || statusCode == 501;
     }
 
     /**
@@ -79,32 +111,42 @@ public class BlossomEndpoint {
             origin.getUserInfo() != null ||
             !("https".equals(origin.getScheme()) || "http".equals(origin.getScheme()))
         ) return AsyncTask.failed(new IllegalArgumentException("Invalid mirror URL"));
-        if (unsupported.contains("mirror")) return AsyncTask.failed(new UnsupportedOperationException("Mirror is unavailable"));
-        byte[] body = NGEPlatform.get().toJSON(Map.of("url", source)).getBytes(StandardCharsets.UTF_8);
-        return httpRequest("mirror", "PUT", Map.of("Content-Type", "application/json"), body, authEvent)
-            .then(response -> descriptorResponse("mirror", response));
+        return supports("mirror")
+            .compose(available -> {
+                if (!available) {
+                    return AsyncTask.failed(new UnsupportedOperationException("Mirror is unavailable"));
+                }
+                byte[] body = NGEPlatform.get().toJSON(Map.of("url", source)).getBytes(StandardCharsets.UTF_8);
+                return httpRequest("mirror", "PUT", Map.of("Content-Type", "application/json"), body, authEvent)
+                    .then(response -> descriptorResponse("mirror", response));
+            });
     }
 
     /**
      * BUD-05: unlike /upload, the returned hash may differ from the submitted bytes.
      */
     public AsyncTask<BlossomResponse> media(byte[] data, @Nullable String mimeType, @Nullable SignedNostrEvent authEvent) {
-        if (unsupported.contains("media")) return AsyncTask.failed(
-            new UnsupportedOperationException("Media optimization is unavailable")
-        );
         byte[] body = data.clone();
         Map<String, String> headers = new HashMap<>();
         headers.put("Content-Type", mimeType == null ? "application/octet-stream" : mimeType);
         headers.put("X-SHA-256", NGEUtils.bytesToHex(NGEPlatform.get().sha256(body)));
-        return httpRequest("media", "PUT", headers, body, authEvent).then(response -> descriptorResponse("media", response));
+        return supports("media")
+            .compose(available -> {
+                if (!available) {
+                    return AsyncTask.failed(new UnsupportedOperationException("Media optimization is unavailable"));
+                }
+                return httpRequest("media", "PUT", headers, body, authEvent)
+                    .then(response -> descriptorResponse("media", response));
+            });
     }
 
     private BlossomResponse descriptorResponse(String operation, NGEHttpResponse response) throws IOException {
-        if (response.statusCode() == 404 || response.statusCode() == 405 || response.statusCode() == 501) {
-            unsupported.add(operation);
+        if (isUnsupported(response.statusCode())) {
+            capabilities.put(operation, false);
             throw new UnsupportedOperationException(operation + " is unavailable on this server");
         }
         handleError(response);
+        capabilities.put(operation, true);
         BlobDescriptor descriptor = new BlobDescriptor(
             NGEPlatform.get().fromJSON(NGEUtils.safeString(response.body()), Map.class)
         );

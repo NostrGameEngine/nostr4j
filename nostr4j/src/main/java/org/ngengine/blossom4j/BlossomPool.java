@@ -42,6 +42,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
@@ -122,7 +125,13 @@ public class BlossomPool implements Closeable {
                 List<AsyncTask<BlobDescriptor>> tasks = new ArrayList<>();
                 for (BlossomEndpoint endpoint : endpoints) tasks.add(
                     endpoint
-                        .mirror(url, token)
+                        .supports("mirror")
+                        .compose(available -> {
+                            if (!available) {
+                                return AsyncTask.failed(new UnsupportedOperationException("Mirror is unavailable"));
+                            }
+                            return endpoint.mirror(url, token);
+                        })
                         .then(response -> {
                             BlobDescriptor blob = response.blobs().get(0);
                             if (sha256 != null && !sha256.equals(blob.getSha256())) throw new IOException(
@@ -131,7 +140,27 @@ public class BlossomPool implements Closeable {
                             return blob;
                         })
                 );
-                return NGEPlatform.get().awaitAny(tasks);
+                if (tasks.isEmpty()) return AsyncTask.failed(
+                    new IOException("No configured Blossom server supports mirroring")
+                );
+                // Optional capabilities and individual server failures are expected during fallback.
+                // Only fail the operation if every candidate fails; awaitAny logs each rejection as a warning.
+                return AsyncTask.<BlobDescriptor>create((resolve, reject) -> {
+                    AtomicInteger remaining = new AtomicInteger(tasks.size());
+                    AtomicBoolean settled = new AtomicBoolean();
+                    AtomicReference<Throwable> failure = new AtomicReference<Throwable>();
+                    for (AsyncTask<BlobDescriptor> task : tasks) task
+                        .then(blob -> {
+                            if (settled.compareAndSet(false, true)) resolve.accept(blob);
+                            return null;
+                        })
+                        .catchException(error -> {
+                            failure.set(error);
+                            if (remaining.decrementAndGet() == 0 && settled.compareAndSet(false, true)) reject.accept(
+                                new IOException("All configured Blossom mirrors failed", failure.get())
+                            );
+                        });
+                });
             });
     }
 
