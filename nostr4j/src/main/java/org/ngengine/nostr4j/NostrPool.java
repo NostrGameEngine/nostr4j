@@ -92,6 +92,30 @@ public class NostrPool {
     private final Map<String, ReadPlan> readPlans = new ConcurrentHashMap<>();
     private volatile Duration priorityTimeout = Duration.ofSeconds(2);
     private final NostrPoolConnections connections = new NostrPoolConnections(() -> relays);
+    private final NostrPoolPublications publications = new NostrPoolPublications(this);
+
+    /**
+     * Opt-in, in-memory best-effort delivery to registered relays outside the connection budget.
+     */
+    public void setProgressivePublication(boolean enabled) {
+        publications.setEnabled(enabled);
+    }
+
+    public boolean isProgressivePublication() {
+        return publications.isEnabled();
+    }
+
+    public void setPublicationInterval(Duration interval) {
+        publications.setInterval(interval);
+    }
+
+    public void setPublicationQueueCapacity(int capacity) {
+        publications.setCapacity(capacity);
+    }
+
+    public int getPendingPublications() {
+        return publications.size();
+    }
 
     /**
      * Sets the target number of automatically selected network connections.
@@ -292,7 +316,13 @@ public class NostrPool {
     }
 
     public AsyncTask<List<AsyncTask<NostrMessageAck>>> publish(SignedNostrEvent ev, NostrPoolAckPolicy ackPolicy) {
+        // Only explicit public publication uses this queue: generic sendMessage and auth/RPC paths do not.
+        List<NostrRelay> deferred = new ArrayList<>();
+        if (publications.isEnabled() && !ev.isExpired()) for (NostrRelay relay : relays) if (
+            !(relay instanceof NostrCacheRelay) && !connections.wanted(relay)
+        ) deferred.add(relay);
         List<AsyncTask<NostrMessageAck>> requests = sendMessage(ev);
+        publications.enqueue(ev, deferred);
         if (requests.isEmpty() && relays.stream().anyMatch(relay -> relay instanceof NostrCacheRelay)) return AsyncTask.failed(
             new IllegalStateException("No network relays available for publication")
         );
@@ -854,6 +884,7 @@ public class NostrPool {
      */
     @Deprecated
     public List<NostrRelay> close() {
+        publications.clear();
         // close all subscriptions owned by this pool
         for (NostrSubscription sub : subscriptions.values()) {
             sub.close();
@@ -868,6 +899,7 @@ public class NostrPool {
     }
 
     public List<NostrRelay> removeAllRelays() {
+        publications.clear();
         List<NostrRelay> detachedRelays = new ArrayList<>(relays);
         for (NostrRelay relay : relays) {
             removeRelay(relay);

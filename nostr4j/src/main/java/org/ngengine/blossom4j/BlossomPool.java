@@ -43,6 +43,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.nostr4j.signer.NostrSigner;
@@ -53,7 +54,7 @@ import org.ngengine.platform.NGEUtils;
 
 public class BlossomPool implements Closeable {
 
-    private static final java.util.logging.Logger logger = java.util.logging.Logger.getLogger(BlossomPool.class.getName());
+    private static final Logger logger = Logger.getLogger(BlossomPool.class.getName());
 
     private final BlossomAuth auth;
     private final CopyOnWriteArrayList<BlossomEndpoint> endpoints = new CopyOnWriteArrayList<>();
@@ -101,6 +102,66 @@ public class BlossomPool implements Closeable {
 
     public void ensureEndpoint(BlossomEndpoint endpoint) {
         endpoints.addIfAbsent(Objects.requireNonNull(endpoint, "endpoint cannot be null"));
+    }
+
+    /**
+     * Try every server; unsupported mirror endpoints do not prevent another server succeeding.
+     * Unknown hashes use an unauthenticated mirror request: BUD-11 forbids wildcard upload tokens.
+     */
+    public AsyncTask<BlobDescriptor> mirror(String url) {
+        return mirror(url, null);
+    }
+
+    public AsyncTask<BlobDescriptor> mirror(String url, @Nullable String sha256) {
+        if (endpoints.isEmpty()) return AsyncTask.failed(new IOException("No Blossom servers configured"));
+        return (
+            sha256 == null
+                ? AsyncTask.<SignedNostrEvent>completed(null)
+                : getAuthEvent(BlossomVerb.UPLOAD, "Mirror media", sha256)
+        ).compose(token -> {
+                List<AsyncTask<BlobDescriptor>> tasks = new ArrayList<>();
+                for (BlossomEndpoint endpoint : endpoints) tasks.add(
+                    endpoint
+                        .mirror(url, token)
+                        .then(response -> {
+                            BlobDescriptor blob = response.blobs().get(0);
+                            if (sha256 != null && !sha256.equals(blob.getSha256())) throw new IOException(
+                                "Mirrored hash mismatch"
+                            );
+                            return blob;
+                        })
+                );
+                return NGEPlatform.get().awaitAny(tasks);
+            });
+    }
+
+    /**
+     * Optimize once, then replicate the resulting bytes via /mirror. Fall back to ordinary upload.
+     */
+    public AsyncTask<BlobDescriptor> uploadMedia(byte[] data, @Nullable String mimeType) {
+        byte[] snapshot = data.clone();
+        if (endpoints.isEmpty()) return AsyncTask.failed(new IOException("No Blossom servers configured"));
+        return executor.run(() -> {
+            String hash = NGEUtils.bytesToHex(NGEPlatform.get().sha256(snapshot));
+            SignedNostrEvent token = getAuthEvent(BlossomVerb.MEDIA, "Optimize uploaded media", hash).await();
+            BlobDescriptor result = null;
+            BlossomEndpoint primary = null;
+            for (BlossomEndpoint endpoint : endpoints) try {
+                result = endpoint.media(snapshot, mimeType, token).await().blobs().get(0);
+                primary = endpoint;
+                break;
+            } catch (Exception unavailable) {
+                logger.fine("Media optimization unavailable on configured Blossom server");
+            }
+            if (result == null) return upload(ByteBuffer.wrap(snapshot), null, mimeType).await();
+            BlobDescriptor optimized = result;
+            SignedNostrEvent mirrorToken = getAuthEvent(BlossomVerb.UPLOAD, "Replicate optimized media", optimized.getSha256())
+                .await();
+            for (BlossomEndpoint endpoint : endpoints) if (endpoint != primary) endpoint
+                .mirror(optimized.getUrl(), mirrorToken)
+                .catchException(error -> logger.fine("Blossom replica unavailable"));
+            return optimized;
+        });
     }
 
     public AsyncTask<ByteBuffer> get(String sha256) {
@@ -176,7 +237,7 @@ public class BlossomPool implements Closeable {
     }
 
     public AsyncTask<BlobDescriptor> upload(ByteBuffer data, @Nullable String fileName, @Nullable String mimeType) {
-        ByteBuffer snapshot = NGEPlatform.get().getNativeAllocator().malloc(data.remaining());
+        ByteBuffer snapshot = ByteBuffer.allocate(data.remaining());
         snapshot.put(data.slice());
         snapshot.flip();
         return this.executor.run(() -> {
@@ -261,6 +322,7 @@ public class BlossomPool implements Closeable {
     }
 
     protected AsyncTask<SignedNostrEvent> getAuthEvent(BlossomVerb verb, String message, @Nullable String sha256) {
+        if (this.auth == null) return AsyncTask.completed(null);
         return this.auth.getAuthEvent(verb, message, sha256 != null ? List.of(sha256) : List.of());
     }
 }

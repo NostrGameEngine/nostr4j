@@ -34,6 +34,7 @@ package org.ngengine.blossom4j;
 public enum BlossomVerb {
     GET,
     UPLOAD,
+    MEDIA,
     LIST,
     DELETE,
 }

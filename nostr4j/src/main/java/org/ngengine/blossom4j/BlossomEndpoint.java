@@ -36,6 +36,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -43,7 +44,11 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrPublicKey;
 import org.ngengine.platform.AsyncTask;
@@ -54,9 +59,79 @@ import org.ngengine.platform.transport.NGEHttpResponse;
 
 public class BlossomEndpoint {
 
-    private static final java.util.logging.Logger logger = java.util.logging.Logger.getLogger(BlossomEndpoint.class.getName());
+    private static final Logger logger = Logger.getLogger(BlossomEndpoint.class.getName());
     private final String url;
     private final SafeFlag verifyBlobs = new SafeFlag(true);
+    private final Set<String> unsupported = ConcurrentHashMap.newKeySet();
+
+    public String getUrl() {
+        return url;
+    }
+
+    /**
+     * BUD-04: the server, never the client, downloads the source URL.
+     */
+    public AsyncTask<BlossomResponse> mirror(String source, @Nullable SignedNostrEvent authEvent) {
+        URI origin = URI.create(source);
+        if (
+            source.length() > 4096 ||
+            origin.getHost() == null ||
+            origin.getUserInfo() != null ||
+            !("https".equals(origin.getScheme()) || "http".equals(origin.getScheme()))
+        ) return AsyncTask.failed(new IllegalArgumentException("Invalid mirror URL"));
+        if (unsupported.contains("mirror")) return AsyncTask.failed(new UnsupportedOperationException("Mirror is unavailable"));
+        byte[] body = NGEPlatform.get().toJSON(Map.of("url", source)).getBytes(StandardCharsets.UTF_8);
+        return httpRequest("mirror", "PUT", Map.of("Content-Type", "application/json"), body, authEvent)
+            .then(response -> descriptorResponse("mirror", response));
+    }
+
+    /**
+     * BUD-05: unlike /upload, the returned hash may differ from the submitted bytes.
+     */
+    public AsyncTask<BlossomResponse> media(byte[] data, @Nullable String mimeType, @Nullable SignedNostrEvent authEvent) {
+        if (unsupported.contains("media")) return AsyncTask.failed(
+            new UnsupportedOperationException("Media optimization is unavailable")
+        );
+        byte[] body = data.clone();
+        Map<String, String> headers = new HashMap<>();
+        headers.put("Content-Type", mimeType == null ? "application/octet-stream" : mimeType);
+        headers.put("X-SHA-256", NGEUtils.bytesToHex(NGEPlatform.get().sha256(body)));
+        return httpRequest("media", "PUT", headers, body, authEvent).then(response -> descriptorResponse("media", response));
+    }
+
+    private BlossomResponse descriptorResponse(String operation, NGEHttpResponse response) throws IOException {
+        if (response.statusCode() == 404 || response.statusCode() == 405 || response.statusCode() == 501) {
+            unsupported.add(operation);
+            throw new UnsupportedOperationException(operation + " is unavailable on this server");
+        }
+        handleError(response);
+        BlobDescriptor descriptor = new BlobDescriptor(
+            NGEPlatform.get().fromJSON(NGEUtils.safeString(response.body()), Map.class)
+        );
+        validateDescriptor(descriptor);
+        return new BlossomResponse(List.of(descriptor), response);
+    }
+
+    /**
+     * Only this explicitly configured server may supply the resulting URL.
+     */
+    public void validateDescriptor(BlobDescriptor descriptor) throws IOException {
+        URI base = URI.create(url), resource = URI.create(descriptor.getUrl());
+        String prefix = base.getPath() == null ? "/" : base.getPath();
+        if (!prefix.endsWith("/")) prefix += "/";
+        if (
+            !Objects.equals(base.getScheme(), resource.getScheme()) ||
+            !Objects.equals(base.getHost(), resource.getHost()) ||
+            base.getPort() != resource.getPort() ||
+            resource.getUserInfo() != null ||
+            resource.getQuery() != null ||
+            resource.getFragment() != null ||
+            !resource.getPath().startsWith(prefix) ||
+            !descriptor.getSha256().matches("[a-f0-9]{64}") ||
+            descriptor.getSize() < 0 ||
+            !resource.getPath().substring(prefix.length()).matches(descriptor.getSha256() + "(?:\\.[A-Za-z0-9]+)?")
+        ) throw new IOException("Untrusted Blossom descriptor URL or hash");
+    }
 
     public BlossomEndpoint(String url) {
         this.url = url;
@@ -161,6 +236,7 @@ public class BlossomEndpoint {
                 handleError(response);
                 Map<String, Object> responseMap = NGEPlatform.get().fromJSON(NGEUtils.safeString(response.body()), Map.class);
                 BlobDescriptor descriptor = new BlobDescriptor(responseMap);
+                validateDescriptor(descriptor);
                 if (verify && (!expectedHash.equalsIgnoreCase(descriptor.getSha256()) || descriptor.getSize() != body.length)) {
                     throw new IOException("Uploaded blob descriptor does not match submitted bytes");
                 }
@@ -290,12 +366,13 @@ public class BlossomEndpoint {
             // Authorization: Nostr eyJpZCI6IjhlY2JkY2RkNTMyOTIwMDEwNTUyNGExNDI4NzkxMzg4MWIzOWQxNDA5ZDhiOTBjY2RiNGI0M2Y4ZjBmYzlkMGMiLCJwdWJrZXkiOiI5ZjBjYzE3MDIzYjJjZjUwOWUwZjFkMzA1NzkzZDIwZTdjNzIyNzY5MjhmZDliZjg1NTM2ODg3YWM1NzBhMjgwIiwiY3JlYXRlZF9hdCI6MTcwODc3MTIyNywia2luZCI6MjQyNDIsInRhZ3MiOltbInQiLCJnZXQiXSxbImV4cGlyYXRpb24iLCIxNzA4ODU3NTQwIl1dLCJjb250ZW50IjoiR2V0IEJsb2JzIiwic2lnIjoiMDJmMGQyYWIyM2IwNDQ0NjI4NGIwNzFhOTVjOThjNjE2YjVlOGM3NWFmMDY2N2Y5NmNlMmIzMWM1M2UwN2I0MjFmOGVmYWRhYzZkOTBiYTc1NTFlMzA4NWJhN2M0ZjU2NzRmZWJkMTVlYjQ4NTFjZTM5MGI4MzI4MjJiNDcwZDIifQ==
             String authJson = NGEPlatform.get().toJSON(authEvent.toMap());
             String authBase64 = NGEPlatform.get().base64encode(authJson.getBytes(StandardCharsets.UTF_8));
-            headers.put("Authorization", "Nostr " + authBase64);
+            headers = new HashMap<>(headers);
+            headers.put("Authorization", "Nostr " + authBase64.replace('+', '-').replace('/', '_').replace("=", ""));
             logger.finer("Using Blossom authorization");
         }
 
         URI url = NGEUtils.safeURI(fullUrl);
-        return NGEPlatform.get().httpRequest(method, url.toString(), body, null, headers);
+        return NGEPlatform.get().httpRequest(method, url.toString(), body, Duration.ofSeconds(20), headers);
     }
 
     public AsyncTask<NGEHttpResponse> httpRequest(
@@ -313,12 +390,13 @@ public class BlossomEndpoint {
             }
             String authJson = NGEPlatform.get().toJSON(authEvent.toMap());
             String authBase64 = NGEPlatform.get().base64encode(authJson.getBytes(StandardCharsets.UTF_8));
-            headers.put("Authorization", "Nostr " + authBase64);
+            headers = new HashMap<>(headers);
+            headers.put("Authorization", "Nostr " + authBase64.replace('+', '-').replace('/', '_').replace("=", ""));
             logger.finer("Using Blossom authorization");
         }
 
         URI url = NGEUtils.safeURI(fullUrl);
-        return NGEPlatform.get().httpRequest(method, url.toString(), body, null, headers);
+        return NGEPlatform.get().httpRequest(method, url.toString(), body, Duration.ofSeconds(20), headers);
     }
 
     private void handleError(NGEHttpResponse response) throws IOException {
