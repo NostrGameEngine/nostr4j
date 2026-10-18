@@ -13,9 +13,9 @@ import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEPlatform;
 
 /**
- * Bounded, best-effort fan-out. It never participates in the caller's ACK policy.
+ * Sends queued events to additional relays without changing the caller's ACK policy.
  */
-final class NostrPoolPublications {
+final class NostrPoolBestEffortPropagation {
 
     private static final class Delivery {
 
@@ -47,17 +47,22 @@ final class NostrPoolPublications {
     private AsyncTask<?> timer;
     private AutoCloseable lease;
     private Delivery active;
-    private boolean enabled, busy;
+    private boolean enabled = true;
+    private boolean busy;
     private long generation;
     private int capacity = 1024;
     private long tickMillis = 100;
 
-    NostrPoolPublications(NostrPool pool) {
+    NostrPoolBestEffortPropagation(NostrPool pool) {
         this.pool = pool;
     }
 
     synchronized boolean isEnabled() {
-        return enabled;
+        return enabled && pool.getConnectionBudget() > 0;
+    }
+
+    synchronized void onBudgetChanged() {
+        if (!isEnabled()) clear();
     }
 
     synchronized int size() {
@@ -66,24 +71,24 @@ final class NostrPoolPublications {
 
     synchronized void setEnabled(boolean value) {
         enabled = value;
-        if (!value) clear();
+        if (!isEnabled()) clear();
     }
 
     synchronized void setInterval(Duration value) {
         if (value == null || value.toMillis() < 10 || value.toMillis() > 60_000) throw new IllegalArgumentException(
-            "Publication interval must be between 10 ms and one minute"
+            "Best-effort propagation interval must be between 10 ms and one minute"
         );
         tickMillis = value.toMillis();
     }
 
     synchronized void setCapacity(int value) {
-        if (value < 1 || value > 100_000) throw new IllegalArgumentException("Invalid publication queue capacity");
+        if (value < 1 || value > 100_000) throw new IllegalArgumentException("Invalid best-effort propagation queue capacity");
         capacity = value;
         while (queue.size() > capacity) pending.remove(queue.removeFirst().key());
     }
 
     synchronized void enqueue(SignedNostrEvent event, List<NostrRelay> targets) {
-        if (!enabled || event == null || event.isExpired()) return;
+        if (!isEnabled() || event == null || event.isExpired()) return;
         int kind = event.getKind();
         if (kind == 4 || kind == 13 || kind == 14 || kind == 1059 || kind >= 20_000 && kind < 30_000) return;
         for (NostrRelay relay : targets) {
@@ -99,8 +104,8 @@ final class NostrPoolPublications {
     }
 
     private synchronized void schedule() {
-        if (!enabled || busy || timer != null || queue.isEmpty()) return;
-        if (executor == null) executor = NGEPlatform.get().newAsyncExecutor(NostrPoolPublications.class);
+        if (!isEnabled() || busy || timer != null || queue.isEmpty()) return;
+        if (executor == null) executor = NGEPlatform.get().newAsyncExecutor(NostrPoolBestEffortPropagation.class);
         long version = generation;
         timer =
             executor.runLater(
@@ -116,7 +121,7 @@ final class NostrPoolPublications {
     private void drain(long version) {
         Delivery delivery;
         synchronized (this) {
-            if (version != generation || !enabled) return;
+            if (version != generation || !isEnabled()) return;
             timer = null;
             do {
                 delivery = queue.pollFirst();
@@ -145,6 +150,7 @@ final class NostrPoolPublications {
                 synchronized (this) {
                     if (
                         version != generation ||
+                        !isEnabled() ||
                         active != selected ||
                         selected.event().isExpired() ||
                         !pool.getRelays().contains(connected)

@@ -42,7 +42,7 @@ tasks.register('cacheTest', Test) {
         includeTestsMatching 'org.ngengine.nostr4j.unit.TestVStoreEventCache'
         includeTestsMatching 'org.ngengine.nostr4j.unit.TestPriorityCacheRelay'
         includeTestsMatching 'org.ngengine.nostr4j.unit.TestConnectionBudget'
-        includeTestsMatching 'org.ngengine.nostr4j.unit.TestProgressivePublication'
+        includeTestsMatching 'org.ngengine.nostr4j.unit.TestBestEffortPropagation'
         includeTestsMatching 'org.ngengine.blossom4j.TestBlossomIntegrity'
         includeTestsMatching 'org.ngengine.blossom4j.TestBlossomMedia'
         includeTestsMatching 'org.ngengine.nostr4j.unit.TestRelayLoopScheduling'

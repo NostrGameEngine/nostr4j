@@ -92,29 +92,44 @@ public class NostrPool {
     private final Map<String, ReadPlan> readPlans = new ConcurrentHashMap<>();
     private volatile Duration priorityTimeout = Duration.ofSeconds(2);
     private final NostrPoolConnections connections = new NostrPoolConnections(() -> relays);
-    private final NostrPoolPublications publications = new NostrPoolPublications(this);
+    private final NostrPoolBestEffortPropagation bestEffortPropagation = new NostrPoolBestEffortPropagation(this);
 
     /**
-     * Opt-in, in-memory best-effort delivery to registered relays outside the connection budget.
+     * Sends public events to the other registered relays in the background.
+     * Enabled by default with a positive connection budget. False disables it.
      */
-    public void setProgressivePublication(boolean enabled) {
-        publications.setEnabled(enabled);
+    public void setBestEffortPropagation(boolean enabled) {
+        bestEffortPropagation.setEnabled(enabled);
     }
 
-    public boolean isProgressivePublication() {
-        return publications.isEnabled();
+    /**
+     * Returns whether background propagation is enabled and a connection budget is set.
+     */
+    public boolean isBestEffortPropagation() {
+        return bestEffortPropagation.isEnabled();
     }
 
-    public void setPublicationInterval(Duration interval) {
-        publications.setInterval(interval);
+    /**
+     * Sets the delay between background deliveries. The default is 100 milliseconds.
+     * Accepted values range from 10 milliseconds to one minute.
+     */
+    public void setBestEffortPropagationInterval(Duration interval) {
+        bestEffortPropagation.setInterval(interval);
     }
 
-    public void setPublicationQueueCapacity(int capacity) {
-        publications.setCapacity(capacity);
+    /**
+     * Limits pending background deliveries. The default is 1024 event/relay pairs.
+     * When full, the queue drops the oldest delivery that has not started.
+     */
+    public void setBestEffortPropagationQueueCapacity(int capacity) {
+        bestEffortPropagation.setCapacity(capacity);
     }
 
-    public int getPendingPublications() {
-        return publications.size();
+    /**
+     * Returns the number of pending background deliveries, including the active delivery.
+     */
+    public int getPendingBestEffortPropagations() {
+        return bestEffortPropagation.size();
     }
 
     /**
@@ -122,12 +137,14 @@ public class NostrPool {
      * Higher connection priorities are preferred, with existing selections winning ties.
      * Zero preserves unlimited connections. Required relay hints may exceed this target,
      * and in-process cache relays do not consume the network budget.
+     * A positive budget also enables best-effort propagation unless explicitly disabled.
      *
      * @param budget non-negative connection target; zero means unlimited
      * @throws IllegalArgumentException if the budget is negative
      */
     public void setConnectionBudget(int budget) {
         connections.setBudget(budget);
+        bestEffortPropagation.onBudgetChanged();
     }
 
     public int getConnectionBudget() {
@@ -318,11 +335,11 @@ public class NostrPool {
     public AsyncTask<List<AsyncTask<NostrMessageAck>>> publish(SignedNostrEvent ev, NostrPoolAckPolicy ackPolicy) {
         // Only explicit public publication uses this queue: generic sendMessage and auth/RPC paths do not.
         List<NostrRelay> deferred = new ArrayList<>();
-        if (publications.isEnabled() && !ev.isExpired()) for (NostrRelay relay : relays) if (
+        if (bestEffortPropagation.isEnabled() && !ev.isExpired()) for (NostrRelay relay : relays) if (
             !(relay instanceof NostrCacheRelay) && !connections.wanted(relay)
         ) deferred.add(relay);
         List<AsyncTask<NostrMessageAck>> requests = sendMessage(ev);
-        publications.enqueue(ev, deferred);
+        bestEffortPropagation.enqueue(ev, deferred);
         if (requests.isEmpty() && relays.stream().anyMatch(relay -> relay instanceof NostrCacheRelay)) return AsyncTask.failed(
             new IllegalStateException("No network relays available for publication")
         );
@@ -885,7 +902,7 @@ public class NostrPool {
      */
     @Deprecated
     public List<NostrRelay> close() {
-        publications.clear();
+        bestEffortPropagation.clear();
         // close all subscriptions owned by this pool
         for (NostrSubscription sub : subscriptions.values()) {
             sub.close();
@@ -900,7 +917,7 @@ public class NostrPool {
     }
 
     public List<NostrRelay> removeAllRelays() {
-        publications.clear();
+        bestEffortPropagation.clear();
         List<NostrRelay> detachedRelays = new ArrayList<>(relays);
         for (NostrRelay relay : relays) {
             removeRelay(relay);
