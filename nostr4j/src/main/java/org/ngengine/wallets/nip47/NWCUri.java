@@ -87,7 +87,7 @@ public class NWCUri {
         List<String> relays = new ArrayList<>();
         String secret = null;
         String lud16 = null;
-        String query = uri.getQuery();
+        String query = uri.getRawQuery();
 
         if (query != null) {
             String[] pairs = query.split("&");

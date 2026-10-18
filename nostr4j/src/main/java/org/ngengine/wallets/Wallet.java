@@ -185,6 +185,14 @@ public interface Wallet {
     public AsyncTask<WalletInfo> getInfo(@Nullable Instant expireRequestAt);
 
     /**
+     * Returns the wallet's Lightning Address or LNURL, or null if unavailable.
+     */
+    @Nullable
+    public default String getReceivingAddress() {
+        return null;
+    }
+
+    /**
      * Checks whether this wallet can be used in the current environment without requesting permissions.
      * The default assumes availability; adapters with environment requirements should override it.
      * Availability does not imply readiness or support for every wallet method.

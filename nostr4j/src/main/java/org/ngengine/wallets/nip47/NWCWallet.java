@@ -140,6 +140,16 @@ public class NWCWallet implements Wallet {
         this.uri = uri;
     }
 
+    /**
+     * Returns the Lightning Address from the connection URI, or null if absent.
+     */
+    @Override
+    @Nullable
+    public String getReceivingAddress() {
+        String address = uri.getLud16();
+        return address == null || address.isBlank() ? null : address;
+    }
+
     @Override
     public void close() {
         if (closer != null) {

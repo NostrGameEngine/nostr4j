@@ -54,12 +54,53 @@ import org.ngengine.nostr4j.proto.NostrMessageAck;
 import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
 import org.ngengine.nostr4j.signer.NostrSigner;
 import org.ngengine.platform.AsyncTask;
+import org.ngengine.wallets.Wallet;
 import org.ngengine.wallets.Wallet.Methods;
 import org.ngengine.wallets.WalletInfo;
 import org.ngengine.wallets.nip47.NWCUri;
 import org.ngengine.wallets.nip47.NWCWallet;
 
 public class TestNWCCaching {
+
+    @Test
+    public void testReceivingAddressComesFromUriWithoutFetching() throws Exception {
+        NostrPool pool = new NostrPool() {
+            @Override
+            public AsyncTask<NostrRelay> ensureRelay(String relay) {
+                return AsyncTask.completed(null);
+            }
+
+            @Override
+            public AsyncTask<List<SignedNostrEvent>> fetch(NostrFilter filter, int limit, Duration timeout) {
+                throw new AssertionError("Reading the receiving address must not fetch events");
+            }
+        };
+        try {
+            for (String[] testCase : new String[][] {
+                { "", null },
+                { "&lud16=", null },
+                { "&lud16=%20", null },
+                { "&lud16=alice%40example.com", "alice@example.com" },
+                { "&lud16=alice%2Btips%40example.com", "alice+tips@example.com" },
+            }) {
+                NWCUri uri = new NWCUri(
+                    "nostr+walletconnect://79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798" +
+                    "?relay=wss%3A%2F%2Fwallet.example" +
+                    "&secret=abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789" +
+                    testCase[0]
+                );
+                Wallet wallet = new NWCWallet(pool, uri);
+                try {
+                    assertEquals(testCase[1], wallet.getReceivingAddress());
+                    assertEquals(uri.toURI(), new NWCUri(uri.toURI().toString()).toURI());
+                } finally {
+                    wallet.close();
+                }
+            }
+        } finally {
+            pool.close();
+        }
+    }
 
     @Test
     public void testConnectionPermissionsOverrideThePublicServiceCapabilities() throws Exception {
