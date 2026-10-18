@@ -128,8 +128,8 @@ public class TestVStoreEventCache {
         try {
             SignedNostrEvent first = note(signer, "First");
             SignedNostrEvent second = note(signer, "Second");
-            cache.put(first.getId(), first).await();
-            cache.put(second.getId(), second).await();
+            cache.put(first).await();
+            cache.put(second).await();
             assertTrue(backend.files.containsKey(payload(first.getId())));
             assertSame(second, cache.get(second.getId()).await());
             assertEquals(0, backend.payloadReads.get());
@@ -156,9 +156,9 @@ public class TestVStoreEventCache {
         try {
             cache.setTtl(Duration.ofSeconds(120)).await();
             SignedNostrEvent event = note(signer, "Original lifetime");
-            cache.put(event.getId(), event).await();
+            cache.put(event).await();
             now.set(now.get().plusSeconds(60));
-            cache.put(event.getId(), event).await();
+            cache.put(event).await();
             NostrEventCache reopened = new NostrEventCache(new NostrVStoreEventStore(store, 0), 4096, now::get);
             reopened.setTtl(Duration.ofSeconds(120)).await();
             assertNotNull(reopened.get(event.getId()).await());
@@ -176,17 +176,15 @@ public class TestVStoreEventCache {
         NostrEventCache cache = new NostrEventCache(new NostrVStoreEventStore(store, 1));
         NostrKeyPairSigner signer = NostrKeyPairSigner.generate();
         try {
-            cache.setHonorDeletions(true).await();
             SignedNostrEvent event = note(signer, "Deleted by author");
             SignedNostrEvent deletion = signer.sign(new UnsignedNostrEvent().withKind(5).withTag("e", event.getId())).await();
-            cache.put(event.getId(), event).await();
-            cache.put(deletion.getId(), deletion).await();
+            cache.put(event).await();
+            cache.put(deletion).await();
             assertNull(cache.get(event.getId()).await());
             cache.clear().await();
             NostrEventCache reopened = new NostrEventCache(new NostrVStoreEventStore(store, 0));
-            reopened.setHonorDeletions(true).await();
             assertTrue(reopened.isDeleted(event).await());
-            reopened.put(event.getId(), event).await();
+            reopened.put(event).await();
             assertNull(reopened.get(event.getId()).await());
             assertEquals(0, reopened.size().await().intValue());
             assertArrayEquals(new byte[] { 1, 2, 3 }, backend.files.get("caller-owned.txt"));
@@ -206,7 +204,7 @@ public class TestVStoreEventCache {
             SignedNostrEvent latest = signer.sign(new UnsignedNostrEvent().withKind(30023).withTag("d", "article")
                 .withContent("Latest")).await();
             SignedNostrEvent note = note(signer, "Note");
-            for (SignedNostrEvent event : List.of(old, latest, note)) cache.put(event.getId(), event).await();
+            for (SignedNostrEvent event : List.of(old, latest, note)) cache.put(event).await();
             NostrEventCache reopened = new NostrEventCache(new NostrVStoreEventStore(store, 0));
             reopened.setReplaceableTtl(null).await();
             assertEquals(List.of(latest.getId()), reopened.query(List.of(new NostrFilter().withKind(30023))).await()
@@ -229,11 +227,11 @@ public class TestVStoreEventCache {
         try {
             SignedNostrEvent event = note(signer, "Write-through");
             backend.failWrites = true;
-            assertThrows(Exception.class, () -> cache.put(event.getId(), event).await());
+            assertThrows(Exception.class, () -> cache.put(event).await());
             assertEquals(0, notifications.get());
             assertNull(cache.get(event.getId()).await());
             backend.failWrites = false;
-            cache.put(event.getId(), event).await();
+            cache.put(event).await();
             assertEquals(1, notifications.get());
             assertNotNull(new NostrEventCache(new NostrVStoreEventStore(store, 0)).get(event.getId()).await());
         } finally { signer.close(); }
@@ -246,7 +244,7 @@ public class TestVStoreEventCache {
         NostrKeyPairSigner signer = NostrKeyPairSigner.generate();
         try {
             SignedNostrEvent event = note(signer, "Authentic");
-            new NostrEventCache(new NostrVStoreEventStore(store, 0)).put(event.getId(), event).await();
+            new NostrEventCache(new NostrVStoreEventStore(store, 0)).put(event).await();
             Map<String, Object> envelope = NGEPlatform.get().fromJSON(
                 new String(backend.files.get(payload(event.getId())), StandardCharsets.UTF_8), Map.class);
             Map<String, Object> modified = new LinkedHashMap<>((Map<String, Object>) envelope.get("event"));
@@ -266,7 +264,7 @@ public class TestVStoreEventCache {
         NostrCacheRelay relay = new NostrCacheRelay(new NostrEventCache(new NostrVStoreEventStore(store, 0)));
         try {
             SignedNostrEvent event = note(signer, "Persistent relay result");
-            writer.put(event.getId(), event).await();
+            writer.put(event).await();
             pool.addRelay(relay).await();
             List<SignedNostrEvent> results = pool.fetch(new NostrFilter().withId(event.getId()), 10, true, Duration.ofSeconds(2)).await();
             assertEquals(1, results.size());
@@ -357,9 +355,9 @@ public class TestVStoreEventCache {
         try {
             SignedNostrEvent first = note(signer, "Before interruption");
             SignedNostrEvent second = note(signer, "Saved before index failure");
-            cache.put(first.getId(), first).await();
+            cache.put(first).await();
             backend.failIndexWrites = true;
-            assertThrows(Exception.class, () -> cache.put(second.getId(), second).await());
+            assertThrows(Exception.class, () -> cache.put(second).await());
             assertEquals(1, notifications.get());
             assertTrue(backend.files.containsKey(payload(second.getId())));
             backend.failIndexWrites = false;
@@ -381,7 +379,7 @@ public class TestVStoreEventCache {
             cache.setTtl(Duration.ofSeconds(10)).await();
             for (int i = 0; i < 23; i++) {
                 SignedNostrEvent event = note(signer, "Cleanup " + i);
-                cache.put(event.getId(), event).await();
+                cache.put(event).await();
             }
             now.set(now.get().plusSeconds(11));
             backend.payloadReads.set(0);

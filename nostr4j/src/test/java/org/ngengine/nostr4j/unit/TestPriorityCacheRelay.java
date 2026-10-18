@@ -63,7 +63,7 @@ public class TestPriorityCacheRelay {
     public void cacheStreamsFirstButAllEoseIncludesUnstartedNetworkRelays() throws Exception {
         NostrKeyPairSigner signer=NostrKeyPairSigner.generate();NostrEventCache cache=new NostrEventCache(new NostrInMemoryEventStore(10));NostrCacheRelay local=new NostrCacheRelay(cache);Relay remote=new Relay("wss://test.invalid");NostrPool pool=new NostrPool();
         try {
-            SignedNostrEvent event=signer.sign(new UnsignedNostrEvent().withKind(1).withContent("Cached")).await();cache.put(event.getId(),event).await();
+            SignedNostrEvent event=signer.sign(new UnsignedNostrEvent().withKind(1).withContent("Cached")).await();cache.put(event).await();
             pool.addRelay(remote).await();pool.addRelay(local).await();CopyOnWriteArrayList<String> seen=new CopyOnWriteArrayList<String>();CopyOnWriteArrayList<Boolean> all=new CopyOnWriteArrayList<Boolean>();
             NostrSubscription sub=pool.subscribe(new NostrFilter().withKind(1));sub.addEventListener((s,e,stored)->seen.add(e.getId()));sub.addEoseListener((s,r,everywhere)->all.add(everywhere));sub.open();
             waitFor(()->!remote.requests.isEmpty());assertEquals(List.of(event.getId()),seen);assertEquals(List.of(false),all);
@@ -75,7 +75,7 @@ public class TestPriorityCacheRelay {
     public void requestedCountCanFinishInCacheWithoutStartingLowerPriorityTier() throws Exception {
         NostrKeyPairSigner signer=NostrKeyPairSigner.generate();NostrEventCache cache=new NostrEventCache(new NostrInMemoryEventStore(10));NostrCacheRelay local=new NostrCacheRelay(cache);Relay remote=new Relay("wss://test.invalid");NostrPool pool=new NostrPool();
         try {
-            SignedNostrEvent event=signer.sign(new UnsignedNostrEvent().withKind(1).withContent("Complete by ID")).await();cache.put(event.getId(),event).await();pool.addRelay(remote).await();pool.addRelay(local).await();
+            SignedNostrEvent event=signer.sign(new UnsignedNostrEvent().withKind(1).withContent("Complete by ID")).await();cache.put(event).await();pool.addRelay(remote).await();pool.addRelay(local).await();
             assertEquals(1,pool.fetch(new NostrFilter().withId(event.getId()),1,false,Duration.ofSeconds(2)).await().size());assertTrue(remote.requests.isEmpty());
         } finally {pool.clean();local.close();remote.disconnect("cleanup",false);signer.close();}
     }
@@ -90,7 +90,7 @@ public class TestPriorityCacheRelay {
             waitFor(()->seen.size()==1);assertEquals(List.of(true),seen);assertNotNull(cache.get(stored.getId()).await());
             AtomicInteger searched=new AtomicInteger();NostrSubscription search=pool.subscribe(new NostrSearchFilter().search("relay-specific search"));
             search.addEventListener((s,e,fromStorage)->searched.incrementAndGet());search.open();waitFor(()->remote.requests.size()==2);
-            SignedNostrEvent live=signer.sign(new UnsignedNostrEvent().withKind(1).withContent("Direct cache insertion")).await();cache.put(live.getId(),live).await();
+            SignedNostrEvent live=signer.sign(new UnsignedNostrEvent().withKind(1).withContent("Direct cache insertion")).await();cache.put(live).await();
             waitFor(()->seen.size()==2);assertEquals(List.of(true,false),seen);remote.event(live);sub.close();search.close();assertEquals(2,seen.size());assertEquals(0,searched.get());
         } finally {pool.clean();local.close();remote.disconnect("cleanup",false);signer.close();}
     }
@@ -157,7 +157,7 @@ public class TestPriorityCacheRelay {
             sub.addEoseListener((s,r,all)->eose.incrementAndGet());
             sub.addEventListener((s,event,stored)->{received.add(Thread.holdsLock(lock));s.close();});
             sub.open();waitFor(()->eose.get()>0);
-            SignedNostrEvent event=signer.sign(new UnsignedNostrEvent().withKind(1).withContent("Live cache callback outside registry lock")).await();cache.put(event.getId(),event).await();
+            SignedNostrEvent event=signer.sign(new UnsignedNostrEvent().withKind(1).withContent("Live cache callback outside registry lock")).await();cache.put(event).await();
             waitFor(()->!received.isEmpty());assertEquals(List.of(false),received);
         } finally {pool.clean();local.close();signer.close();}
     }

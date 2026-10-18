@@ -141,7 +141,7 @@ public final class NostrCacheRelay extends NostrRelay implements AutoCloseable {
             active.remove(((NostrSubscription.NostrSubCloseMessage) message).getId());
         } else if (message instanceof SignedNostrEvent) {
             SignedNostrEvent event = (SignedNostrEvent) message;
-            return AsyncTask.create((resolve, reject) -> cache.put(event.getId(), event).then(ignored -> {
+            return AsyncTask.create((resolve, reject) -> cache.put(event).then(ignored -> {
                 ack.callSuccessCallback("local");
                 resolve.accept(ack);
                 return null;

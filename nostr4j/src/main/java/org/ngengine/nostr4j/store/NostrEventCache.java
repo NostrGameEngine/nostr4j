@@ -76,7 +76,7 @@ public final class NostrEventCache {
     private volatile Duration ttl;
     private volatile Duration replaceableTtl = Duration.ofMillis(100);
     private volatile Duration ephemeralTtl = Duration.ZERO;
-    private volatile boolean honorDeletions;
+    private volatile boolean honorDeletions = true;
 
     /**
      * Creates a cache using the supplied store. The caller keeps ownership of the store.
@@ -203,7 +203,7 @@ public final class NostrEventCache {
     }
 
     /**
-     * Controls whether author deletion requests hide earlier events.
+     * Controls whether author deletion requests hide earlier events. Enabled by default.
      */
     public AsyncTask<Void> setHonorDeletions(boolean enabled) {
         return submit(() -> {
@@ -298,16 +298,16 @@ public final class NostrEventCache {
     /**
      * Verifies and saves an event. Saving a duplicate does not extend its lifetime.
      */
-    public AsyncTask<SignedNostrEvent> put(String id, SignedNostrEvent event) {
-        return put(id, event, true);
+    public AsyncTask<SignedNostrEvent> put(SignedNostrEvent event) {
+        return put(event, true);
     }
 
     /**
      * Verifies and saves an event, optionally notifying listeners after the write.
      */
-    public AsyncTask<SignedNostrEvent> put(String id, SignedNostrEvent event, boolean notify) {
+    public AsyncTask<SignedNostrEvent> put(SignedNostrEvent event, boolean notify) {
         Objects.requireNonNull(event, "event");
-        if (!event.getId().equals(id)) return AsyncTask.failed(new IllegalArgumentException("Cache key does not match event ID"));
+        String id = event.getId();
         boolean[] inserted = { false };
         return submit(() -> event.verifyAsync().compose(valid -> {
             if (!valid) return AsyncTask.failed(new IllegalArgumentException("Invalid event signature"));

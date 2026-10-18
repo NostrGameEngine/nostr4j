@@ -141,15 +141,13 @@ public class TestEventStore {
             SignedNostrEvent event = note(signer, "Deleted", Instant.now().minusSeconds(1));
             SignedNostrEvent deletion = signer.sign(new UnsignedNostrEvent().withKind(5).withTag("e", event.getId())).await();
             NostrEventCache cache = new NostrEventCache(store);
-            cache.setHonorDeletions(true).await();
-            cache.put(event.getId(), event).await();
-            cache.put(deletion.getId(), deletion).await();
+            cache.put(event).await();
+            cache.put(deletion).await();
             cache.clear().await();
             NostrEventStore reopened = files == null ? store : new NostrVStoreEventStore(files, 0);
             NostrEventCache next = new NostrEventCache(reopened);
-            next.setHonorDeletions(true).await();
             assertTrue(next.isDeleted(event).await());
-            next.put(event.getId(), event).await();
+            next.put(event).await();
             assertNull(next.get(event.getId()).await());
             assertArrayEquals(new byte[] { 1, 2, 3 }, reopened.readMetadata("caller").await());
         } finally { signer.close(); }
