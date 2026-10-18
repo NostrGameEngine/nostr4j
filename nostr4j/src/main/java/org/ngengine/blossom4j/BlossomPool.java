@@ -42,9 +42,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
@@ -63,6 +61,7 @@ public class BlossomPool implements Closeable {
     private final CopyOnWriteArrayList<BlossomEndpoint> endpoints = new CopyOnWriteArrayList<>();
     private final AsyncExecutor executor;
     private final List<Runnable> closers = new CopyOnWriteArrayList<>();
+    private volatile boolean closed;
 
     public BlossomPool(BlossomAuth auth) {
         this.auth = auth;
@@ -89,6 +88,7 @@ public class BlossomPool implements Closeable {
 
     @Override
     public void close() {
+        closed = true;
         for (Runnable closer : closers) {
             try {
                 closer.run();
@@ -108,7 +108,7 @@ public class BlossomPool implements Closeable {
     }
 
     /**
-     * Try every server; unsupported mirror endpoints do not prevent another server succeeding.
+     * Try servers sequentially from a random starting point, stopping at the first success.
      * Unknown hashes use an unauthenticated mirror request: BUD-11 forbids wildcard upload tokens.
      */
     public AsyncTask<BlobDescriptor> mirror(String url) {
@@ -116,52 +116,59 @@ public class BlossomPool implements Closeable {
     }
 
     public AsyncTask<BlobDescriptor> mirror(String url, @Nullable String sha256) {
+        if (closed) return AsyncTask.failed(new IOException("Blossom pool closed"));
         if (endpoints.isEmpty()) return AsyncTask.failed(new IOException("No Blossom servers configured"));
         return (
             sha256 == null
                 ? AsyncTask.<SignedNostrEvent>completed(null)
                 : getAuthEvent(BlossomVerb.UPLOAD, "Mirror media", sha256)
         ).compose(token -> {
-                List<AsyncTask<BlobDescriptor>> tasks = new ArrayList<>();
-                for (BlossomEndpoint endpoint : endpoints) tasks.add(
-                    endpoint
-                        .supports("mirror")
-                        .compose(available -> {
-                            if (!available) {
-                                return AsyncTask.failed(new UnsupportedOperationException("Mirror is unavailable"));
-                            }
-                            return endpoint.mirror(url, token);
-                        })
-                        .then(response -> {
-                            BlobDescriptor blob = response.blobs().get(0);
-                            if (sha256 != null && !sha256.equals(blob.getSha256())) throw new IOException(
-                                "Mirrored hash mismatch"
-                            );
-                            return blob;
-                        })
+                List<BlossomEndpoint> candidates = new ArrayList<>(endpoints);
+                int start = (NGEPlatform.get().randomBytes(1)[0] & 255) % candidates.size();
+                Collections.rotate(candidates, -start);
+                return AsyncTask.<BlobDescriptor>create((resolve, reject) ->
+                    mirrorNext(candidates, 0, url, sha256, token, resolve, reject, null)
                 );
-                if (tasks.isEmpty()) return AsyncTask.failed(
-                    new IOException("No configured Blossom server supports mirroring")
-                );
-                // Optional capabilities and individual server failures are expected during fallback.
-                // Only fail the operation if every candidate fails; awaitAny logs each rejection as a warning.
-                return AsyncTask.<BlobDescriptor>create((resolve, reject) -> {
-                    AtomicInteger remaining = new AtomicInteger(tasks.size());
-                    AtomicBoolean settled = new AtomicBoolean();
-                    AtomicReference<Throwable> failure = new AtomicReference<Throwable>();
-                    for (AsyncTask<BlobDescriptor> task : tasks) task
-                        .then(blob -> {
-                            if (settled.compareAndSet(false, true)) resolve.accept(blob);
-                            return null;
-                        })
-                        .catchException(error -> {
-                            failure.set(error);
-                            if (remaining.decrementAndGet() == 0 && settled.compareAndSet(false, true)) reject.accept(
-                                new IOException("All configured Blossom mirrors failed", failure.get())
-                            );
-                        });
-                });
             });
+    }
+
+    private void mirrorNext(
+        List<BlossomEndpoint> candidates,
+        int index,
+        String url,
+        String hash,
+        SignedNostrEvent token,
+        Consumer<BlobDescriptor> resolve,
+        Consumer<Throwable> reject,
+        Throwable failure
+    ) {
+        if (closed) {
+            reject.accept(new IOException("Blossom pool closed"));
+            return;
+        }
+        if (index >= candidates.size()) {
+            reject.accept(new IOException("All configured Blossom mirrors failed", failure));
+            return;
+        }
+        try {
+            BlossomEndpoint endpoint = candidates.get(index);
+            endpoint
+                .supports("mirror")
+                .compose(available ->
+                    available
+                        ? endpoint.mirror(url, token)
+                        : AsyncTask.<BlossomResponse>failed(new UnsupportedOperationException("Mirror is unavailable"))
+                )
+                .then(response -> {
+                    BlobDescriptor blob = response.blobs().get(0);
+                    if (hash != null && !hash.equals(blob.getSha256())) throw new IOException("Mirrored hash mismatch");
+                    resolve.accept(blob);
+                    return null;
+                })
+                .catchException(error -> mirrorNext(candidates, index + 1, url, hash, token, resolve, reject, error));
+        } catch (Exception error) {
+            mirrorNext(candidates, index + 1, url, hash, token, resolve, reject, error);
+        }
     }
 
     /**

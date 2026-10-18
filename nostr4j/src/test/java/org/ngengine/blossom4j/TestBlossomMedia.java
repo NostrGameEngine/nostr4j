@@ -233,6 +233,24 @@ public class TestBlossomMedia {
     }
 
     @Test
+    public void mirrorStopsAfterTheFirstSuccessAndClosedPoolsDoNotStartRequests() throws Exception {
+        Server first = new Server("https://first.test");
+        Server second = new Server("https://second.test");
+        BlossomPool pool = new BlossomPool();
+        try {
+            pool.ensureEndpoint(first);
+            pool.ensureEndpoint(second);
+            for (int i = 0; i < 12; i++) assertNotNull(pool.mirror("https://origin.test/picture.png").await());
+            assertEquals(12, first.mirrorCalls.get() + second.mirrorCalls.get());
+            pool.close();
+            assertThrows(Exception.class, () -> pool.mirror("https://origin.test/closed.png").await());
+            assertEquals(12, first.mirrorCalls.get() + second.mirrorCalls.get());
+        } finally {
+            pool.close();
+        }
+    }
+
+    @Test
     public void optimizationFallsBackToUploadAndRemoteDescriptorCannotDowngradeTransport() throws Exception {
         Server old = new Server("https://old.test");
         old.unsupported = true;
