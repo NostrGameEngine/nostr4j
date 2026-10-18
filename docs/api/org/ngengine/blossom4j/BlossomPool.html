@@ -68,6 +68,9 @@ loadScripts(document, 'script');</script>
 <li><a href="#close()" tabindex="0">close()</a></li>
 <li><a href="#connectEndpoint(org.ngengine.blossom4j.BlossomEndpoint)" tabindex="0">connectEndpoint(BlossomEndpoint)</a></li>
 <li><a href="#ensureEndpoint(org.ngengine.blossom4j.BlossomEndpoint)" tabindex="0">ensureEndpoint(BlossomEndpoint)</a></li>
+<li><a href="#mirror(java.lang.String)" tabindex="0">mirror(String)</a></li>
+<li><a href="#mirror(java.lang.String,java.lang.String)" tabindex="0">mirror(String, String)</a></li>
+<li><a href="#uploadMedia(byte%5B%5D,java.lang.String)" tabindex="0">uploadMedia(byte[], String)</a></li>
 <li><a href="#get(java.lang.String)" tabindex="0">get(String)</a></li>
 <li><a href="#get(java.lang.String,java.lang.String)" tabindex="0">get(String, String)</a></li>
 <li><a href="#get(java.lang.String,int%5B%5D)" tabindex="0">get(String, int[])</a></li>
@@ -189,6 +192,15 @@ implements <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base
  <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Instant.html" title="class or interface in java.time" class="external-link">Instant</a>&nbsp;until)</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>org.ngengine.platform.AsyncTask<wbr>&lt;<a href="BlobDescriptor.html" title="class in org.ngengine.blossom4j">BlobDescriptor</a>&gt;</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#mirror(java.lang.String)" class="member-name-link">mirror</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;url)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Try every server; unsupported mirror endpoints do not prevent another server succeeding.</div>
+</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>org.ngengine.platform.AsyncTask<wbr>&lt;<a href="BlobDescriptor.html" title="class in org.ngengine.blossom4j">BlobDescriptor</a>&gt;</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#mirror(java.lang.String,java.lang.String)" class="member-name-link">mirror</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;url,
+ <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;sha256)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>org.ngengine.platform.AsyncTask<wbr>&lt;<a href="BlobDescriptor.html" title="class in org.ngengine.blossom4j">BlobDescriptor</a>&gt;</code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#upload(java.nio.ByteBuffer)" class="member-name-link">upload</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/nio/ByteBuffer.html" title="class or interface in java.nio" class="external-link">ByteBuffer</a>&nbsp;data)</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>org.ngengine.platform.AsyncTask<wbr>&lt;<a href="BlobDescriptor.html" title="class in org.ngengine.blossom4j">BlobDescriptor</a>&gt;</code></div>
@@ -200,6 +212,12 @@ implements <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base
  <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;fileName,
  <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;mimeType)</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>org.ngengine.platform.AsyncTask<wbr>&lt;<a href="BlobDescriptor.html" title="class in org.ngengine.blossom4j">BlobDescriptor</a>&gt;</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#uploadMedia(byte%5B%5D,java.lang.String)" class="member-name-link">uploadMedia</a><wbr>(byte[]&nbsp;data,
+ <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;mimeType)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Optimize once, then replicate the resulting bytes via /mirror.</div>
+</div>
 </div>
 </div>
 </div>
@@ -276,6 +294,37 @@ implements <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base
 <h3>ensureEndpoint</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">ensureEndpoint</span><wbr><span class="parameters">(<a href="BlossomEndpoint.html" title="class in org.ngengine.blossom4j">BlossomEndpoint</a>&nbsp;endpoint)</span></div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="mirror(java.lang.String)">
+<h3>mirror</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">org.ngengine.platform.AsyncTask&lt;<a href="BlobDescriptor.html" title="class in org.ngengine.blossom4j">BlobDescriptor</a>&gt;</span>&nbsp;<span class="element-name">mirror</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;url)</span></div>
+<div class="block">Try every server; unsupported mirror endpoints do not prevent another server succeeding.
+Unknown hashes use an unauthenticated mirror request: BUD-11 forbids wildcard upload tokens.</div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="mirror(java.lang.String,java.lang.String)">
+<h3>mirror</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">org.ngengine.platform.AsyncTask&lt;<a href="BlobDescriptor.html" title="class in org.ngengine.blossom4j">BlobDescriptor</a>&gt;</span>&nbsp;<span class="element-name">mirror</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;url,
+ @Nullable
+ <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;sha256)</span></div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="uploadMedia(byte[],java.lang.String)">
+<h3>uploadMedia</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">org.ngengine.platform.AsyncTask&lt;<a href="BlobDescriptor.html" title="class in org.ngengine.blossom4j">BlobDescriptor</a>&gt;</span>&nbsp;<span class="element-name">uploadMedia</span><wbr><span class="parameters">(byte[]&nbsp;data,
+ @Nullable
+ <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;mimeType)</span></div>
+<div class="block">Optimize once, then replicate the resulting bytes via /mirror. Fall back to ordinary upload.</div>
 </div>
 </section>
 </li>

@@ -10249,7 +10249,9 @@ var __webpack_exports__ = {};
 /* harmony export */   sha256: () => (/* binding */ sha256),
 /* harmony export */   sha256Buffer: () => (/* binding */ sha256Buffer),
 /* harmony export */   sha256JSON: () => (/* binding */ sha256JSON),
+/* harmony export */   sha256JSONAsync: () => (/* binding */ sha256JSONAsync),
 /* harmony export */   sha256String: () => (/* binding */ sha256String),
+/* harmony export */   sha256StringAsync: () => (/* binding */ sha256StringAsync),
 /* harmony export */   sign: () => (/* binding */ sign),
 /* harmony export */   signBuffer: () => (/* binding */ signBuffer),
 /* harmony export */   signHex: () => (/* binding */ signHex),
@@ -10962,6 +10964,68 @@ var sha256JSON = function sha256JSON(data) {
   // surrogates. Keep the large serialized text entirely in the host runtime.
   return (0,_noble_hashes_utils_js__WEBPACK_IMPORTED_MODULE_7__.bytesToHex)((0,_noble_hashes_sha2_js__WEBPACK_IMPORTED_MODULE_3__.sha256)(_utf8Encoder.encode(JSON.stringify(data))));
 };
+var _sha256Async = /*#__PURE__*/function () {
+  var _ref6 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee16(bytes) {
+    var _s$crypto;
+    var hash, offset, _t9, _t0, _t1;
+    return _regenerator().w(function (_context16) {
+      while (1) switch (_context16.p = _context16.n) {
+        case 0:
+          if (!((_s$crypto = _s().crypto) !== null && _s$crypto !== void 0 && _s$crypto.subtle)) {
+            _context16.n = 2;
+            break;
+          }
+          _t9 = _noble_hashes_utils_js__WEBPACK_IMPORTED_MODULE_7__.bytesToHex;
+          _t0 = Uint8Array;
+          _context16.n = 1;
+          return _s().crypto.subtle.digest('SHA-256', bytes);
+        case 1:
+          _t1 = _context16.v;
+          return _context16.a(2, _t9(new _t0(_t1)));
+        case 2:
+          // In insecure contexts, keep the same digest but yield between bounded chunks.
+          hash = _noble_hashes_sha2_js__WEBPACK_IMPORTED_MODULE_3__.sha256.create();
+          _context16.p = 3;
+          offset = 0;
+        case 4:
+          if (!(offset < bytes.length)) {
+            _context16.n = 6;
+            break;
+          }
+          hash.update(bytes.subarray(offset, offset + 65536));
+          if (!(offset + 65536 < bytes.length)) {
+            _context16.n = 5;
+            break;
+          }
+          _context16.n = 5;
+          return new Promise(function (resolve) {
+            return _s().setTimeout(resolve, 0);
+          });
+        case 5:
+          offset += 65536;
+          _context16.n = 4;
+          break;
+        case 6:
+          return _context16.a(2, (0,_noble_hashes_utils_js__WEBPACK_IMPORTED_MODULE_7__.bytesToHex)(hash.digest()));
+        case 7:
+          _context16.p = 7;
+          hash.destroy();
+          return _context16.f(7);
+        case 8:
+          return _context16.a(2);
+      }
+    }, _callee16, null, [[3,, 7, 8]]);
+  }));
+  return function _sha256Async(_x3) {
+    return _ref6.apply(this, arguments);
+  };
+}();
+var sha256JSONAsync = function sha256JSONAsync(data) {
+  return _sha256Async(_utf8Encoder.encode(JSON.stringify(data)));
+};
+var sha256StringAsync = function sha256StringAsync(data) {
+  return _sha256Async(_utf8Encoder.encode(data.replace(_unpairedSurrogate, '?')));
+};
 var sha256Buffer = function sha256Buffer(data, output) {
   return _writeBytes(output, (0,_noble_hashes_sha2_js__WEBPACK_IMPORTED_MODULE_3__.sha256)(_u(data)));
 };
@@ -11359,57 +11423,57 @@ var aes256cbc = function aes256cbc(key /*byte[]*/, iv /*byte[]*/, data /*byte[]*
 var aes256cbcBuffer = function aes256cbcBuffer(key, iv, data, forEncryption, output) {
   return _writeBytes(output, aes256cbc(key, iv, data, forEncryption));
 };
-function getVFileStore(_x3) {
+function getVFileStore(_x4) {
   return _getVFileStore.apply(this, arguments);
 } // OutputStream.close() cannot return a JavaScript Promise. A stream remains
 // completely local while it is open; once close starts its IndexedDB commit,
 // keep that promise here so subsequent backend operations observe close order.
 function _getVFileStore() {
-  _getVFileStore = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee33(name) {
-    var globalObj, injectedStore, _t14;
-    return _regenerator().w(function (_context33) {
-      while (1) switch (_context33.p = _context33.n) {
+  _getVFileStore = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee34(name) {
+    var globalObj, injectedStore, _t17;
+    return _regenerator().w(function (_context34) {
+      while (1) switch (_context34.p = _context34.n) {
         case 0:
           globalObj = _s();
           if (!(typeof (globalObj === null || globalObj === void 0 ? void 0 : globalObj.ngeVStoreFactory) === 'function')) {
-            _context33.n = 3;
+            _context34.n = 3;
             break;
           }
-          _context33.n = 1;
+          _context34.n = 1;
           return globalObj.ngeVStoreFactory(name);
         case 1:
-          injectedStore = _context33.v;
+          injectedStore = _context34.v;
           if (injectedStore) {
-            _context33.n = 2;
+            _context34.n = 2;
             break;
           }
           throw new Error("Injected VStore factory returned no store for ".concat(name));
         case 2:
-          return _context33.a(2, injectedStore);
+          return _context34.a(2, injectedStore);
         case 3:
           if (_hasIndexedDB()) {
-            _context33.n = 8;
+            _context34.n = 8;
             break;
           }
           if (!_isNodeRuntime()) {
-            _context33.n = 7;
+            _context34.n = 7;
             break;
           }
-          _context33.p = 4;
-          _context33.n = 5;
+          _context34.p = 4;
+          _context34.n = 5;
           return _getNodeFSVFileStore(name);
         case 5:
-          return _context33.a(2, _context33.v);
+          return _context34.a(2, _context34.v);
         case 6:
-          _context33.p = 6;
-          _t14 = _context33.v;
-          console.error('Node filesystem VStore unavailable, falling back to in-memory VStore:', _t14);
-          return _context33.a(2, _getMemoryVFileStore(name));
+          _context34.p = 6;
+          _t17 = _context34.v;
+          console.error('Node filesystem VStore unavailable, falling back to in-memory VStore:', _t17);
+          return _context34.a(2, _getMemoryVFileStore(name));
         case 7:
           console.warn('IndexedDB is not supported in this environment. Falling back to an in-memory VStore.');
-          return _context33.a(2, _getMemoryVFileStore(name));
+          return _context34.a(2, _getMemoryVFileStore(name));
         case 8:
-          return _context33.a(2, new Promise(function (resolve, reject) {
+          return _context34.a(2, new Promise(function (resolve, reject) {
             var request = globalObj.indexedDB.open('nge-vstore-' + name, 1);
             request.onupgradeneeded = function (event) {
               var db = event.target.result;
@@ -11435,11 +11499,11 @@ function _getVFileStore() {
                   db.close();
                 },
                 exists: function exists(path) {
-                  return _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee28() {
-                    return _regenerator().w(function (_context28) {
-                      while (1) switch (_context28.n) {
+                  return _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee29() {
+                    return _regenerator().w(function (_context29) {
+                      while (1) switch (_context29.n) {
                         case 0:
-                          return _context28.a(2, new Promise(function (resolve, reject) {
+                          return _context29.a(2, new Promise(function (resolve, reject) {
                             var transaction = db.transaction(["files"], 'readonly');
                             var store = transaction.objectStore("files");
                             var request = store.count(path);
@@ -11458,15 +11522,15 @@ function _getVFileStore() {
                             transaction.onabort = fail;
                           }));
                       }
-                    }, _callee28);
+                    }, _callee29);
                   }))();
                 },
                 read: function read(path) {
-                  return _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee29() {
-                    return _regenerator().w(function (_context29) {
-                      while (1) switch (_context29.n) {
+                  return _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee30() {
+                    return _regenerator().w(function (_context30) {
+                      while (1) switch (_context30.n) {
                         case 0:
-                          return _context29.a(2, new Promise(function (resolve, reject) {
+                          return _context30.a(2, new Promise(function (resolve, reject) {
                             var transaction = db.transaction(["files"], 'readonly');
                             var store = transaction.objectStore("files");
                             var request = store.get(path);
@@ -11486,15 +11550,15 @@ function _getVFileStore() {
                             transaction.onabort = fail;
                           }));
                       }
-                    }, _callee29);
+                    }, _callee30);
                   }))();
                 },
                 write: function write(path, data) {
-                  return _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee30() {
-                    return _regenerator().w(function (_context30) {
-                      while (1) switch (_context30.n) {
+                  return _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee31() {
+                    return _regenerator().w(function (_context31) {
+                      while (1) switch (_context31.n) {
                         case 0:
-                          return _context30.a(2, new Promise(function (resolve, reject) {
+                          return _context31.a(2, new Promise(function (resolve, reject) {
                             var transaction = db.transaction(["files"], 'readwrite');
                             var store = transaction.objectStore("files");
                             store.put(data, path);
@@ -11509,15 +11573,15 @@ function _getVFileStore() {
                             transaction.onabort = fail;
                           }));
                       }
-                    }, _callee30);
+                    }, _callee31);
                   }))();
                 },
                 "delete": function _delete(path) {
-                  return _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee31() {
-                    return _regenerator().w(function (_context31) {
-                      while (1) switch (_context31.n) {
+                  return _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee32() {
+                    return _regenerator().w(function (_context32) {
+                      while (1) switch (_context32.n) {
                         case 0:
-                          return _context31.a(2, new Promise(function (resolve, reject) {
+                          return _context32.a(2, new Promise(function (resolve, reject) {
                             var transaction = db.transaction(["files"], 'readwrite');
                             var store = transaction.objectStore("files");
                             store["delete"](path);
@@ -11532,15 +11596,15 @@ function _getVFileStore() {
                             transaction.onabort = fail;
                           }));
                       }
-                    }, _callee31);
+                    }, _callee32);
                   }))();
                 },
                 listAll: function listAll() {
-                  return _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee32() {
-                    return _regenerator().w(function (_context32) {
-                      while (1) switch (_context32.n) {
+                  return _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee33() {
+                    return _regenerator().w(function (_context33) {
+                      while (1) switch (_context33.n) {
                         case 0:
-                          return _context32.a(2, new Promise(function (resolve, reject) {
+                          return _context33.a(2, new Promise(function (resolve, reject) {
                             try {
                               var transaction = db.transaction(["files"], 'readonly');
                               var store = transaction.objectStore("files");
@@ -11564,7 +11628,7 @@ function _getVFileStore() {
                             }
                           }));
                       }
-                    }, _callee32);
+                    }, _callee33);
                   }))();
                 }
               };
@@ -11572,7 +11636,7 @@ function _getVFileStore() {
             };
           }));
       }
-    }, _callee33, null, [[4, 6]]);
+    }, _callee34, null, [[4, 6]]);
   }));
   return _getVFileStore.apply(this, arguments);
 }
@@ -11603,80 +11667,80 @@ function _waitForPendingVFileCloses(name) {
   var closes = _pendingVFileCloses(name, false);
   return closes ? Promise.all(Array.from(closes.values())) : Promise.resolve();
 }
-function _withVFileStore(_x4, _x5) {
+function _withVFileStore(_x5, _x6) {
   return _withVFileStore2.apply(this, arguments);
 }
 function _withVFileStore2() {
-  _withVFileStore2 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee34(name, operation) {
+  _withVFileStore2 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee35(name, operation) {
     var vstore;
-    return _regenerator().w(function (_context34) {
-      while (1) switch (_context34.p = _context34.n) {
+    return _regenerator().w(function (_context35) {
+      while (1) switch (_context35.p = _context35.n) {
         case 0:
-          _context34.n = 1;
+          _context35.n = 1;
           return getVFileStore(name);
         case 1:
-          vstore = _context34.v;
-          _context34.p = 2;
-          _context34.n = 3;
+          vstore = _context35.v;
+          _context35.p = 2;
+          _context35.n = 3;
           return operation(vstore);
         case 3:
-          return _context34.a(2, _context34.v);
+          return _context35.a(2, _context35.v);
         case 4:
-          _context34.p = 4;
+          _context35.p = 4;
           vstore.close();
-          return _context34.f(4);
+          return _context35.f(4);
         case 5:
-          return _context34.a(2);
+          return _context35.a(2);
       }
-    }, _callee34, null, [[2,, 4, 5]]);
+    }, _callee35, null, [[2,, 4, 5]]);
   }));
   return _withVFileStore2.apply(this, arguments);
 }
 var vfileExists = /*#__PURE__*/function () {
-  var _ref6 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee16(name, path) {
-    return _regenerator().w(function (_context16) {
-      while (1) switch (_context16.n) {
-        case 0:
-          _context16.n = 1;
-          return _waitForPendingVFileClose(name, path);
-        case 1:
-          return _context16.a(2, _withVFileStore(name, function (vstore) {
-            return vstore.exists(path);
-          }));
-      }
-    }, _callee16);
-  }));
-  return function vfileExists(_x6, _x7) {
-    return _ref6.apply(this, arguments);
-  };
-}();
-var vfileRead = /*#__PURE__*/function () {
   var _ref7 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee17(name, path) {
-    var value;
     return _regenerator().w(function (_context17) {
       while (1) switch (_context17.n) {
         case 0:
           _context17.n = 1;
           return _waitForPendingVFileClose(name, path);
         case 1:
-          _context17.n = 2;
+          return _context17.a(2, _withVFileStore(name, function (vstore) {
+            return vstore.exists(path);
+          }));
+      }
+    }, _callee17);
+  }));
+  return function vfileExists(_x7, _x8) {
+    return _ref7.apply(this, arguments);
+  };
+}();
+var vfileRead = /*#__PURE__*/function () {
+  var _ref8 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee18(name, path) {
+    var value;
+    return _regenerator().w(function (_context18) {
+      while (1) switch (_context18.n) {
+        case 0:
+          _context18.n = 1;
+          return _waitForPendingVFileClose(name, path);
+        case 1:
+          _context18.n = 2;
           return _withVFileStore(name, function (vstore) {
             return vstore.read(path);
           });
         case 2:
-          value = _context17.v;
+          value = _context18.v;
           if (!(value === null || value === undefined)) {
-            _context17.n = 3;
+            _context18.n = 3;
             break;
           }
           throw new Error("File not found: ".concat(path, " in store ").concat(name));
         case 3:
-          return _context17.a(2, _u(value));
+          return _context18.a(2, _u(value));
       }
-    }, _callee17);
+    }, _callee18);
   }));
-  return function vfileRead(_x8, _x9) {
-    return _ref7.apply(this, arguments);
+  return function vfileRead(_x9, _x0) {
+    return _ref8.apply(this, arguments);
   };
 }();
 var vfileWrite = function vfileWrite(name, path, data) {
@@ -11700,78 +11764,78 @@ var vfileWrite = function vfileWrite(name, path, data) {
   return current;
 };
 var vfileDelete = /*#__PURE__*/function () {
-  var _ref8 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee18(name, path) {
-    return _regenerator().w(function (_context18) {
-      while (1) switch (_context18.n) {
+  var _ref9 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee19(name, path) {
+    return _regenerator().w(function (_context19) {
+      while (1) switch (_context19.n) {
         case 0:
-          _context18.n = 1;
+          _context19.n = 1;
           return _waitForPendingVFileClose(name, path);
         case 1:
-          return _context18.a(2, _withVFileStore(name, function (vstore) {
+          return _context19.a(2, _withVFileStore(name, function (vstore) {
             return vstore["delete"](path);
           }));
       }
-    }, _callee18);
+    }, _callee19);
   }));
-  return function vfileDelete(_x0, _x1) {
-    return _ref8.apply(this, arguments);
+  return function vfileDelete(_x1, _x10) {
+    return _ref9.apply(this, arguments);
   };
 }();
 var vfileListAll = /*#__PURE__*/function () {
-  var _ref9 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee19(name) {
-    var files, _t9;
-    return _regenerator().w(function (_context19) {
-      while (1) switch (_context19.p = _context19.n) {
+  var _ref0 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee20(name) {
+    var files, _t10;
+    return _regenerator().w(function (_context20) {
+      while (1) switch (_context20.p = _context20.n) {
         case 0:
-          _context19.p = 0;
-          _context19.n = 1;
+          _context20.p = 0;
+          _context20.n = 1;
           return _waitForPendingVFileCloses(name);
         case 1:
-          _context19.n = 2;
+          _context20.n = 2;
           return _withVFileStore(name, function (vstore) {
             return vstore.listAll();
           });
         case 2:
-          files = _context19.v;
+          files = _context20.v;
           if (!(files === undefined || files === null)) {
-            _context19.n = 3;
+            _context20.n = 3;
             break;
           }
           console.warn("No files found in store ".concat(name));
-          return _context19.a(2, []);
+          return _context20.a(2, []);
         case 3:
-          return _context19.a(2, files.map(function (file) {
+          return _context20.a(2, files.map(function (file) {
             return file.toString();
           }));
         case 4:
-          _context19.p = 4;
-          _t9 = _context19.v;
-          console.error("Error listing files in store ".concat(name, ":"), _t9);
-          return _context19.a(2, []);
+          _context20.p = 4;
+          _t10 = _context20.v;
+          console.error("Error listing files in store ".concat(name, ":"), _t10);
+          return _context20.a(2, []);
       }
-    }, _callee19, null, [[0, 4]]);
+    }, _callee20, null, [[0, 4]]);
   }));
-  return function vfileListAll(_x10) {
-    return _ref9.apply(this, arguments);
+  return function vfileListAll(_x11) {
+    return _ref0.apply(this, arguments);
   };
 }();
 var vfileExistsPromise = vfileExists;
 var vfileReadPromise = /*#__PURE__*/function () {
-  var _ref0 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee20(name, path) {
-    var _t0;
-    return _regenerator().w(function (_context20) {
-      while (1) switch (_context20.n) {
+  var _ref1 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee21(name, path) {
+    var _t11;
+    return _regenerator().w(function (_context21) {
+      while (1) switch (_context21.n) {
         case 0:
-          _t0 = _bw;
-          _context20.n = 1;
+          _t11 = _bw;
+          _context21.n = 1;
           return vfileRead(name, path);
         case 1:
-          return _context20.a(2, _t0(_context20.v));
+          return _context21.a(2, _t11(_context21.v));
       }
-    }, _callee20);
+    }, _callee21);
   }));
-  return function vfileReadPromise(_x11, _x12) {
-    return _ref0.apply(this, arguments);
+  return function vfileReadPromise(_x12, _x13) {
+    return _ref1.apply(this, arguments);
   };
 }();
 var vfileWritePromise = vfileWrite;
@@ -11879,69 +11943,14 @@ function toFunction(f) {
   return fun.bind(obj);
 }
 var callFunction = /*#__PURE__*/function () {
-  var _ref1 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee21(functionName, data, res, rej) {
-    var _s8, args, executor, result, _t1;
-    return _regenerator().w(function (_context21) {
-      while (1) switch (_context21.p = _context21.n) {
+  var _ref10 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee22(functionName, data, res, rej) {
+    var _s8, args, executor, result, _t12;
+    return _regenerator().w(function (_context22) {
+      while (1) switch (_context22.p = _context22.n) {
         case 0:
-          _context21.p = 0;
+          _context22.p = 0;
           args = JSON.parse(data).args;
           executor = (_s8 = _s()) === null || _s8 === void 0 ? void 0 : _s8.ngeFunctionExecutor;
-          if (!(typeof executor === 'function')) {
-            _context21.n = 2;
-            break;
-          }
-          _context21.n = 1;
-          return executor(functionName, args);
-        case 1:
-          result = _context21.v;
-          _context21.n = 6;
-          break;
-        case 2:
-          if (!(executor && typeof executor.execute === 'function')) {
-            _context21.n = 4;
-            break;
-          }
-          _context21.n = 3;
-          return executor.execute(functionName, args);
-        case 3:
-          result = _context21.v;
-          _context21.n = 6;
-          break;
-        case 4:
-          _context21.n = 5;
-          return toFunction(functionName).apply(void 0, _toConsumableArray(args));
-        case 5:
-          result = _context21.v;
-        case 6:
-          res(JSON.stringify({
-            result: result
-          }));
-          _context21.n = 8;
-          break;
-        case 7:
-          _context21.p = 7;
-          _t1 = _context21.v;
-          console.error("Error executing function ".concat(functionName, ":"), _t1);
-          rej(String(_t1));
-        case 8:
-          return _context21.a(2);
-      }
-    }, _callee21, null, [[0, 7]]);
-  }));
-  return function callFunction(_x13, _x14, _x15, _x16) {
-    return _ref1.apply(this, arguments);
-  };
-}();
-var callFunctionPromise = /*#__PURE__*/function () {
-  var _ref10 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee22(functionName, data) {
-    var _s9;
-    var args, executor, result;
-    return _regenerator().w(function (_context22) {
-      while (1) switch (_context22.n) {
-        case 0:
-          args = JSON.parse(data).args;
-          executor = (_s9 = _s()) === null || _s9 === void 0 ? void 0 : _s9.ngeFunctionExecutor;
           if (!(typeof executor === 'function')) {
             _context22.n = 2;
             break;
@@ -11969,33 +11978,88 @@ var callFunctionPromise = /*#__PURE__*/function () {
         case 5:
           result = _context22.v;
         case 6:
-          return _context22.a(2, JSON.stringify({
+          res(JSON.stringify({
             result: result
           }));
+          _context22.n = 8;
+          break;
+        case 7:
+          _context22.p = 7;
+          _t12 = _context22.v;
+          console.error("Error executing function ".concat(functionName, ":"), _t12);
+          rej(String(_t12));
+        case 8:
+          return _context22.a(2);
       }
-    }, _callee22);
+    }, _callee22, null, [[0, 7]]);
   }));
-  return function callFunctionPromise(_x17, _x18) {
+  return function callFunction(_x14, _x15, _x16, _x17) {
     return _ref10.apply(this, arguments);
   };
 }();
-var canCallFunction = /*#__PURE__*/function () {
-  var _ref11 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee23(functionName, res) {
-    var _s0, executor, canCall, _t10;
+var callFunctionPromise = /*#__PURE__*/function () {
+  var _ref11 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee23(functionName, data) {
+    var _s9;
+    var args, executor, result;
     return _regenerator().w(function (_context23) {
-      while (1) switch (_context23.p = _context23.n) {
+      while (1) switch (_context23.n) {
         case 0:
-          _context23.p = 0;
-          executor = (_s0 = _s()) === null || _s0 === void 0 ? void 0 : _s0.ngeFunctionExecutor;
-          if (!(executor && typeof executor.canExecute === 'function')) {
+          args = JSON.parse(data).args;
+          executor = (_s9 = _s()) === null || _s9 === void 0 ? void 0 : _s9.ngeFunctionExecutor;
+          if (!(typeof executor === 'function')) {
             _context23.n = 2;
             break;
           }
           _context23.n = 1;
+          return executor(functionName, args);
+        case 1:
+          result = _context23.v;
+          _context23.n = 6;
+          break;
+        case 2:
+          if (!(executor && typeof executor.execute === 'function')) {
+            _context23.n = 4;
+            break;
+          }
+          _context23.n = 3;
+          return executor.execute(functionName, args);
+        case 3:
+          result = _context23.v;
+          _context23.n = 6;
+          break;
+        case 4:
+          _context23.n = 5;
+          return toFunction(functionName).apply(void 0, _toConsumableArray(args));
+        case 5:
+          result = _context23.v;
+        case 6:
+          return _context23.a(2, JSON.stringify({
+            result: result
+          }));
+      }
+    }, _callee23);
+  }));
+  return function callFunctionPromise(_x18, _x19) {
+    return _ref11.apply(this, arguments);
+  };
+}();
+var canCallFunction = /*#__PURE__*/function () {
+  var _ref12 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee24(functionName, res) {
+    var _s0, executor, canCall, _t13;
+    return _regenerator().w(function (_context24) {
+      while (1) switch (_context24.p = _context24.n) {
+        case 0:
+          _context24.p = 0;
+          executor = (_s0 = _s()) === null || _s0 === void 0 ? void 0 : _s0.ngeFunctionExecutor;
+          if (!(executor && typeof executor.canExecute === 'function')) {
+            _context24.n = 2;
+            break;
+          }
+          _context24.n = 1;
           return executor.canExecute(functionName);
         case 1:
-          canCall = !!_context23.v;
-          _context23.n = 3;
+          canCall = !!_context24.v;
+          _context24.n = 3;
           break;
         case 2:
           if (typeof executor === 'function' || executor && typeof executor.execute === 'function') {
@@ -12011,56 +12075,56 @@ var canCallFunction = /*#__PURE__*/function () {
             console.warn("Function ".concat(functionName, " cannot be called."));
             res(false);
           }
-          _context23.n = 5;
+          _context24.n = 5;
           break;
         case 4:
-          _context23.p = 4;
-          _t10 = _context23.v;
-          console.error("Error checking function ".concat(functionName, ":"), _t10);
+          _context24.p = 4;
+          _t13 = _context24.v;
+          console.error("Error checking function ".concat(functionName, ":"), _t13);
           res(false);
         case 5:
-          return _context23.a(2);
+          return _context24.a(2);
       }
-    }, _callee23, null, [[0, 4]]);
+    }, _callee24, null, [[0, 4]]);
   }));
-  return function canCallFunction(_x19, _x20) {
-    return _ref11.apply(this, arguments);
+  return function canCallFunction(_x20, _x21) {
+    return _ref12.apply(this, arguments);
   };
 }();
 var canCallFunctionPromise = /*#__PURE__*/function () {
-  var _ref12 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee24(functionName) {
+  var _ref13 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee25(functionName) {
     var _s1;
-    var executor, _t11;
-    return _regenerator().w(function (_context24) {
-      while (1) switch (_context24.p = _context24.n) {
+    var executor, _t14;
+    return _regenerator().w(function (_context25) {
+      while (1) switch (_context25.p = _context25.n) {
         case 0:
           executor = (_s1 = _s()) === null || _s1 === void 0 ? void 0 : _s1.ngeFunctionExecutor;
           if (!(executor && typeof executor.canExecute === 'function')) {
-            _context24.n = 2;
+            _context25.n = 2;
             break;
           }
-          _context24.n = 1;
+          _context25.n = 1;
           return executor.canExecute(functionName);
         case 1:
-          return _context24.a(2, !!_context24.v);
+          return _context25.a(2, !!_context25.v);
         case 2:
           if (!(typeof executor === 'function' || executor && typeof executor.execute === 'function')) {
-            _context24.n = 3;
+            _context25.n = 3;
             break;
           }
-          return _context24.a(2, true);
+          return _context25.a(2, true);
         case 3:
-          _context24.p = 3;
-          return _context24.a(2, !!toFunction(functionName));
+          _context25.p = 3;
+          return _context25.a(2, !!toFunction(functionName));
         case 4:
-          _context24.p = 4;
-          _t11 = _context24.v;
-          return _context24.a(2, false);
+          _context25.p = 4;
+          _t14 = _context25.v;
+          return _context25.a(2, false);
       }
-    }, _callee24, null, [[3, 4]]);
+    }, _callee25, null, [[3, 4]]);
   }));
-  return function canCallFunctionPromise(_x21) {
-    return _ref12.apply(this, arguments);
+  return function canCallFunctionPromise(_x22) {
+    return _ref13.apply(this, arguments);
   };
 }();
 var openURL = function openURL(url) {
@@ -12108,12 +12172,12 @@ res, rej) {
   });
 };
 var scryptBufferPromise = /*#__PURE__*/function () {
-  var _ref13 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee25(password, salt, n, r, p, dkLen, output) {
+  var _ref14 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee26(password, salt, n, r, p, dkLen, output) {
     var derived;
-    return _regenerator().w(function (_context25) {
-      while (1) switch (_context25.n) {
+    return _regenerator().w(function (_context26) {
+      while (1) switch (_context26.n) {
         case 0:
-          _context25.n = 1;
+          _context26.n = 1;
           return (0,_noble_hashes_scrypt__WEBPACK_IMPORTED_MODULE_8__.scryptAsync)(_u(password), _u(salt), {
             N: n,
             r: r,
@@ -12121,13 +12185,13 @@ var scryptBufferPromise = /*#__PURE__*/function () {
             dkLen: dkLen
           });
         case 1:
-          derived = _context25.v;
-          return _context25.a(2, _writeBytes(output, derived));
+          derived = _context26.v;
+          return _context26.a(2, _writeBytes(output, derived));
       }
-    }, _callee25);
+    }, _callee26);
   }));
-  return function scryptBufferPromise(_x22, _x23, _x24, _x25, _x26, _x27, _x28) {
-    return _ref13.apply(this, arguments);
+  return function scryptBufferPromise(_x23, _x24, _x25, _x26, _x27, _x28, _x29) {
+    return _ref14.apply(this, arguments);
   };
 }();
 var xchacha20poly1305 = function xchacha20poly1305(key, /*byte[]*/
@@ -12433,33 +12497,33 @@ var fetchPromise = function fetchPromise(method, url, headers, body, timeoutMs) 
     return Promise.reject(new Error('Fetch is not available in this runtime'));
   }
   return fetchImpl.call(_s(), url, options).then(/*#__PURE__*/function () {
-    var _ref14 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee26(response) {
-      var respHeaders, respBody, _t12, _t13;
-      return _regenerator().w(function (_context26) {
-        while (1) switch (_context26.n) {
+    var _ref15 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee27(response) {
+      var respHeaders, respBody, _t15, _t16;
+      return _regenerator().w(function (_context27) {
+        while (1) switch (_context27.n) {
           case 0:
             clearTimeout(timeoutId);
             respHeaders = {};
             response.headers.forEach(function (value, key) {
               respHeaders[key] = value;
             });
-            _t12 = Uint8Array;
-            _context26.n = 1;
+            _t15 = Uint8Array;
+            _context27.n = 1;
             return response.arrayBuffer();
           case 1:
-            _t13 = _context26.v;
-            respBody = new _t12(_t13);
-            return _context26.a(2, {
+            _t16 = _context27.v;
+            respBody = new _t15(_t16);
+            return _context27.a(2, {
               status: response.status,
               statusText: response.statusText,
               headers: JSON.stringify(respHeaders),
               body: respBody
             });
         }
-      }, _callee26);
+      }, _callee27);
     }));
-    return function (_x29) {
-      return _ref14.apply(this, arguments);
+    return function (_x30) {
+      return _ref15.apply(this, arguments);
     };
   }())["catch"](function (error) {
     clearTimeout(timeoutId);
@@ -12508,10 +12572,10 @@ var fetchStreamPromise = function fetchStreamPromise(method, url, headers, body,
     return Promise.reject(new Error('Fetch is not available in this runtime'));
   }
   return fetchImpl.call(_s(), url, options).then(/*#__PURE__*/function () {
-    var _ref15 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee27(response) {
+    var _ref16 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee28(response) {
       var respHeaders, stream;
-      return _regenerator().w(function (_context27) {
-        while (1) switch (_context27.n) {
+      return _regenerator().w(function (_context28) {
+        while (1) switch (_context28.n) {
           case 0:
             clearTimeout(timeoutId);
             respHeaders = {};
@@ -12519,17 +12583,17 @@ var fetchStreamPromise = function fetchStreamPromise(method, url, headers, body,
               respHeaders[key] = value;
             });
             stream = response.body;
-            return _context27.a(2, {
+            return _context28.a(2, {
               status: response.status,
               statusText: response.statusText,
               headers: JSON.stringify(respHeaders),
               body: stream
             });
         }
-      }, _callee27);
+      }, _callee28);
     }));
-    return function (_x30) {
-      return _ref15.apply(this, arguments);
+    return function (_x31) {
+      return _ref16.apply(this, arguments);
     };
   }())["catch"](function (error) {
     clearTimeout(timeoutId);
@@ -12736,7 +12800,9 @@ const __webpack_exports__setTimeout = __webpack_exports__.setTimeout;
 const __webpack_exports__sha256 = __webpack_exports__.sha256;
 const __webpack_exports__sha256Buffer = __webpack_exports__.sha256Buffer;
 const __webpack_exports__sha256JSON = __webpack_exports__.sha256JSON;
+const __webpack_exports__sha256JSONAsync = __webpack_exports__.sha256JSONAsync;
 const __webpack_exports__sha256String = __webpack_exports__.sha256String;
+const __webpack_exports__sha256StringAsync = __webpack_exports__.sha256StringAsync;
 const __webpack_exports__sign = __webpack_exports__.sign;
 const __webpack_exports__signBuffer = __webpack_exports__.signBuffer;
 const __webpack_exports__signHex = __webpack_exports__.signHex;
@@ -12763,4 +12829,4 @@ const __webpack_exports__websocketOpenPromise = __webpack_exports__.websocketOpe
 const __webpack_exports__websocketReadBinaryEvent = __webpack_exports__.websocketReadBinaryEvent;
 const __webpack_exports__xchacha20poly1305 = __webpack_exports__.xchacha20poly1305;
 const __webpack_exports__xchacha20poly1305Buffer = __webpack_exports__.xchacha20poly1305Buffer;
-export { __webpack_exports___bw as _bw, __webpack_exports__aes256cbc as aes256cbc, __webpack_exports__aes256cbcBuffer as aes256cbcBuffer, __webpack_exports__base64decode as base64decode, __webpack_exports__base64decodeBuffer as base64decodeBuffer, __webpack_exports__base64encode as base64encode, __webpack_exports__base64encodeBuffer as base64encodeBuffer, __webpack_exports__callFunction as callFunction, __webpack_exports__callFunctionPromise as callFunctionPromise, __webpack_exports__canCallFunction as canCallFunction, __webpack_exports__canCallFunctionPromise as canCallFunctionPromise, __webpack_exports__chacha20 as chacha20, __webpack_exports__chacha20Buffer as chacha20Buffer, __webpack_exports__copyHttpResponseBody as copyHttpResponseBody, __webpack_exports__delayPromise as delayPromise, __webpack_exports__eventQueueDispose as eventQueueDispose, __webpack_exports__eventQueueWaitPromise as eventQueueWaitPromise, __webpack_exports__fetchAsync as fetchAsync, __webpack_exports__fetchBufferAsync as fetchBufferAsync, __webpack_exports__fetchBufferPromise as fetchBufferPromise, __webpack_exports__fetchPromise as fetchPromise, __webpack_exports__fetchStreamAsync as fetchStreamAsync, __webpack_exports__fetchStreamPromise as fetchStreamPromise, __webpack_exports__fromJSON as fromJSON, __webpack_exports__genPubKey as genPubKey, __webpack_exports__genPubKeyBuffer as genPubKeyBuffer, __webpack_exports__generatePrivateKey as generatePrivateKey, __webpack_exports__generatePrivateKeyBuffer as generatePrivateKeyBuffer, __webpack_exports__getBundledResource as getBundledResource, __webpack_exports__getClipboardContentAsync as getClipboardContentAsync, __webpack_exports__getClipboardContentPromise as getClipboardContentPromise, __webpack_exports__getPlatformName as getPlatformName, __webpack_exports__getPromise as getPromise, __webpack_exports__getRuntimeName as getRuntimeName, __webpack_exports__hasBundledResource as hasBundledResource, __webpack_exports__hkdfExpandBuffer as hkdfExpandBuffer, __webpack_exports__hkdfExtractBuffer as hkdfExtractBuffer, __webpack_exports__hkdf_expand as hkdf_expand, __webpack_exports__hkdf_extract as hkdf_extract, __webpack_exports__hmac as hmac, __webpack_exports__hmacBuffer as hmacBuffer, __webpack_exports__httpResponseBodyLength as httpResponseBodyLength, __webpack_exports__newPromise as newPromise, __webpack_exports__nfkc as nfkc, __webpack_exports__openURL as openURL, __webpack_exports__panic as panic, __webpack_exports__randomBytes as randomBytes, __webpack_exports__randomBytesBuffer as randomBytesBuffer, __webpack_exports__rejectPromise as rejectPromise, __webpack_exports__resolvePromise as resolvePromise, __webpack_exports__rtcAddIceCandidateAsync as rtcAddIceCandidateAsync, __webpack_exports__rtcAddIceCandidatePromise as rtcAddIceCandidatePromise, __webpack_exports__rtcCreateAnswerAsync as rtcCreateAnswerAsync, __webpack_exports__rtcCreateAnswerPromise as rtcCreateAnswerPromise, __webpack_exports__rtcCreateDataChannel as rtcCreateDataChannel, __webpack_exports__rtcCreateIceCandidate as rtcCreateIceCandidate, __webpack_exports__rtcCreateOfferAsync as rtcCreateOfferAsync, __webpack_exports__rtcCreateOfferPromise as rtcCreateOfferPromise, __webpack_exports__rtcCreatePeerConnection as rtcCreatePeerConnection, __webpack_exports__rtcDataChannelConsumeEvent as rtcDataChannelConsumeEvent, __webpack_exports__rtcDataChannelEventBinaryLength as rtcDataChannelEventBinaryLength, __webpack_exports__rtcDataChannelEventError as rtcDataChannelEventError, __webpack_exports__rtcDataChannelEventType as rtcDataChannelEventType, __webpack_exports__rtcDataChannelGetAvailableAmount as rtcDataChannelGetAvailableAmount, __webpack_exports__rtcDataChannelGetBufferedAmount as rtcDataChannelGetBufferedAmount, __webpack_exports__rtcDataChannelGetMaxPacketLifeTime as rtcDataChannelGetMaxPacketLifeTime, __webpack_exports__rtcDataChannelGetMaxRetransmits as rtcDataChannelGetMaxRetransmits, __webpack_exports__rtcDataChannelGetProtocol as rtcDataChannelGetProtocol, __webpack_exports__rtcDataChannelIsOrdered as rtcDataChannelIsOrdered, __webpack_exports__rtcDataChannelIsReliable as rtcDataChannelIsReliable, __webpack_exports__rtcDataChannelSetBufferedAmountLowThreshold as rtcDataChannelSetBufferedAmountLowThreshold, __webpack_exports__rtcGetMaxMessageSize as rtcGetMaxMessageSize, __webpack_exports__rtcInitDataChannelEventQueue as rtcInitDataChannelEventQueue, __webpack_exports__rtcInitPeerEventQueue as rtcInitPeerEventQueue, __webpack_exports__rtcPeerConsumeEvent as rtcPeerConsumeEvent, __webpack_exports__rtcPeerEventCandidate as rtcPeerEventCandidate, __webpack_exports__rtcPeerEventChannel as rtcPeerEventChannel, __webpack_exports__rtcPeerEventState as rtcPeerEventState, __webpack_exports__rtcPeerEventType as rtcPeerEventType, __webpack_exports__rtcReadDataChannelBinaryEvent as rtcReadDataChannelBinaryEvent, __webpack_exports__rtcSetLocalDescriptionAsync as rtcSetLocalDescriptionAsync, __webpack_exports__rtcSetLocalDescriptionPromise as rtcSetLocalDescriptionPromise, __webpack_exports__rtcSetOnMessageHandler as rtcSetOnMessageHandler, __webpack_exports__rtcSetRemoteDescriptionAsync as rtcSetRemoteDescriptionAsync, __webpack_exports__rtcSetRemoteDescriptionPromise as rtcSetRemoteDescriptionPromise, __webpack_exports__runSoon as runSoon, __webpack_exports__scryptAsync as scryptAsync, __webpack_exports__scryptBufferPromise as scryptBufferPromise, __webpack_exports__secp256k1PrivateKeyVerify as secp256k1PrivateKeyVerify, __webpack_exports__secp256k1PrivateKeyVerifyBuffer as secp256k1PrivateKeyVerifyBuffer, __webpack_exports__secp256k1PublicKeyCreate as secp256k1PublicKeyCreate, __webpack_exports__secp256k1PublicKeyCreateBuffer as secp256k1PublicKeyCreateBuffer, __webpack_exports__secp256k1PublicKeyVerify as secp256k1PublicKeyVerify, __webpack_exports__secp256k1PublicKeyVerifyBuffer as secp256k1PublicKeyVerifyBuffer, __webpack_exports__secp256k1RecoverPublicKey as secp256k1RecoverPublicKey, __webpack_exports__secp256k1RecoverPublicKeyBuffer as secp256k1RecoverPublicKeyBuffer, __webpack_exports__secp256k1SharedSecret as secp256k1SharedSecret, __webpack_exports__secp256k1SharedSecretBuffer as secp256k1SharedSecretBuffer, __webpack_exports__secp256k1SignRecoverable as secp256k1SignRecoverable, __webpack_exports__secp256k1SignRecoverableBuffer as secp256k1SignRecoverableBuffer, __webpack_exports__setClipboardContent as setClipboardContent, __webpack_exports__setTimeout as setTimeout, __webpack_exports__sha256 as sha256, __webpack_exports__sha256Buffer as sha256Buffer, __webpack_exports__sha256JSON as sha256JSON, __webpack_exports__sha256String as sha256String, __webpack_exports__sign as sign, __webpack_exports__signBuffer as signBuffer, __webpack_exports__signHex as signHex, __webpack_exports__toJSON as toJSON, __webpack_exports__verify as verify, __webpack_exports__verifyBuffer as verifyBuffer, __webpack_exports__verifyHex as verifyHex, __webpack_exports__vfileDeleteAsync as vfileDeleteAsync, __webpack_exports__vfileDeletePromise as vfileDeletePromise, __webpack_exports__vfileExistsAsync as vfileExistsAsync, __webpack_exports__vfileExistsPromise as vfileExistsPromise, __webpack_exports__vfileListAllAsync as vfileListAllAsync, __webpack_exports__vfileListAllPromise as vfileListAllPromise, __webpack_exports__vfileReadAsync as vfileReadAsync, __webpack_exports__vfileReadPromise as vfileReadPromise, __webpack_exports__vfileWriteAsync as vfileWriteAsync, __webpack_exports__vfileWritePromise as vfileWritePromise, __webpack_exports__websocketConsumeEvent as websocketConsumeEvent, __webpack_exports__websocketEventBinaryLength as websocketEventBinaryLength, __webpack_exports__websocketEventText as websocketEventText, __webpack_exports__websocketEventType as websocketEventType, __webpack_exports__websocketInitEventQueue as websocketInitEventQueue, __webpack_exports__websocketOpenPromise as websocketOpenPromise, __webpack_exports__websocketReadBinaryEvent as websocketReadBinaryEvent, __webpack_exports__xchacha20poly1305 as xchacha20poly1305, __webpack_exports__xchacha20poly1305Buffer as xchacha20poly1305Buffer };
+export { __webpack_exports___bw as _bw, __webpack_exports__aes256cbc as aes256cbc, __webpack_exports__aes256cbcBuffer as aes256cbcBuffer, __webpack_exports__base64decode as base64decode, __webpack_exports__base64decodeBuffer as base64decodeBuffer, __webpack_exports__base64encode as base64encode, __webpack_exports__base64encodeBuffer as base64encodeBuffer, __webpack_exports__callFunction as callFunction, __webpack_exports__callFunctionPromise as callFunctionPromise, __webpack_exports__canCallFunction as canCallFunction, __webpack_exports__canCallFunctionPromise as canCallFunctionPromise, __webpack_exports__chacha20 as chacha20, __webpack_exports__chacha20Buffer as chacha20Buffer, __webpack_exports__copyHttpResponseBody as copyHttpResponseBody, __webpack_exports__delayPromise as delayPromise, __webpack_exports__eventQueueDispose as eventQueueDispose, __webpack_exports__eventQueueWaitPromise as eventQueueWaitPromise, __webpack_exports__fetchAsync as fetchAsync, __webpack_exports__fetchBufferAsync as fetchBufferAsync, __webpack_exports__fetchBufferPromise as fetchBufferPromise, __webpack_exports__fetchPromise as fetchPromise, __webpack_exports__fetchStreamAsync as fetchStreamAsync, __webpack_exports__fetchStreamPromise as fetchStreamPromise, __webpack_exports__fromJSON as fromJSON, __webpack_exports__genPubKey as genPubKey, __webpack_exports__genPubKeyBuffer as genPubKeyBuffer, __webpack_exports__generatePrivateKey as generatePrivateKey, __webpack_exports__generatePrivateKeyBuffer as generatePrivateKeyBuffer, __webpack_exports__getBundledResource as getBundledResource, __webpack_exports__getClipboardContentAsync as getClipboardContentAsync, __webpack_exports__getClipboardContentPromise as getClipboardContentPromise, __webpack_exports__getPlatformName as getPlatformName, __webpack_exports__getPromise as getPromise, __webpack_exports__getRuntimeName as getRuntimeName, __webpack_exports__hasBundledResource as hasBundledResource, __webpack_exports__hkdfExpandBuffer as hkdfExpandBuffer, __webpack_exports__hkdfExtractBuffer as hkdfExtractBuffer, __webpack_exports__hkdf_expand as hkdf_expand, __webpack_exports__hkdf_extract as hkdf_extract, __webpack_exports__hmac as hmac, __webpack_exports__hmacBuffer as hmacBuffer, __webpack_exports__httpResponseBodyLength as httpResponseBodyLength, __webpack_exports__newPromise as newPromise, __webpack_exports__nfkc as nfkc, __webpack_exports__openURL as openURL, __webpack_exports__panic as panic, __webpack_exports__randomBytes as randomBytes, __webpack_exports__randomBytesBuffer as randomBytesBuffer, __webpack_exports__rejectPromise as rejectPromise, __webpack_exports__resolvePromise as resolvePromise, __webpack_exports__rtcAddIceCandidateAsync as rtcAddIceCandidateAsync, __webpack_exports__rtcAddIceCandidatePromise as rtcAddIceCandidatePromise, __webpack_exports__rtcCreateAnswerAsync as rtcCreateAnswerAsync, __webpack_exports__rtcCreateAnswerPromise as rtcCreateAnswerPromise, __webpack_exports__rtcCreateDataChannel as rtcCreateDataChannel, __webpack_exports__rtcCreateIceCandidate as rtcCreateIceCandidate, __webpack_exports__rtcCreateOfferAsync as rtcCreateOfferAsync, __webpack_exports__rtcCreateOfferPromise as rtcCreateOfferPromise, __webpack_exports__rtcCreatePeerConnection as rtcCreatePeerConnection, __webpack_exports__rtcDataChannelConsumeEvent as rtcDataChannelConsumeEvent, __webpack_exports__rtcDataChannelEventBinaryLength as rtcDataChannelEventBinaryLength, __webpack_exports__rtcDataChannelEventError as rtcDataChannelEventError, __webpack_exports__rtcDataChannelEventType as rtcDataChannelEventType, __webpack_exports__rtcDataChannelGetAvailableAmount as rtcDataChannelGetAvailableAmount, __webpack_exports__rtcDataChannelGetBufferedAmount as rtcDataChannelGetBufferedAmount, __webpack_exports__rtcDataChannelGetMaxPacketLifeTime as rtcDataChannelGetMaxPacketLifeTime, __webpack_exports__rtcDataChannelGetMaxRetransmits as rtcDataChannelGetMaxRetransmits, __webpack_exports__rtcDataChannelGetProtocol as rtcDataChannelGetProtocol, __webpack_exports__rtcDataChannelIsOrdered as rtcDataChannelIsOrdered, __webpack_exports__rtcDataChannelIsReliable as rtcDataChannelIsReliable, __webpack_exports__rtcDataChannelSetBufferedAmountLowThreshold as rtcDataChannelSetBufferedAmountLowThreshold, __webpack_exports__rtcGetMaxMessageSize as rtcGetMaxMessageSize, __webpack_exports__rtcInitDataChannelEventQueue as rtcInitDataChannelEventQueue, __webpack_exports__rtcInitPeerEventQueue as rtcInitPeerEventQueue, __webpack_exports__rtcPeerConsumeEvent as rtcPeerConsumeEvent, __webpack_exports__rtcPeerEventCandidate as rtcPeerEventCandidate, __webpack_exports__rtcPeerEventChannel as rtcPeerEventChannel, __webpack_exports__rtcPeerEventState as rtcPeerEventState, __webpack_exports__rtcPeerEventType as rtcPeerEventType, __webpack_exports__rtcReadDataChannelBinaryEvent as rtcReadDataChannelBinaryEvent, __webpack_exports__rtcSetLocalDescriptionAsync as rtcSetLocalDescriptionAsync, __webpack_exports__rtcSetLocalDescriptionPromise as rtcSetLocalDescriptionPromise, __webpack_exports__rtcSetOnMessageHandler as rtcSetOnMessageHandler, __webpack_exports__rtcSetRemoteDescriptionAsync as rtcSetRemoteDescriptionAsync, __webpack_exports__rtcSetRemoteDescriptionPromise as rtcSetRemoteDescriptionPromise, __webpack_exports__runSoon as runSoon, __webpack_exports__scryptAsync as scryptAsync, __webpack_exports__scryptBufferPromise as scryptBufferPromise, __webpack_exports__secp256k1PrivateKeyVerify as secp256k1PrivateKeyVerify, __webpack_exports__secp256k1PrivateKeyVerifyBuffer as secp256k1PrivateKeyVerifyBuffer, __webpack_exports__secp256k1PublicKeyCreate as secp256k1PublicKeyCreate, __webpack_exports__secp256k1PublicKeyCreateBuffer as secp256k1PublicKeyCreateBuffer, __webpack_exports__secp256k1PublicKeyVerify as secp256k1PublicKeyVerify, __webpack_exports__secp256k1PublicKeyVerifyBuffer as secp256k1PublicKeyVerifyBuffer, __webpack_exports__secp256k1RecoverPublicKey as secp256k1RecoverPublicKey, __webpack_exports__secp256k1RecoverPublicKeyBuffer as secp256k1RecoverPublicKeyBuffer, __webpack_exports__secp256k1SharedSecret as secp256k1SharedSecret, __webpack_exports__secp256k1SharedSecretBuffer as secp256k1SharedSecretBuffer, __webpack_exports__secp256k1SignRecoverable as secp256k1SignRecoverable, __webpack_exports__secp256k1SignRecoverableBuffer as secp256k1SignRecoverableBuffer, __webpack_exports__setClipboardContent as setClipboardContent, __webpack_exports__setTimeout as setTimeout, __webpack_exports__sha256 as sha256, __webpack_exports__sha256Buffer as sha256Buffer, __webpack_exports__sha256JSON as sha256JSON, __webpack_exports__sha256JSONAsync as sha256JSONAsync, __webpack_exports__sha256String as sha256String, __webpack_exports__sha256StringAsync as sha256StringAsync, __webpack_exports__sign as sign, __webpack_exports__signBuffer as signBuffer, __webpack_exports__signHex as signHex, __webpack_exports__toJSON as toJSON, __webpack_exports__verify as verify, __webpack_exports__verifyBuffer as verifyBuffer, __webpack_exports__verifyHex as verifyHex, __webpack_exports__vfileDeleteAsync as vfileDeleteAsync, __webpack_exports__vfileDeletePromise as vfileDeletePromise, __webpack_exports__vfileExistsAsync as vfileExistsAsync, __webpack_exports__vfileExistsPromise as vfileExistsPromise, __webpack_exports__vfileListAllAsync as vfileListAllAsync, __webpack_exports__vfileListAllPromise as vfileListAllPromise, __webpack_exports__vfileReadAsync as vfileReadAsync, __webpack_exports__vfileReadPromise as vfileReadPromise, __webpack_exports__vfileWriteAsync as vfileWriteAsync, __webpack_exports__vfileWritePromise as vfileWritePromise, __webpack_exports__websocketConsumeEvent as websocketConsumeEvent, __webpack_exports__websocketEventBinaryLength as websocketEventBinaryLength, __webpack_exports__websocketEventText as websocketEventText, __webpack_exports__websocketEventType as websocketEventType, __webpack_exports__websocketInitEventQueue as websocketInitEventQueue, __webpack_exports__websocketOpenPromise as websocketOpenPromise, __webpack_exports__websocketReadBinaryEvent as websocketReadBinaryEvent, __webpack_exports__xchacha20poly1305 as xchacha20poly1305, __webpack_exports__xchacha20poly1305Buffer as xchacha20poly1305Buffer };

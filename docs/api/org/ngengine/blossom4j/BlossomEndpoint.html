@@ -63,6 +63,11 @@ loadScripts(document, 'script');</script>
 </li>
 <li><a href="#method-detail" tabindex="0">Method Details</a>
 <ol class="toc-list">
+<li><a href="#getUrl()" tabindex="0">getUrl()</a></li>
+<li><a href="#supports(java.lang.String)" tabindex="0">supports(String)</a></li>
+<li><a href="#mirror(java.lang.String,org.ngengine.nostr4j.event.SignedNostrEvent)" tabindex="0">mirror(String, SignedNostrEvent)</a></li>
+<li><a href="#media(byte%5B%5D,java.lang.String,org.ngengine.nostr4j.event.SignedNostrEvent)" tabindex="0">media(byte[], String, SignedNostrEvent)</a></li>
+<li><a href="#validateDescriptor(org.ngengine.blossom4j.BlobDescriptor)" tabindex="0">validateDescriptor(BlobDescriptor)</a></li>
 <li><a href="#setVerifyBlobs(boolean)" tabindex="0">setVerifyBlobs(boolean)</a></li>
 <li><a href="#isVerifyBlobs()" tabindex="0">isVerifyBlobs()</a></li>
 <li><a href="#get(java.lang.String,int%5B%5D,org.ngengine.nostr4j.event.SignedNostrEvent)" tabindex="0">get(String, int[], SignedNostrEvent)</a></li>
@@ -144,43 +149,64 @@ loadScripts(document, 'script');</script>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
 <div class="block">Get blob by SHA256</div>
 </div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>int</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#hashCode()" class="member-name-link">hashCode</a>()</code></div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a></code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#getUrl()" class="member-name-link">getUrl</a>()</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>org.ngengine.platform.AsyncTask<wbr>&lt;org.ngengine.platform.transport.NGEHttpResponse&gt;</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#httpRequest(java.lang.String,java.lang.String,java.util.Map,byte%5B%5D,org.ngengine.nostr4j.event.SignedNostrEvent)" class="member-name-link">httpRequest</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;endpoint,
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>int</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#hashCode()" class="member-name-link">hashCode</a>()</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>org.ngengine.platform.AsyncTask<wbr>&lt;org.ngengine.platform.transport.NGEHttpResponse&gt;</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#httpRequest(java.lang.String,java.lang.String,java.util.Map,byte%5B%5D,org.ngengine.nostr4j.event.SignedNostrEvent)" class="member-name-link">httpRequest</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;endpoint,
  <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;method,
  <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/Map.html" title="class or interface in java.util" class="external-link">Map</a>&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>,<wbr><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&gt;&nbsp;headers,
  byte[]&nbsp;body,
  <a href="../nostr4j/event/SignedNostrEvent.html" title="class in org.ngengine.nostr4j.event">SignedNostrEvent</a>&nbsp;authEvent)</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>org.ngengine.platform.AsyncTask<wbr>&lt;org.ngengine.platform.transport.NGEHttpResponse&gt;</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#httpRequest(java.lang.String,java.lang.String,java.util.Map,java.nio.ByteBuffer,org.ngengine.nostr4j.event.SignedNostrEvent)" class="member-name-link">httpRequest</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;endpoint,
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>org.ngengine.platform.AsyncTask<wbr>&lt;org.ngengine.platform.transport.NGEHttpResponse&gt;</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#httpRequest(java.lang.String,java.lang.String,java.util.Map,java.nio.ByteBuffer,org.ngengine.nostr4j.event.SignedNostrEvent)" class="member-name-link">httpRequest</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;endpoint,
  <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;method,
  <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/Map.html" title="class or interface in java.util" class="external-link">Map</a>&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>,<wbr><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&gt;&nbsp;headers,
  <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/nio/ByteBuffer.html" title="class or interface in java.nio" class="external-link">ByteBuffer</a>&nbsp;body,
  <a href="../nostr4j/event/SignedNostrEvent.html" title="class in org.ngengine.nostr4j.event">SignedNostrEvent</a>&nbsp;authEvent)</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>org.ngengine.platform.AsyncTask<wbr>&lt;org.ngengine.platform.transport.NGEHttpResponse&gt;</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#httpRequest(java.lang.String,java.lang.String,java.util.Map,org.ngengine.nostr4j.event.SignedNostrEvent)" class="member-name-link">httpRequest</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;endpoint,
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>org.ngengine.platform.AsyncTask<wbr>&lt;org.ngengine.platform.transport.NGEHttpResponse&gt;</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#httpRequest(java.lang.String,java.lang.String,java.util.Map,org.ngengine.nostr4j.event.SignedNostrEvent)" class="member-name-link">httpRequest</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;endpoint,
  <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;method,
  <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/Map.html" title="class or interface in java.util" class="external-link">Map</a>&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>,<wbr><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&gt;&nbsp;headers,
  <a href="../nostr4j/event/SignedNostrEvent.html" title="class in org.ngengine.nostr4j.event">SignedNostrEvent</a>&nbsp;authEvent)</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>boolean</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#isVerifyBlobs()" class="member-name-link">isVerifyBlobs</a>()</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>org.ngengine.platform.AsyncTask<wbr>&lt;<a href="BlossomResponse.html" title="class in org.ngengine.blossom4j">BlossomResponse</a>&gt;</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#list(org.ngengine.nostr4j.keypair.NostrPublicKey,java.time.Instant,java.time.Instant,org.ngengine.nostr4j.event.SignedNostrEvent)" class="member-name-link">list</a><wbr>(<a href="../nostr4j/keypair/NostrPublicKey.html" title="class in org.ngengine.nostr4j.keypair">NostrPublicKey</a>&nbsp;pubkey,
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>boolean</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#isVerifyBlobs()" class="member-name-link">isVerifyBlobs</a>()</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>org.ngengine.platform.AsyncTask<wbr>&lt;<a href="BlossomResponse.html" title="class in org.ngengine.blossom4j">BlossomResponse</a>&gt;</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#list(org.ngengine.nostr4j.keypair.NostrPublicKey,java.time.Instant,java.time.Instant,org.ngengine.nostr4j.event.SignedNostrEvent)" class="member-name-link">list</a><wbr>(<a href="../nostr4j/keypair/NostrPublicKey.html" title="class in org.ngengine.nostr4j.keypair">NostrPublicKey</a>&nbsp;pubkey,
  <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Instant.html" title="class or interface in java.time" class="external-link">Instant</a>&nbsp;since,
  <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Instant.html" title="class or interface in java.time" class="external-link">Instant</a>&nbsp;until,
  <a href="../nostr4j/event/SignedNostrEvent.html" title="class in org.ngengine.nostr4j.event">SignedNostrEvent</a>&nbsp;authEvent)</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
 <div class="block">List blobs uploaded by a given public key</div>
 </div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#setVerifyBlobs(boolean)" class="member-name-link">setVerifyBlobs</a><wbr>(boolean&nbsp;verify)</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>org.ngengine.platform.AsyncTask<wbr>&lt;<a href="BlossomResponse.html" title="class in org.ngengine.blossom4j">BlossomResponse</a>&gt;</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#media(byte%5B%5D,java.lang.String,org.ngengine.nostr4j.event.SignedNostrEvent)" class="member-name-link">media</a><wbr>(byte[]&nbsp;data,
+ <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;mimeType,
+ <a href="../nostr4j/event/SignedNostrEvent.html" title="class in org.ngengine.nostr4j.event">SignedNostrEvent</a>&nbsp;authEvent)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">BUD-05: unlike /upload, the returned hash may differ from the submitted bytes.</div>
+</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>org.ngengine.platform.AsyncTask<wbr>&lt;<a href="BlossomResponse.html" title="class in org.ngengine.blossom4j">BlossomResponse</a>&gt;</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#mirror(java.lang.String,org.ngengine.nostr4j.event.SignedNostrEvent)" class="member-name-link">mirror</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;source,
+ <a href="../nostr4j/event/SignedNostrEvent.html" title="class in org.ngengine.nostr4j.event">SignedNostrEvent</a>&nbsp;authEvent)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">BUD-04: the server, never the client, downloads the source URL.</div>
+</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#setVerifyBlobs(boolean)" class="member-name-link">setVerifyBlobs</a><wbr>(boolean&nbsp;verify)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>org.ngengine.platform.AsyncTask<wbr>&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Boolean.html" title="class or interface in java.lang" class="external-link">Boolean</a>&gt;</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#supports(java.lang.String)" class="member-name-link">supports</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;operation)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Checks an endpoint with an unauthenticated OPTIONS request and caches either result.</div>
+</div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a></code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#toString()" class="member-name-link">toString</a>()</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
@@ -196,6 +222,11 @@ loadScripts(document, 'script');</script>
  <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;mimeType,
  <a href="../nostr4j/event/SignedNostrEvent.html" title="class in org.ngengine.nostr4j.event">SignedNostrEvent</a>&nbsp;authEvent)</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#validateDescriptor(org.ngengine.blossom4j.BlobDescriptor)" class="member-name-link">validateDescriptor</a><wbr>(<a href="BlobDescriptor.html" title="class in org.ngengine.blossom4j">BlobDescriptor</a>&nbsp;descriptor)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Only this explicitly configured server may supply the resulting URL.</div>
+</div>
 </div>
 </div>
 </div>
@@ -229,6 +260,70 @@ loadScripts(document, 'script');</script>
 <section class="method-details" id="method-detail">
 <h2>Method Details</h2>
 <ul class="member-list">
+<li>
+<section class="detail" id="getUrl()">
+<h3>getUrl</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a></span>&nbsp;<span class="element-name">getUrl</span>()</div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="supports(java.lang.String)">
+<h3>supports</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">org.ngengine.platform.AsyncTask&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Boolean.html" title="class or interface in java.lang" class="external-link">Boolean</a>&gt;</span>&nbsp;<span class="element-name">supports</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;operation)</span></div>
+<div class="block">Checks an endpoint with an unauthenticated OPTIONS request and caches either result.
+Authorization requirements still indicate an available endpoint. Transport failures,
+rate limits and temporary server errors fail the task without caching a negative result.
+Actual operation responses update the cache if a server changes or uses generic preflight handling.</div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>operation</code> - endpoint name, such as mirror or media</dd>
+<dt>Returns:</dt>
+<dd>whether the endpoint is available according to the probe or a previous operation</dd>
+</dl>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="mirror(java.lang.String,org.ngengine.nostr4j.event.SignedNostrEvent)">
+<h3>mirror</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">org.ngengine.platform.AsyncTask&lt;<a href="BlossomResponse.html" title="class in org.ngengine.blossom4j">BlossomResponse</a>&gt;</span>&nbsp;<span class="element-name">mirror</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;source,
+ @Nullable
+ <a href="../nostr4j/event/SignedNostrEvent.html" title="class in org.ngengine.nostr4j.event">SignedNostrEvent</a>&nbsp;authEvent)</span></div>
+<div class="block">BUD-04: the server, never the client, downloads the source URL.</div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="media(byte[],java.lang.String,org.ngengine.nostr4j.event.SignedNostrEvent)">
+<h3>media</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">org.ngengine.platform.AsyncTask&lt;<a href="BlossomResponse.html" title="class in org.ngengine.blossom4j">BlossomResponse</a>&gt;</span>&nbsp;<span class="element-name">media</span><wbr><span class="parameters">(byte[]&nbsp;data,
+ @Nullable
+ <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;mimeType,
+ @Nullable
+ <a href="../nostr4j/event/SignedNostrEvent.html" title="class in org.ngengine.nostr4j.event">SignedNostrEvent</a>&nbsp;authEvent)</span></div>
+<div class="block">BUD-05: unlike /upload, the returned hash may differ from the submitted bytes.</div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="validateDescriptor(org.ngengine.blossom4j.BlobDescriptor)">
+<h3>validateDescriptor</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">validateDescriptor</span><wbr><span class="parameters">(<a href="BlobDescriptor.html" title="class in org.ngengine.blossom4j">BlobDescriptor</a>&nbsp;descriptor)</span>
+                        throws <span class="exceptions"><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></span></div>
+<div class="block">Only this explicitly configured server may supply the resulting URL.</div>
+<dl class="notes">
+<dt>Throws:</dt>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></code></dd>
+</dl>
+</div>
+</section>
+</li>
 <li>
 <section class="detail" id="setVerifyBlobs(boolean)">
 <h3>setVerifyBlobs</h3>

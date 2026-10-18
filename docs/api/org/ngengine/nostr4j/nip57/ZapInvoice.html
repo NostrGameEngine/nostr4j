@@ -59,6 +59,7 @@ loadScripts(document, 'script');</script>
 <li><a href="#constructor-detail" tabindex="0">Constructor Details</a>
 <ol class="toc-list">
 <li><a href="#%3Cinit%3E(java.lang.String,java.lang.String,org.ngengine.nostr4j.event.SignedNostrEvent,org.ngengine.nostr4j.keypair.NostrPublicKey)" tabindex="0">ZapInvoice(String, String, SignedNostrEvent, NostrPublicKey)</a></li>
+<li><a href="#%3Cinit%3E(java.lang.String,java.lang.String,org.ngengine.nostr4j.event.SignedNostrEvent,org.ngengine.nostr4j.keypair.NostrPublicKey,java.lang.String)" tabindex="0">ZapInvoice(String, String, SignedNostrEvent, NostrPublicKey, String)</a></li>
 <li><a href="#%3Cinit%3E(java.util.Map)" tabindex="0">ZapInvoice(Map)</a></li>
 </ol>
 </li>
@@ -67,6 +68,7 @@ loadScripts(document, 'script');</script>
 <li><a href="#getProviderPubkey()" tabindex="0">getProviderPubkey()</a></li>
 <li><a href="#getComment()" tabindex="0">getComment()</a></li>
 <li><a href="#getZapRequest()" tabindex="0">getZapRequest()</a></li>
+<li><a href="#getZapRequestJson()" tabindex="0">getZapRequestJson()</a></li>
 <li><a href="#getInvoice()" tabindex="0">getInvoice()</a></li>
 <li><a href="#toString()" tabindex="0">toString()</a></li>
 <li><a href="#equals(java.lang.Object)" tabindex="0">equals(Object)</a></li>
@@ -106,8 +108,16 @@ loadScripts(document, 'script');</script>
  <a href="../event/SignedNostrEvent.html" title="class in org.ngengine.nostr4j.event">SignedNostrEvent</a>&nbsp;zapRequest,
  <a href="../keypair/NostrPublicKey.html" title="class in org.ngengine.nostr4j.keypair">NostrPublicKey</a>&nbsp;providerPubkey)</code></div>
 <div class="col-last even-row-color">&nbsp;</div>
-<div class="col-constructor-name odd-row-color"><code><a href="#%3Cinit%3E(java.util.Map)" class="member-name-link">ZapInvoice</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/Map.html" title="class or interface in java.util" class="external-link">Map</a>&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>,<wbr><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a>&gt;&nbsp;map)</code></div>
-<div class="col-last odd-row-color">&nbsp;</div>
+<div class="col-constructor-name odd-row-color"><code><a href="#%3Cinit%3E(java.lang.String,java.lang.String,org.ngengine.nostr4j.event.SignedNostrEvent,org.ngengine.nostr4j.keypair.NostrPublicKey,java.lang.String)" class="member-name-link">ZapInvoice</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;invoice,
+ <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;comment,
+ <a href="../event/SignedNostrEvent.html" title="class in org.ngengine.nostr4j.event">SignedNostrEvent</a>&nbsp;zapRequest,
+ <a href="../keypair/NostrPublicKey.html" title="class in org.ngengine.nostr4j.keypair">NostrPublicKey</a>&nbsp;providerPubkey,
+ <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;zapRequestJson)</code></div>
+<div class="col-last odd-row-color">
+<div class="block">Preserve the exact LNURL callback payload: its bytes, not a reserialization, commit the invoice.</div>
+</div>
+<div class="col-constructor-name even-row-color"><code><a href="#%3Cinit%3E(java.util.Map)" class="member-name-link">ZapInvoice</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/Map.html" title="class or interface in java.util" class="external-link">Map</a>&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>,<wbr><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a>&gt;&nbsp;map)</code></div>
+<div class="col-last even-row-color">&nbsp;</div>
 </div>
 </section>
 </li>
@@ -137,15 +147,18 @@ loadScripts(document, 'script');</script>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="ZapRequest.html" title="class in org.ngengine.nostr4j.nip57">ZapRequest</a></code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#getZapRequest()" class="member-name-link">getZapRequest</a>()</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>int</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#hashCode()" class="member-name-link">hashCode</a>()</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/Map.html" title="class or interface in java.util" class="external-link">Map</a><wbr>&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>,<wbr><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a>&gt;</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#toMap()" class="member-name-link">toMap</a>()</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a></code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#toString()" class="member-name-link">toString</a>()</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#getZapRequestJson()" class="member-name-link">getZapRequestJson</a>()</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>int</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#hashCode()" class="member-name-link">hashCode</a>()</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/Map.html" title="class or interface in java.util" class="external-link">Map</a><wbr>&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>,<wbr><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a>&gt;</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#toMap()" class="member-name-link">toMap</a>()</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a></code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#toString()" class="member-name-link">toString</a>()</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
 </div>
 </div>
 </div>
@@ -171,6 +184,19 @@ loadScripts(document, 'script');</script>
  <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;comment,
  <a href="../event/SignedNostrEvent.html" title="class in org.ngengine.nostr4j.event">SignedNostrEvent</a>&nbsp;zapRequest,
  <a href="../keypair/NostrPublicKey.html" title="class in org.ngengine.nostr4j.keypair">NostrPublicKey</a>&nbsp;providerPubkey)</span></div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="&lt;init&gt;(java.lang.String,java.lang.String,org.ngengine.nostr4j.event.SignedNostrEvent,org.ngengine.nostr4j.keypair.NostrPublicKey,java.lang.String)">
+<h3>ZapInvoice</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="element-name">ZapInvoice</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;invoice,
+ <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;comment,
+ <a href="../event/SignedNostrEvent.html" title="class in org.ngengine.nostr4j.event">SignedNostrEvent</a>&nbsp;zapRequest,
+ <a href="../keypair/NostrPublicKey.html" title="class in org.ngengine.nostr4j.keypair">NostrPublicKey</a>&nbsp;providerPubkey,
+ <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;zapRequestJson)</span></div>
+<div class="block">Preserve the exact LNURL callback payload: its bytes, not a reserialization, commit the invoice.</div>
 </div>
 </section>
 </li>
@@ -216,6 +242,14 @@ loadScripts(document, 'script');</script>
 <h3>getZapRequest</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="ZapRequest.html" title="class in org.ngengine.nostr4j.nip57">ZapRequest</a></span>&nbsp;<span class="element-name">getZapRequest</span>()</div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="getZapRequestJson()">
+<h3>getZapRequestJson</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a></span>&nbsp;<span class="element-name">getZapRequestJson</span>()</div>
 </div>
 </section>
 </li>

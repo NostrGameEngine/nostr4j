@@ -17,7 +17,10 @@ NostrPublicKey identity = keys.getPublicKey();
 String npub = identity.asBech32();
 ```
 
-To create a new account, use `new NostrKeyPair()`. Keep that identity between launches if the user expects to return to the same account. Call `keys.close()` when you're finished with a locally owned key, and keep private key text out of logs.
+To create a new account, use `new NostrKeyPair()`. Keep that identity between launches if the user expects to return to the same account.
+
+!!! tip "Clear key material from memory"
+    You can optionally call `close()` on a private key or key pair to erase its internal private-key bytes immediately. The closed key can no longer be used.
 
 ## Store a private key with a passphrase
 
@@ -26,7 +29,6 @@ Before saving a key, encrypt it as an `ncryptsec` string. This is the NIP-49 for
 ```java
 String encrypted = secret.asNcryptsec(passphrase).await();
 NostrPrivateKey restored = NostrPrivateKey.fromNcryptsec(encrypted, passphrase).await();
-restored.close();
 ```
 
 Key derivation takes time by design, which is why these calls are asynchronous. Save the encrypted string in protected application storage and ask the user for their passphrase when needed.

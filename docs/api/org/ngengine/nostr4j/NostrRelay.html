@@ -90,6 +90,7 @@ loadScripts(document, 'script');</script>
 <ol class="toc-list">
 <li><a href="#%3Cinit%3E(java.lang.String)" tabindex="0">NostrRelay(String)</a></li>
 <li><a href="#%3Cinit%3E(java.lang.String,org.ngengine.platform.AsyncExecutor)" tabindex="0">NostrRelay(String, AsyncExecutor)</a></li>
+<li><a href="#%3Cinit%3E(java.lang.String,org.ngengine.platform.AsyncExecutor,boolean)" tabindex="0">NostrRelay(String, AsyncExecutor, boolean)</a></li>
 </ol>
 </li>
 <li><a href="#method-detail" tabindex="0">Method Details</a>
@@ -123,6 +124,10 @@ loadScripts(document, 'script');</script>
 <li><a href="#sendMessage(org.ngengine.nostr4j.proto.NostrMessage)" tabindex="0">sendMessage(NostrMessage)</a></li>
 <li><a href="#sendMessage(org.ngengine.nostr4j.proto.NostrMessage,int)" tabindex="0">sendMessage(NostrMessage, int)</a></li>
 <li><a href="#getUrl()" tabindex="0">getUrl()</a></li>
+<li><a href="#getConnectionPriority()" tabindex="0">getConnectionPriority()</a></li>
+<li><a href="#setConnectionPriority(int)" tabindex="0">setConnectionPriority(int)</a></li>
+<li><a href="#getQueryPriority()" tabindex="0">getQueryPriority()</a></li>
+<li><a href="#setQueryPriority(int)" tabindex="0">setQueryPriority(int)</a></li>
 <li><a href="#connect()" tabindex="0">connect()</a></li>
 <li><a href="#isMarkedForDisconnection()" tabindex="0">isMarkedForDisconnection()</a></li>
 <li><a href="#disconnect(java.lang.String)" tabindex="0">disconnect(String)</a></li>
@@ -143,9 +148,13 @@ loadScripts(document, 'script');</script>
 <div class="inheritance">org.ngengine.nostr4j.NostrRelay</div>
 </div>
 <section class="class-description" id="class-description">
+<dl class="notes">
+<dt>Direct Known Subclasses:</dt>
+<dd><code><a href="store/NostrCacheRelay.html" title="class in org.ngengine.nostr4j.store">NostrCacheRelay</a></code></dd>
+</dl>
 <hr>
 <div class="horizontal-scroll">
-<div class="type-signature"><span class="modifiers">public final class </span><span class="element-name type-name-label">NostrRelay</span>
+<div class="type-signature"><span class="modifiers">public class </span><span class="element-name type-name-label">NostrRelay</span>
 <span class="extends-implements">extends <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a></span></div>
 </div>
 </section>
@@ -244,7 +253,7 @@ loadScripts(document, 'script');</script>
 <div class="col-first even-row-color"><code>protected final org.ngengine.platform.SafeFlag</code></div>
 <div class="col-second even-row-color"><code><a href="#verifyEvents" class="member-name-link">verifyEvents</a></code></div>
 <div class="col-last even-row-color">&nbsp;</div>
-<div class="col-first odd-row-color"><code>protected final <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/Map.html" title="class or interface in java.util" class="external-link">Map</a><wbr>&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>, <a href="proto/NostrMessageAck.html" title="class in org.ngengine.nostr4j.proto">NostrMessageAck</a>&gt;</code></div>
+<div class="col-first odd-row-color"><code>protected final <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/Map.html" title="class or interface in java.util" class="external-link">Map</a><wbr>&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>, <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="proto/NostrMessageAck.html" title="class in org.ngengine.nostr4j.proto">NostrMessageAck</a>&gt;&gt;</code></div>
 <div class="col-second odd-row-color"><code><a href="#waitingEventsAck" class="member-name-link">waitingEventsAck</a></code></div>
 <div class="col-last odd-row-color">&nbsp;</div>
 </div>
@@ -255,14 +264,24 @@ loadScripts(document, 'script');</script>
 <section class="constructor-summary" id="constructor-summary">
 <h2>Constructor Summary</h2>
 <div class="caption"><span>Constructors</span></div>
-<div class="summary-table two-column-summary">
-<div class="table-header col-first">Constructor</div>
+<div class="summary-table three-column-summary">
+<div class="table-header col-first">Modifier</div>
+<div class="table-header col-second">Constructor</div>
 <div class="table-header col-last">Description</div>
+<div class="col-first even-row-color"><code>&nbsp;</code></div>
 <div class="col-constructor-name even-row-color"><code><a href="#%3Cinit%3E(java.lang.String)" class="member-name-link">NostrRelay</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;url)</code></div>
 <div class="col-last even-row-color">&nbsp;</div>
+<div class="col-first odd-row-color"><code>&nbsp;</code></div>
 <div class="col-constructor-name odd-row-color"><code><a href="#%3Cinit%3E(java.lang.String,org.ngengine.platform.AsyncExecutor)" class="member-name-link">NostrRelay</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;url,
  org.ngengine.platform.AsyncExecutor&nbsp;executor)</code></div>
 <div class="col-last odd-row-color">&nbsp;</div>
+<div class="col-first even-row-color"><code>protected </code></div>
+<div class="col-constructor-name even-row-color"><code><a href="#%3Cinit%3E(java.lang.String,org.ngengine.platform.AsyncExecutor,boolean)" class="member-name-link">NostrRelay</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;url,
+ org.ngengine.platform.AsyncExecutor&nbsp;executor,
+ boolean&nbsp;local)</code></div>
+<div class="col-last even-row-color">
+<div class="block">Creates a relay that can use a caller-supplied executor without a WebSocket transport.</div>
+</div>
 </div>
 </section>
 </li>
@@ -305,9 +324,19 @@ loadScripts(document, 'script');</script>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>&lt;T extends <a href="listeners/NostrRelayComponent.html" title="interface in org.ngengine.nostr4j.listeners">NostrRelayComponent</a>&gt;<br>T</code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#getComponent(java.lang.Class)" class="member-name-link">getComponent</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Class.html" title="class or interface in java.lang" class="external-link">Class</a>&lt;T&gt;&nbsp;clazz)</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="NostrRelayInfo.html" title="class in org.ngengine.nostr4j">NostrRelayInfo</a></code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#getInfo()" class="member-name-link">getInfo</a>()</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>int</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#getConnectionPriority()" class="member-name-link">getConnectionPriority</a>()</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Returns the preference used when a pool selects network connections under a budget.</div>
+</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="NostrRelayInfo.html" title="class in org.ngengine.nostr4j">NostrRelayInfo</a></code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#getInfo()" class="member-name-link">getInfo</a>()</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>int</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#getQueryPriority()" class="member-name-link">getQueryPriority</a>()</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Returns the priority used to group and order subscription queries.</div>
+</div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="NostrRelay.Status.html" title="enum class in org.ngengine.nostr4j">NostrRelay.Status</a></code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#getStatus()" class="member-name-link">getStatus</a>()</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
@@ -382,6 +411,16 @@ connection setup/retry states.</div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#setAutoReconnect(boolean)" class="member-name-link">setAutoReconnect</a><wbr>(boolean&nbsp;reconnect)</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="NostrRelay.html" title="class in org.ngengine.nostr4j">NostrRelay</a></code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#setConnectionPriority(int)" class="member-name-link">setConnectionPriority</a><wbr>(int&nbsp;connectionPriority)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Changes the relay's network connection preference and notifies attached components.</div>
+</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="NostrRelay.html" title="class in org.ngengine.nostr4j">NostrRelay</a></code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#setQueryPriority(int)" class="member-name-link">setQueryPriority</a><wbr>(int&nbsp;priority)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Changes the priority used to order query tiers for newly created read plans.</div>
+</div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>protected void</code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#setStatus(org.ngengine.nostr4j.NostrRelay.Status)" class="member-name-link">setStatus</a><wbr>(<a href="NostrRelay.Status.html" title="enum class in org.ngengine.nostr4j">NostrRelay.Status</a>&nbsp;s)</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
@@ -439,7 +478,7 @@ connection setup/retry states.</div>
 <section class="detail" id="waitingEventsAck">
 <h3>waitingEventsAck</h3>
 <div class="horizontal-scroll">
-<div class="member-signature"><span class="modifiers">protected final</span>&nbsp;<span class="return-type"><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/Map.html" title="class or interface in java.util" class="external-link">Map</a>&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>, <a href="proto/NostrMessageAck.html" title="class in org.ngengine.nostr4j.proto">NostrMessageAck</a>&gt;</span>&nbsp;<span class="element-name">waitingEventsAck</span></div>
+<div class="member-signature"><span class="modifiers">protected final</span>&nbsp;<span class="return-type"><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/Map.html" title="class or interface in java.util" class="external-link">Map</a>&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>, <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="proto/NostrMessageAck.html" title="class in org.ngengine.nostr4j.proto">NostrMessageAck</a>&gt;&gt;</span>&nbsp;<span class="element-name">waitingEventsAck</span></div>
 </div>
 </section>
 </li>
@@ -625,6 +664,25 @@ connection setup/retry states.</div>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="element-name">NostrRelay</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;url,
  org.ngengine.platform.AsyncExecutor&nbsp;executor)</span></div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="&lt;init&gt;(java.lang.String,org.ngengine.platform.AsyncExecutor,boolean)">
+<h3>NostrRelay</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">protected</span>&nbsp;<span class="element-name">NostrRelay</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;url,
+ org.ngengine.platform.AsyncExecutor&nbsp;executor,
+ boolean&nbsp;local)</span></div>
+<div class="block">Creates a relay that can use a caller-supplied executor without a WebSocket transport.
+Subclasses that skip transport creation provide their own connection, delivery and
+acknowledgement behavior while retaining the relay component interfaces.</div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>url</code> - relay identifier</dd>
+<dd><code>executor</code> - executor used for relay work</dd>
+<dd><code>local</code> - whether WebSocket transport creation is omitted</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -876,6 +934,69 @@ connection setup/retry states.</div>
 <h3>getUrl</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a></span>&nbsp;<span class="element-name">getUrl</span>()</div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="getConnectionPriority()">
+<h3>getConnectionPriority</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">int</span>&nbsp;<span class="element-name">getConnectionPriority</span>()</div>
+<div class="block">Returns the preference used when a pool selects network connections under a budget.
+Higher values are preferred; equal values preserve incumbent selections. This value
+is independent of the priority used to order subscription queries.</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>connection selection priority</dd>
+</dl>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="setConnectionPriority(int)">
+<h3>setConnectionPriority</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="NostrRelay.html" title="class in org.ngengine.nostr4j">NostrRelay</a></span>&nbsp;<span class="element-name">setConnectionPriority</span><wbr><span class="parameters">(int&nbsp;connectionPriority)</span></div>
+<div class="block">Changes the relay's network connection preference and notifies attached components.
+A pool with a connection budget can recompute its selection immediately; query
+priority and subscription ordering remain independent.</div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>connectionPriority</code> - new connection preference; higher values are preferred</dd>
+<dt>Returns:</dt>
+<dd>this relay</dd>
+</dl>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="getQueryPriority()">
+<h3>getQueryPriority</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">int</span>&nbsp;<span class="element-name">getQueryPriority</span>()</div>
+<div class="block">Returns the priority used to group and order subscription queries.
+Higher values are queried first, allowing a local cache to precede network relays
+without changing which network connections the pool prefers to keep open.</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>query-tier priority</dd>
+</dl>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="setQueryPriority(int)">
+<h3>setQueryPriority</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="NostrRelay.html" title="class in org.ngengine.nostr4j">NostrRelay</a></span>&nbsp;<span class="element-name">setQueryPriority</span><wbr><span class="parameters">(int&nbsp;priority)</span></div>
+<div class="block">Changes the priority used to order query tiers for newly created read plans.
+This value does not acquire a connection lease or change the network budget.</div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>priority</code> - new query priority; higher values are queried first</dd>
+<dt>Returns:</dt>
+<dd>this relay</dd>
+</dl>
 </div>
 </section>
 </li>

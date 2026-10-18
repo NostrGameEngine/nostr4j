@@ -29,9 +29,15 @@ A TURN WebSocket close code of `1011` indicates an internal error at the endpoin
 
 Also check that every participant uses matching application and protocol IDs in `RTCSettings`, the same room key and compatible protocol versions. For TURN writes, a reachable server must also implement the client's authenticated delivery-receipt format.
 
+## Broadcast reports no connected mutually attested graph
+
+Peer discovery can finish before the room has usable physical links and an agreed routing topology. `No connected mutually attested graph for broadcast` means the current graph cannot support that broadcast; a list of discovered peers is not enough.
+
+Inspect `room.getConnectionDiagnostics()` for pending, established and closing resources, then check the topology and transport callbacks. Verify ICE connectivity and the TURN handshake rather than repeatedly publishing discovery announcements. Handle the broadcast task's failure, and send fresh application state after connectivity recovers.
+
 ## A stream read waits indefinitely
 
-Both participants must call `connect()` with the other's public key and the same connection ID. Use `flush()` after a partial write, and close the output stream when its bytes are complete so the other side can observe EOF. `readAllBytes()` waits until that EOF or a failure. Run blocking stream operations away from your UI thread; see [RTC streams](rtc-streams.md).
+Both participants must call `connect()` with the other's public key and the same connection ID. Finish exchanging replies before closing the output: EOF ends the remote connection. `readAllBytes()` waits for EOF; use a framed read such as `readUTF()` during an open conversation. Run blocking operations away from your UI thread; see [Simple P2P streams](simple-rtc-connection.md).
 
 ## SLF4J reports that no provider was found
 

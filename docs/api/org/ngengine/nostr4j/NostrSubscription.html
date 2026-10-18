@@ -54,6 +54,7 @@ loadScripts(document, 'script');</script>
 <div class="toc-header">Contents&nbsp;<input type="text" class="filter-input" disabled placeholder="Filter contents (type .)" aria-label="Filter table of contents" autocomplete="off" spellcheck="false"><input type="reset" class="reset-filter" disabled tabindex="-1" value="Reset"></div>
 <ol class="toc-list" tabindex="-1">
 <li><a href="#" tabindex="0">Description</a></li>
+<li><a href="#nested-class-summary" tabindex="0">Nested Class Summary</a></li>
 <li><a href="#field-summary" tabindex="0">Field Summary</a></li>
 <li><a href="#constructor-summary" tabindex="0">Constructor Summary</a></li>
 <li><a href="#method-summary" tabindex="0">Method Summary</a></li>
@@ -85,7 +86,9 @@ loadScripts(document, 'script');</script>
 <li><a href="#addListener(org.ngengine.nostr4j.listeners.sub.NostrSubListener)" tabindex="0">addListener(NostrSubListener)</a></li>
 <li><a href="#removeListener(org.ngengine.nostr4j.listeners.sub.NostrSubListener)" tabindex="0">removeListener(NostrSubListener)</a></li>
 <li><a href="#callEoseListeners(org.ngengine.nostr4j.NostrRelay,boolean)" tabindex="0">callEoseListeners(NostrRelay, boolean)</a></li>
+<li><a href="#callEoseListeners(org.ngengine.nostr4j.NostrRelay,boolean,java.lang.Runnable)" tabindex="0">callEoseListeners(NostrRelay, boolean, Runnable)</a></li>
 <li><a href="#callEventListeners(org.ngengine.nostr4j.event.SignedNostrEvent,boolean)" tabindex="0">callEventListeners(SignedNostrEvent, boolean)</a></li>
+<li><a href="#callEventListeners(org.ngengine.nostr4j.event.SignedNostrEvent,boolean,org.ngengine.platform.AsyncTask)" tabindex="0">callEventListeners(SignedNostrEvent, boolean, AsyncTask)</a></li>
 <li><a href="#callCloseListeners()" tabindex="0">callCloseListeners()</a></li>
 <li><a href="#callOpenListeners()" tabindex="0">callOpenListeners()</a></li>
 <li><a href="#getPrefix()" tabindex="0">getPrefix()</a></li>
@@ -133,6 +136,23 @@ subscription.open();
 </section>
 <section class="summary">
 <ul class="summary-list">
+<!-- ======== NESTED CLASS SUMMARY ======== -->
+<li>
+<section class="nested-class-summary" id="nested-class-summary">
+<h2>Nested Class Summary</h2>
+<div class="caption"><span>Nested Classes</span></div>
+<div class="summary-table three-column-summary">
+<div class="table-header col-first">Modifier and Type</div>
+<div class="table-header col-second">Class</div>
+<div class="table-header col-last">Description</div>
+<div class="col-first even-row-color"><code>static final class&nbsp;</code></div>
+<div class="col-second even-row-color"><code><a href="NostrSubscription.NostrSubCloseMessage.html" class="type-name-link" title="class in org.ngengine.nostr4j">NostrSubscription.NostrSubCloseMessage</a></code></div>
+<div class="col-last even-row-color">
+<div class="block">Wire CLOSE message retiring one subscription without disconnecting its relay.</div>
+</div>
+</div>
+</section>
+</li>
 <!-- =========== FIELD SUMMARY =========== -->
 <li>
 <section class="field-summary" id="field-summary">
@@ -162,7 +182,7 @@ subscription.open();
  <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/Collection.html" title="class or interface in java.util" class="external-link">Collection</a>&lt;<a href="NostrFilter.html" title="class in org.ngengine.nostr4j">NostrFilter</a>&gt;&nbsp;filters,
  <a href="event/tracker/EventTracker.html" title="interface in org.ngengine.nostr4j.event.tracker">EventTracker</a>&nbsp;eventTracker,
  <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/function/Function.html" title="class or interface in java.util.function" class="external-link">Function</a>&lt;<a href="NostrSubscription.html" title="class in org.ngengine.nostr4j">NostrSubscription</a>, <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;org.ngengine.platform.AsyncTask&lt;<a href="proto/NostrMessageAck.html" title="class in org.ngengine.nostr4j.proto">NostrMessageAck</a>&gt;&gt;&gt;&nbsp;onOpen,
- <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/function/BiFunction.html" title="class or interface in java.util.function" class="external-link">BiFunction</a>&lt;<a href="NostrSubscription.html" title="class in org.ngengine.nostr4j">NostrSubscription</a>, org.ngengine.nostr4j.NostrSubscription.NostrSubCloseMessage, <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;org.ngengine.platform.AsyncTask&lt;<a href="proto/NostrMessageAck.html" title="class in org.ngengine.nostr4j.proto">NostrMessageAck</a>&gt;&gt;&gt;&nbsp;onClose)</code></div>
+ <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/function/BiFunction.html" title="class or interface in java.util.function" class="external-link">BiFunction</a>&lt;<a href="NostrSubscription.html" title="class in org.ngengine.nostr4j">NostrSubscription</a>, <a href="NostrSubscription.NostrSubCloseMessage.html" title="class in org.ngengine.nostr4j">NostrSubscription.NostrSubCloseMessage</a>, <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;org.ngengine.platform.AsyncTask&lt;<a href="proto/NostrMessageAck.html" title="class in org.ngengine.nostr4j.proto">NostrMessageAck</a>&gt;&gt;&gt;&nbsp;onClose)</code></div>
 <div class="col-last even-row-color">
 <div class="block">Creates a new subscription with the specified parameters.</div>
 </div>
@@ -213,9 +233,23 @@ subscription.open();
  boolean&nbsp;everyWhere)</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>protected void</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#callEventListeners(org.ngengine.nostr4j.event.SignedNostrEvent,boolean)" class="member-name-link">callEventListeners</a><wbr>(<a href="event/SignedNostrEvent.html" title="class in org.ngengine.nostr4j.event">SignedNostrEvent</a>&nbsp;event,
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#callEoseListeners(org.ngengine.nostr4j.NostrRelay,boolean,java.lang.Runnable)" class="member-name-link">callEoseListeners</a><wbr>(<a href="NostrRelay.html" title="class in org.ngengine.nostr4j">NostrRelay</a>&nbsp;relay,
+ boolean&nbsp;everyWhere,
+ <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Runnable.html" title="class or interface in java.lang" class="external-link">Runnable</a>&nbsp;completed)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Delivers EOSE after the event callbacks already registered for this subscription settle.</div>
+</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>protected void</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#callEventListeners(org.ngengine.nostr4j.event.SignedNostrEvent,boolean)" class="member-name-link">callEventListeners</a><wbr>(<a href="event/SignedNostrEvent.html" title="class in org.ngengine.nostr4j.event">SignedNostrEvent</a>&nbsp;event,
  boolean&nbsp;stored)</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>protected void</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#callEventListeners(org.ngengine.nostr4j.event.SignedNostrEvent,boolean,org.ngengine.platform.AsyncTask)" class="member-name-link">callEventListeners</a><wbr>(<a href="event/SignedNostrEvent.html" title="class in org.ngengine.nostr4j.event">SignedNostrEvent</a>&nbsp;event,
+ boolean&nbsp;stored,
+ org.ngengine.platform.AsyncTask&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Boolean.html" title="class or interface in java.lang" class="external-link">Boolean</a>&gt;&nbsp;accepted)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Registers delivery immediately while an asynchronous cache policy decides eligibility.</div>
+</div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>protected void</code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#callOpenListeners()" class="member-name-link">callOpenListeners</a>()</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
@@ -317,7 +351,7 @@ subscription.open();
  <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/Collection.html" title="class or interface in java.util" class="external-link">Collection</a>&lt;<a href="NostrFilter.html" title="class in org.ngengine.nostr4j">NostrFilter</a>&gt;&nbsp;filters,
  <a href="event/tracker/EventTracker.html" title="interface in org.ngengine.nostr4j.event.tracker">EventTracker</a>&nbsp;eventTracker,
  <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/function/Function.html" title="class or interface in java.util.function" class="external-link">Function</a>&lt;<a href="NostrSubscription.html" title="class in org.ngengine.nostr4j">NostrSubscription</a>, <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;org.ngengine.platform.AsyncTask&lt;<a href="proto/NostrMessageAck.html" title="class in org.ngengine.nostr4j.proto">NostrMessageAck</a>&gt;&gt;&gt;&nbsp;onOpen,
- <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/function/BiFunction.html" title="class or interface in java.util.function" class="external-link">BiFunction</a>&lt;<a href="NostrSubscription.html" title="class in org.ngengine.nostr4j">NostrSubscription</a>, org.ngengine.nostr4j.NostrSubscription.NostrSubCloseMessage, <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;org.ngengine.platform.AsyncTask&lt;<a href="proto/NostrMessageAck.html" title="class in org.ngengine.nostr4j.proto">NostrMessageAck</a>&gt;&gt;&gt;&nbsp;onClose)</span></div>
+ <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/function/BiFunction.html" title="class or interface in java.util.function" class="external-link">BiFunction</a>&lt;<a href="NostrSubscription.html" title="class in org.ngengine.nostr4j">NostrSubscription</a>, <a href="NostrSubscription.NostrSubCloseMessage.html" title="class in org.ngengine.nostr4j">NostrSubscription.NostrSubCloseMessage</a>, <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;org.ngengine.platform.AsyncTask&lt;<a href="proto/NostrMessageAck.html" title="class in org.ngengine.nostr4j.proto">NostrMessageAck</a>&gt;&gt;&gt;&nbsp;onClose)</span></div>
 <div class="block">Creates a new subscription with the specified parameters.</div>
 <dl class="notes">
 <dt>Parameters:</dt>
@@ -564,11 +598,49 @@ The listener will be notified when the subscription is successfully opened.
 </section>
 </li>
 <li>
+<section class="detail" id="callEoseListeners(org.ngengine.nostr4j.NostrRelay,boolean,java.lang.Runnable)">
+<h3>callEoseListeners</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">protected</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">callEoseListeners</span><wbr><span class="parameters">(<a href="NostrRelay.html" title="class in org.ngengine.nostr4j">NostrRelay</a>&nbsp;relay,
+ boolean&nbsp;everyWhere,
+ <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Runnable.html" title="class or interface in java.lang" class="external-link">Runnable</a>&nbsp;completed)</span></div>
+<div class="block">Delivers EOSE after the event callbacks already registered for this subscription settle.
+Event callbacks remain parallel. After the EOSE listeners also settle, the completion
+action runs only if the same subscription executor is still active and the read is open.</div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>relay</code> - relay that reported the end of stored events</dd>
+<dd><code>everyWhere</code> - whether all participating relays have reported EOSE</dd>
+<dd><code>completed</code> - action to run after delivery and policy callbacks finish</dd>
+</dl>
+</div>
+</section>
+</li>
+<li>
 <section class="detail" id="callEventListeners(org.ngengine.nostr4j.event.SignedNostrEvent,boolean)">
 <h3>callEventListeners</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">protected</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">callEventListeners</span><wbr><span class="parameters">(<a href="event/SignedNostrEvent.html" title="class in org.ngengine.nostr4j.event">SignedNostrEvent</a>&nbsp;event,
  boolean&nbsp;stored)</span></div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="callEventListeners(org.ngengine.nostr4j.event.SignedNostrEvent,boolean,org.ngengine.platform.AsyncTask)">
+<h3>callEventListeners</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">protected</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">callEventListeners</span><wbr><span class="parameters">(<a href="event/SignedNostrEvent.html" title="class in org.ngengine.nostr4j.event">SignedNostrEvent</a>&nbsp;event,
+ boolean&nbsp;stored,
+ org.ngengine.platform.AsyncTask&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Boolean.html" title="class or interface in java.lang" class="external-link">Boolean</a>&gt;&nbsp;accepted)</span></div>
+<div class="block">Registers delivery immediately while an asynchronous cache policy decides eligibility.
+EOSE waits for the combined policy and listener tasks, so persistent storage cannot
+make end-of-history overtake a preceding event. No relay thread blocks on storage IO.</div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>event</code> - event to deliver after policy completion</dd>
+<dd><code>stored</code> - whether it preceded EOSE on the source relay</dd>
+<dd><code>accepted</code> - task reporting whether the event may be delivered</dd>
+</dl>
 </div>
 </section>
 </li>

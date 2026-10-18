@@ -58,6 +58,7 @@ loadScripts(document, 'script');</script>
 <li><a href="#method-detail" tabindex="0">Method Details</a>
 <ol class="toc-list">
 <li><a href="#onRTCSocketRouteUpdate(org.ngengine.nostr4j.rtc.NostrRTCSocket,java.util.Collection,java.lang.String)" tabindex="0">onRTCSocketRouteUpdate(NostrRTCSocket, Collection, String)</a></li>
+<li><a href="#onRTCSocketRouteUpdate(org.ngengine.nostr4j.rtc.NostrRTCSocket,java.util.Collection,java.lang.String,long)" tabindex="0">onRTCSocketRouteUpdate(NostrRTCSocket, Collection, String, long)</a></li>
 <li><a href="#onRTCSocketClose(org.ngengine.nostr4j.rtc.NostrRTCSocket)" tabindex="0">onRTCSocketClose(NostrRTCSocket)</a></li>
 <li><a href="#onRTCChannelReady(org.ngengine.nostr4j.rtc.NostrRTCChannel)" tabindex="0">onRTCChannelReady(NostrRTCChannel)</a></li>
 <li><a href="#onRTCChannel(org.ngengine.nostr4j.rtc.NostrRTCChannel)" tabindex="0">onRTCChannel(NostrRTCChannel)</a></li>
@@ -106,16 +107,22 @@ loadScripts(document, 'script');</script>
  <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;turnServer)</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">&nbsp;</div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5"><code>default void</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5"><code><a href="#onRTCSocketTransportDegraded(org.ngengine.nostr4j.rtc.NostrRTCSocket,org.ngengine.nostr4j.rtc.NostrRTCSocket.TransportPath,java.lang.String)" class="member-name-link">onRTCSocketTransportDegraded</a><wbr>(<a href="../NostrRTCSocket.html" title="class in org.ngengine.nostr4j.rtc">NostrRTCSocket</a>&nbsp;socket,
- <a href="../NostrRTCSocket.TransportPath.html" title="enum class in org.ngengine.nostr4j.rtc">NostrRTCSocket.TransportPath</a>&nbsp;active,
- <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;reason)</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5"><code><a href="#onRTCSocketRouteUpdate(org.ngengine.nostr4j.rtc.NostrRTCSocket,java.util.Collection,java.lang.String,long)" class="member-name-link">onRTCSocketRouteUpdate</a><wbr>(<a href="../NostrRTCSocket.html" title="class in org.ngengine.nostr4j.rtc">NostrRTCSocket</a>&nbsp;socket,
+ <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/Collection.html" title="class or interface in java.util" class="external-link">Collection</a>&lt;org.ngengine.platform.transport.RTCTransportIceCandidate&gt;&nbsp;candidates,
+ <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;turnServer,
+ long&nbsp;transportGeneration)</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5">&nbsp;</div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5"><code>default void</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5"><code><a href="#onRTCSocketTransportSwitch(org.ngengine.nostr4j.rtc.NostrRTCSocket,org.ngengine.nostr4j.rtc.NostrRTCSocket.TransportPath,org.ngengine.nostr4j.rtc.NostrRTCSocket.TransportPath,java.lang.String)" class="member-name-link">onRTCSocketTransportSwitch</a><wbr>(<a href="../NostrRTCSocket.html" title="class in org.ngengine.nostr4j.rtc">NostrRTCSocket</a>&nbsp;socket,
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5"><code><a href="#onRTCSocketTransportDegraded(org.ngengine.nostr4j.rtc.NostrRTCSocket,org.ngengine.nostr4j.rtc.NostrRTCSocket.TransportPath,java.lang.String)" class="member-name-link">onRTCSocketTransportDegraded</a><wbr>(<a href="../NostrRTCSocket.html" title="class in org.ngengine.nostr4j.rtc">NostrRTCSocket</a>&nbsp;socket,
+ <a href="../NostrRTCSocket.TransportPath.html" title="enum class in org.ngengine.nostr4j.rtc">NostrRTCSocket.TransportPath</a>&nbsp;active,
+ <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;reason)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5">&nbsp;</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5"><code>default void</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5"><code><a href="#onRTCSocketTransportSwitch(org.ngengine.nostr4j.rtc.NostrRTCSocket,org.ngengine.nostr4j.rtc.NostrRTCSocket.TransportPath,org.ngengine.nostr4j.rtc.NostrRTCSocket.TransportPath,java.lang.String)" class="member-name-link">onRTCSocketTransportSwitch</a><wbr>(<a href="../NostrRTCSocket.html" title="class in org.ngengine.nostr4j.rtc">NostrRTCSocket</a>&nbsp;socket,
  <a href="../NostrRTCSocket.TransportPath.html" title="enum class in org.ngengine.nostr4j.rtc">NostrRTCSocket.TransportPath</a>&nbsp;from,
  <a href="../NostrRTCSocket.TransportPath.html" title="enum class in org.ngengine.nostr4j.rtc">NostrRTCSocket.TransportPath</a>&nbsp;to,
  <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;reason)</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5">&nbsp;</div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5">&nbsp;</div>
 </div>
 </div>
 </div>
@@ -138,6 +145,18 @@ loadScripts(document, 'script');</script>
  <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/Collection.html" title="class or interface in java.util" class="external-link">Collection</a>&lt;org.ngengine.platform.transport.RTCTransportIceCandidate&gt;&nbsp;candidates,
  @Nullable
  <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;turnServer)</span></div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="onRTCSocketRouteUpdate(org.ngengine.nostr4j.rtc.NostrRTCSocket,java.util.Collection,java.lang.String,long)">
+<h3>onRTCSocketRouteUpdate</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">default</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">onRTCSocketRouteUpdate</span><wbr><span class="parameters">(<a href="../NostrRTCSocket.html" title="class in org.ngengine.nostr4j.rtc">NostrRTCSocket</a>&nbsp;socket,
+ <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/Collection.html" title="class or interface in java.util" class="external-link">Collection</a>&lt;org.ngengine.platform.transport.RTCTransportIceCandidate&gt;&nbsp;candidates,
+ @Nullable
+ <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;turnServer,
+ long&nbsp;transportGeneration)</span></div>
 </div>
 </section>
 </li>

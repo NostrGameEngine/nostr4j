@@ -73,6 +73,20 @@ loadScripts(document, 'script');</script>
 </li>
 <li><a href="#method-detail" tabindex="0">Method Details</a>
 <ol class="toc-list">
+<li><a href="#getSessionLimits()" tabindex="0">getSessionLimits()</a></li>
+<li><a href="#withSessionLimits(org.ngengine.nostr4j.rtc.RTCSessionLimits)" tabindex="0">withSessionLimits(RTCSessionLimits)</a></li>
+<li><a href="#getConnectionRetryInitialDelay()" tabindex="0">getConnectionRetryInitialDelay()</a></li>
+<li><a href="#withConnectionRetryInitialDelay(java.time.Duration)" tabindex="0">withConnectionRetryInitialDelay(Duration)</a></li>
+<li><a href="#getConnectionRetryMaxDelay()" tabindex="0">getConnectionRetryMaxDelay()</a></li>
+<li><a href="#withConnectionRetryMaxDelay(java.time.Duration)" tabindex="0">withConnectionRetryMaxDelay(Duration)</a></li>
+<li><a href="#getConnectionRetryMultiplier()" tabindex="0">getConnectionRetryMultiplier()</a></li>
+<li><a href="#withConnectionRetryMultiplier(float)" tabindex="0">withConnectionRetryMultiplier(float)</a></li>
+<li><a href="#getConnectionRetryJitter()" tabindex="0">getConnectionRetryJitter()</a></li>
+<li><a href="#withConnectionRetryJitter(float)" tabindex="0">withConnectionRetryJitter(float)</a></li>
+<li><a href="#getMaxConcurrentConnectionAttempts()" tabindex="0">getMaxConcurrentConnectionAttempts()</a></li>
+<li><a href="#withMaxConcurrentConnectionAttempts(int)" tabindex="0">withMaxConcurrentConnectionAttempts(int)</a></li>
+<li><a href="#getConnectionMinimumLifetime()" tabindex="0">getConnectionMinimumLifetime()</a></li>
+<li><a href="#withConnectionMinimumLifetime(java.time.Duration)" tabindex="0">withConnectionMinimumLifetime(Duration)</a></li>
 <li><a href="#getSignalingAnnounceExpiration()" tabindex="0">getSignalingAnnounceExpiration()</a></li>
 <li><a href="#getP2pGiveupTimeout()" tabindex="0">getP2pGiveupTimeout()</a></li>
 <li><a href="#getSignalingLoopInterval()" tabindex="0">getSignalingLoopInterval()</a></li>
@@ -204,14 +218,32 @@ implements <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a></code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#getApplicationId()" class="member-name-link">getApplicationId</a>()</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static <a href="RTCSettings.html" title="class in org.ngengine.nostr4j">RTCSettings</a></code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#getDefault(java.lang.String,java.lang.String)" class="member-name-link">getDefault</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;applicationId,
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Duration.html" title="class or interface in java.time" class="external-link">Duration</a></code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#getConnectionMinimumLifetime()" class="member-name-link">getConnectionMinimumLifetime</a>()</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Duration.html" title="class or interface in java.time" class="external-link">Duration</a></code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#getConnectionRetryInitialDelay()" class="member-name-link">getConnectionRetryInitialDelay</a>()</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>float</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#getConnectionRetryJitter()" class="member-name-link">getConnectionRetryJitter</a>()</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Duration.html" title="class or interface in java.time" class="external-link">Duration</a></code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#getConnectionRetryMaxDelay()" class="member-name-link">getConnectionRetryMaxDelay</a>()</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>float</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#getConnectionRetryMultiplier()" class="member-name-link">getConnectionRetryMultiplier</a>()</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static <a href="RTCSettings.html" title="class in org.ngengine.nostr4j">RTCSettings</a></code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#getDefault(java.lang.String,java.lang.String)" class="member-name-link">getDefault</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;applicationId,
  <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;protocolId)</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">
+<div class="col-last even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">
 <div class="block">Creates settings with the default RTC options and public signaling relays.</div>
 </div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Duration.html" title="class or interface in java.time" class="external-link">Duration</a></code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#getDelayedCandidatesInterval()" class="member-name-link">getDelayedCandidatesInterval</a>()</code></div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Duration.html" title="class or interface in java.time" class="external-link">Duration</a></code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#getDelayedCandidatesInterval()" class="member-name-link">getDelayedCandidatesInterval</a>()</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>int</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#getMaxConcurrentConnectionAttempts()" class="member-name-link">getMaxConcurrentConnectionAttempts</a>()</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>int</code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#getMaxDirectPeers()" class="member-name-link">getMaxDirectPeers</a>()</code></div>
@@ -234,30 +266,60 @@ implements <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Duration.html" title="class or interface in java.time" class="external-link">Duration</a></code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#getRoomLoopInterval()" class="member-name-link">getRoomLoopInterval</a>()</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Duration.html" title="class or interface in java.time" class="external-link">Duration</a></code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#getSignalingAnnounceExpiration()" class="member-name-link">getSignalingAnnounceExpiration</a>()</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="rtc/RTCSessionLimits.html" title="class in org.ngengine.nostr4j.rtc">RTCSessionLimits</a></code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#getSessionLimits()" class="member-name-link">getSessionLimits</a>()</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Returns local session-admission limits.</div>
+</div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Duration.html" title="class or interface in java.time" class="external-link">Duration</a></code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#getSignalingLoopInterval()" class="member-name-link">getSignalingLoopInterval</a>()</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#getSignalingAnnounceExpiration()" class="member-name-link">getSignalingAnnounceExpiration</a>()</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a><wbr>&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&gt;</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#getSignalingRelays()" class="member-name-link">getSignalingRelays</a>()</code></div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Duration.html" title="class or interface in java.time" class="external-link">Duration</a></code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#getSignalingLoopInterval()" class="member-name-link">getSignalingLoopInterval</a>()</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/Collection.html" title="class or interface in java.util" class="external-link">Collection</a><wbr>&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&gt;</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#getStunServers()" class="member-name-link">getStunServers</a>()</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a><wbr>&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&gt;</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#getSignalingRelays()" class="member-name-link">getSignalingRelays</a>()</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/Collection.html" title="class or interface in java.util" class="external-link">Collection</a><wbr>&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&gt;</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#getStunServers()" class="member-name-link">getStunServers</a>()</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
 <div class="block">Returns the STUN servers used by local peers with these settings.</div>
 </div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>int</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#hashCode()" class="member-name-link">hashCode</a>()</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a></code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#toString()" class="member-name-link">toString</a>()</code></div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>int</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#hashCode()" class="member-name-link">hashCode</a>()</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="RTCSettings.html" title="class in org.ngengine.nostr4j">RTCSettings</a></code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#withApplicationId(java.lang.String)" class="member-name-link">withApplicationId</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;applicationId)</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a></code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#toString()" class="member-name-link">toString</a>()</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="RTCSettings.html" title="class in org.ngengine.nostr4j">RTCSettings</a></code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#withApplicationId(java.lang.String)" class="member-name-link">withApplicationId</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;applicationId)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
 <div class="block">Returns a copy with the application identifier changed.</div>
+</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="RTCSettings.html" title="class in org.ngengine.nostr4j">RTCSettings</a></code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#withConnectionMinimumLifetime(java.time.Duration)" class="member-name-link">withConnectionMinimumLifetime</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Duration.html" title="class or interface in java.time" class="external-link">Duration</a>&nbsp;connectionMinimumLifetime)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Returns a copy with <code>connectionMinimumLifetime</code> changed.</div>
+</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="RTCSettings.html" title="class in org.ngengine.nostr4j">RTCSettings</a></code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#withConnectionRetryInitialDelay(java.time.Duration)" class="member-name-link">withConnectionRetryInitialDelay</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Duration.html" title="class or interface in java.time" class="external-link">Duration</a>&nbsp;connectionRetryInitialDelay)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Returns a copy with <code>connectionRetryInitialDelay</code> changed.</div>
+</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="RTCSettings.html" title="class in org.ngengine.nostr4j">RTCSettings</a></code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#withConnectionRetryJitter(float)" class="member-name-link">withConnectionRetryJitter</a><wbr>(float&nbsp;connectionRetryJitter)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Returns a copy with <code>connectionRetryJitter</code> changed.</div>
+</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="RTCSettings.html" title="class in org.ngengine.nostr4j">RTCSettings</a></code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#withConnectionRetryMaxDelay(java.time.Duration)" class="member-name-link">withConnectionRetryMaxDelay</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Duration.html" title="class or interface in java.time" class="external-link">Duration</a>&nbsp;connectionRetryMaxDelay)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Returns a copy with <code>connectionRetryMaxDelay</code> changed.</div>
+</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="RTCSettings.html" title="class in org.ngengine.nostr4j">RTCSettings</a></code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#withConnectionRetryMultiplier(float)" class="member-name-link">withConnectionRetryMultiplier</a><wbr>(float&nbsp;connectionRetryMultiplier)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Returns a copy with <code>connectionRetryMultiplier</code> changed.</div>
 </div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="RTCSettings.html" title="class in org.ngengine.nostr4j">RTCSettings</a></code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#withDelayedCandidatesInterval(java.time.Duration)" class="member-name-link">withDelayedCandidatesInterval</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Duration.html" title="class or interface in java.time" class="external-link">Duration</a>&nbsp;delayedCandidatesInterval)</code></div>
@@ -265,39 +327,49 @@ implements <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base
 <div class="block">Returns a copy with the interval used to process delayed ICE candidates changed.</div>
 </div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="RTCSettings.html" title="class in org.ngengine.nostr4j">RTCSettings</a></code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#withMaxDirectPeers(int)" class="member-name-link">withMaxDirectPeers</a><wbr>(int&nbsp;maxDirectPeers)</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#withMaxConcurrentConnectionAttempts(int)" class="member-name-link">withMaxConcurrentConnectionAttempts</a><wbr>(int&nbsp;maxConcurrentConnectionAttempts)</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Returns a copy with <code>maxConcurrentConnectionAttempts</code> changed.</div>
+</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="RTCSettings.html" title="class in org.ngengine.nostr4j">RTCSettings</a></code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#withMaxDirectPeers(int)" class="member-name-link">withMaxDirectPeers</a><wbr>(int&nbsp;maxDirectPeers)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
 <div class="block">Returns a copy with the maximum number of directly connected peers changed.</div>
 </div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="RTCSettings.html" title="class in org.ngengine.nostr4j">RTCSettings</a></code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#withoutStunServer(java.lang.String)" class="member-name-link">withoutStunServer</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;stunServer)</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="RTCSettings.html" title="class in org.ngengine.nostr4j">RTCSettings</a></code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#withoutStunServer(java.lang.String)" class="member-name-link">withoutStunServer</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;stunServer)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
 <div class="block">Returns a copy with one matching STUN server removed from the configured list.</div>
 </div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="RTCSettings.html" title="class in org.ngengine.nostr4j">RTCSettings</a></code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#withP2pAttemptTimeout(java.time.Duration)" class="member-name-link">withP2pAttemptTimeout</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Duration.html" title="class or interface in java.time" class="external-link">Duration</a>&nbsp;p2pAttemptTimeout)</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="RTCSettings.html" title="class in org.ngengine.nostr4j">RTCSettings</a></code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#withP2pAttemptTimeout(java.time.Duration)" class="member-name-link">withP2pAttemptTimeout</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Duration.html" title="class or interface in java.time" class="external-link">Duration</a>&nbsp;p2pAttemptTimeout)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
 <div class="block">Returns a copy with the timeout for an individual peer-to-peer connection attempt changed.</div>
 </div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="RTCSettings.html" title="class in org.ngengine.nostr4j">RTCSettings</a></code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#withPeerExpiration(java.time.Duration)" class="member-name-link">withPeerExpiration</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Duration.html" title="class or interface in java.time" class="external-link">Duration</a>&nbsp;peerExpiration)</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="RTCSettings.html" title="class in org.ngengine.nostr4j">RTCSettings</a></code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#withPeerExpiration(java.time.Duration)" class="member-name-link">withPeerExpiration</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Duration.html" title="class or interface in java.time" class="external-link">Duration</a>&nbsp;peerExpiration)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
 <div class="block">Returns a copy with the timeout for considering a peer inactive changed.</div>
 </div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="RTCSettings.html" title="class in org.ngengine.nostr4j">RTCSettings</a></code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#withProtocolId(java.lang.String)" class="member-name-link">withProtocolId</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;protocolId)</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="RTCSettings.html" title="class in org.ngengine.nostr4j">RTCSettings</a></code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#withProtocolId(java.lang.String)" class="member-name-link">withProtocolId</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;protocolId)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
 <div class="block">Returns a copy with the protocol identifier changed.</div>
 </div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="RTCSettings.html" title="class in org.ngengine.nostr4j">RTCSettings</a></code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#withQueuedSendTimeout(java.time.Duration)" class="member-name-link">withQueuedSendTimeout</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Duration.html" title="class or interface in java.time" class="external-link">Duration</a>&nbsp;queuedSendTimeout)</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="RTCSettings.html" title="class in org.ngengine.nostr4j">RTCSettings</a></code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#withQueuedSendTimeout(java.time.Duration)" class="member-name-link">withQueuedSendTimeout</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Duration.html" title="class or interface in java.time" class="external-link">Duration</a>&nbsp;queuedSendTimeout)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
 <div class="block">Returns a copy with the maximum time to wait for a queued send changed.</div>
 </div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="RTCSettings.html" title="class in org.ngengine.nostr4j">RTCSettings</a></code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#withRoomLoopInterval(java.time.Duration)" class="member-name-link">withRoomLoopInterval</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Duration.html" title="class or interface in java.time" class="external-link">Duration</a>&nbsp;roomLoopInterval)</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="RTCSettings.html" title="class in org.ngengine.nostr4j">RTCSettings</a></code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#withRoomLoopInterval(java.time.Duration)" class="member-name-link">withRoomLoopInterval</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Duration.html" title="class or interface in java.time" class="external-link">Duration</a>&nbsp;roomLoopInterval)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
 <div class="block">Returns a copy with the room maintenance loop interval changed.</div>
+</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="RTCSettings.html" title="class in org.ngengine.nostr4j">RTCSettings</a></code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#withSessionLimits(org.ngengine.nostr4j.rtc.RTCSessionLimits)" class="member-name-link">withSessionLimits</a><wbr>(<a href="rtc/RTCSessionLimits.html" title="class in org.ngengine.nostr4j.rtc">RTCSessionLimits</a>&nbsp;sessionLimits)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Returns an immutable copy with the specified local session-admission limits.</div>
 </div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="RTCSettings.html" title="class in org.ngengine.nostr4j">RTCSettings</a></code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#withSignalingAnnounceExpiration(java.time.Duration)" class="member-name-link">withSignalingAnnounceExpiration</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Duration.html" title="class or interface in java.time" class="external-link">Duration</a>&nbsp;signalingAnnounceExpiration)</code></div>
@@ -453,6 +525,126 @@ implements <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base
 <section class="method-details" id="method-detail">
 <h2>Method Details</h2>
 <ul class="member-list">
+<li>
+<section class="detail" id="getSessionLimits()">
+<h3>getSessionLimits</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="rtc/RTCSessionLimits.html" title="class in org.ngengine.nostr4j.rtc">RTCSessionLimits</a></span>&nbsp;<span class="element-name">getSessionLimits</span>()</div>
+<div class="block">Returns local session-admission limits. Older serialized settings use the defaults.</div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="withSessionLimits(org.ngengine.nostr4j.rtc.RTCSessionLimits)">
+<h3>withSessionLimits</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="RTCSettings.html" title="class in org.ngengine.nostr4j">RTCSettings</a></span>&nbsp;<span class="element-name">withSessionLimits</span><wbr><span class="parameters">(<a href="rtc/RTCSessionLimits.html" title="class in org.ngengine.nostr4j.rtc">RTCSessionLimits</a>&nbsp;sessionLimits)</span></div>
+<div class="block">Returns an immutable copy with the specified local session-admission limits.</div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="getConnectionRetryInitialDelay()">
+<h3>getConnectionRetryInitialDelay</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Duration.html" title="class or interface in java.time" class="external-link">Duration</a></span>&nbsp;<span class="element-name">getConnectionRetryInitialDelay</span>()</div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="withConnectionRetryInitialDelay(java.time.Duration)">
+<h3>withConnectionRetryInitialDelay</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="RTCSettings.html" title="class in org.ngengine.nostr4j">RTCSettings</a></span>&nbsp;<span class="element-name">withConnectionRetryInitialDelay</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Duration.html" title="class or interface in java.time" class="external-link">Duration</a>&nbsp;connectionRetryInitialDelay)</span></div>
+<div class="block">Returns a copy with <code>connectionRetryInitialDelay</code> changed.</div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="getConnectionRetryMaxDelay()">
+<h3>getConnectionRetryMaxDelay</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Duration.html" title="class or interface in java.time" class="external-link">Duration</a></span>&nbsp;<span class="element-name">getConnectionRetryMaxDelay</span>()</div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="withConnectionRetryMaxDelay(java.time.Duration)">
+<h3>withConnectionRetryMaxDelay</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="RTCSettings.html" title="class in org.ngengine.nostr4j">RTCSettings</a></span>&nbsp;<span class="element-name">withConnectionRetryMaxDelay</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Duration.html" title="class or interface in java.time" class="external-link">Duration</a>&nbsp;connectionRetryMaxDelay)</span></div>
+<div class="block">Returns a copy with <code>connectionRetryMaxDelay</code> changed.</div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="getConnectionRetryMultiplier()">
+<h3>getConnectionRetryMultiplier</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">float</span>&nbsp;<span class="element-name">getConnectionRetryMultiplier</span>()</div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="withConnectionRetryMultiplier(float)">
+<h3>withConnectionRetryMultiplier</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="RTCSettings.html" title="class in org.ngengine.nostr4j">RTCSettings</a></span>&nbsp;<span class="element-name">withConnectionRetryMultiplier</span><wbr><span class="parameters">(float&nbsp;connectionRetryMultiplier)</span></div>
+<div class="block">Returns a copy with <code>connectionRetryMultiplier</code> changed.</div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="getConnectionRetryJitter()">
+<h3>getConnectionRetryJitter</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">float</span>&nbsp;<span class="element-name">getConnectionRetryJitter</span>()</div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="withConnectionRetryJitter(float)">
+<h3>withConnectionRetryJitter</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="RTCSettings.html" title="class in org.ngengine.nostr4j">RTCSettings</a></span>&nbsp;<span class="element-name">withConnectionRetryJitter</span><wbr><span class="parameters">(float&nbsp;connectionRetryJitter)</span></div>
+<div class="block">Returns a copy with <code>connectionRetryJitter</code> changed.</div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="getMaxConcurrentConnectionAttempts()">
+<h3>getMaxConcurrentConnectionAttempts</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">int</span>&nbsp;<span class="element-name">getMaxConcurrentConnectionAttempts</span>()</div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="withMaxConcurrentConnectionAttempts(int)">
+<h3>withMaxConcurrentConnectionAttempts</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="RTCSettings.html" title="class in org.ngengine.nostr4j">RTCSettings</a></span>&nbsp;<span class="element-name">withMaxConcurrentConnectionAttempts</span><wbr><span class="parameters">(int&nbsp;maxConcurrentConnectionAttempts)</span></div>
+<div class="block">Returns a copy with <code>maxConcurrentConnectionAttempts</code> changed.</div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="getConnectionMinimumLifetime()">
+<h3>getConnectionMinimumLifetime</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Duration.html" title="class or interface in java.time" class="external-link">Duration</a></span>&nbsp;<span class="element-name">getConnectionMinimumLifetime</span>()</div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="withConnectionMinimumLifetime(java.time.Duration)">
+<h3>withConnectionMinimumLifetime</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="RTCSettings.html" title="class in org.ngengine.nostr4j">RTCSettings</a></span>&nbsp;<span class="element-name">withConnectionMinimumLifetime</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Duration.html" title="class or interface in java.time" class="external-link">Duration</a>&nbsp;connectionMinimumLifetime)</span></div>
+<div class="block">Returns a copy with <code>connectionMinimumLifetime</code> changed.</div>
+</div>
+</section>
+</li>
 <li>
 <section class="detail" id="getSignalingAnnounceExpiration()">
 <h3>getSignalingAnnounceExpiration</h3>

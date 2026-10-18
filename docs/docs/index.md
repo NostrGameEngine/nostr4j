@@ -32,11 +32,16 @@ From there, choose the part your app needs:
 | Load a feed and keep it up to date | [Filters](filters.md), [fetch and subscribe](fetch-subscribe.md) |
 | Show or edit a profile | [Profile metadata](nip-01.md) and [internet identifiers](nip-05.md) |
 | Encrypt data for another user | [Message encryption](nip-44.md) |
+| Deliver a sealed private message | [Gift-wrapped messages](nip-59.md) |
 | Accept payments or upload media | [Wallets](wallets.md), [zaps](nip-57.md) and [Blossom](blossom.md) |
 | Exchange data between app users in real time | [Peer-to-peer real-time connections](p2p-overview.md) |
-| Connect JVM code through input and output streams | [RTC streams](rtc-streams.md) |
+| Connect JVM code through input and output streams | [Simple P2P streams](simple-rtc-connection.md) |
 
 For individual methods, consult the [Javadoc](../api/index.html). If you already know a NIP number, use the [protocol index](nips.md).
+
+## Keep data and manage connections
+
+Use [event stores](event-stores.md) and [caches](event-cache.md) to retain events locally. The relay guides cover [connection selection](relay-hints.md) and [background propagation](progressive-publication.md). For rooms with particular connection needs, see [RTC settings](rtc-tuning.md).
 
 ## Asynchronous calls
 

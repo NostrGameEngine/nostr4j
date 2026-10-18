@@ -2,8 +2,8 @@
 package org.ngengine.site.demos;
 
 import java.io.IOException;
-import java.io.OutputStream;
-import java.nio.charset.StandardCharsets;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.time.Instant;
 import java.util.List;
 import org.ngengine.nostr4j.proto.NostrMessageAck;
@@ -84,12 +84,12 @@ final class DocumentationExamples {
                 localPrivateKey, settings, connectionId, null, 4096, 16)) {
             connection.connect(remotePublicKey);
 
-            OutputStream output = connection.getOutputStream();
-            output.write("hello".getBytes(StandardCharsets.UTF_8));
+            DataOutputStream output = new DataOutputStream(connection.getOutputStream());
+            DataInputStream input = new DataInputStream(connection.getInputStream());
+            output.writeUTF("hello");
+            output.flush();
+            System.out.println(input.readUTF());
             output.close();
-
-            byte[] response = connection.getInputStream().readAllBytes();
-            System.out.println(new String(response, StandardCharsets.UTF_8));
         }
         // --8<-- [end:rtc-stream]
     }

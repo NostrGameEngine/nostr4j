@@ -5,7 +5,7 @@ import {join} from 'node:path';
 import assert from 'node:assert/strict';
 
 const target = process.argv[2] || 'home';
-if (!['home', 'layout', 'relay', 'publish', 'wallet', 'ping', 'private', 'game'].includes(target)) {
+if (!['home', 'layout', 'docs', 'relay', 'publish', 'wallet', 'ping', 'private', 'game'].includes(target)) {
   throw new Error('Unknown browser smoke target: ' + target);
 }
 const base = (process.env.DEMO_URL || 'http://127.0.0.1:8000').replace(/\/$/, '');
@@ -77,9 +77,66 @@ try {
   await call('Runtime.enable');
   await call('Page.enable');
   await call('Network.enable');
-  await call('Page.navigate', {url: base + (target === 'home' || target === 'layout' ? '/' : '/demos.html')});
+  const initialPath = target === 'docs' ? '/docs/event-stores.html'
+    : target === 'home' || target === 'layout' ? '/' : '/demos.html';
+  await call('Page.navigate', {url: base + initialPath});
   await until('document.readyState === "complete"');
-  if (target === 'home') {
+  if (target === 'docs') {
+    const pages = [
+      ['event-stores', 'Event stores'],
+      ['relay-hints', 'Relay hints and connection budgets'],
+      ['event-cache', 'Cache events locally'],
+      ['progressive-publication', 'Background propagation'],
+      ['rtc-tuning', 'Tune RTC connections'],
+      ['nip-42', 'Authenticate to a relay'],
+      ['nip-59', 'Send a gift-wrapped message'],
+      ['webln', 'Connect a WebLN wallet'],
+      ['simple-rtc-connection', 'Simple P2P streams'],
+      ['p2p-overview', 'How RTC connections work'],
+      ['rtc-rooms', 'Connect and exchange data'],
+      ['onion-routing', 'Multi-Hop Routing'],
+      ['turn-server', 'Host a fallback server'],
+      ['wallets', 'Connect an NWC wallet'],
+      ['blossom', 'Blossom - media storage'],
+      ['nip-57', 'Tip with zaps'],
+    ];
+    for (const [page, heading] of pages) {
+      await call('Page.navigate', {url: `${base}/docs/${page}.html`});
+      await until('document.readyState === "complete"');
+      assert.ok((await evaluate('document.querySelector(".docs-content h1").textContent')).includes(heading));
+      const groups = await evaluate('Array.from(document.querySelectorAll(".docs-nav-group"), group => group.textContent.trim())');
+      assert.ok(groups.includes('Storage'));
+      assert.ok(!groups.includes('Advanced'));
+      const rtcLinks = await evaluate('(() => { const group = Array.from(document.querySelectorAll(".docs-nav-group")).find(item => item.textContent.trim() === "Peer-to-peer real-time connections"); const links = []; for (let item = group.nextElementSibling; item && !item.classList.contains("docs-nav-group"); item = item.nextElementSibling) if (item.tagName === "A") links.push(item.textContent.trim()); return links; })()');
+      assert.deepEqual(rtcLinks.slice(0, 2), ['Simple P2P streams', 'How RTC connections work']);
+      assert.ok(!rtcLinks.includes('Exchange data with streams'));
+      assert.ok(await evaluate('Array.from(document.querySelectorAll(".docs-content img")).every(img => img.complete && img.naturalWidth > 0)'), `Missing diagram: ${page}`);
+      const placements = {'event-stores': 'Storage', 'event-cache': 'Storage', 'relay-hints': 'Relays and feeds', 'progressive-publication': 'Relays and feeds', 'rtc-tuning': 'Peer-to-peer real-time connections'};
+      if (placements[page]) {
+        const group = await evaluate('(() => { let item = document.querySelector(".docs-nav a[aria-current=page]"); while (item && !item.classList.contains("docs-nav-group")) item = item.previousElementSibling; return item?.textContent.trim(); })()');
+        assert.equal(group, placements[page]);
+      }
+      assert.ok(await evaluate('Boolean(document.querySelector(".docs-nav a[aria-current=page]"))'));
+      assert.ok(await evaluate('document.querySelectorAll(".docs-content .highlight span").length > 0'), `Missing code highlighting: ${page}`);
+      for (const width of [1280, 390]) {
+        await call('Emulation.setDeviceMetricsOverride', {width, height: 900, deviceScaleFactor: 1, mobile: false});
+        await pause(150);
+        assert.ok(await evaluate('document.documentElement.scrollWidth <= window.innerWidth'), `Documentation overflows at ${width}: ${page}`);
+        const diagrams = await evaluate('Array.from(document.querySelectorAll(".docs-content img")).filter(img => img.src.includes("/diagrams/")).map(img => { const r = img.getBoundingClientRect(); return {x: r.x + scrollX, y: r.y + scrollY, width: r.width, height: r.height, scale: 1}; })');
+        for (const [index, clip] of diagrams.entries()) {
+          const shot = await call('Page.captureScreenshot', {format: 'png', captureBeyondViewport: true, clip});
+          await writeFile(`/tmp/nostr4j-diagram-${page}-${index}-${width}.png`, Buffer.from(shot.data, 'base64'));
+        }
+        if (['event-stores', 'event-cache', 'simple-rtc-connection', 'p2p-overview', 'onion-routing'].includes(page)) {
+          const shot = await call('Page.captureScreenshot', {format: 'png', captureBeyondViewport: true});
+          await writeFile(`/tmp/nostr4j-oct18-${page}-${width}.png`, Buffer.from(shot.data, 'base64'));
+        }
+      }
+    }
+    await call('Page.navigate', {url: `${base}/docs/rtc-streams.html`});
+    await until('location.pathname.endsWith("/docs/simple-rtc-connection.html") && document.readyState === "complete"');
+    console.log('Documentation pages, diagrams, RTC navigation and stream redirect passed desktop/mobile checks.');
+  } else if (target === 'home') {
     await call('Emulation.setDeviceMetricsOverride', {width: 1280, height: 900, deviceScaleFactor: 1, mobile: false});
     await evaluate('document.getElementById("quickstart-run").click()');
     await until('!document.getElementById("quickstart-run").disabled', 45000);
@@ -147,7 +204,11 @@ try {
           }
         }
         return visited.size === t.nodes.length;
-      })()`, 45000);
+      })()`, 45000).catch(async error => {
+        console.log('Topology at timeout:', await evaluate('document.getElementById("seas-status").dataset.topology'));
+        console.log('Recent peer events:', await evaluate('JSON.stringify(demoEvents.filter(e => e.t !== "topo" && e.t !== "msg").slice(-30))'));
+        throw error;
+      });
       const topology = JSON.parse(await evaluate('document.getElementById("seas-status").dataset.topology'));
       const degrees = new Map(topology.nodes.map(node => [node.id, 0]));
       for (const edge of topology.edges) {

@@ -12,7 +12,7 @@ const context = {
   pool: 'NostrPool', signalingPool: 'NostrPool', signer: 'NostrSigner',
   keys: 'NostrKeyPair', clientKeyPair: 'NostrKeyPair', roomKeyPair: 'NostrKeyPair',
   unsigned: 'UnsignedNostrEvent', unsignedEvent: 'UnsignedNostrEvent',
-  draft: 'UnsignedNostrEvent', store: 'EventStore', notes: 'NostrFilter',
+  draft: 'UnsignedNostrEvent', store: 'NostrEventStore', notes: 'NostrFilter',
   filter: 'NostrFilter', numEvents: 'int', timeout: 'Duration',
   ids: 'Nip39ExternalIdentities',
   event: 'SignedNostrEvent', signed: 'SignedNostrEvent', signedNote: 'SignedNostrEvent',
@@ -32,7 +32,8 @@ const context = {
   expectedLnUrl: 'LnUrl', expectedSender: 'NostrPublicKey',
   room: 'NostrRTCRoom', peer: 'NostrRTCPeer', message: 'byte[]', announcement: 'byte[]',
   remotePeerNpub: 'String', savedNsec: 'String', sharedConnectionId: 'String',
-  knownRemotePeerNpub: 'String',
+  knownRemotePeerNpub: 'String', sharedRoomNsec: 'String',
+  expectedSha256: 'String', blossom: 'BlossomPool',
 };
 
 const packages = [
@@ -45,6 +46,8 @@ const packages = [
   'org.ngengine.nostr4j.nip24', 'org.ngengine.nostr4j.nip39', 'org.ngengine.nostr4j.nip44',
   'org.ngengine.nostr4j.nip46', 'org.ngengine.nostr4j.nip49', 'org.ngengine.nostr4j.nip50',
   'org.ngengine.nostr4j.nip57', 'org.ngengine.wallets', 'org.ngengine.wallets.nip47',
+  'org.ngengine.nostr4j.nip42', 'org.ngengine.nostr4j.nip59',
+  'org.ngengine.wallets.webln',
   'org.ngengine.wallets.nip47.keysend', 'org.ngengine.blossom4j', 'org.ngengine.lnurl',
   'org.ngengine.platform', 'org.ngengine.platform.jvm',
 ];
@@ -78,6 +81,7 @@ for (const file of readdirSync('docs/docs').filter(name => name.endsWith('.md'))
       return used && !declared && !lambdaParameters.has(name);
     }).map(([name, type]) => {
       if (name === 'signer' && /\bsigner\.(listen|connect|sendRPC)\(/.test(code)) type = 'NostrNIP46Signer';
+      if (name === 'wallet' && file === 'webln.md') type = 'WebLNWallet';
       return `${type} ${name}`;
     });
     lines.push(`static void example${examples.length}(${params.join(', ')}) throws Exception {`);

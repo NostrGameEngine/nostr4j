@@ -63,6 +63,7 @@ loadScripts(document, 'script');</script>
 </li>
 <li><a href="#method-detail" tabindex="0">Method Details</a>
 <ol class="toc-list">
+<li><a href="#isClosed(java.lang.String)" tabindex="0">isClosed(String)</a></li>
 <li><a href="#onRelayConnectRequest(org.ngengine.nostr4j.NostrRelay)" tabindex="0">onRelayConnectRequest(NostrRelay)</a></li>
 <li><a href="#onRelayConnect(org.ngengine.nostr4j.NostrRelay)" tabindex="0">onRelayConnect(NostrRelay)</a></li>
 <li><a href="#onRelayMessage(org.ngengine.nostr4j.NostrRelay,org.ngengine.nostr4j.proto.NostrMessage)" tabindex="0">onRelayMessage(NostrRelay, NostrMessage)</a></li>
@@ -130,52 +131,60 @@ implements <a href="listeners/NostrRelayComponent.html" title="interface in org.
 <div class="block">Checks if the given subscription is currently active on this relay.</div>
 </div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>boolean</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#isEose(org.ngengine.nostr4j.NostrSubscription)" class="member-name-link">isEose</a><wbr>(<a href="NostrSubscription.html" title="class in org.ngengine.nostr4j">NostrSubscription</a>&nbsp;sub)</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#isClosed(java.lang.String)" class="member-name-link">isClosed</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;subId)</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Checks whether this relay recently retired the supplied subscription ID.</div>
+</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>boolean</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#isEose(org.ngengine.nostr4j.NostrSubscription)" class="member-name-link">isEose</a><wbr>(<a href="NostrSubscription.html" title="class in org.ngengine.nostr4j">NostrSubscription</a>&nbsp;sub)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
 <div class="block">Checks if the given subscription has received the EOSE (End of Stored Events)
 message from this relay.</div>
 </div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>boolean</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#onRelayAfterSend(org.ngengine.nostr4j.NostrRelay,org.ngengine.nostr4j.proto.NostrMessage)" class="member-name-link">onRelayAfterSend</a><wbr>(<a href="NostrRelay.html" title="class in org.ngengine.nostr4j">NostrRelay</a>&nbsp;relay,
- <a href="proto/NostrMessage.html" title="class in org.ngengine.nostr4j.proto">NostrMessage</a>&nbsp;message)</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>boolean</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#onRelayBeforeSend(org.ngengine.nostr4j.NostrRelay,org.ngengine.nostr4j.proto.NostrMessage)" class="member-name-link">onRelayBeforeSend</a><wbr>(<a href="NostrRelay.html" title="class in org.ngengine.nostr4j">NostrRelay</a>&nbsp;relay,
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#onRelayAfterSend(org.ngengine.nostr4j.NostrRelay,org.ngengine.nostr4j.proto.NostrMessage)" class="member-name-link">onRelayAfterSend</a><wbr>(<a href="NostrRelay.html" title="class in org.ngengine.nostr4j">NostrRelay</a>&nbsp;relay,
  <a href="proto/NostrMessage.html" title="class in org.ngengine.nostr4j.proto">NostrMessage</a>&nbsp;message)</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>boolean</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#onRelayConnect(org.ngengine.nostr4j.NostrRelay)" class="member-name-link">onRelayConnect</a><wbr>(<a href="NostrRelay.html" title="class in org.ngengine.nostr4j">NostrRelay</a>&nbsp;relay)</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#onRelayBeforeSend(org.ngengine.nostr4j.NostrRelay,org.ngengine.nostr4j.proto.NostrMessage)" class="member-name-link">onRelayBeforeSend</a><wbr>(<a href="NostrRelay.html" title="class in org.ngengine.nostr4j">NostrRelay</a>&nbsp;relay,
+ <a href="proto/NostrMessage.html" title="class in org.ngengine.nostr4j.proto">NostrMessage</a>&nbsp;message)</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>boolean</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#onRelayConnectRequest(org.ngengine.nostr4j.NostrRelay)" class="member-name-link">onRelayConnectRequest</a><wbr>(<a href="NostrRelay.html" title="class in org.ngengine.nostr4j">NostrRelay</a>&nbsp;relay)</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#onRelayConnect(org.ngengine.nostr4j.NostrRelay)" class="member-name-link">onRelayConnect</a><wbr>(<a href="NostrRelay.html" title="class in org.ngengine.nostr4j">NostrRelay</a>&nbsp;relay)</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>boolean</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#onRelayDisconnect(org.ngengine.nostr4j.NostrRelay,java.lang.String,boolean)" class="member-name-link">onRelayDisconnect</a><wbr>(<a href="NostrRelay.html" title="class in org.ngengine.nostr4j">NostrRelay</a>&nbsp;relay,
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#onRelayConnectRequest(org.ngengine.nostr4j.NostrRelay)" class="member-name-link">onRelayConnectRequest</a><wbr>(<a href="NostrRelay.html" title="class in org.ngengine.nostr4j">NostrRelay</a>&nbsp;relay)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>boolean</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#onRelayDisconnect(org.ngengine.nostr4j.NostrRelay,java.lang.String,boolean)" class="member-name-link">onRelayDisconnect</a><wbr>(<a href="NostrRelay.html" title="class in org.ngengine.nostr4j">NostrRelay</a>&nbsp;relay,
  <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;reason,
  boolean&nbsp;byClient)</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>boolean</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#onRelayDisconnectRequest(org.ngengine.nostr4j.NostrRelay,java.lang.String)" class="member-name-link">onRelayDisconnectRequest</a><wbr>(<a href="NostrRelay.html" title="class in org.ngengine.nostr4j">NostrRelay</a>&nbsp;relay,
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>boolean</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#onRelayDisconnectRequest(org.ngengine.nostr4j.NostrRelay,java.lang.String)" class="member-name-link">onRelayDisconnectRequest</a><wbr>(<a href="NostrRelay.html" title="class in org.ngengine.nostr4j">NostrRelay</a>&nbsp;relay,
  <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;reason)</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>boolean</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#onRelayError(org.ngengine.nostr4j.NostrRelay,java.lang.Throwable)" class="member-name-link">onRelayError</a><wbr>(<a href="NostrRelay.html" title="class in org.ngengine.nostr4j">NostrRelay</a>&nbsp;relay,
- <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Throwable.html" title="class or interface in java.lang" class="external-link">Throwable</a>&nbsp;error)</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>boolean</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#onRelayMessage(org.ngengine.nostr4j.NostrRelay,org.ngengine.nostr4j.proto.NostrMessage)" class="member-name-link">onRelayMessage</a><wbr>(<a href="NostrRelay.html" title="class in org.ngengine.nostr4j">NostrRelay</a>&nbsp;relay,
- <a href="proto/NostrMessage.html" title="class in org.ngengine.nostr4j.proto">NostrMessage</a>&nbsp;rcv)</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#onRelayError(org.ngengine.nostr4j.NostrRelay,java.lang.Throwable)" class="member-name-link">onRelayError</a><wbr>(<a href="NostrRelay.html" title="class in org.ngengine.nostr4j">NostrRelay</a>&nbsp;relay,
+ <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Throwable.html" title="class or interface in java.lang" class="external-link">Throwable</a>&nbsp;error)</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>boolean</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#onRelaySend(org.ngengine.nostr4j.NostrRelay,org.ngengine.nostr4j.proto.NostrMessage)" class="member-name-link">onRelaySend</a><wbr>(<a href="NostrRelay.html" title="class in org.ngengine.nostr4j">NostrRelay</a>&nbsp;relay,
- <a href="proto/NostrMessage.html" title="class in org.ngengine.nostr4j.proto">NostrMessage</a>&nbsp;message)</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#onRelayMessage(org.ngengine.nostr4j.NostrRelay,org.ngengine.nostr4j.proto.NostrMessage)" class="member-name-link">onRelayMessage</a><wbr>(<a href="NostrRelay.html" title="class in org.ngengine.nostr4j">NostrRelay</a>&nbsp;relay,
+ <a href="proto/NostrMessage.html" title="class in org.ngengine.nostr4j.proto">NostrMessage</a>&nbsp;rcv)</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>boolean</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#onRelaySend(org.ngengine.nostr4j.NostrRelay,org.ngengine.nostr4j.proto.NostrMessage)" class="member-name-link">onRelaySend</a><wbr>(<a href="NostrRelay.html" title="class in org.ngengine.nostr4j">NostrRelay</a>&nbsp;relay,
+ <a href="proto/NostrMessage.html" title="class in org.ngengine.nostr4j.proto">NostrMessage</a>&nbsp;message)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
 </div>
 </div>
 </div>
 <div class="inherited-list">
 <h3 id="methods-inherited-from-class-java.lang.Object">Methods inherited from class&nbsp;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Object.html#method-summary" title="class or interface in java.lang" class="external-link">Object</a></h3>
 <code><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Object.html#clone()" title="class or interface in java.lang" class="external-link">clone</a>, <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Object.html#equals(java.lang.Object)" title="class or interface in java.lang" class="external-link">equals</a>, <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Object.html#finalize()" title="class or interface in java.lang" class="external-link">finalize</a>, <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Object.html#getClass()" title="class or interface in java.lang" class="external-link">getClass</a>, <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Object.html#hashCode()" title="class or interface in java.lang" class="external-link">hashCode</a>, <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Object.html#notify()" title="class or interface in java.lang" class="external-link">notify</a>, <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Object.html#notifyAll()" title="class or interface in java.lang" class="external-link">notifyAll</a>, <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Object.html#toString()" title="class or interface in java.lang" class="external-link">toString</a>, <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Object.html#wait()" title="class or interface in java.lang" class="external-link">wait</a>, <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Object.html#wait(long)" title="class or interface in java.lang" class="external-link">wait</a>, <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Object.html#wait(long,int)" title="class or interface in java.lang" class="external-link">wait</a></code></div>
+<div class="inherited-list">
+<h3 id="methods-inherited-from-class-org.ngengine.nostr4j.listeners.NostrRelayComponent">Methods inherited from interface&nbsp;<a href="listeners/NostrRelayComponent.html#method-summary" title="interface in org.ngengine.nostr4j.listeners">NostrRelayComponent</a></h3>
+<code><a href="listeners/NostrRelayComponent.html#onRelayPriorityChanged(org.ngengine.nostr4j.NostrRelay)" title="onRelayPriorityChanged(NostrRelay)">onRelayPriorityChanged</a></code></div>
 </section>
 </li>
 </ul>
@@ -203,6 +212,23 @@ message from this relay.</div>
 <section class="method-details" id="method-detail">
 <h2>Method Details</h2>
 <ul class="member-list">
+<li>
+<section class="detail" id="isClosed(java.lang.String)">
+<h3>isClosed</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">boolean</span>&nbsp;<span class="element-name">isClosed</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;subId)</span></div>
+<div class="block">Checks whether this relay recently retired the supplied subscription ID.
+Known late events can be discarded before signature verification. Unknown IDs are
+not treated as closed, and reopening an ID removes its closure record.</div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>subId</code> - wire subscription identifier</dd>
+<dt>Returns:</dt>
+<dd>whether the ID is present in the bounded recent-closure history</dd>
+</dl>
+</div>
+</section>
+</li>
 <li>
 <section class="detail" id="onRelayConnectRequest(org.ngengine.nostr4j.NostrRelay)">
 <h3>onRelayConnectRequest</h3>

@@ -65,6 +65,7 @@ loadScripts(document, 'script');</script>
 <li><a href="#method-detail" tabindex="0">Method Details</a>
 <ol class="toc-list">
 <li><a href="#broadcast(java.lang.String,org.ngengine.nostr4j.rtc.routing.RouteTransportProfile,java.nio.ByteBuffer,java.time.Instant)" tabindex="0">broadcast(String, RouteTransportProfile, ByteBuffer, Instant)</a></li>
+<li><a href="#broadcast(java.lang.String,org.ngengine.nostr4j.rtc.routing.RouteTransportProfile,java.nio.ByteBuffer,java.time.Instant,org.ngengine.nostr4j.rtc.routing.topology.TopologyGraph)" tabindex="0">broadcast(String, RouteTransportProfile, ByteBuffer, Instant, TopologyGraph)</a></li>
 <li><a href="#onTreeFrame(org.ngengine.nostr4j.rtc.routing.NodeId,java.nio.ByteBuffer,java.time.Instant)" tabindex="0">onTreeFrame(NodeId, ByteBuffer, Instant)</a></li>
 <li><a href="#onRepairFrame(org.ngengine.nostr4j.rtc.routing.NodeId,java.nio.ByteBuffer,java.time.Instant)" tabindex="0">onRepairFrame(NodeId, ByteBuffer, Instant)</a></li>
 <li><a href="#onAck(org.ngengine.nostr4j.rtc.routing.broadcast.BroadcastAck)" tabindex="0">onAck(BroadcastAck)</a></li>
@@ -134,22 +135,31 @@ implements <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base
  <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/nio/ByteBuffer.html" title="class or interface in java.nio" class="external-link">ByteBuffer</a>&nbsp;payload,
  <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Instant.html" title="class or interface in java.time" class="external-link">Instant</a>&nbsp;now)</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#close()" class="member-name-link">close</a>()</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>boolean</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#onAck(org.ngengine.nostr4j.rtc.routing.broadcast.BroadcastAck)" class="member-name-link">onAck</a><wbr>(<a href="BroadcastAck.html" title="class in org.ngengine.nostr4j.rtc.routing.broadcast">BroadcastAck</a>&nbsp;ack)</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>org.ngengine.platform.AsyncTask<wbr>&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Boolean.html" title="class or interface in java.lang" class="external-link">Boolean</a>&gt;</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#onRepairFrame(org.ngengine.nostr4j.rtc.routing.NodeId,java.nio.ByteBuffer,java.time.Instant)" class="member-name-link">onRepairFrame</a><wbr>(<a href="../NodeId.html" title="class in org.ngengine.nostr4j.rtc.routing">NodeId</a>&nbsp;circuitSource,
- <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/nio/ByteBuffer.html" title="class or interface in java.nio" class="external-link">ByteBuffer</a>&nbsp;encoded,
- <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Instant.html" title="class or interface in java.time" class="external-link">Instant</a>&nbsp;now)</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#broadcast(java.lang.String,org.ngengine.nostr4j.rtc.routing.RouteTransportProfile,java.nio.ByteBuffer,java.time.Instant,org.ngengine.nostr4j.rtc.routing.topology.TopologyGraph)" class="member-name-link">broadcast</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;logicalChannel,
+ <a href="../RouteTransportProfile.html" title="class in org.ngengine.nostr4j.rtc.routing">RouteTransportProfile</a>&nbsp;profile,
+ <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/nio/ByteBuffer.html" title="class or interface in java.nio" class="external-link">ByteBuffer</a>&nbsp;payload,
+ <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Instant.html" title="class or interface in java.time" class="external-link">Instant</a>&nbsp;now,
+ <a href="../topology/TopologyGraph.html" title="class in org.ngengine.nostr4j.rtc.routing.topology">TopologyGraph</a>&nbsp;graph)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Use the same immutable topology snapshot that the caller qualified for this broadcast.</div>
+</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#close()" class="member-name-link">close</a>()</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>boolean</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#onAck(org.ngengine.nostr4j.rtc.routing.broadcast.BroadcastAck)" class="member-name-link">onAck</a><wbr>(<a href="BroadcastAck.html" title="class in org.ngengine.nostr4j.rtc.routing.broadcast">BroadcastAck</a>&nbsp;ack)</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>org.ngengine.platform.AsyncTask<wbr>&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Boolean.html" title="class or interface in java.lang" class="external-link">Boolean</a>&gt;</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#onTreeFrame(org.ngengine.nostr4j.rtc.routing.NodeId,java.nio.ByteBuffer,java.time.Instant)" class="member-name-link">onTreeFrame</a><wbr>(<a href="../NodeId.html" title="class in org.ngengine.nostr4j.rtc.routing">NodeId</a>&nbsp;previousDirectPeer,
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#onRepairFrame(org.ngengine.nostr4j.rtc.routing.NodeId,java.nio.ByteBuffer,java.time.Instant)" class="member-name-link">onRepairFrame</a><wbr>(<a href="../NodeId.html" title="class in org.ngengine.nostr4j.rtc.routing">NodeId</a>&nbsp;circuitSource,
  <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/nio/ByteBuffer.html" title="class or interface in java.nio" class="external-link">ByteBuffer</a>&nbsp;encoded,
  <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Instant.html" title="class or interface in java.time" class="external-link">Instant</a>&nbsp;now)</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>org.ngengine.platform.AsyncTask<wbr>&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Boolean.html" title="class or interface in java.lang" class="external-link">Boolean</a>&gt;</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#onTreeFrame(org.ngengine.nostr4j.rtc.routing.NodeId,java.nio.ByteBuffer,java.time.Instant)" class="member-name-link">onTreeFrame</a><wbr>(<a href="../NodeId.html" title="class in org.ngengine.nostr4j.rtc.routing">NodeId</a>&nbsp;previousDirectPeer,
+ <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/nio/ByteBuffer.html" title="class or interface in java.nio" class="external-link">ByteBuffer</a>&nbsp;encoded,
+ <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Instant.html" title="class or interface in java.time" class="external-link">Instant</a>&nbsp;now)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
 </div>
 </div>
 </div>
@@ -206,6 +216,19 @@ implements <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base
  <a href="../RouteTransportProfile.html" title="class in org.ngengine.nostr4j.rtc.routing">RouteTransportProfile</a>&nbsp;profile,
  <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/nio/ByteBuffer.html" title="class or interface in java.nio" class="external-link">ByteBuffer</a>&nbsp;payload,
  <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Instant.html" title="class or interface in java.time" class="external-link">Instant</a>&nbsp;now)</span></div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="broadcast(java.lang.String,org.ngengine.nostr4j.rtc.routing.RouteTransportProfile,java.nio.ByteBuffer,java.time.Instant,org.ngengine.nostr4j.rtc.routing.topology.TopologyGraph)">
+<h3>broadcast</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">org.ngengine.platform.AsyncTask&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Boolean.html" title="class or interface in java.lang" class="external-link">Boolean</a>&gt;</span>&nbsp;<span class="element-name">broadcast</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;logicalChannel,
+ <a href="../RouteTransportProfile.html" title="class in org.ngengine.nostr4j.rtc.routing">RouteTransportProfile</a>&nbsp;profile,
+ <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/nio/ByteBuffer.html" title="class or interface in java.nio" class="external-link">ByteBuffer</a>&nbsp;payload,
+ <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Instant.html" title="class or interface in java.time" class="external-link">Instant</a>&nbsp;now,
+ <a href="../topology/TopologyGraph.html" title="class in org.ngengine.nostr4j.rtc.routing.topology">TopologyGraph</a>&nbsp;graph)</span></div>
+<div class="block">Use the same immutable topology snapshot that the caller qualified for this broadcast.</div>
 </div>
 </section>
 </li>

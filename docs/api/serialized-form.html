@@ -96,8 +96,32 @@ loadScripts(document, 'script');</script>
 <pre><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a> applicationId</pre>
 </li>
 <li class="block-list">
+<h5>connectionMinimumLifetime</h5>
+<pre><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Duration.html" title="class or interface in java.time" class="external-link">Duration</a> connectionMinimumLifetime</pre>
+</li>
+<li class="block-list">
+<h5>connectionRetryInitialDelay</h5>
+<pre><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Duration.html" title="class or interface in java.time" class="external-link">Duration</a> connectionRetryInitialDelay</pre>
+</li>
+<li class="block-list">
+<h5>connectionRetryJitter</h5>
+<pre>float connectionRetryJitter</pre>
+</li>
+<li class="block-list">
+<h5>connectionRetryMaxDelay</h5>
+<pre><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Duration.html" title="class or interface in java.time" class="external-link">Duration</a> connectionRetryMaxDelay</pre>
+</li>
+<li class="block-list">
+<h5>connectionRetryMultiplier</h5>
+<pre>float connectionRetryMultiplier</pre>
+</li>
+<li class="block-list">
 <h5>delayedCandidatesInterval</h5>
 <pre><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Duration.html" title="class or interface in java.time" class="external-link">Duration</a> delayedCandidatesInterval</pre>
+</li>
+<li class="block-list">
+<h5>maxConcurrentConnectionAttempts</h5>
+<pre>int maxConcurrentConnectionAttempts</pre>
 </li>
 <li class="block-list">
 <h5>maxDirectPeers</h5>
@@ -126,6 +150,10 @@ loadScripts(document, 'script');</script>
 <li class="block-list">
 <h5>roomLoopInterval</h5>
 <pre><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Duration.html" title="class or interface in java.time" class="external-link">Duration</a> roomLoopInterval</pre>
+</li>
+<li class="block-list">
+<h5>sessionLimits</h5>
+<pre><a href="org/ngengine/nostr4j/rtc/RTCSessionLimits.html" title="class in org.ngengine.nostr4j.rtc">RTCSessionLimits</a> sessionLimits</pre>
 </li>
 <li class="block-list">
 <h5>signalingAnnounceExpiration</h5>
@@ -726,6 +754,52 @@ loadScripts(document, 'script');</script>
 </li>
 <li>
 <section class="serialized-package-container">
+<h2 title="Package">Package&nbsp;<a href="org/ngengine/nostr4j/rtc/package-summary.html">org.ngengine.nostr4j.rtc</a></h2>
+<ul class="block-list">
+<li>
+<section class="serialized-class-details" id="org.ngengine.nostr4j.rtc.RTCSessionLimits">
+<h3>Class&nbsp;<a href="org/ngengine/nostr4j/rtc/RTCSessionLimits.html" title="class in org.ngengine.nostr4j.rtc">org.ngengine.nostr4j.rtc.RTCSessionLimits</a></h3>
+<div class="type-signature">class RTCSessionLimits extends <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a> implements <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/io/Serializable.html" title="class or interface in java.io" class="external-link">Serializable</a></div>
+<dl class="name-value">
+<dt>serialVersionUID:</dt>
+<dd>1L</dd>
+</dl>
+<ul class="block-list">
+<li>
+<section class="detail">
+<h4>Serialized Fields</h4>
+<ul class="block-list">
+<li class="block-list">
+<h5>maxAnnouncedSessionsPerIdentity</h5>
+<pre>int maxAnnouncedSessionsPerIdentity</pre>
+</li>
+<li class="block-list">
+<h5>maxPresenceRecordsPerIdentity</h5>
+<pre>int maxPresenceRecordsPerIdentity</pre>
+</li>
+<li class="block-list">
+<h5>maxProvisionalPeers</h5>
+<pre>int maxProvisionalPeers</pre>
+</li>
+<li class="block-list">
+<h5>maxProvisionalSessionsPerIdentity</h5>
+<pre>int maxProvisionalSessionsPerIdentity</pre>
+</li>
+<li class="block-list">
+<h5>provisionalLifetime</h5>
+<pre><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Duration.html" title="class or interface in java.time" class="external-link">Duration</a> provisionalLifetime</pre>
+</li>
+</ul>
+</section>
+</li>
+</ul>
+</section>
+</li>
+</ul>
+</section>
+</li>
+<li>
+<section class="serialized-package-container">
 <h2 title="Package">Package&nbsp;<a href="org/ngengine/nostr4j/rtc/delivery/package-summary.html">org.ngengine.nostr4j.rtc.delivery</a></h2>
 <ul class="block-list">
 <li>
@@ -939,6 +1013,16 @@ loadScripts(document, 'script');</script>
 <section class="serialized-package-container">
 <h2 title="Package">Package&nbsp;<a href="org/ngengine/nostr4j/signer/package-summary.html">org.ngengine.nostr4j.signer</a></h2>
 <ul class="block-list">
+<li>
+<section class="serialized-class-details" id="org.ngengine.nostr4j.signer.NostrAnonSigner">
+<h3>Class&nbsp;<a href="org/ngengine/nostr4j/signer/NostrAnonSigner.html" title="class in org.ngengine.nostr4j.signer">org.ngengine.nostr4j.signer.NostrAnonSigner</a></h3>
+<div class="type-signature">class NostrAnonSigner extends <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a> implements <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/io/Serializable.html" title="class or interface in java.io" class="external-link">Serializable</a></div>
+<dl class="name-value">
+<dt>serialVersionUID:</dt>
+<dd>1L</dd>
+</dl>
+</section>
+</li>
 <li>
 <section class="serialized-class-details" id="org.ngengine.nostr4j.signer.NostrKeyPairSigner">
 <h3>Class&nbsp;<a href="org/ngengine/nostr4j/signer/NostrKeyPairSigner.html" title="class in org.ngengine.nostr4j.signer">org.ngengine.nostr4j.signer.NostrKeyPairSigner</a></h3>

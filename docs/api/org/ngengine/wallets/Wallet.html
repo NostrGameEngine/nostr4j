@@ -70,6 +70,7 @@ loadScripts(document, 'script');</script>
 <li><a href="#getBalance(java.time.Instant)" tabindex="0">getBalance(Instant)</a></li>
 <li><a href="#getInfo()" tabindex="0">getInfo()</a></li>
 <li><a href="#getInfo(java.time.Instant)" tabindex="0">getInfo(Instant)</a></li>
+<li><a href="#isAvailable()" tabindex="0">isAvailable()</a></li>
 <li><a href="#isReady()" tabindex="0">isReady()</a></li>
 <li><a href="#waitForReady()" tabindex="0">waitForReady()</a></li>
 <li><a href="#isMethodSupported(org.ngengine.wallets.Wallet.Methods)" tabindex="0">isMethodSupported(Wallet.Methods)</a></li>
@@ -86,7 +87,7 @@ loadScripts(document, 'script');</script>
 <section class="class-description" id="class-description">
 <dl class="notes">
 <dt>All Known Implementing Classes:</dt>
-<dd><code><a href="nip47/NWCWallet.html" title="class in org.ngengine.wallets.nip47">NWCWallet</a></code></dd>
+<dd><code><a href="nip47/NWCWallet.html" title="class in org.ngengine.wallets.nip47">NWCWallet</a>, <a href="webln/WebLNWallet.html" title="class in org.ngengine.wallets.webln">WebLNWallet</a></code></dd>
 </dl>
 <hr>
 <div class="horizontal-scroll">
@@ -146,77 +147,82 @@ loadScripts(document, 'script');</script>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
 <div class="block">Get information about the wallet.</div>
 </div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>org.ngengine.platform.AsyncTask<wbr>&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Boolean.html" title="class or interface in java.lang" class="external-link">Boolean</a>&gt;</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#isMethodSupported(org.ngengine.wallets.Wallet.Methods)" class="member-name-link">isMethodSupported</a><wbr>(<a href="Wallet.Methods.html" title="enum class in org.ngengine.wallets">Wallet.Methods</a>&nbsp;method)</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5"><code>default org.ngengine.platform.AsyncTask<wbr>&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Boolean.html" title="class or interface in java.lang" class="external-link">Boolean</a>&gt;</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5"><code><a href="#isAvailable()" class="member-name-link">isAvailable</a>()</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5">
+<div class="block">Checks whether this wallet can be used in the current environment without requesting permissions.</div>
+</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>org.ngengine.platform.AsyncTask<wbr>&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Boolean.html" title="class or interface in java.lang" class="external-link">Boolean</a>&gt;</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#isMethodSupported(org.ngengine.wallets.Wallet.Methods)" class="member-name-link">isMethodSupported</a><wbr>(<a href="Wallet.Methods.html" title="enum class in org.ngengine.wallets">Wallet.Methods</a>&nbsp;method)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
 <div class="block">Check if a specific method is supported by the wallet.</div>
 </div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>boolean</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#isReady()" class="member-name-link">isReady</a>()</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>boolean</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#isReady()" class="member-name-link">isReady</a>()</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
 <div class="block">Check if the wallet is ready to use.</div>
 </div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5"><code>default org.ngengine.platform.AsyncTask<wbr>&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="TransactionInfo.html" title="class in org.ngengine.wallets">TransactionInfo</a>&gt;&gt;</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5"><code><a href="#listTransactions(java.time.Instant,java.time.Instant,java.lang.Integer,java.lang.Integer,boolean,org.ngengine.wallets.TransactionType)" class="member-name-link">listTransactions</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Instant.html" title="class or interface in java.time" class="external-link">Instant</a>&nbsp;from,
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5"><code>default org.ngengine.platform.AsyncTask<wbr>&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="TransactionInfo.html" title="class in org.ngengine.wallets">TransactionInfo</a>&gt;&gt;</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5"><code><a href="#listTransactions(java.time.Instant,java.time.Instant,java.lang.Integer,java.lang.Integer,boolean,org.ngengine.wallets.TransactionType)" class="member-name-link">listTransactions</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Instant.html" title="class or interface in java.time" class="external-link">Instant</a>&nbsp;from,
  <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Instant.html" title="class or interface in java.time" class="external-link">Instant</a>&nbsp;until,
  <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Integer.html" title="class or interface in java.lang" class="external-link">Integer</a>&nbsp;limit,
  <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Integer.html" title="class or interface in java.lang" class="external-link">Integer</a>&nbsp;offset,
  boolean&nbsp;includeUnpaid,
  <a href="TransactionType.html" title="enum class in org.ngengine.wallets">TransactionType</a>&nbsp;type)</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5">
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5">
 <div class="block">List transactions in the wallet.</div>
 </div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>org.ngengine.platform.AsyncTask<wbr>&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="TransactionInfo.html" title="class in org.ngengine.wallets">TransactionInfo</a>&gt;&gt;</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#listTransactions(java.time.Instant,java.time.Instant,java.lang.Integer,java.lang.Integer,boolean,org.ngengine.wallets.TransactionType,java.time.Instant)" class="member-name-link">listTransactions</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Instant.html" title="class or interface in java.time" class="external-link">Instant</a>&nbsp;from,
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>org.ngengine.platform.AsyncTask<wbr>&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="TransactionInfo.html" title="class in org.ngengine.wallets">TransactionInfo</a>&gt;&gt;</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#listTransactions(java.time.Instant,java.time.Instant,java.lang.Integer,java.lang.Integer,boolean,org.ngengine.wallets.TransactionType,java.time.Instant)" class="member-name-link">listTransactions</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Instant.html" title="class or interface in java.time" class="external-link">Instant</a>&nbsp;from,
  <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Instant.html" title="class or interface in java.time" class="external-link">Instant</a>&nbsp;until,
  <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Integer.html" title="class or interface in java.lang" class="external-link">Integer</a>&nbsp;limit,
  <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Integer.html" title="class or interface in java.lang" class="external-link">Integer</a>&nbsp;offset,
  boolean&nbsp;includeUnpaid,
  <a href="TransactionType.html" title="enum class in org.ngengine.wallets">TransactionType</a>&nbsp;type,
  <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Instant.html" title="class or interface in java.time" class="external-link">Instant</a>&nbsp;expireRequestAt)</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
 <div class="block">List transactions in the wallet.</div>
 </div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5"><code>default org.ngengine.platform.AsyncTask<wbr>&lt;<a href="InvoiceData.html" title="class in org.ngengine.wallets">InvoiceData</a>&gt;</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5"><code><a href="#lookupInvoice(java.lang.String,java.lang.String)" class="member-name-link">lookupInvoice</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;paymentHash,
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5"><code>default org.ngengine.platform.AsyncTask<wbr>&lt;<a href="InvoiceData.html" title="class in org.ngengine.wallets">InvoiceData</a>&gt;</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5"><code><a href="#lookupInvoice(java.lang.String,java.lang.String)" class="member-name-link">lookupInvoice</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;paymentHash,
  <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;invoice)</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5">
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5">
 <div class="block">Lookup an invoice by payment hash or invoice string.</div>
 </div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>org.ngengine.platform.AsyncTask<wbr>&lt;<a href="InvoiceData.html" title="class in org.ngengine.wallets">InvoiceData</a>&gt;</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#lookupInvoice(java.lang.String,java.lang.String,java.time.Instant)" class="member-name-link">lookupInvoice</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;paymentHash,
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>org.ngengine.platform.AsyncTask<wbr>&lt;<a href="InvoiceData.html" title="class in org.ngengine.wallets">InvoiceData</a>&gt;</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#lookupInvoice(java.lang.String,java.lang.String,java.time.Instant)" class="member-name-link">lookupInvoice</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;paymentHash,
  <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;invoice,
  <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Instant.html" title="class or interface in java.time" class="external-link">Instant</a>&nbsp;expireRequestAt)</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
 <div class="block">Lookup an invoice by payment hash or invoice string.</div>
 </div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5"><code>default org.ngengine.platform.AsyncTask<wbr>&lt;<a href="InvoiceData.html" title="class in org.ngengine.wallets">InvoiceData</a>&gt;</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5"><code><a href="#makeInvoice(org.ngengine.wallets.InvoiceProperties)" class="member-name-link">makeInvoice</a><wbr>(<a href="InvoiceProperties.html" title="class in org.ngengine.wallets">InvoiceProperties</a>&nbsp;req)</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5">
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5"><code>default org.ngengine.platform.AsyncTask<wbr>&lt;<a href="InvoiceData.html" title="class in org.ngengine.wallets">InvoiceData</a>&gt;</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5"><code><a href="#makeInvoice(org.ngengine.wallets.InvoiceProperties)" class="member-name-link">makeInvoice</a><wbr>(<a href="InvoiceProperties.html" title="class in org.ngengine.wallets">InvoiceProperties</a>&nbsp;req)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5">
 <div class="block">Create a lightning invoice</div>
 </div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>org.ngengine.platform.AsyncTask<wbr>&lt;<a href="InvoiceData.html" title="class in org.ngengine.wallets">InvoiceData</a>&gt;</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#makeInvoice(org.ngengine.wallets.InvoiceProperties,java.time.Instant)" class="member-name-link">makeInvoice</a><wbr>(<a href="InvoiceProperties.html" title="class in org.ngengine.wallets">InvoiceProperties</a>&nbsp;req,
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>org.ngengine.platform.AsyncTask<wbr>&lt;<a href="InvoiceData.html" title="class in org.ngengine.wallets">InvoiceData</a>&gt;</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#makeInvoice(org.ngengine.wallets.InvoiceProperties,java.time.Instant)" class="member-name-link">makeInvoice</a><wbr>(<a href="InvoiceProperties.html" title="class in org.ngengine.wallets">InvoiceProperties</a>&nbsp;req,
  <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Instant.html" title="class or interface in java.time" class="external-link">Instant</a>&nbsp;expireRequestAt)</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
 <div class="block">Create a lightning invoice</div>
 </div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5"><code>default org.ngengine.platform.AsyncTask<wbr>&lt;<a href="PayResponse.html" title="class in org.ngengine.wallets">PayResponse</a>&gt;</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5"><code><a href="#payInvoice(java.lang.String,java.lang.Long)" class="member-name-link">payInvoice</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;invoice,
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5"><code>default org.ngengine.platform.AsyncTask<wbr>&lt;<a href="PayResponse.html" title="class in org.ngengine.wallets">PayResponse</a>&gt;</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5"><code><a href="#payInvoice(java.lang.String,java.lang.Long)" class="member-name-link">payInvoice</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;invoice,
  <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Long.html" title="class or interface in java.lang" class="external-link">Long</a>&nbsp;amountMsats)</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5">
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5">
 <div class="block">Pay a lightning invoice</div>
 </div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>org.ngengine.platform.AsyncTask<wbr>&lt;<a href="PayResponse.html" title="class in org.ngengine.wallets">PayResponse</a>&gt;</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#payInvoice(java.lang.String,java.lang.Long,java.time.Instant)" class="member-name-link">payInvoice</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;invoice,
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>org.ngengine.platform.AsyncTask<wbr>&lt;<a href="PayResponse.html" title="class in org.ngengine.wallets">PayResponse</a>&gt;</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#payInvoice(java.lang.String,java.lang.Long,java.time.Instant)" class="member-name-link">payInvoice</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;invoice,
  <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Long.html" title="class or interface in java.lang" class="external-link">Long</a>&nbsp;amountMsats,
  <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Instant.html" title="class or interface in java.time" class="external-link">Instant</a>&nbsp;expireRequestAt)</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
 <div class="block">Pay a lightning invoice</div>
 </div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>org.ngengine.platform.AsyncTask<wbr>&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Boolean.html" title="class or interface in java.lang" class="external-link">Boolean</a>&gt;</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#waitForReady()" class="member-name-link">waitForReady</a>()</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>org.ngengine.platform.AsyncTask<wbr>&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Boolean.html" title="class or interface in java.lang" class="external-link">Boolean</a>&gt;</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#waitForReady()" class="member-name-link">waitForReady</a>()</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
 <div class="block">Wait for the wallet to be ready.</div>
 </div>
 </div>
@@ -465,6 +471,21 @@ At least one of paymentHash or invoice must be provided.</div>
 <dd><code>expireRequestAt</code> - an optional Instant to expire the request at, or null for no expiration</dd>
 <dt>Returns:</dt>
 <dd>an AsyncTask that resolves to a WalletInfo containing the wallet details</dd>
+</dl>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="isAvailable()">
+<h3>isAvailable</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">default</span>&nbsp;<span class="return-type">org.ngengine.platform.AsyncTask&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Boolean.html" title="class or interface in java.lang" class="external-link">Boolean</a>&gt;</span>&nbsp;<span class="element-name">isAvailable</span>()</div>
+<div class="block">Checks whether this wallet can be used in the current environment without requesting permissions.
+The default assumes availability; adapters with environment requirements should override it.
+Availability does not imply readiness or support for every wallet method.</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>a task resolving to whether the wallet is available</dd>
 </dl>
 </div>
 </section>

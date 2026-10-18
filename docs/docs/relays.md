@@ -40,7 +40,9 @@ The return type of `publish` is `AsyncTask<List<AsyncTask<NostrMessageAck>>>`. A
 With the built-in policies, publication succeeds as soon as the policy is satisfied, but reports failure only after every relay task has finished. For example, with `NostrPoolAllAckPolicy`, one rejection is enough to prevent success; the operation still waits for the remaining tasks before failing.
 
 !!! note
-    If the pool has no relays, publication returns an empty list without an error. No event has been sent in that case.
+    If the pool has no relays, publication returns an empty list without an error. No event has been sent in that case. A pool with only local cache relays instead fails publication because there is no network target; storing locally is not a publication acknowledgement.
+
+For a relay that requires an identity challenge, enable [NIP-42 authentication](nip-42.md) explicitly. Most applications can keep the default connection selection. [Relay hints and budgets](relay-hints.md) and [background propagation](progressive-publication.md) explain how to use a larger relay list with fewer open connections.
 
 ## Handle duplicate deliveries
 

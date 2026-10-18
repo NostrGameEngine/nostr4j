@@ -12,11 +12,13 @@ org.ngengine.nostr4j.nip05
 org.ngengine.nostr4j.nip09
 org.ngengine.nostr4j.nip24
 org.ngengine.nostr4j.nip39
+org.ngengine.nostr4j.nip42
 org.ngengine.nostr4j.nip44
 org.ngengine.nostr4j.nip46
 org.ngengine.nostr4j.nip49
 org.ngengine.nostr4j.nip50
 org.ngengine.nostr4j.nip57
+org.ngengine.nostr4j.nip59
 org.ngengine.nostr4j.pool.ackpolicy
 org.ngengine.nostr4j.pool.fetchpolicy
 org.ngengine.nostr4j.proto
@@ -37,3 +39,4 @@ org.ngengine.nostr4j.utils
 org.ngengine.wallets
 org.ngengine.wallets.nip47
 org.ngengine.wallets.nip47.keysend
+org.ngengine.wallets.webln

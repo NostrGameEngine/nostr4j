@@ -84,6 +84,8 @@ loadScripts(document, 'script');</script>
 <li><a href="#getPeers()" tabindex="0">getPeers()</a></li>
 <li><a href="#getSocket(org.ngengine.nostr4j.rtc.signal.NostrRTCPeer)" tabindex="0">getSocket(NostrRTCPeer)</a></li>
 <li><a href="#getSockets()" tabindex="0">getSockets()</a></li>
+<li><a href="#setDiscoveryPriority(org.ngengine.nostr4j.rtc.DiscoveryPriority)" tabindex="0">setDiscoveryPriority(DiscoveryPriority)</a></li>
+<li><a href="#getConnectionDiagnostics()" tabindex="0">getConnectionDiagnostics()</a></li>
 <li><a href="#send(org.ngengine.nostr4j.rtc.signal.NostrRTCPeer,java.nio.ByteBuffer)" tabindex="0">send(NostrRTCPeer, ByteBuffer)</a></li>
 <li><a href="#send(java.lang.String,org.ngengine.nostr4j.rtc.signal.NostrRTCPeer,java.nio.ByteBuffer)" tabindex="0">send(String, NostrRTCPeer, ByteBuffer)</a></li>
 <li><a href="#send(org.ngengine.nostr4j.rtc.NostrRTCChannel,java.nio.ByteBuffer)" tabindex="0">send(NostrRTCChannel, ByteBuffer)</a></li>
@@ -211,60 +213,70 @@ implements <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>org.ngengine.platform.AsyncTask<wbr>&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Void.html" title="class or interface in java.lang" class="external-link">Void</a>&gt;</code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#discover()" class="member-name-link">discover</a>()</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="signal/NostrRTCPeer.html" title="class in org.ngengine.nostr4j.rtc.signal">NostrRTCPeer</a></code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#getLocalPeerInfo()" class="member-name-link">getLocalPeerInfo</a>()</code></div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="RTCConnectionDiagnostics.html" title="class in org.ngengine.nostr4j.rtc">RTCConnectionDiagnostics</a></code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#getConnectionDiagnostics()" class="member-name-link">getConnectionDiagnostics</a>()</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Bounded read-only snapshot of physical reservations, retry state and attested routing topology.</div>
+</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="signal/NostrRTCPeer.html" title="class in org.ngengine.nostr4j.rtc.signal">NostrRTCPeer</a></code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#getLocalPeerInfo()" class="member-name-link">getLocalPeerInfo</a>()</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
 <div class="block">Get some info about the local peer</div>
 </div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/Set.html" title="class or interface in java.util" class="external-link">Set</a><wbr>&lt;<a href="signal/NostrRTCPeer.html" title="class in org.ngengine.nostr4j.rtc.signal">NostrRTCPeer</a>&gt;</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#getPeers()" class="member-name-link">getPeers</a>()</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/Set.html" title="class or interface in java.util" class="external-link">Set</a><wbr>&lt;<a href="signal/NostrRTCPeer.html" title="class in org.ngengine.nostr4j.rtc.signal">NostrRTCPeer</a>&gt;</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#getPeers()" class="member-name-link">getPeers</a>()</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
 <div class="block">Return a snapshot of all currently announced logical remote peers.</div>
 </div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="NostrRTCSocket.html" title="class in org.ngengine.nostr4j.rtc">NostrRTCSocket</a></code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#getSocket(org.ngengine.nostr4j.rtc.signal.NostrRTCPeer)" class="member-name-link">getSocket</a><wbr>(<a href="signal/NostrRTCPeer.html" title="class in org.ngengine.nostr4j.rtc.signal">NostrRTCPeer</a>&nbsp;peer)</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="NostrRTCSocket.html" title="class in org.ngengine.nostr4j.rtc">NostrRTCSocket</a></code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#getSocket(org.ngengine.nostr4j.rtc.signal.NostrRTCPeer)" class="member-name-link">getSocket</a><wbr>(<a href="signal/NostrRTCPeer.html" title="class in org.ngengine.nostr4j.rtc.signal">NostrRTCPeer</a>&nbsp;peer)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
 <div class="block">Resolve the normal logical socket for an announced peer.</div>
 </div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/Collection.html" title="class or interface in java.util" class="external-link">Collection</a><wbr>&lt;<a href="NostrRTCSocket.html" title="class in org.ngengine.nostr4j.rtc">NostrRTCSocket</a>&gt;</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#getSockets()" class="member-name-link">getSockets</a>()</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/Collection.html" title="class or interface in java.util" class="external-link">Collection</a><wbr>&lt;<a href="NostrRTCSocket.html" title="class in org.ngengine.nostr4j.rtc">NostrRTCSocket</a>&gt;</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#getSockets()" class="member-name-link">getSockets</a>()</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
 <div class="block">Return a snapshot of all normal logical peer sockets.</div>
 </div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>boolean</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#isForceTURN()" class="member-name-link">isForceTURN</a>()</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4 method-summary-table-tab6"><code>void</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4 method-summary-table-tab6"><code><a href="#kick(org.ngengine.nostr4j.keypair.NostrPublicKey)" class="member-name-link">kick</a><wbr>(<a href="../keypair/NostrPublicKey.html" title="class in org.ngengine.nostr4j.keypair">NostrPublicKey</a>&nbsp;peer)</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4 method-summary-table-tab6">
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>boolean</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#isForceTURN()" class="member-name-link">isForceTURN</a>()</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4 method-summary-table-tab6"><code>void</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4 method-summary-table-tab6"><code><a href="#kick(org.ngengine.nostr4j.keypair.NostrPublicKey)" class="member-name-link">kick</a><wbr>(<a href="../keypair/NostrPublicKey.html" title="class in org.ngengine.nostr4j.keypair">NostrPublicKey</a>&nbsp;peer)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4 method-summary-table-tab6">
 <div class="block"><span class="deprecated-label">Deprecated.</span>
 <div class="deprecation-comment">Use <a href="#kick(org.ngengine.nostr4j.keypair.NostrPublicKey)"><code>kick(NostrPublicKey)</code></a> instead.</div>
 </div>
 </div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4 method-summary-table-tab6"><code>void</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4 method-summary-table-tab6"><code><a href="#kick(org.ngengine.nostr4j.rtc.signal.NostrRTCPeer)" class="member-name-link">kick</a><wbr>(<a href="signal/NostrRTCPeer.html" title="class in org.ngengine.nostr4j.rtc.signal">NostrRTCPeer</a>&nbsp;peer)</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4 method-summary-table-tab6">
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4 method-summary-table-tab6"><code>void</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4 method-summary-table-tab6"><code><a href="#kick(org.ngengine.nostr4j.rtc.signal.NostrRTCPeer)" class="member-name-link">kick</a><wbr>(<a href="signal/NostrRTCPeer.html" title="class in org.ngengine.nostr4j.rtc.signal">NostrRTCPeer</a>&nbsp;peer)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4 method-summary-table-tab6">
 <div class="block"><span class="deprecated-label">Deprecated.</span>
 <div class="deprecation-comment">Use <a href="#disconnect(org.ngengine.nostr4j.rtc.signal.NostrRTCPeer)"><code>disconnect(NostrRTCPeer)</code></a> instead.</div>
 </div>
 </div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="NostrRTCRoom.html" title="class in org.ngengine.nostr4j.rtc">NostrRTCRoom</a></code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#removeListener(org.ngengine.nostr4j.rtc.listeners.NostrRTCRoomListener)" class="member-name-link">removeListener</a><wbr>(<a href="listeners/NostrRTCRoomListener.html" title="interface in org.ngengine.nostr4j.rtc.listeners">NostrRTCRoomListener</a>&nbsp;listener)</code></div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="NostrRTCRoom.html" title="class in org.ngengine.nostr4j.rtc">NostrRTCRoom</a></code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#removeListener(org.ngengine.nostr4j.rtc.listeners.NostrRTCRoomListener)" class="member-name-link">removeListener</a><wbr>(<a href="listeners/NostrRTCRoomListener.html" title="interface in org.ngengine.nostr4j.rtc.listeners">NostrRTCRoomListener</a>&nbsp;listener)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>org.ngengine.platform.AsyncTask<wbr>&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Void.html" title="class or interface in java.lang" class="external-link">Void</a>&gt;</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#send(java.lang.String,org.ngengine.nostr4j.rtc.signal.NostrRTCPeer,java.nio.ByteBuffer)" class="member-name-link">send</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;channel,
+ <a href="signal/NostrRTCPeer.html" title="class in org.ngengine.nostr4j.rtc.signal">NostrRTCPeer</a>&nbsp;peer,
+ <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/nio/ByteBuffer.html" title="class or interface in java.nio" class="external-link">ByteBuffer</a>&nbsp;bbf)</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>org.ngengine.platform.AsyncTask<wbr>&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Void.html" title="class or interface in java.lang" class="external-link">Void</a>&gt;</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#send(java.lang.String,org.ngengine.nostr4j.rtc.signal.NostrRTCPeer,java.nio.ByteBuffer)" class="member-name-link">send</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;channel,
- <a href="signal/NostrRTCPeer.html" title="class in org.ngengine.nostr4j.rtc.signal">NostrRTCPeer</a>&nbsp;peer,
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#send(org.ngengine.nostr4j.rtc.NostrRTCChannel,java.nio.ByteBuffer)" class="member-name-link">send</a><wbr>(<a href="NostrRTCChannel.html" title="class in org.ngengine.nostr4j.rtc">NostrRTCChannel</a>&nbsp;chan,
  <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/nio/ByteBuffer.html" title="class or interface in java.nio" class="external-link">ByteBuffer</a>&nbsp;bbf)</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>org.ngengine.platform.AsyncTask<wbr>&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Void.html" title="class or interface in java.lang" class="external-link">Void</a>&gt;</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#send(org.ngengine.nostr4j.rtc.NostrRTCChannel,java.nio.ByteBuffer)" class="member-name-link">send</a><wbr>(<a href="NostrRTCChannel.html" title="class in org.ngengine.nostr4j.rtc">NostrRTCChannel</a>&nbsp;chan,
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#send(org.ngengine.nostr4j.rtc.signal.NostrRTCPeer,java.nio.ByteBuffer)" class="member-name-link">send</a><wbr>(<a href="signal/NostrRTCPeer.html" title="class in org.ngengine.nostr4j.rtc.signal">NostrRTCPeer</a>&nbsp;peer,
  <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/nio/ByteBuffer.html" title="class or interface in java.nio" class="external-link">ByteBuffer</a>&nbsp;bbf)</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>org.ngengine.platform.AsyncTask<wbr>&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Void.html" title="class or interface in java.lang" class="external-link">Void</a>&gt;</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#send(org.ngengine.nostr4j.rtc.signal.NostrRTCPeer,java.nio.ByteBuffer)" class="member-name-link">send</a><wbr>(<a href="signal/NostrRTCPeer.html" title="class in org.ngengine.nostr4j.rtc.signal">NostrRTCPeer</a>&nbsp;peer,
- <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/nio/ByteBuffer.html" title="class or interface in java.nio" class="external-link">ByteBuffer</a>&nbsp;bbf)</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
 <div class="block">Send some data to a remote peer.</div>
+</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#setDiscoveryPriority(org.ngengine.nostr4j.rtc.DiscoveryPriority)" class="member-name-link">setDiscoveryPriority</a><wbr>(<a href="DiscoveryPriority.html" title="interface in org.ngengine.nostr4j.rtc">DiscoveryPriority</a>&nbsp;priority)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Replace the local physical-neighbor preference and reevaluate known peers.</div>
 </div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#setForceTURN(boolean)" class="member-name-link">setForceTURN</a><wbr>(boolean&nbsp;forceTURN)</code></div>
@@ -539,6 +551,27 @@ it after those rooms have closed.</p></div>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/Collection.html" title="class or interface in java.util" class="external-link">Collection</a>&lt;<a href="NostrRTCSocket.html" title="class in org.ngengine.nostr4j.rtc">NostrRTCSocket</a>&gt;</span>&nbsp;<span class="element-name">getSockets</span>()</div>
 <div class="block">Return a snapshot of all normal logical peer sockets.</div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="setDiscoveryPriority(org.ngengine.nostr4j.rtc.DiscoveryPriority)">
+<h3>setDiscoveryPriority</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">setDiscoveryPriority</span><wbr><span class="parameters">(<a href="DiscoveryPriority.html" title="interface in org.ngengine.nostr4j.rtc">DiscoveryPriority</a>&nbsp;priority)</span></div>
+<div class="block">Replace the local physical-neighbor preference and reevaluate known peers.
+Null disables preference-driven swaps. Zero is admitted; a negative value
+retires physical resources while preserving the logical endpoint and routing
+metadata. Invalid results retain the peer's last valid evaluation.</div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="getConnectionDiagnostics()">
+<h3>getConnectionDiagnostics</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="RTCConnectionDiagnostics.html" title="class in org.ngengine.nostr4j.rtc">RTCConnectionDiagnostics</a></span>&nbsp;<span class="element-name">getConnectionDiagnostics</span>()</div>
+<div class="block">Bounded read-only snapshot of physical reservations, retry state and attested routing topology.</div>
 </div>
 </section>
 </li>

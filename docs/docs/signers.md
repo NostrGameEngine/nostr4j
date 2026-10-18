@@ -26,6 +26,17 @@ This example creates a new identity. To keep using an existing account, [load it
 
 Reuse the signer when signing several events with the same identity. It prepares reusable public signing state while keeping the private key owned by the supplied pair; closing that pair prevents further signing.
 
+## Sign without retaining an identity
+
+For a public action that needs a fresh identity each time:
+
+```java
+NostrSigner signer = new NostrAnonSigner();
+SignedNostrEvent signed = signer.sign(unsignedEvent).await();
+```
+
+Each `sign` or `powSign` call generates a different key and destroys it when the operation finishes. The signer has no persistent public key and cannot encrypt or decrypt. It does not hide the client's network address or make relay use anonymous. Use a normal signer for accounts, conversations, RTC or wallet pairing that need a stable identity.
+
 ## Ask a browser extension
 
 If the user has a Nostr extension, you can request signatures without asking them to give your app a private key:

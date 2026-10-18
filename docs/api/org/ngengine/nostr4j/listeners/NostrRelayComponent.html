@@ -57,6 +57,7 @@ loadScripts(document, 'script');</script>
 <li><a href="#method-summary" tabindex="0">Method Summary</a></li>
 <li><a href="#method-detail" tabindex="0">Method Details</a>
 <ol class="toc-list">
+<li><a href="#onRelayPriorityChanged(org.ngengine.nostr4j.NostrRelay)" tabindex="0">onRelayPriorityChanged(NostrRelay)</a></li>
 <li><a href="#onRelayConnectRequest(org.ngengine.nostr4j.NostrRelay)" tabindex="0">onRelayConnectRequest(NostrRelay)</a></li>
 <li><a href="#onRelayConnect(org.ngengine.nostr4j.NostrRelay)" tabindex="0">onRelayConnect(NostrRelay)</a></li>
 <li><a href="#onRelayMessage(org.ngengine.nostr4j.NostrRelay,org.ngengine.nostr4j.proto.NostrMessage)" tabindex="0">onRelayMessage(NostrRelay, NostrMessage)</a></li>
@@ -78,7 +79,7 @@ loadScripts(document, 'script');</script>
 <section class="class-description" id="class-description">
 <dl class="notes">
 <dt>All Known Implementing Classes:</dt>
-<dd><code><a href="../NostrRelayLifecycleManager.html" title="class in org.ngengine.nostr4j">NostrRelayLifecycleManager</a>, <a href="../NostrRelaySubManager.html" title="class in org.ngengine.nostr4j">NostrRelaySubManager</a>, <a href="../NostrRelayWatchdog.html" title="class in org.ngengine.nostr4j">NostrRelayWatchdog</a></code></dd>
+<dd><code><a href="../nip42/Nip42RelayAuth.html" title="class in org.ngengine.nostr4j.nip42">Nip42RelayAuth</a>, <a href="../NostrRelayLifecycleManager.html" title="class in org.ngengine.nostr4j">NostrRelayLifecycleManager</a>, <a href="../NostrRelaySubManager.html" title="class in org.ngengine.nostr4j">NostrRelaySubManager</a>, <a href="../NostrRelayWatchdog.html" title="class in org.ngengine.nostr4j">NostrRelayWatchdog</a></code></dd>
 </dl>
 <hr>
 <div class="horizontal-scroll">
@@ -92,7 +93,7 @@ loadScripts(document, 'script');</script>
 <section class="method-summary" id="method-summary">
 <h2>Method Summary</h2>
 <div id="method-summary-table">
-<div class="table-tabs" role="tablist" aria-orientation="horizontal"><button id="method-summary-table-tab0" role="tab" aria-selected="true" aria-controls="method-summary-table.tabpanel" tabindex="0" onkeydown="switchTab(event)" onclick="show('method-summary-table', 'method-summary-table', 3)" class="active-table-tab">All Methods</button><button id="method-summary-table-tab2" role="tab" aria-selected="false" aria-controls="method-summary-table.tabpanel" tabindex="-1" onkeydown="switchTab(event)" onclick="show('method-summary-table', 'method-summary-table-tab2', 3)" class="table-tab">Instance Methods</button><button id="method-summary-table-tab3" role="tab" aria-selected="false" aria-controls="method-summary-table.tabpanel" tabindex="-1" onkeydown="switchTab(event)" onclick="show('method-summary-table', 'method-summary-table-tab3', 3)" class="table-tab">Abstract Methods</button></div>
+<div class="table-tabs" role="tablist" aria-orientation="horizontal"><button id="method-summary-table-tab0" role="tab" aria-selected="true" aria-controls="method-summary-table.tabpanel" tabindex="0" onkeydown="switchTab(event)" onclick="show('method-summary-table', 'method-summary-table', 3)" class="active-table-tab">All Methods</button><button id="method-summary-table-tab2" role="tab" aria-selected="false" aria-controls="method-summary-table.tabpanel" tabindex="-1" onkeydown="switchTab(event)" onclick="show('method-summary-table', 'method-summary-table-tab2', 3)" class="table-tab">Instance Methods</button><button id="method-summary-table-tab3" role="tab" aria-selected="false" aria-controls="method-summary-table.tabpanel" tabindex="-1" onkeydown="switchTab(event)" onclick="show('method-summary-table', 'method-summary-table-tab3', 3)" class="table-tab">Abstract Methods</button><button id="method-summary-table-tab5" role="tab" aria-selected="false" aria-controls="method-summary-table.tabpanel" tabindex="-1" onkeydown="switchTab(event)" onclick="show('method-summary-table', 'method-summary-table-tab5', 3)" class="table-tab">Default Methods</button></div>
 <div id="method-summary-table.tabpanel" role="tabpanel" aria-labelledby="method-summary-table-tab0">
 <div class="summary-table three-column-summary">
 <div class="table-header col-first">Modifier and Type</div>
@@ -129,10 +130,13 @@ loadScripts(document, 'script');</script>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#onRelayMessage(org.ngengine.nostr4j.NostrRelay,org.ngengine.nostr4j.proto.NostrMessage)" class="member-name-link">onRelayMessage</a><wbr>(<a href="../NostrRelay.html" title="class in org.ngengine.nostr4j">NostrRelay</a>&nbsp;relay,
  <a href="../proto/NostrMessage.html" title="class in org.ngengine.nostr4j.proto">NostrMessage</a>&nbsp;message)</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">&nbsp;</div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>boolean</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#onRelaySend(org.ngengine.nostr4j.NostrRelay,org.ngengine.nostr4j.proto.NostrMessage)" class="member-name-link">onRelaySend</a><wbr>(<a href="../NostrRelay.html" title="class in org.ngengine.nostr4j">NostrRelay</a>&nbsp;relay,
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5"><code>default void</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5"><code><a href="#onRelayPriorityChanged(org.ngengine.nostr4j.NostrRelay)" class="member-name-link">onRelayPriorityChanged</a><wbr>(<a href="../NostrRelay.html" title="class in org.ngengine.nostr4j">NostrRelay</a>&nbsp;relay)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5">&nbsp;</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>boolean</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#onRelaySend(org.ngengine.nostr4j.NostrRelay,org.ngengine.nostr4j.proto.NostrMessage)" class="member-name-link">onRelaySend</a><wbr>(<a href="../NostrRelay.html" title="class in org.ngengine.nostr4j">NostrRelay</a>&nbsp;relay,
  <a href="../proto/NostrMessage.html" title="class in org.ngengine.nostr4j.proto">NostrMessage</a>&nbsp;message)</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">&nbsp;</div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">&nbsp;</div>
 </div>
 </div>
 </div>
@@ -147,6 +151,14 @@ loadScripts(document, 'script');</script>
 <section class="method-details" id="method-detail">
 <h2>Method Details</h2>
 <ul class="member-list">
+<li>
+<section class="detail" id="onRelayPriorityChanged(org.ngengine.nostr4j.NostrRelay)">
+<h3>onRelayPriorityChanged</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">default</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">onRelayPriorityChanged</span><wbr><span class="parameters">(<a href="../NostrRelay.html" title="class in org.ngengine.nostr4j">NostrRelay</a>&nbsp;relay)</span></div>
+</div>
+</section>
+</li>
 <li>
 <section class="detail" id="onRelayConnectRequest(org.ngengine.nostr4j.NostrRelay)">
 <h3>onRelayConnectRequest</h3>

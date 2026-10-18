@@ -6,25 +6,31 @@ title: Connect and exchange data
 
 <a class="doc-run-button" href="../demos.html#rtc">Run RTC ping demo</a>
 
-This page shows how to exchange data between participants in a room. The example below creates a `NostrRTCRoom` that sends a greeting when a peer becomes available and prints the messages it receives.
+Use `NostrRTCRoom` to exchange asynchronous messages with one or more participants. For a two-peer Java stream, use [Simple P2P streams](simple-rtc-connection.md).
 
-## Create a room
+## Create or join a room
 
-Start with your participant's `signer` and a room key shared with the other participants. In the example below, `sharedRoomNsec` is the room's private key, received through your application's invitation flow. Each participant loads that same key. See [room access](security.md#rtc-room-access) if you need to create one.
+To create or join a room, you need a Nostr signer for your participant. Use the user's signer or a key-pair signer with a temporary identity created for this session.
+
+You also need a room key: a randomly generated private key shared among the room's participants. Generate it once per room, then share it through your own application flow, such as your backend or a private invitation link. See [Create or join a room](p2p-overview.md#create-or-join-a-room) for the key-generation example.
+
+In the example below, `signer` identifies the participant and `sharedRoomNsec` contains the shared room key. All participants reconstruct the same room key pair and use matching application and protocol IDs.
 
 ```java
 --8<-- "site-demos/src/backend/java/org/ngengine/site/demos/DocumentationExamples.java:rtc-room"
 ```
 
-Use `RTCSettings.getDefault(applicationId, protocolId)` for the usual connection policy. Application and protocol IDs, signaling relays and STUN servers belong in these settings. To change a setting, call a `with…` method and keep its result - it returns a new settings object. For example, `withStunServers(List.of("stun.l.google.com:19302"))` selects one STUN server.
+The room uses the signaling relays in `RTCSettings`. The local peer gets a session ID automatically. The two `null` arguments leave TURN fallback disabled.
 
-Create the `NostrRTCLocalPeer` with those settings, your signer and the shared room key pair. This constructor generates a session ID; use the overload taking a session ID if your app supplies one. Pass the same settings to the room. The room ensures the settings' relay URLs on the supplied `NostrPool`, and the connections proceed asynchronously. If your app opens several rooms with the same relay configuration, give them a shared pool to reuse those connections.
+!!! tip "Reuse relay connections"
+    Give multiple rooms the same `NostrPool` to reuse relay connections and reduce the total number of connections.
 
-The local peer's TURN URL and the room's TURN pool are both `null` here. Direct WebRTC connections and peer routing work with this setup.
+!!! note "Changing settings"
+    Settings are immutable. Keep the result of each `with...` call and pass the same settings to the local peer and room. See [connection settings](rtc-tuning.md) for budgets and retries.
 
 ## Receive messages and greet new peers
 
-Register the listeners before starting the room; the message listener is called with a `ByteBuffer`. Here we copy its remaining bytes and decode the greeting as UTF-8.
+Add listeners before starting the room:
 
 ```java
 room.addMessageListener((peer, socket, channel, data, turn) -> {
@@ -44,13 +50,13 @@ room.addPeerSocketAvailableListener((peer, socket) -> {
 room.start().await();
 ```
 
-Call `start()` to begin discovery and connection management. Once the room has a logical socket for a discovered peer, the socket listener fires - create channels and queue sends there while transport negotiation continues. The example waits for startup with `await()`; an asynchronous application can compose the returned task instead.
+The socket listener gives you the peer to address. Transport setup can still be in progress; sends wait for connectivity within their timeout. Direct and routed messages reach the same message listener.
 
-The `peer` passed to a listener is also the object you use to address that participant. Keep the peers your application needs and use `addDisconnectionListener` to react when their sockets are closed. Both direct and routed messages reach the same listener.
+Use `addDisconnectionListener` when your app needs to react to a peer leaving.
 
 ## Send on the default channel or create your own
 
-The greeting uses the default channel. Once you have a peer, you can send any application payload in the same way, or broadcast an update to the room:
+Send to one peer or broadcast to the room:
 
 ```java
 room.send(peer, ByteBuffer.wrap(message))
@@ -64,37 +70,51 @@ room.broadcast(ByteBuffer.wrap(announcement))
     });
 ```
 
-Both calls are asynchronous; handle failures according to your application protocol. If you need confirmation that another application has processed an action, have it send a reply - the transport's completion alone cannot tell you that.
+!!! note "Delivery and replies"
+    Handle failed send tasks. If you need confirmation that the other app processed a message, have it send a reply.
 
-Sends can remain queued for a limited time while connectivity recovers. Set that wait with `RTCSettings.withQueuedSendTimeout(Duration)`; the default is 30 seconds. Each queued send keeps its original deadline across retries and transport switches; reconnecting does not give an old message a fresh timeout. Closing the room cancels pending sends. For fast-changing state, such as player positions, send a fresh update after recovery rather than replaying expired state.
+Queued sends wait up to 30 seconds by default. Set this with `RTCSettings.withQueuedSendTimeout(Duration)`.
 
-Use named channels when a connection carries several kinds of messages. Create the channel for the peer before sending on it, usually in the listener shown above:
+Use named channels to separate traffic such as chat and game updates. Create the channel for the peer before sending:
 
 ```java
 room.createChannel(peer, "updates");
 room.send("updates", peer, ByteBuffer.wrap(message));
 ```
 
-In the receiving listener, check `channel.getName()` to choose a handler. Channels created with this overload are ordered and reliable. To choose ordering, reliability and retransmission limits for your traffic, use the other `createChannel` overloads.
+Check `channel.getName()` in your message listener to choose a handler. This overload creates an ordered, reliable channel; other overloads let you change delivery options.
 
 ## Add an optional TURN fallback
 
-To use a Nostr4J TURN service, pass its public URL to the local peer and a `NostrTURNPool` to the room:
+Give the local peer a TURN URL and the room a TURN pool:
 
 ```java
 --8<-- "site-demos/src/backend/java/org/ngengine/site/demos/DocumentationExamples.java:rtc-turn"
 ```
 
-Use these constructors in place of the earlier pair, then register the same listeners and start the room. With this setup the endpoint is advertised to peers, and fallback and recovery are handled for you.
+Use these constructors instead of the earlier pair, then add the same listeners and start the room. The room advertises the endpoint and manages fallback automatically.
 
-TURN receive channels are opened when fallback is selected, even before this participant sends its first message. A lost physical connection can be replaced while the logical channel is retained; explicit channel or pool closure ends that channel.
+!!! tip "Test the fallback"
+    Call `room.setForceTURN(true)` during development. Set it back to `false` to restore automatic path selection.
 
-Share one TURN pool across several rooms, even with different application, protocol and session IDs. See [Host a fallback server](turn-server.md) to run your own endpoint.
+See [Host a fallback server](turn-server.md) to run a compatible service.
 
-To exercise the configured fallback during development, call `room.setForceTURN(true)`, then set it back to `false` to restore automatic path selection. To watch transport switches and degradation, register a `NostrRTCSocketListener` - its `onRTCSocketTransportSwitch` and `onRTCSocketTransportDegraded` callbacks tell you what changed. Its transport states are `NONE`, `RTC` and `TURN`.
+## End-to-end encryption and privacy
 
-## Close the room when the session ends
+Messages sent to a specific peer are encrypted end to end. Only the destination peer can read their contents, whether the path is direct WebRTC, a TURN server or [multi-hop routing](onion-routing.md) through other peers. Forwarding peers and TURN servers cannot decrypt those payloads. Broadcast messages are shared with the room's members.
 
-Call `room.close()` when your application leaves the session. The signaling pool, TURN pool and supplied keys stay owned by your application. Close each only after its last user has finished, so one room cannot close resources another still needs.
+Connection setup is protected too. Offers, answers and ICE connection details sent through Nostr relays are encrypted for the intended peer. The relay and other room members cannot read their contents. Topology updates are encrypted for members holding the shared room key.
 
-For the room lifecycle in a working application, see the [RTC ping demo source](https://github.com/NostrGameEngine/nostr4j/blob/gh-pages/site-demos/src/main/java/org/ngengine/site/demos/rtc/RTCPingDemo.java). For larger groups, continue with [onion routing](onion-routing.md). If your JVM code works with `InputStream` and `OutputStream`, use the [peer connection adapter](rtc-streams.md).
+!!! tip "Keep the user's identity separate from signaling"
+    Use a fresh, temporary key-pair signer for each participant's room session instead of their account signer. Generate a separate random room key as well. This keeps the user's account public key out of signaling events and metadata, reducing direct links to their identity; network metadata can still allow correlation.
+
+    Once the RTC connection is established, send the user's identity directly to the intended peer over the encrypted connection. For example, send an event signed by the user's account key that binds the temporary peer key to the current session and a challenge supplied by the recipient. The recipient can verify the signature and challenge before associating that peer with the account.
+
+## Close the room
+
+Call `room.close()` when leaving the session.
+
+!!! note "Shared resources"
+    Your app owns the supplied signaling pool, TURN pool and keys. Close them after their last user has finished.
+
+Continue with [multi-hop routing](onion-routing.md) for larger groups, or see the [RTC ping demo source](https://github.com/NostrGameEngine/nostr4j/blob/gh-pages/site-demos/src/main/java/org/ngengine/site/demos/rtc/RTCPingDemo.java).

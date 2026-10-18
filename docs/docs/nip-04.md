@@ -16,6 +16,5 @@ String plaintext = signer.decrypt(
     NostrSigner.EncryptAlgo.NIP04).await();
 ```
 
-These calls also work with browser and remote signers that support NIP-04. With a local private key in hand, use the `Nip04.encrypt(...)` and `Nip04.decrypt(...)` helpers directly.
-
-Use the event kind and tags required by the protocol you are implementing. For new encrypted data, prefer [NIP-44](nip-44.md). Decryption in either format returns the payload; validating it is your app's job.
+!!! tip
+    For new encrypted data, prefer [NIP-44](nip-44.md).

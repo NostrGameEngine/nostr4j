@@ -75,4 +75,10 @@ RTC channels bound incomplete fragment reassembly: at most 64 pending packets, 1
 
 When hosting TURN, keep the endpoint behind TLS and retain the server's authentication, frame and queue limits. Follow the [deployment instructions](turn-server.md) to set up the container and reverse proxy.
 
+Provisional signaling is bounded separately from physical neighbors. If your app needs different per-identity admission limits, see [RTC connection settings](rtc-tuning.md); those quotas do not replace authorization to join a room.
+
+## Optional storage and relay features
+
+Enable [relay authentication](nip-42.md) only for URLs trusted to request that identity. Validate [relay hints](relay-hints.md) from external data before allowing a connection. [Caches](event-cache.md) authenticate events but do not encrypt their backing storage or prove network completeness. Keep private-event retention and local storage permissions under your application's control.
+
 Use temporary identities and limited wallet connections when trying demos. You don't need to enter a real private key to use the examples on this site.

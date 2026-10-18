@@ -120,6 +120,8 @@ The query is sent in the `search` field. Only relays that support NIP-50 will pr
 
 Calling `search` again replaces the query. A null or empty query omits the search field. Keep ordinary selection criteria in their filter fields rather than embedding them in the query text.
 
+Local `matches` and `prepare` also enforce the ordinary NIP-01 criteria, then compare the search string as a case-insensitive substring of the content. This is not a full-text search engine and need not reproduce a relay's search ranking or syntax. Local event caches do not answer search filters.
+
 ## Match events locally
 
 Use `matches(event)` to check one event. For repeated checks, `prepare()` captures the filter's current criteria as a reusable predicate:

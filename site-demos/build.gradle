@@ -35,7 +35,7 @@ dependencies {
     implementation project(':nostr4j')
     implementation "org.ngengine:nge-platform-teavm:${ngePlatformVersion}"
     implementation 'org.ngengine:bech32:1.2.1'
-    implementation 'org.ngengine:lnurl4j:0.0.5'
+    implementation 'org.ngengine:lnurl4j:0.0.6'
     implementation 'org.ngengine:bolt11:0.0.2'
     implementation 'jakarta.annotation:jakarta.annotation-api:2.1.1'
     implementation 'org.slf4j:slf4j-api:2.0.16'
@@ -59,7 +59,7 @@ def demoMains = [
 teavm {
     js {
         moduleType.set(org.teavm.gradle.api.JSModuleType.ES2015)
-        obfuscated.set(false)
+        obfuscated.set(true)
     }
 }
 
@@ -85,7 +85,8 @@ demoMains.each { name, mainClassName ->
         )
         sourceFiles.from(sourceSets.main.allSource, sourceSets.teavm.allSource)
         moduleType.set(org.teavm.gradle.api.JSModuleType.ES2015)
-        obfuscated.set(false)
+        // Keep browser delivery compact; the readable examples remain in Java.
+        obfuscated.set(true)
         doLast {
             // NGE's TeaVM platform declares this native ES module through
             // @JSModule. TeaVM references it but does not copy it into a
@@ -155,7 +156,7 @@ tasks.register('quickstartJvmSmokeTest', JavaExec) {
 
 tasks.register('documentationSmokeTest', JavaExec) {
     group = 'verification'
-    description = 'Check event JSON, signing and prepared filter examples without network access'
+    description = 'Check event, filter, cache and gift-wrap examples without network access'
     dependsOn tasks.named('backendClasses')
     classpath = sourceSets.backend.runtimeClasspath
     mainClass.set('org.ngengine.site.demos.DocumentationSmokeTest')
@@ -178,7 +179,7 @@ dependencies {
     backendImplementation project(':nostr4j')
     backendImplementation "org.ngengine:nge-platform-jvm:${ngePlatformVersion}"
     backendImplementation 'org.ngengine:bech32:1.2.1'
-    backendImplementation 'org.ngengine:lnurl4j:0.0.5'
+    backendImplementation 'org.ngengine:lnurl4j:0.0.6'
     backendImplementation 'org.ngengine:bolt11:0.0.2'
     backendImplementation 'jakarta.annotation:jakarta.annotation-api:2.1.1'
     backendImplementation 'org.slf4j:slf4j-api:2.0.16'

@@ -6,6 +6,8 @@ title: Tip with zaps
 
 To tip a note or profile, first request a Lightning invoice from the recipient's LNURL-pay provider. Include a signed zap request so the payment can be associated with the Nostr event or account. After payment, the provider publishes a kind-9735 receipt to the relays named in that request.
 
+![The app requests an invoice with a signed zap request, the wallet pays it, and the provider publishes the zap receipt.](../assets/diagrams/zap-flow.svg)
+
 ## Zapping an event
 
 ```java
@@ -24,7 +26,10 @@ PayResponse payment = wallet.payInvoice(inv.getInvoice(), null, null).await();
 //    publishes the kind-9735 receipt after it observes payment.
 ```
 
-Amounts are in millisatoshis. To tip a profile instead of an event, use the overload of `getZapInvoices` that takes a bare public key. If you already know the Lightning address, use the lower-level overload that works directly from an `LnUrl`. If the target has no usable Lightning address, you get a `MalformedZapTargetException`.
+Amounts are in millisatoshis.
+
+!!! tip "Tip a profile or Lightning address"
+    To tip a profile, use the `getZapInvoices` overload that accepts a public key. If you already know the Lightning address, use the overload that accepts an `LnUrl`. A target without a usable Lightning address raises `MalformedZapTargetException`.
 
 ## Reading zaps
 
@@ -48,8 +53,14 @@ ZapReceipt receipt = Nip57.parseAndValidateZapReceipt(
     .await();
 ```
 
-Supply either `expectedInvoice` with its provider public key, or an independently trusted `expectedProvider`. The task fails if neither supplies a provider key. Do not take that trusted key from the unverified receipt itself. Other expectations may be `null` when you cannot supply them.
+Supply the provider's public key through `expectedInvoice` or `expectedProvider`. Validation requires this key; the other expectations can be `null` when unavailable.
 
-Validation checks the receipt signature, the embedded request signature and their relationship to the provider and invoice. To read the receipt's details, use `getBolt11()`, `getPreimage()`, `getSender()`, `getRecipient()`, and `getZappedEventCoordinates()`. Read the amount from the embedded request: `receipt.getZapRequestEvent().getAmountMsats()`.
+!!! warning "Use a trusted provider key"
+    Obtain the provider key independently of the receipt you are checking. Taking it from an unverified receipt would let the receipt choose its own trusted signer.
 
-For the payment step, see [wallet operations](wallets.md). Parsing a receipt alone is not proof of payment; supply the invoice and request expectations you have when validating it.
+Validation checks both signatures and matches the receipt against the payment details you supply. Pass the invoice and request when you have them.
+
+Read the sender and recipient with `getSender()` and `getRecipient()`, and the amount with `receipt.getZapRequestEvent().getAmountMsats()`.
+
+!!! tip "Save the original request JSON"
+    When saving or forwarding a `ZapInvoice`, preserve `getZapRequestJson()` exactly. The invoice uses a hash of that JSON, so reformatting it can break validation. The serialized invoice includes it as `request_json`.

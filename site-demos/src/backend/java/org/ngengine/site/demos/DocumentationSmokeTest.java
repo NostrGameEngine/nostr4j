@@ -2,11 +2,16 @@
 package org.ngengine.site.demos;
 
 import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 import java.util.function.Predicate;
 import org.ngengine.nostr4j.NostrFilter;
+import org.ngengine.nostr4j.store.NostrEventCache;
+import org.ngengine.nostr4j.store.NostrInMemoryEventStore;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.event.UnsignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
+import org.ngengine.nostr4j.nip59.Nip59;
 import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
 import org.ngengine.platform.NGEPlatform;
 import org.ngengine.platform.jvm.JVMAsyncPlatform;
@@ -59,6 +64,41 @@ public final class DocumentationSmokeTest {
             SignedNostrEvent tampered = SignedNostrEvent.fromJSON(json.replace("Hello, Nostr", "Changed"));
             if (tampered.verify()) {
                 throw new AssertionError("Parsing JSON authenticated tampered data");
+            }
+
+            NostrEventCache cache = new NostrEventCache(new NostrInMemoryEventStore(4));
+            cache.put(event.getId(), event).await();
+            if (!event.getId().equals(cache.get(event.getId()).await().getId())
+                    || cache.query(List.of(new NostrFilter().withKind(1).limit(1))).await().size() != 1) {
+                throw new AssertionError("Documented cache insertion/query did not retain the signed event");
+            }
+            boolean rejected = false;
+            try {
+                cache.put(event.getId(), tampered).await();
+            } catch (Exception invalid) {
+                rejected = true;
+            }
+            if (!rejected) throw new AssertionError("Cache accepted a tampered event");
+            cache.clear().await();
+            if (cache.size().await() != 0) throw new AssertionError("Cache clear retained payloads");
+
+            try (NostrKeyPair recipientKeys = new NostrKeyPair()) {
+                NostrKeyPairSigner recipient = new NostrKeyPairSigner(recipientKeys);
+                try {
+                    UnsignedNostrEvent rumor = new UnsignedNostrEvent()
+                        .withKind(14)
+                        .withTag("p", recipientKeys.getPublicKey().asHex())
+                        .withContent("Gift-wrap documentation check");
+                    SignedNostrEvent wrap = Nip59.wrap(signer, rumor, recipientKeys.getPublicKey()).await();
+                    Map<String, Object> opened = Nip59.unwrap(recipient, wrap).await();
+                    if (!Nip59.isGiftWrap(wrap) || !wrap.verify()
+                            || !rumor.getContent().equals(opened.get("content"))
+                            || !keys.getPublicKey().asHex().equals(opened.get("pubkey"))) {
+                        throw new AssertionError("Gift-wrap round trip lost the authenticated rumor");
+                    }
+                } finally {
+                    recipient.close();
+                }
             }
             signer.close();
         }

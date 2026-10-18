@@ -64,6 +64,15 @@ loadScripts(document, 'script');</script>
 </li>
 <li><a href="#method-detail" tabindex="0">Method Details</a>
 <ol class="toc-list">
+<li><a href="#setBestEffortPropagation(boolean)" tabindex="0">setBestEffortPropagation(boolean)</a></li>
+<li><a href="#isBestEffortPropagation()" tabindex="0">isBestEffortPropagation()</a></li>
+<li><a href="#setBestEffortPropagationInterval(java.time.Duration)" tabindex="0">setBestEffortPropagationInterval(Duration)</a></li>
+<li><a href="#setBestEffortPropagationQueueCapacity(int)" tabindex="0">setBestEffortPropagationQueueCapacity(int)</a></li>
+<li><a href="#getPendingBestEffortPropagations()" tabindex="0">getPendingBestEffortPropagations()</a></li>
+<li><a href="#setConnectionBudget(int)" tabindex="0">setConnectionBudget(int)</a></li>
+<li><a href="#getConnectionBudget()" tabindex="0">getConnectionBudget()</a></li>
+<li><a href="#retainConnections(java.util.Collection)" tabindex="0">retainConnections(Collection)</a></li>
+<li><a href="#setPriorityTimeout(java.time.Duration)" tabindex="0">setPriorityTimeout(Duration)</a></li>
 <li><a href="#addNoticeListener(org.ngengine.nostr4j.listeners.NostrNoticeListener)" tabindex="0">addNoticeListener(NostrNoticeListener)</a></li>
 <li><a href="#removeNoticeListener(org.ngengine.nostr4j.listeners.NostrNoticeListener)" tabindex="0">removeNoticeListener(NostrNoticeListener)</a></li>
 <li><a href="#publish(org.ngengine.nostr4j.event.SignedNostrEvent)" tabindex="0">publish(SignedNostrEvent)</a></li>
@@ -71,17 +80,24 @@ loadScripts(document, 'script');</script>
 <li><a href="#send(org.ngengine.nostr4j.event.SignedNostrEvent)" tabindex="0">send(SignedNostrEvent)</a></li>
 <li><a href="#sendMessage(org.ngengine.nostr4j.proto.NostrMessage)" tabindex="0">sendMessage(NostrMessage)</a></li>
 <li><a href="#ensureRelay(java.lang.String)" tabindex="0">ensureRelay(String)</a></li>
+<li><a href="#createRelay(java.lang.String)" tabindex="0">createRelay(String)</a></li>
 <li><a href="#addRelay(org.ngengine.nostr4j.NostrRelay)" tabindex="0">addRelay(NostrRelay)</a></li>
+<li><a href="#registerRelay(org.ngengine.nostr4j.NostrRelay)" tabindex="0">registerRelay(NostrRelay)</a></li>
 <li><a href="#connectRelay(org.ngengine.nostr4j.NostrRelay)" tabindex="0">connectRelay(NostrRelay)</a></li>
 <li><a href="#removeRelay(org.ngengine.nostr4j.NostrRelay)" tabindex="0">removeRelay(NostrRelay)</a></li>
 <li><a href="#subscribe(org.ngengine.nostr4j.NostrFilter)" tabindex="0">subscribe(NostrFilter)</a></li>
+<li><a href="#subscribe(org.ngengine.nostr4j.NostrFilter,java.util.Collection)" tabindex="0">subscribe(NostrFilter, Collection)</a></li>
+<li><a href="#subscribe(java.util.Collection,java.util.Collection)" tabindex="0">subscribe(Collection, Collection)</a></li>
 <li><a href="#subscribe(java.util.Collection)" tabindex="0">subscribe(Collection)</a></li>
 <li><a href="#subscribe(org.ngengine.nostr4j.NostrFilter,java.util.function.Supplier)" tabindex="0">subscribe(NostrFilter, Supplier)</a></li>
 <li><a href="#subscribe(java.util.Collection,java.util.function.Supplier)" tabindex="0">subscribe(Collection, Supplier)</a></li>
+<li><a href="#subscribe(java.util.Collection,java.util.function.Supplier,java.util.Collection)" tabindex="0">subscribe(Collection, Supplier, Collection)</a></li>
 <li><a href="#fetch(org.ngengine.nostr4j.NostrFilter,int,java.time.Duration)" tabindex="0">fetch(NostrFilter, int, Duration)</a></li>
 <li><a href="#fetch(org.ngengine.nostr4j.NostrFilter,int,boolean,java.time.Duration)" tabindex="0">fetch(NostrFilter, int, boolean, Duration)</a></li>
 <li><a href="#fetch(java.util.Collection,org.ngengine.nostr4j.pool.fetchpolicy.NostrPoolFetchPolicy)" tabindex="0">fetch(Collection, NostrPoolFetchPolicy)</a></li>
+<li><a href="#fetch(java.util.Collection,org.ngengine.nostr4j.pool.fetchpolicy.NostrPoolFetchPolicy,java.util.Collection)" tabindex="0">fetch(Collection, NostrPoolFetchPolicy, Collection)</a></li>
 <li><a href="#fetch(java.util.Collection,java.util.function.Supplier,org.ngengine.nostr4j.pool.fetchpolicy.NostrPoolFetchPolicy)" tabindex="0">fetch(Collection, Supplier, NostrPoolFetchPolicy)</a></li>
+<li><a href="#fetch(java.util.Collection,java.util.function.Supplier,org.ngengine.nostr4j.pool.fetchpolicy.NostrPoolFetchPolicy,java.util.Collection)" tabindex="0">fetch(Collection, Supplier, NostrPoolFetchPolicy, Collection)</a></li>
 <li><a href="#onRelayMessage(org.ngengine.nostr4j.NostrRelay,org.ngengine.nostr4j.proto.NostrMessage)" tabindex="0">onRelayMessage(NostrRelay, NostrMessage)</a></li>
 <li><a href="#close()" tabindex="0">close()</a></li>
 <li><a href="#removeAllRelays()" tabindex="0">removeAllRelays()</a></li>
@@ -149,7 +165,7 @@ loadScripts(document, 'script');</script>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>org.ngengine.platform.AsyncTask<wbr>&lt;<a href="NostrRelay.html" title="class in org.ngengine.nostr4j">NostrRelay</a>&gt;</code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#addRelay(org.ngengine.nostr4j.NostrRelay)" class="member-name-link">addRelay</a><wbr>(<a href="NostrRelay.html" title="class in org.ngengine.nostr4j">NostrRelay</a>&nbsp;relay)</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
-<div class="block">Adds a relay to this pool and connects to it if not already connected.</div>
+<div class="block">Adds a relay to this pool.</div>
 </div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a><wbr>&lt;<a href="NostrRelay.html" title="class in org.ngengine.nostr4j">NostrRelay</a>&gt;</code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#clean()" class="member-name-link">clean</a>()</code></div>
@@ -169,16 +185,25 @@ loadScripts(document, 'script');</script>
 <div class="deprecation-comment">Use <a href="#addRelay(org.ngengine.nostr4j.NostrRelay)"><code>addRelay(NostrRelay)</code></a></div>
 </div>
 </div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>org.ngengine.platform.AsyncTask<wbr>&lt;<a href="NostrRelay.html" title="class in org.ngengine.nostr4j">NostrRelay</a>&gt;</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#ensureRelay(java.lang.String)" class="member-name-link">ensureRelay</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;relay)</code></div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>protected <a href="NostrRelay.html" title="class in org.ngengine.nostr4j">NostrRelay</a></code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#createRelay(java.lang.String)" class="member-name-link">createRelay</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;url)</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>org.ngengine.platform.AsyncTask<wbr>&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="event/SignedNostrEvent.html" title="class in org.ngengine.nostr4j.event">SignedNostrEvent</a>&gt;&gt;</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#fetch(java.util.Collection,java.util.function.Supplier,org.ngengine.nostr4j.pool.fetchpolicy.NostrPoolFetchPolicy)" class="member-name-link">fetch</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/Collection.html" title="class or interface in java.util" class="external-link">Collection</a>&lt;<a href="NostrFilter.html" title="class in org.ngengine.nostr4j">NostrFilter</a>&gt;&nbsp;filters,
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>org.ngengine.platform.AsyncTask<wbr>&lt;<a href="NostrRelay.html" title="class in org.ngengine.nostr4j">NostrRelay</a>&gt;</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#ensureRelay(java.lang.String)" class="member-name-link">ensureRelay</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;relay)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>org.ngengine.platform.AsyncTask<wbr>&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="event/SignedNostrEvent.html" title="class in org.ngengine.nostr4j.event">SignedNostrEvent</a>&gt;&gt;</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#fetch(java.util.Collection,java.util.function.Supplier,org.ngengine.nostr4j.pool.fetchpolicy.NostrPoolFetchPolicy)" class="member-name-link">fetch</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/Collection.html" title="class or interface in java.util" class="external-link">Collection</a>&lt;<a href="NostrFilter.html" title="class in org.ngengine.nostr4j">NostrFilter</a>&gt;&nbsp;filters,
  <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/function/Supplier.html" title="class or interface in java.util.function" class="external-link">Supplier</a>&lt;<a href="event/tracker/EventTracker.html" title="interface in org.ngengine.nostr4j.event.tracker">EventTracker</a>&gt;&nbsp;eventTracker,
  <a href="pool/fetchpolicy/NostrPoolFetchPolicy.html" title="interface in org.ngengine.nostr4j.pool.fetchpolicy">NostrPoolFetchPolicy</a>&nbsp;fetchPolicy)</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
 <div class="block">Fetch events matching the given filters using the specified event tracker and fetch policy.</div>
 </div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>org.ngengine.platform.AsyncTask<wbr>&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="event/SignedNostrEvent.html" title="class in org.ngengine.nostr4j.event">SignedNostrEvent</a>&gt;&gt;</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#fetch(java.util.Collection,java.util.function.Supplier,org.ngengine.nostr4j.pool.fetchpolicy.NostrPoolFetchPolicy,java.util.Collection)" class="member-name-link">fetch</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/Collection.html" title="class or interface in java.util" class="external-link">Collection</a>&lt;<a href="NostrFilter.html" title="class in org.ngengine.nostr4j">NostrFilter</a>&gt;&nbsp;filters,
+ <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/function/Supplier.html" title="class or interface in java.util.function" class="external-link">Supplier</a>&lt;<a href="event/tracker/EventTracker.html" title="interface in org.ngengine.nostr4j.event.tracker">EventTracker</a>&gt;&nbsp;eventTracker,
+ <a href="pool/fetchpolicy/NostrPoolFetchPolicy.html" title="interface in org.ngengine.nostr4j.pool.fetchpolicy">NostrPoolFetchPolicy</a>&nbsp;fetchPolicy,
+ <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/Collection.html" title="class or interface in java.util" class="external-link">Collection</a>&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&gt;&nbsp;relayHints)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>org.ngengine.platform.AsyncTask<wbr>&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="event/SignedNostrEvent.html" title="class in org.ngengine.nostr4j.event">SignedNostrEvent</a>&gt;&gt;</code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#fetch(java.util.Collection,org.ngengine.nostr4j.pool.fetchpolicy.NostrPoolFetchPolicy)" class="member-name-link">fetch</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/Collection.html" title="class or interface in java.util" class="external-link">Collection</a>&lt;<a href="NostrFilter.html" title="class in org.ngengine.nostr4j">NostrFilter</a>&gt;&nbsp;filters,
  <a href="pool/fetchpolicy/NostrPoolFetchPolicy.html" title="interface in org.ngengine.nostr4j.pool.fetchpolicy">NostrPoolFetchPolicy</a>&nbsp;fetchPolicy)</code></div>
@@ -186,26 +211,44 @@ loadScripts(document, 'script');</script>
 <div class="block">Fetch events matching the given filters using the specified fetch policy.</div>
 </div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>org.ngengine.platform.AsyncTask<wbr>&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="event/SignedNostrEvent.html" title="class in org.ngengine.nostr4j.event">SignedNostrEvent</a>&gt;&gt;</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#fetch(org.ngengine.nostr4j.NostrFilter,int,boolean,java.time.Duration)" class="member-name-link">fetch</a><wbr>(<a href="NostrFilter.html" title="class in org.ngengine.nostr4j">NostrFilter</a>&nbsp;filter,
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#fetch(java.util.Collection,org.ngengine.nostr4j.pool.fetchpolicy.NostrPoolFetchPolicy,java.util.Collection)" class="member-name-link">fetch</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/Collection.html" title="class or interface in java.util" class="external-link">Collection</a>&lt;<a href="NostrFilter.html" title="class in org.ngengine.nostr4j">NostrFilter</a>&gt;&nbsp;filters,
+ <a href="pool/fetchpolicy/NostrPoolFetchPolicy.html" title="interface in org.ngengine.nostr4j.pool.fetchpolicy">NostrPoolFetchPolicy</a>&nbsp;fetchPolicy,
+ <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/Collection.html" title="class or interface in java.util" class="external-link">Collection</a>&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&gt;&nbsp;relayHints)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>org.ngengine.platform.AsyncTask<wbr>&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="event/SignedNostrEvent.html" title="class in org.ngengine.nostr4j.event">SignedNostrEvent</a>&gt;&gt;</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#fetch(org.ngengine.nostr4j.NostrFilter,int,boolean,java.time.Duration)" class="member-name-link">fetch</a><wbr>(<a href="NostrFilter.html" title="class in org.ngengine.nostr4j">NostrFilter</a>&nbsp;filter,
  int&nbsp;numEvents,
  boolean&nbsp;withEose,
  <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Duration.html" title="class or interface in java.time" class="external-link">Duration</a>&nbsp;timeout)</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
 <div class="block">Fetch up to maxEvents events matching the given filter until timeout is
 reached, numEvents have been received or all relays have sent EOSE if
 withEose is true.</div>
 </div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>org.ngengine.platform.AsyncTask<wbr>&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="event/SignedNostrEvent.html" title="class in org.ngengine.nostr4j.event">SignedNostrEvent</a>&gt;&gt;</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#fetch(org.ngengine.nostr4j.NostrFilter,int,java.time.Duration)" class="member-name-link">fetch</a><wbr>(<a href="NostrFilter.html" title="class in org.ngengine.nostr4j">NostrFilter</a>&nbsp;filter,
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>org.ngengine.platform.AsyncTask<wbr>&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="event/SignedNostrEvent.html" title="class in org.ngengine.nostr4j.event">SignedNostrEvent</a>&gt;&gt;</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#fetch(org.ngengine.nostr4j.NostrFilter,int,java.time.Duration)" class="member-name-link">fetch</a><wbr>(<a href="NostrFilter.html" title="class in org.ngengine.nostr4j">NostrFilter</a>&nbsp;filter,
  int&nbsp;numEvents,
  <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Duration.html" title="class or interface in java.time" class="external-link">Duration</a>&nbsp;timeout)</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
 <div class="block">Fetch up to numEvents events matching the given filter until timeout is
 reached or numEvents have been received.</div>
 </div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a><wbr>&lt;<a href="NostrRelay.html" title="class in org.ngengine.nostr4j">NostrRelay</a>&gt;</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#getRelays()" class="member-name-link">getRelays</a>()</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>int</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#getConnectionBudget()" class="member-name-link">getConnectionBudget</a>()</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>int</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#getPendingBestEffortPropagations()" class="member-name-link">getPendingBestEffortPropagations</a>()</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Returns the number of pending background deliveries, including the active delivery.</div>
+</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a><wbr>&lt;<a href="NostrRelay.html" title="class in org.ngengine.nostr4j">NostrRelay</a>&gt;</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#getRelays()" class="member-name-link">getRelays</a>()</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>boolean</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#isBestEffortPropagation()" class="member-name-link">isBestEffortPropagation</a>()</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Returns whether background propagation is enabled and a connection budget is set.</div>
+</div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>protected boolean</code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#onAfterRelaySend(org.ngengine.nostr4j.NostrRelay,org.ngengine.nostr4j.proto.NostrMessage)" class="member-name-link">onAfterRelaySend</a><wbr>(<a href="NostrRelay.html" title="class in org.ngengine.nostr4j">NostrRelay</a>&nbsp;relay,
  <a href="proto/NostrMessage.html" title="class in org.ngengine.nostr4j.proto">NostrMessage</a>&nbsp;message)</code></div>
@@ -248,15 +291,25 @@ reached or numEvents have been received.</div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#publish(org.ngengine.nostr4j.event.SignedNostrEvent,org.ngengine.nostr4j.pool.ackpolicy.NostrPoolAckPolicy)" class="member-name-link">publish</a><wbr>(<a href="event/SignedNostrEvent.html" title="class in org.ngengine.nostr4j.event">SignedNostrEvent</a>&nbsp;ev,
  <a href="pool/ackpolicy/NostrPoolAckPolicy.html" title="interface in org.ngengine.nostr4j.pool.ackpolicy">NostrPoolAckPolicy</a>&nbsp;ackPolicy)</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a><wbr>&lt;<a href="NostrRelay.html" title="class in org.ngengine.nostr4j">NostrRelay</a>&gt;</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#removeAllRelays()" class="member-name-link">removeAllRelays</a>()</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="NostrPool.html" title="class in org.ngengine.nostr4j">NostrPool</a></code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#removeNoticeListener(org.ngengine.nostr4j.listeners.NostrNoticeListener)" class="member-name-link">removeNoticeListener</a><wbr>(<a href="listeners/NostrNoticeListener.html" title="interface in org.ngengine.nostr4j.listeners">NostrNoticeListener</a>&nbsp;listener)</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="NostrRelay.html" title="class in org.ngengine.nostr4j">NostrRelay</a></code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#removeRelay(org.ngengine.nostr4j.NostrRelay)" class="member-name-link">removeRelay</a><wbr>(<a href="NostrRelay.html" title="class in org.ngengine.nostr4j">NostrRelay</a>&nbsp;relay)</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#registerRelay(org.ngengine.nostr4j.NostrRelay)" class="member-name-link">registerRelay</a><wbr>(<a href="NostrRelay.html" title="class in org.ngengine.nostr4j">NostrRelay</a>&nbsp;relay)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Registers a relay as a connection candidate without waiting for it to connect.</div>
+</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a><wbr>&lt;<a href="NostrRelay.html" title="class in org.ngengine.nostr4j">NostrRelay</a>&gt;</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#removeAllRelays()" class="member-name-link">removeAllRelays</a>()</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="NostrPool.html" title="class in org.ngengine.nostr4j">NostrPool</a></code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#removeNoticeListener(org.ngengine.nostr4j.listeners.NostrNoticeListener)" class="member-name-link">removeNoticeListener</a><wbr>(<a href="listeners/NostrNoticeListener.html" title="interface in org.ngengine.nostr4j.listeners">NostrNoticeListener</a>&nbsp;listener)</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="NostrRelay.html" title="class in org.ngengine.nostr4j">NostrRelay</a></code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#removeRelay(org.ngengine.nostr4j.NostrRelay)" class="member-name-link">removeRelay</a><wbr>(<a href="NostrRelay.html" title="class in org.ngengine.nostr4j">NostrRelay</a>&nbsp;relay)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/AutoCloseable.html" title="class or interface in java.lang" class="external-link">AutoCloseable</a></code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#retainConnections(java.util.Collection)" class="member-name-link">retainConnections</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/Collection.html" title="class or interface in java.util" class="external-link">Collection</a>&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&gt;&nbsp;urls)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Keep host-owned transports eligible independently of a subscription, until the lease is closed.</div>
+</div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4 method-summary-table-tab6"><code><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a><wbr>&lt;org.ngengine.platform.AsyncTask&lt;<a href="proto/NostrMessageAck.html" title="class in org.ngengine.nostr4j.proto">NostrMessageAck</a>&gt;&gt;</code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4 method-summary-table-tab6"><code><a href="#send(org.ngengine.nostr4j.event.SignedNostrEvent)" class="member-name-link">send</a><wbr>(<a href="event/SignedNostrEvent.html" title="class in org.ngengine.nostr4j.event">SignedNostrEvent</a>&nbsp;ev)</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4 method-summary-table-tab6">
@@ -267,17 +320,57 @@ reached or numEvents have been received.</div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>protected <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a><wbr>&lt;org.ngengine.platform.AsyncTask&lt;<a href="proto/NostrMessageAck.html" title="class in org.ngengine.nostr4j.proto">NostrMessageAck</a>&gt;&gt;</code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#sendMessage(org.ngengine.nostr4j.proto.NostrMessage)" class="member-name-link">sendMessage</a><wbr>(<a href="proto/NostrMessage.html" title="class in org.ngengine.nostr4j.proto">NostrMessage</a>&nbsp;message)</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="NostrSubscription.html" title="class in org.ngengine.nostr4j">NostrSubscription</a></code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#subscribe(java.util.Collection)" class="member-name-link">subscribe</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/Collection.html" title="class or interface in java.util" class="external-link">Collection</a>&lt;<a href="NostrFilter.html" title="class in org.ngengine.nostr4j">NostrFilter</a>&gt;&nbsp;filter)</code></div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#setBestEffortPropagation(boolean)" class="member-name-link">setBestEffortPropagation</a><wbr>(boolean&nbsp;enabled)</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Sends public events to the other registered relays in the background.</div>
+</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#setBestEffortPropagationInterval(java.time.Duration)" class="member-name-link">setBestEffortPropagationInterval</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Duration.html" title="class or interface in java.time" class="external-link">Duration</a>&nbsp;interval)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Sets the delay between background deliveries.</div>
+</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#setBestEffortPropagationQueueCapacity(int)" class="member-name-link">setBestEffortPropagationQueueCapacity</a><wbr>(int&nbsp;capacity)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Limits pending background deliveries.</div>
+</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#setConnectionBudget(int)" class="member-name-link">setConnectionBudget</a><wbr>(int&nbsp;budget)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Sets the target number of automatically selected network connections.</div>
+</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#setPriorityTimeout(java.time.Duration)" class="member-name-link">setPriorityTimeout</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Duration.html" title="class or interface in java.time" class="external-link">Duration</a>&nbsp;timeout)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Sets how long a read waits for one query-priority tier before starting the next.</div>
+</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="NostrSubscription.html" title="class in org.ngengine.nostr4j">NostrSubscription</a></code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#subscribe(java.util.Collection)" class="member-name-link">subscribe</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/Collection.html" title="class or interface in java.util" class="external-link">Collection</a>&lt;<a href="NostrFilter.html" title="class in org.ngengine.nostr4j">NostrFilter</a>&gt;&nbsp;filter)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
 <div class="block">Creates a subscription based on the provided filters.</div>
 </div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="NostrSubscription.html" title="class in org.ngengine.nostr4j">NostrSubscription</a></code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#subscribe(java.util.Collection,java.util.Collection)" class="member-name-link">subscribe</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/Collection.html" title="class or interface in java.util" class="external-link">Collection</a>&lt;<a href="NostrFilter.html" title="class in org.ngengine.nostr4j">NostrFilter</a>&gt;&nbsp;filters,
+ <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/Collection.html" title="class or interface in java.util" class="external-link">Collection</a>&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&gt;&nbsp;relayHints)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="NostrSubscription.html" title="class in org.ngengine.nostr4j">NostrSubscription</a></code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#subscribe(java.util.Collection,java.util.function.Supplier)" class="member-name-link">subscribe</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/Collection.html" title="class or interface in java.util" class="external-link">Collection</a>&lt;<a href="NostrFilter.html" title="class in org.ngengine.nostr4j">NostrFilter</a>&gt;&nbsp;filters,
  <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/function/Supplier.html" title="class or interface in java.util.function" class="external-link">Supplier</a>&lt;<a href="event/tracker/EventTracker.html" title="interface in org.ngengine.nostr4j.event.tracker">EventTracker</a>&gt;&nbsp;eventTracker)</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="NostrSubscription.html" title="class in org.ngengine.nostr4j">NostrSubscription</a></code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#subscribe(org.ngengine.nostr4j.NostrFilter)" class="member-name-link">subscribe</a><wbr>(<a href="NostrFilter.html" title="class in org.ngengine.nostr4j">NostrFilter</a>&nbsp;filter)</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#subscribe(java.util.Collection,java.util.function.Supplier,java.util.Collection)" class="member-name-link">subscribe</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/Collection.html" title="class or interface in java.util" class="external-link">Collection</a>&lt;<a href="NostrFilter.html" title="class in org.ngengine.nostr4j">NostrFilter</a>&gt;&nbsp;filters,
+ <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/function/Supplier.html" title="class or interface in java.util.function" class="external-link">Supplier</a>&lt;<a href="event/tracker/EventTracker.html" title="interface in org.ngengine.nostr4j.event.tracker">EventTracker</a>&gt;&nbsp;eventTracker,
+ <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/Collection.html" title="class or interface in java.util" class="external-link">Collection</a>&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&gt;&nbsp;relayHints)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Creates a read restricted to the supplied relay hints and local cache relays.</div>
+</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="NostrSubscription.html" title="class in org.ngengine.nostr4j">NostrSubscription</a></code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#subscribe(org.ngengine.nostr4j.NostrFilter)" class="member-name-link">subscribe</a><wbr>(<a href="NostrFilter.html" title="class in org.ngengine.nostr4j">NostrFilter</a>&nbsp;filter)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="NostrSubscription.html" title="class in org.ngengine.nostr4j">NostrSubscription</a></code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#subscribe(org.ngengine.nostr4j.NostrFilter,java.util.Collection)" class="member-name-link">subscribe</a><wbr>(<a href="NostrFilter.html" title="class in org.ngengine.nostr4j">NostrFilter</a>&nbsp;filter,
+ <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/Collection.html" title="class or interface in java.util" class="external-link">Collection</a>&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&gt;&nbsp;relayHints)</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="NostrSubscription.html" title="class in org.ngengine.nostr4j">NostrSubscription</a></code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#subscribe(org.ngengine.nostr4j.NostrFilter,java.util.function.Supplier)" class="member-name-link">subscribe</a><wbr>(<a href="NostrFilter.html" title="class in org.ngengine.nostr4j">NostrFilter</a>&nbsp;filter,
@@ -329,6 +422,109 @@ reached or numEvents have been received.</div>
 <section class="method-details" id="method-detail">
 <h2>Method Details</h2>
 <ul class="member-list">
+<li>
+<section class="detail" id="setBestEffortPropagation(boolean)">
+<h3>setBestEffortPropagation</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">setBestEffortPropagation</span><wbr><span class="parameters">(boolean&nbsp;enabled)</span></div>
+<div class="block">Sends public events to the other registered relays in the background.
+Enabled by default with a positive connection budget. False disables it.</div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="isBestEffortPropagation()">
+<h3>isBestEffortPropagation</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">boolean</span>&nbsp;<span class="element-name">isBestEffortPropagation</span>()</div>
+<div class="block">Returns whether background propagation is enabled and a connection budget is set.</div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="setBestEffortPropagationInterval(java.time.Duration)">
+<h3>setBestEffortPropagationInterval</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">setBestEffortPropagationInterval</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Duration.html" title="class or interface in java.time" class="external-link">Duration</a>&nbsp;interval)</span></div>
+<div class="block">Sets the delay between background deliveries. The default is 100 milliseconds.
+Accepted values range from 10 milliseconds to one minute.</div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="setBestEffortPropagationQueueCapacity(int)">
+<h3>setBestEffortPropagationQueueCapacity</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">setBestEffortPropagationQueueCapacity</span><wbr><span class="parameters">(int&nbsp;capacity)</span></div>
+<div class="block">Limits pending background deliveries. The default is 1024 event/relay pairs.
+When full, the queue drops the oldest delivery that has not started.</div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="getPendingBestEffortPropagations()">
+<h3>getPendingBestEffortPropagations</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">int</span>&nbsp;<span class="element-name">getPendingBestEffortPropagations</span>()</div>
+<div class="block">Returns the number of pending background deliveries, including the active delivery.</div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="setConnectionBudget(int)">
+<h3>setConnectionBudget</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">setConnectionBudget</span><wbr><span class="parameters">(int&nbsp;budget)</span></div>
+<div class="block">Sets the target number of automatically selected network connections.
+Higher connection priorities are preferred, with existing selections winning ties.
+Zero preserves unlimited connections. Required relay hints may exceed this target,
+and in-process cache relays do not consume the network budget.
+A positive budget also enables best-effort propagation unless explicitly disabled.</div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>budget</code> - non-negative connection target; zero means unlimited</dd>
+<dt>Throws:</dt>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/IllegalArgumentException.html" title="class or interface in java.lang" class="external-link">IllegalArgumentException</a></code> - if the budget is negative</dd>
+</dl>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="getConnectionBudget()">
+<h3>getConnectionBudget</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">int</span>&nbsp;<span class="element-name">getConnectionBudget</span>()</div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="retainConnections(java.util.Collection)">
+<h3>retainConnections</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/AutoCloseable.html" title="class or interface in java.lang" class="external-link">AutoCloseable</a></span>&nbsp;<span class="element-name">retainConnections</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/Collection.html" title="class or interface in java.util" class="external-link">Collection</a>&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&gt;&nbsp;urls)</span></div>
+<div class="block">Keep host-owned transports eligible independently of a subscription, until the lease is closed.
+Shares the same budget/ownership rules as operation hints, but sends no artificial REQ.
+This does not broaden the relay targets of any fetch or subscription.</div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="setPriorityTimeout(java.time.Duration)">
+<h3>setPriorityTimeout</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">setPriorityTimeout</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/time/Duration.html" title="class or interface in java.time" class="external-link">Duration</a>&nbsp;timeout)</span></div>
+<div class="block">Sets how long a read waits for one query-priority tier before starting the next.
+EOSE can advance the read earlier after its event and policy callbacks complete.
+This is a per-tier fallback timeout, independent of the fetch policy's overall deadline.</div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>timeout</code> - positive, non-null wait for each higher-priority tier</dd>
+<dt>Throws:</dt>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/IllegalArgumentException.html" title="class or interface in java.lang" class="external-link">IllegalArgumentException</a></code> - if the duration is null, zero or negative</dd>
+</dl>
+</div>
+</section>
+</li>
 <li>
 <section class="detail" id="addNoticeListener(org.ngengine.nostr4j.listeners.NostrNoticeListener)">
 <h3>addNoticeListener</h3>
@@ -391,16 +587,43 @@ reached or numEvents have been received.</div>
 </section>
 </li>
 <li>
+<section class="detail" id="createRelay(java.lang.String)">
+<h3>createRelay</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">protected</span>&nbsp;<span class="return-type"><a href="NostrRelay.html" title="class in org.ngengine.nostr4j">NostrRelay</a></span>&nbsp;<span class="element-name">createRelay</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;url)</span></div>
+</div>
+</section>
+</li>
+<li>
 <section class="detail" id="addRelay(org.ngengine.nostr4j.NostrRelay)">
 <h3>addRelay</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">org.ngengine.platform.AsyncTask&lt;<a href="NostrRelay.html" title="class in org.ngengine.nostr4j">NostrRelay</a>&gt;</span>&nbsp;<span class="element-name">addRelay</span><wbr><span class="parameters">(<a href="NostrRelay.html" title="class in org.ngengine.nostr4j">NostrRelay</a>&nbsp;relay)</span></div>
-<div class="block">Adds a relay to this pool and connects to it if not already connected.</div>
+<div class="block">Adds a relay to this pool. With an unlimited budget it connects immediately;
+otherwise it registers an automatic connection candidate.</div>
 <dl class="notes">
 <dt>Parameters:</dt>
 <dd><code>relay</code> - The relay to attach to this pool</dd>
 <dt>Returns:</dt>
-<dd>A promise that resolves when the relay is connected and ready to use</dd>
+<dd>With an unlimited budget, a promise of connection; with a finite budget,
+        a completed registration task (use operation hints for required reads)</dd>
+</dl>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="registerRelay(org.ngengine.nostr4j.NostrRelay)">
+<h3>registerRelay</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="NostrRelay.html" title="class in org.ngengine.nostr4j">NostrRelay</a></span>&nbsp;<span class="element-name">registerRelay</span><wbr><span class="parameters">(<a href="NostrRelay.html" title="class in org.ngengine.nostr4j">NostrRelay</a>&nbsp;relay)</span></div>
+<div class="block">Registers a relay as a connection candidate without waiting for it to connect.
+The pool's connection budget and active read leases determine whether a network
+transport is selected; callers that require readiness must observe connection state.</div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>relay</code> - relay to add to this pool</dd>
+<dt>Returns:</dt>
+<dd>the registered relay</dd>
 </dl>
 </div>
 </section>
@@ -430,6 +653,24 @@ reached or numEvents have been received.</div>
 <h3>subscribe</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="NostrSubscription.html" title="class in org.ngengine.nostr4j">NostrSubscription</a></span>&nbsp;<span class="element-name">subscribe</span><wbr><span class="parameters">(<a href="NostrFilter.html" title="class in org.ngengine.nostr4j">NostrFilter</a>&nbsp;filter)</span></div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="subscribe(org.ngengine.nostr4j.NostrFilter,java.util.Collection)">
+<h3>subscribe</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="NostrSubscription.html" title="class in org.ngengine.nostr4j">NostrSubscription</a></span>&nbsp;<span class="element-name">subscribe</span><wbr><span class="parameters">(<a href="NostrFilter.html" title="class in org.ngengine.nostr4j">NostrFilter</a>&nbsp;filter,
+ <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/Collection.html" title="class or interface in java.util" class="external-link">Collection</a>&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&gt;&nbsp;relayHints)</span></div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="subscribe(java.util.Collection,java.util.Collection)">
+<h3>subscribe</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="NostrSubscription.html" title="class in org.ngengine.nostr4j">NostrSubscription</a></span>&nbsp;<span class="element-name">subscribe</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/Collection.html" title="class or interface in java.util" class="external-link">Collection</a>&lt;<a href="NostrFilter.html" title="class in org.ngengine.nostr4j">NostrFilter</a>&gt;&nbsp;filters,
+ <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/Collection.html" title="class or interface in java.util" class="external-link">Collection</a>&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&gt;&nbsp;relayHints)</span></div>
 </div>
 </section>
 </li>
@@ -479,6 +720,28 @@ a custom event tracker implementation for handling duplicate events.
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="NostrSubscription.html" title="class in org.ngengine.nostr4j">NostrSubscription</a></span>&nbsp;<span class="element-name">subscribe</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/Collection.html" title="class or interface in java.util" class="external-link">Collection</a>&lt;<a href="NostrFilter.html" title="class in org.ngengine.nostr4j">NostrFilter</a>&gt;&nbsp;filters,
  <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/function/Supplier.html" title="class or interface in java.util.function" class="external-link">Supplier</a>&lt;<a href="event/tracker/EventTracker.html" title="interface in org.ngengine.nostr4j.event.tracker">EventTracker</a>&gt;&nbsp;eventTracker)</span></div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="subscribe(java.util.Collection,java.util.function.Supplier,java.util.Collection)">
+<h3>subscribe</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="NostrSubscription.html" title="class in org.ngengine.nostr4j">NostrSubscription</a></span>&nbsp;<span class="element-name">subscribe</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/Collection.html" title="class or interface in java.util" class="external-link">Collection</a>&lt;<a href="NostrFilter.html" title="class in org.ngengine.nostr4j">NostrFilter</a>&gt;&nbsp;filters,
+ <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/function/Supplier.html" title="class or interface in java.util.function" class="external-link">Supplier</a>&lt;<a href="event/tracker/EventTracker.html" title="interface in org.ngengine.nostr4j.event.tracker">EventTracker</a>&gt;&nbsp;eventTracker,
+ <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/Collection.html" title="class or interface in java.util" class="external-link">Collection</a>&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&gt;&nbsp;relayHints)</span></div>
+<div class="block">Creates a read restricted to the supplied relay hints and local cache relays.
+Opening the subscription acquires connection leases for the hints; closing it releases
+those leases. An empty hint set uses ordinary pool selection. Query priority controls
+the order in which eligible relay groups are asked for events.</div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>filters</code> - filters to send to the selected relays</dd>
+<dd><code>eventTracker</code> - supplier of the duplicate-event tracker for this subscription</dd>
+<dd><code>relayHints</code> - URLs of network relays required by this read</dd>
+<dt>Returns:</dt>
+<dd>a subscription that the caller must open and close</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -559,6 +822,16 @@ or if all relays have sent EOSE and withEose is true
 </section>
 </li>
 <li>
+<section class="detail" id="fetch(java.util.Collection,org.ngengine.nostr4j.pool.fetchpolicy.NostrPoolFetchPolicy,java.util.Collection)">
+<h3>fetch</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">org.ngengine.platform.AsyncTask&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="event/SignedNostrEvent.html" title="class in org.ngengine.nostr4j.event">SignedNostrEvent</a>&gt;&gt;</span>&nbsp;<span class="element-name">fetch</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/Collection.html" title="class or interface in java.util" class="external-link">Collection</a>&lt;<a href="NostrFilter.html" title="class in org.ngengine.nostr4j">NostrFilter</a>&gt;&nbsp;filters,
+ <a href="pool/fetchpolicy/NostrPoolFetchPolicy.html" title="interface in org.ngengine.nostr4j.pool.fetchpolicy">NostrPoolFetchPolicy</a>&nbsp;fetchPolicy,
+ <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/Collection.html" title="class or interface in java.util" class="external-link">Collection</a>&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&gt;&nbsp;relayHints)</span></div>
+</div>
+</section>
+</li>
+<li>
 <section class="detail" id="fetch(java.util.Collection,java.util.function.Supplier,org.ngengine.nostr4j.pool.fetchpolicy.NostrPoolFetchPolicy)">
 <h3>fetch</h3>
 <div class="horizontal-scroll">
@@ -574,6 +847,17 @@ or if all relays have sent EOSE and withEose is true
 <dt>Returns:</dt>
 <dd>A promise that resolves with the list of matching events based on the fetch policy</dd>
 </dl>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="fetch(java.util.Collection,java.util.function.Supplier,org.ngengine.nostr4j.pool.fetchpolicy.NostrPoolFetchPolicy,java.util.Collection)">
+<h3>fetch</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">org.ngengine.platform.AsyncTask&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="event/SignedNostrEvent.html" title="class in org.ngengine.nostr4j.event">SignedNostrEvent</a>&gt;&gt;</span>&nbsp;<span class="element-name">fetch</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/Collection.html" title="class or interface in java.util" class="external-link">Collection</a>&lt;<a href="NostrFilter.html" title="class in org.ngengine.nostr4j">NostrFilter</a>&gt;&nbsp;filters,
+ <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/function/Supplier.html" title="class or interface in java.util.function" class="external-link">Supplier</a>&lt;<a href="event/tracker/EventTracker.html" title="interface in org.ngengine.nostr4j.event.tracker">EventTracker</a>&gt;&nbsp;eventTracker,
+ <a href="pool/fetchpolicy/NostrPoolFetchPolicy.html" title="interface in org.ngengine.nostr4j.pool.fetchpolicy">NostrPoolFetchPolicy</a>&nbsp;fetchPolicy,
+ <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/Collection.html" title="class or interface in java.util" class="external-link">Collection</a>&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&gt;&nbsp;relayHints)</span></div>
 </div>
 </section>
 </li>

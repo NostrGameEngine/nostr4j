@@ -38,7 +38,9 @@ Create the subscription, attach your listeners, then call `open()`.
 When handling incoming events, distinguish history from new activity:
 
 - Use **`stored`** to tell whether the event is history (`true`) or arrived live (`false`). A freshly opened subscription first replays stored events, then flips to live.
-- **`EOSE`** ("end of stored events") means a relay has finished sending its history. After EOSE, only new events arrive. `onSubEose` is invoked once per relay; `everyWhere` is true when every relay in the pool has sent EOSE.
+- **`EOSE`** ("end of stored events") means a relay has finished sending its history. After EOSE, that relay's subsequent events are live. `onSubEose` is invoked per relay; `everyWhere` refers to the relays selected for this read, not every registered standby relay. A live event from one relay can arrive while another is still sending history.
+
+Stored-event callbacks finish before that relay's EOSE callback advances the read. A filter's `limit` controls historical results, not the lifetime of a live subscription: `.limit(0)` still permits live events. Closing or cancelling a fetch retires its subscription so late replies do not reopen it.
 
 !!! tip
     Call `setVerifyMatchLocally(true)` to also check received events against the filter locally - useful when a relay is malicious, malfunctioning, or limited in its capabilities.

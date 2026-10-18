@@ -4,47 +4,78 @@ title: How RTC connections work
 
 # How RTC connections work
 
-This page explains how application instances find each other through Nostr and exchange data over WebRTC. A game, for example, can use a Nostr relay to bring players into the same session, then send game messages between their devices. The relay carries discovery and signaling; the connections in the room carry application data.
+Nostr4j uses Nostr relays to help peers find each other and set up connections. Application data then travels over WebRTC, with routing and an optional fallback when a direct path is unavailable.
 
-The central object is `NostrRTCRoom`. Use it as the place to send messages, receive them, and follow peers as they connect or leave. A room works with two participants or a larger group, and can carry several named channels for different kinds of traffic.
+For a simple two-peer Java I/O connection, start with [Simple P2P streams](simple-rtc-connection.md). Use `NostrRTCRoom` when you need multiple participants, asynchronous messages or named channels.
 
-Use it for multiplayer state updates, chat messages or file transfers. The library carries bytes; your application defines the message format. To connect existing Java I/O code between two peers, start with [Simple P2P streams](simple-rtc-connection.md).
+![Nostr relays carry discovery and signaling; WebRTC carries application data, with an optional Nostr4j TURN fallback.](../assets/diagrams/rtc-paths.svg)
 
-## Joining the same room
+## Create or join a room
 
-Each participant has its own Nostr identity, represented by a signer. The participants also share a room key pair, which identifies the room and lets them prove they belong to it. For a private session, generate this key pair once and distribute it through your application's invitation flow. Each participant loads the same room key; their personal keys stay private.
+Create a room by generating a normal key pair once:
 
-An application ID identifies your app and a protocol ID identifies the message format it speaks. Peers need matching IDs and the same room key to join the same group. See [room access](security.md#rtc-room-access) for an example of creating and sharing that key.
+```java
+NostrKeyPair roomKeyPair = new NostrKeyPair();
+String roomInvitation = roomKeyPair.getPrivateKey().asBech32();
+```
 
-These IDs belong in `RTCSettings`, along with signaling relays and connection policy. Use the same settings values on all participants. The room key and each participant's signer are supplied separately. A local peer also has a session ID to identify that particular instance; the convenience constructor generates it for you.
+Share `roomInvitation` out of band: through an authenticated, encrypted invitation channel provided by your app. Room-key distribution happens outside RTC signaling.
 
-## From discovery to a working connection
+Each invited participant reconstructs the same room key pair from that invitation:
 
-When you start a room, your peer is announced through the configured Nostr relays, and your listeners pick up other participants as they appear. Peers then exchange the signaling needed to establish WebRTC connections, including the information used to find a path through their networks.
+```java
+NostrKeyPair roomKeyPair = new NostrKeyPair(
+    NostrPrivateKey.fromBech32(sharedRoomNsec));
+```
 
-Discovery can use the newest authenticated presence already stored by a relay, so you need not wait for the next announcement. Expired presence and events dated more than 30 seconds into the future are rejected. Stored offers, answers and routes are not replayed into a new connection attempt.
+Here, `sharedRoomNsec` is the received invitation. Each participant also uses their own identity signer. Generating a different room key on each device would create different rooms.
 
-Discovery and connection happen over time. Install your listeners before starting the room, so they catch the first connection; they tell your application when a peer has a socket available or sends a message.
+![The creator generates one room key, shares it through an encrypted invitation, and both peers use that room key with their own identity signers.](../assets/diagrams/rtc-room-key.svg)
 
-Your application then works with peers and byte buffers:
+| Value | Purpose |
+|---|---|
+| Participant signer | Identifies this peer |
+| Shared room key | Identifies the room and proves membership |
+| Application ID | Identifies your app |
+| Protocol ID | Identifies the message format your app uses |
+| Signaling relays | Let participants discover each other and exchange connection details |
+
+Put the application ID, protocol ID and relay URLs in `RTCSettings`. Supply the signer and room key when creating the local peer and room. Each running instance also gets a session ID automatically.
+
+!!! tip "Room access"
+    The invitation contains the room's private key. Share it only with participants allowed to join. Their personal identity keys remain separate.
+
+## Discover and connect
+
+Starting the room announces your peer through its Nostr relays. Peers discover each other and exchange the information needed to establish WebRTC connections.
+
+Register listeners before starting. They tell your app when a peer becomes available and when messages arrive.
+
+!!! note "Discovery takes time"
+    A discovered peer may still be establishing its transport. Handle the tasks returned by send operations so your app can react to a failed delivery.
+
+## Exchange messages
+
+Send a byte buffer to one participant or broadcast it to the room:
 
 ```java
 room.send(peer, ByteBuffer.wrap(message));
 room.broadcast(ByteBuffer.wrap(announcement));
 ```
 
-Here, `message` and `announcement` are byte arrays in whatever format your application uses: a JSON document, a game update or a serialized Nostr event. On the receiving side, you get the sender, channel and payload, so you can dispatch each message to the right part of your app.
+Your app chooses the data format, such as JSON or a game-state update. The receiving listener gets the sender, channel and payload. Named channels let you separate different kinds of traffic on the same connection.
 
-The [room guide](rtc-rooms.md) shows how to create a room and wire up those listeners.
+The [room guide](rtc-rooms.md) puts setup, listeners and sending together.
 
-For JVM applications built around `InputStream` and `OutputStream`, the [peer connection adapter](rtc-streams.md) provides a blocking byte stream over the same transports.
+## Reach peers through the room
 
-## Reaching the rest of the group
+The room automatically routes messages through other participants when there is no working direct connection to the destination and an alternative path is available. Your app keeps using the same `send` call; route selection and updates are handled by the library.
 
-A room does not need a direct connection between every pair of participants. To reach the rest of the group, messages are forwarded through each peer's direct neighbors - see [onion routing](onion-routing.md). Your application still addresses the destination peer and uses the same `send` call.
+![Alice reaches Carol through Bob, who forwards the encrypted message.](../assets/diagrams/rtc-routing.svg)
 
-A direct WebRTC connection is used whenever it works; the alternatives are a routed path through other peers or a configured [TURN fallback service](turn-server.md). Paths update as connectivity changes, while your application keeps using the same channels and listeners.
+[Multi-hop routing](onion-routing.md) and a configured [TURN service](turn-server.md) provide alternative paths. The library updates paths as connectivity changes.
 
-A send can fail while a peer is offline or the network is changing, so handle its returned task and decide how your application should recover. For a shared document that might mean fetching a fresh revision; for a game it might mean sending the latest state when the peer returns.
+!!! tip "End-to-end encryption"
+    Messages addressed to one peer remain encrypted end to end, whether sent directly, through a TURN server or through other peers. Only the destination peer can decrypt the payload; intermediaries forward encrypted data. Broadcast messages are intended for all room members.
 
-The [NIP-DC specification](https://github.com/NostrGameEngine/nostr4j/blob/master/NIP-DC.md) describes the signaling, routing and packet formats used by these connections.
+For the signaling and packet formats, see the [NIP-DC specification](https://github.com/NostrGameEngine/nostr4j/blob/master/NIP-DC.md).

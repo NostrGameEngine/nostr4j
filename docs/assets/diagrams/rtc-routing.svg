@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 230" role="img" aria-labelledby="title desc">
+<title id="title">A routed message from Alice to Carol</title><desc id="desc">Alice and Carol have no direct connection. Bob forwards the encrypted message between them. Carol decrypts the message.</desc>
+<defs><marker id="a" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8" fill="#91d7b7"/></marker></defs>
+<rect width="560" height="230" rx="16" fill="#171124"/>
+<g font-family="system-ui,sans-serif" text-anchor="middle" fill="#eee8f5">
+<text x="280" y="35" font-size="21">Encrypted message for Carol</text>
+<g fill="#30203f"><rect x="15" y="80" width="140" height="60" rx="10"/><rect x="210" y="80" width="140" height="60" rx="10"/><rect x="405" y="80" width="140" height="60" rx="10"/></g>
+<text x="85" y="117" font-size="24">Alice</text><text x="280" y="117" font-size="24">Bob</text><text x="475" y="117" font-size="24">Carol</text>
+<path d="M160 110H200M355 110H395" stroke="#91d7b7" stroke-width="2" marker-end="url(#a)"/>
+<text x="85" y="177" font-size="19">Sends</text><text x="280" y="177" font-size="19">Forwards</text><text x="475" y="177" font-size="19">Decrypts</text>
+<text x="280" y="211" font-size="18">Two links instead of a direct link for every pair</text>
+</g></svg>
