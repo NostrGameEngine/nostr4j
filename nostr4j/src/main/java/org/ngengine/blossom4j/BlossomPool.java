@@ -124,7 +124,8 @@ public class BlossomPool implements Closeable {
                 : getAuthEvent(BlossomVerb.UPLOAD, "Mirror media", sha256)
         ).compose(token -> {
                 List<BlossomEndpoint> candidates = new ArrayList<>(endpoints);
-                int start = (NGEPlatform.get().randomBytes(1)[0] & 255) % candidates.size();
+                // Browser entropy checks deliberately reject single-byte random samples.
+                int start = (NGEPlatform.get().randomBytes(32)[0] & 255) % candidates.size();
                 Collections.rotate(candidates, -start);
                 return AsyncTask.<BlobDescriptor>create((resolve, reject) ->
                     mirrorNext(candidates, 0, url, sha256, token, resolve, reject, null)
