@@ -72,6 +72,59 @@ public class TestNostrTURNPoolFailures {
         assertLateConnectFailureIsIgnored(false);
     }
 
+    @Test(timeout = 15000L)
+    public void testSlowConnectSigningDoesNotConsumeServerAckDeadline() throws Exception {
+        AtomicInteger signingCalls = new AtomicInteger();
+        CountDownLatch signingStarted = new CountDownLatch(1);
+        AtomicReference<java.util.function.Consumer<SignedNostrEvent>> completeSigning = new AtomicReference<>();
+        AtomicReference<UnsignedNostrEvent> unsigned = new AtomicReference<>();
+        NostrKeyPairSigner signer = new NostrKeyPairSigner(new NostrKeyPair()) {
+            @Override
+            public AsyncTask<SignedNostrEvent> powSign(UnsignedNostrEvent event, int difficulty) {
+                signingCalls.incrementAndGet();
+                unsigned.set(event);
+                return AsyncTask.create((resolve, reject) -> {
+                    completeSigning.set(resolve);
+                    signingStarted.countDown();
+                });
+            }
+        };
+        NostrKeyPair room = room();
+        NostrRTCLocalPeer local = new NostrRTCLocalPeer(
+            RTCSettings.getDefault(APP_ID, PROTOCOL_ID).withStunServers(Collections.emptyList()),
+            signer,
+            "slow-signing",
+            room,
+            TURN_URL
+        );
+        DelayedConnectPlatform platform = new DelayedConnectPlatform(local);
+        installPlatform(platform);
+        NostrTURNPool pool = new NostrTURNPool(24);
+        try {
+            NostrTURNChannel channel = pool.connect(
+                local,
+                remotePeer("slow-remote", room),
+                TURN_URL,
+                room,
+                "primary",
+                true,
+                null
+            );
+            assertTrue(signingStarted.await(3, TimeUnit.SECONDS));
+            Thread.sleep(5500L);
+            assertEquals("ACK deadline must not restart a CONNECT still being signed", 1, signingCalls.get());
+            completeSigning.get().accept(signer.sign(unsigned.get()).await());
+            waitUntil(
+                () -> platform.firstFailures.containsKey(channel.getRoutingVsocketId()),
+                2000L,
+                "signed CONNECT must be sent"
+            );
+            assertTrue(channel.isConnectPending());
+        } finally {
+            pool.close();
+        }
+    }
+
     @Test
     public void testLateConnectSendFailureCannotResetNewerPendingAttempt() throws Exception {
         assertLateConnectFailureIsIgnored(true);

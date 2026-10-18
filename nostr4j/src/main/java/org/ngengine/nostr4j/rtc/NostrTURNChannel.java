@@ -83,6 +83,7 @@ public final class NostrTURNChannel {
 
     private static final long DELIVERY_ACK_TIMEOUT_MS = 12000L;
     private static final long CONNECT_ACK_TIMEOUT_MS = 5000L;
+    private static final long CONNECT_PREPARATION_TIMEOUT_MS = 30000L;
 
     private final List<NostrTURNChannelListener> listeners = new CopyOnWriteArrayList<>();
 
@@ -293,7 +294,7 @@ public final class NostrTURNChannel {
         }
     }
 
-    private synchronized void scheduleConnectAckTimeout() {
+    private synchronized void scheduleConnectAckTimeout(long timeoutMs) {
         cancelConnectAckTimeout();
         if (closed || state != 1) {
             return;
@@ -315,7 +316,7 @@ public final class NostrTURNChannel {
                         return null;
                     }
                 },
-                CONNECT_ACK_TIMEOUT_MS,
+                timeoutMs,
                 TimeUnit.MILLISECONDS
             );
     }
@@ -550,7 +551,9 @@ public final class NostrTURNChannel {
             requiredDifficulty
         );
         state = 1;
-        scheduleConnectAckTimeout();
+        // Signing and proof-of-work can outlast the server's ACK window. Bound
+        // preparation separately, then start the ACK deadline at wire submission.
+        scheduleConnectAckTimeout(CONNECT_PREPARATION_TIMEOUT_MS);
         sendControlEvent(connection);
     }
 
@@ -851,7 +854,7 @@ public final class NostrTURNChannel {
             }
             return;
         }
-        final long expectedAttempt = connectAttempt;
+        final AtomicLong expectedAttempt = new AtomicLong(connectAttempt);
         final boolean connecting = event instanceof NostrTURNConnectEvent;
         event
             .encodeToFrame(null)
@@ -859,9 +862,13 @@ public final class NostrTURNChannel {
                 synchronized (NostrTURNChannel.this) {
                     if (
                         connecting &&
-                        (closed || state != 1 || connectAttempt != expectedAttempt || transport != currentTransport)
+                        (closed || state != 1 || connectAttempt != expectedAttempt.get() || transport != currentTransport)
                     ) {
                         return AsyncTask.completed(null);
+                    }
+                    if (connecting) {
+                        scheduleConnectAckTimeout(CONNECT_ACK_TIMEOUT_MS);
+                        expectedAttempt.set(connectAttempt);
                     }
                     return currentTransport.getTransport().sendBinary(bbf);
                 }
@@ -873,7 +880,7 @@ public final class NostrTURNChannel {
                         connecting &&
                         !closed &&
                         state == 1 &&
-                        connectAttempt == expectedAttempt &&
+                        connectAttempt == expectedAttempt.get() &&
                         transport == currentTransport
                     ) {
                         cancelConnectAckTimeout();
