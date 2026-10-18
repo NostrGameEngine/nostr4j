@@ -67,14 +67,14 @@ public final class DocumentationSmokeTest {
             }
 
             NostrEventCache cache = new NostrEventCache(new NostrInMemoryEventStore(4));
-            cache.put(event.getId(), event).await();
+            cache.put(event).await();
             if (!event.getId().equals(cache.get(event.getId()).await().getId())
                     || cache.query(List.of(new NostrFilter().withKind(1).limit(1))).await().size() != 1) {
                 throw new AssertionError("Documented cache insertion/query did not retain the signed event");
             }
             boolean rejected = false;
             try {
-                cache.put(event.getId(), tampered).await();
+                cache.put(tampered).await();
             } catch (Exception invalid) {
                 rejected = true;
             }

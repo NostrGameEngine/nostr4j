@@ -18,7 +18,7 @@ NostrEventCache cache = new NostrEventCache(store);
 cache.setTtl(Duration.ofMinutes(10)).await();
 cache.setReplaceableTtl(Duration.ofSeconds(30)).await();
 
-cache.put(event.getId(), event).await();
+cache.put(event).await();
 SignedNostrEvent saved = cache.get(event.getId()).await();
 List<SignedNostrEvent> notes = cache.query(
     List.of(new NostrFilter().withKind(1).limit(20))).await();

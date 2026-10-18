@@ -73,8 +73,8 @@ loadScripts(document, 'script');</script>
 <li><a href="#setHonorDeletions(boolean)" tabindex="0">setHonorDeletions(boolean)</a></li>
 <li><a href="#get(java.lang.String)" tabindex="0">get(String)</a></li>
 <li><a href="#isDeleted(org.ngengine.nostr4j.event.SignedNostrEvent)" tabindex="0">isDeleted(SignedNostrEvent)</a></li>
-<li><a href="#put(java.lang.String,org.ngengine.nostr4j.event.SignedNostrEvent)" tabindex="0">put(String, SignedNostrEvent)</a></li>
-<li><a href="#put(java.lang.String,org.ngengine.nostr4j.event.SignedNostrEvent,boolean)" tabindex="0">put(String, SignedNostrEvent, boolean)</a></li>
+<li><a href="#put(org.ngengine.nostr4j.event.SignedNostrEvent)" tabindex="0">put(SignedNostrEvent)</a></li>
+<li><a href="#put(org.ngengine.nostr4j.event.SignedNostrEvent,boolean)" tabindex="0">put(SignedNostrEvent, boolean)</a></li>
 <li><a href="#remove(java.lang.String)" tabindex="0">remove(String)</a></li>
 <li><a href="#invalidate(java.lang.String)" tabindex="0">invalidate(String)</a></li>
 <li><a href="#clear()" tabindex="0">clear()</a></li>
@@ -188,14 +188,12 @@ loadScripts(document, 'script');</script>
 <div class="block">Calls the listener after a new event is saved.</div>
 </div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>org.ngengine.platform.AsyncTask<wbr>&lt;<a href="../event/SignedNostrEvent.html" title="class in org.ngengine.nostr4j.event">SignedNostrEvent</a>&gt;</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#put(java.lang.String,org.ngengine.nostr4j.event.SignedNostrEvent)" class="member-name-link">put</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;id,
- <a href="../event/SignedNostrEvent.html" title="class in org.ngengine.nostr4j.event">SignedNostrEvent</a>&nbsp;event)</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#put(org.ngengine.nostr4j.event.SignedNostrEvent)" class="member-name-link">put</a><wbr>(<a href="../event/SignedNostrEvent.html" title="class in org.ngengine.nostr4j.event">SignedNostrEvent</a>&nbsp;event)</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
 <div class="block">Verifies and saves an event.</div>
 </div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>org.ngengine.platform.AsyncTask<wbr>&lt;<a href="../event/SignedNostrEvent.html" title="class in org.ngengine.nostr4j.event">SignedNostrEvent</a>&gt;</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#put(java.lang.String,org.ngengine.nostr4j.event.SignedNostrEvent,boolean)" class="member-name-link">put</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;id,
- <a href="../event/SignedNostrEvent.html" title="class in org.ngengine.nostr4j.event">SignedNostrEvent</a>&nbsp;event,
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#put(org.ngengine.nostr4j.event.SignedNostrEvent,boolean)" class="member-name-link">put</a><wbr>(<a href="../event/SignedNostrEvent.html" title="class in org.ngengine.nostr4j.event">SignedNostrEvent</a>&nbsp;event,
  boolean&nbsp;notify)</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
 <div class="block">Verifies and saves an event, optionally notifying listeners after the write.</div>
@@ -339,7 +337,7 @@ loadScripts(document, 'script');</script>
 <h3>setHonorDeletions</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">org.ngengine.platform.AsyncTask&lt;<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Void.html" title="class or interface in java.lang" class="external-link">Void</a>&gt;</span>&nbsp;<span class="element-name">setHonorDeletions</span><wbr><span class="parameters">(boolean&nbsp;enabled)</span></div>
-<div class="block">Controls whether author deletion requests hide earlier events.</div>
+<div class="block">Controls whether author deletion requests hide earlier events. Enabled by default.</div>
 </div>
 </section>
 </li>
@@ -362,21 +360,19 @@ loadScripts(document, 'script');</script>
 </section>
 </li>
 <li>
-<section class="detail" id="put(java.lang.String,org.ngengine.nostr4j.event.SignedNostrEvent)">
+<section class="detail" id="put(org.ngengine.nostr4j.event.SignedNostrEvent)">
 <h3>put</h3>
 <div class="horizontal-scroll">
-<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">org.ngengine.platform.AsyncTask&lt;<a href="../event/SignedNostrEvent.html" title="class in org.ngengine.nostr4j.event">SignedNostrEvent</a>&gt;</span>&nbsp;<span class="element-name">put</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;id,
- <a href="../event/SignedNostrEvent.html" title="class in org.ngengine.nostr4j.event">SignedNostrEvent</a>&nbsp;event)</span></div>
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">org.ngengine.platform.AsyncTask&lt;<a href="../event/SignedNostrEvent.html" title="class in org.ngengine.nostr4j.event">SignedNostrEvent</a>&gt;</span>&nbsp;<span class="element-name">put</span><wbr><span class="parameters">(<a href="../event/SignedNostrEvent.html" title="class in org.ngengine.nostr4j.event">SignedNostrEvent</a>&nbsp;event)</span></div>
 <div class="block">Verifies and saves an event. Saving a duplicate does not extend its lifetime.</div>
 </div>
 </section>
 </li>
 <li>
-<section class="detail" id="put(java.lang.String,org.ngengine.nostr4j.event.SignedNostrEvent,boolean)">
+<section class="detail" id="put(org.ngengine.nostr4j.event.SignedNostrEvent,boolean)">
 <h3>put</h3>
 <div class="horizontal-scroll">
-<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">org.ngengine.platform.AsyncTask&lt;<a href="../event/SignedNostrEvent.html" title="class in org.ngengine.nostr4j.event">SignedNostrEvent</a>&gt;</span>&nbsp;<span class="element-name">put</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;id,
- <a href="../event/SignedNostrEvent.html" title="class in org.ngengine.nostr4j.event">SignedNostrEvent</a>&nbsp;event,
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">org.ngengine.platform.AsyncTask&lt;<a href="../event/SignedNostrEvent.html" title="class in org.ngengine.nostr4j.event">SignedNostrEvent</a>&gt;</span>&nbsp;<span class="element-name">put</span><wbr><span class="parameters">(<a href="../event/SignedNostrEvent.html" title="class in org.ngengine.nostr4j.event">SignedNostrEvent</a>&nbsp;event,
  boolean&nbsp;notify)</span></div>
 <div class="block">Verifies and saves an event, optionally notifying listeners after the write.</div>
 </div>

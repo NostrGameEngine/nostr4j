@@ -2090,9 +2090,17 @@ using the provided time.</div>
 <dd>&nbsp;</dd>
 <dt><a href="org/ngengine/nostr4j/rtc/turn/NostrTURNDisconnectEvent.html#getReason()" class="member-name-link">getReason()</a> - Method in class org.ngengine.nostr4j.rtc.turn.<a href="org/ngengine/nostr4j/rtc/turn/NostrTURNDisconnectEvent.html" title="class in org.ngengine.nostr4j.rtc.turn">NostrTURNDisconnectEvent</a></dt>
 <dd>&nbsp;</dd>
+<dt><a href="org/ngengine/wallets/nip47/NWCWallet.html#getReceivingAddress()" class="member-name-link">getReceivingAddress()</a> - Method in class org.ngengine.wallets.nip47.<a href="org/ngengine/wallets/nip47/NWCWallet.html" title="class in org.ngengine.wallets.nip47">NWCWallet</a></dt>
+<dd>
+<div class="block">Returns the Lightning Address from the connection URI, or null if absent.</div>
+</dd>
+<dt><a href="org/ngengine/wallets/Wallet.html#getReceivingAddress()" class="member-name-link">getReceivingAddress()</a> - Method in interface org.ngengine.wallets.<a href="org/ngengine/wallets/Wallet.html" title="interface in org.ngengine.wallets">Wallet</a></dt>
+<dd>
+<div class="block">Returns the wallet's Lightning Address or LNURL, or null if unavailable.</div>
+</dd>
 <dt><a href="org/ngengine/wallets/webln/WebLNWallet.html#getReceivingAddress()" class="member-name-link">getReceivingAddress()</a> - Method in class org.ngengine.wallets.webln.<a href="org/ngengine/wallets/webln/WebLNWallet.html" title="class in org.ngengine.wallets.webln">WebLNWallet</a></dt>
 <dd>
-<div class="block">Returns the optional receiving-address suggestion reported by the provider.</div>
+<div class="block">Returns the provider's lud16, lightningAddress or lud06, or null if unavailable.</div>
 </dd>
 <dt><a href="org/ngengine/nostr4j/nip57/ZapReceipt.html#getRecipient()" class="member-name-link">getRecipient()</a> - Method in class org.ngengine.nostr4j.nip57.<a href="org/ngengine/nostr4j/nip57/ZapReceipt.html" title="class in org.ngengine.nostr4j.nip57">ZapReceipt</a></dt>
 <dd>&nbsp;</dd>
@@ -4149,11 +4157,11 @@ from Nostr relays.</div>
 <dd>&nbsp;</dd>
 <dt><a href="org/ngengine/nostr4j/NostrPool.html#publish(org.ngengine.nostr4j.event.SignedNostrEvent,org.ngengine.nostr4j.pool.ackpolicy.NostrPoolAckPolicy)" class="member-name-link">publish(SignedNostrEvent, NostrPoolAckPolicy)</a> - Method in class org.ngengine.nostr4j.<a href="org/ngengine/nostr4j/NostrPool.html" title="class in org.ngengine.nostr4j">NostrPool</a></dt>
 <dd>&nbsp;</dd>
-<dt><a href="org/ngengine/nostr4j/store/NostrEventCache.html#put(java.lang.String,org.ngengine.nostr4j.event.SignedNostrEvent)" class="member-name-link">put(String, SignedNostrEvent)</a> - Method in class org.ngengine.nostr4j.store.<a href="org/ngengine/nostr4j/store/NostrEventCache.html" title="class in org.ngengine.nostr4j.store">NostrEventCache</a></dt>
+<dt><a href="org/ngengine/nostr4j/store/NostrEventCache.html#put(org.ngengine.nostr4j.event.SignedNostrEvent)" class="member-name-link">put(SignedNostrEvent)</a> - Method in class org.ngengine.nostr4j.store.<a href="org/ngengine/nostr4j/store/NostrEventCache.html" title="class in org.ngengine.nostr4j.store">NostrEventCache</a></dt>
 <dd>
 <div class="block">Verifies and saves an event.</div>
 </dd>
-<dt><a href="org/ngengine/nostr4j/store/NostrEventCache.html#put(java.lang.String,org.ngengine.nostr4j.event.SignedNostrEvent,boolean)" class="member-name-link">put(String, SignedNostrEvent, boolean)</a> - Method in class org.ngengine.nostr4j.store.<a href="org/ngengine/nostr4j/store/NostrEventCache.html" title="class in org.ngengine.nostr4j.store">NostrEventCache</a></dt>
+<dt><a href="org/ngengine/nostr4j/store/NostrEventCache.html#put(org.ngengine.nostr4j.event.SignedNostrEvent,boolean)" class="member-name-link">put(SignedNostrEvent, boolean)</a> - Method in class org.ngengine.nostr4j.store.<a href="org/ngengine/nostr4j/store/NostrEventCache.html" title="class in org.ngengine.nostr4j.store">NostrEventCache</a></dt>
 <dd>
 <div class="block">Verifies and saves an event, optionally notifying listeners after the write.</div>
 </dd>
