@@ -190,9 +190,10 @@ public interface NostrEvent extends Cloneable, Serializable {
                 executor.run(() -> {
                     try {
                         int nonce = 0;
-
+                        if (event.getCreatedAt() == null) event.createdAt(Instant.now());
+                        // Other tags can already be signed against this timestamp.
+                        // Preserve it while searching for the proof-of-work nonce.
                         do {
-                            event.createdAt(Instant.now());
                             event.replaceTag("nonce", "" + nonce, "" + difficulty);
                             String id = NostrEvent.computeEventId(pubkey.asHex(), event);
                             int leadingZeroes = ZeroCounter.countLeadingZeroes(id);
