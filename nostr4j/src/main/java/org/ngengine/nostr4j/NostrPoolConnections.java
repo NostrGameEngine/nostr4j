@@ -10,7 +10,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
-import org.ngengine.nostr4j.cache.NostrCacheRelay;
+import org.ngengine.nostr4j.store.NostrCacheRelay;
 import org.ngengine.platform.AsyncExecutor;
 import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEUtils;

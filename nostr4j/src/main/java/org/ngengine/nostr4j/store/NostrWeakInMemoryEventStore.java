@@ -1,7 +1,7 @@
 /**
  * BSD 3-Clause License
  *
- * Copyright (c) 2025, Riccardo Balbo
+ * Copyright (c) 2026, Riccardo Balbo
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -28,19 +28,43 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-
 package org.ngengine.nostr4j.store;
 
-import java.util.List;
-import org.ngengine.nostr4j.NostrFilter;
+import java.lang.ref.ReferenceQueue;
+import java.lang.ref.WeakReference;
+import java.util.function.Supplier;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 
-public interface EventStore {
-    public void addEvent(SignedNostrEvent event);
+/**
+ * Stores events in memory using weak references.
+ */
+public final class NostrWeakInMemoryEventStore extends NostrInMemoryEventStore {
+    private static final class EventReference extends WeakReference<SignedNostrEvent> {
+        final String id;
+        EventReference(SignedNostrEvent event, ReferenceQueue<SignedNostrEvent> queue) {
+            super(event, queue);
+            id = event.getId();
+        }
+    }
+    private final ReferenceQueue<SignedNostrEvent> collected = new ReferenceQueue<>();
 
-    public default List<SignedNostrEvent> getEvents(List<NostrFilter> filters) {
-        return getEvents(filters, null);
+    @Override
+    protected void cleanup() {
+        EventReference reference;
+        while ((reference = (EventReference) collected.poll()) != null) removeCollected(reference.id);
     }
 
-    public List<SignedNostrEvent> getEvents(List<NostrFilter> filters, List<SignedNostrEvent> results);
+    public NostrWeakInMemoryEventStore() {
+        super();
+    }
+
+    public NostrWeakInMemoryEventStore(int capacity) {
+        super(capacity);
+    }
+
+    @Override
+    protected Supplier<SignedNostrEvent> retain(SignedNostrEvent event) {
+        WeakReference<SignedNostrEvent> reference = new EventReference(event, collected);
+        return reference::get;
+    }
 }

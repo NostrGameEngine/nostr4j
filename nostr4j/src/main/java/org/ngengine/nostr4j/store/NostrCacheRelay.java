@@ -28,7 +28,7 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package org.ngengine.nostr4j.cache;
+package org.ngengine.nostr4j.store;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -52,10 +52,7 @@ import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEUtils;
 
 /**
- * Serves verified cached events through the ordinary subscription and fetch-policy APIs.
- * Historical results use EVENT followed by EOSE; subsequent cache insertions can be
- * forwarded to open subscriptions. The relay owns its executor and cache observation,
- * while the supplied cache remains owned by the caller. Search filters are not answered locally.
+ * Serves cached events as a local relay.
  */
 public final class NostrCacheRelay extends NostrRelay implements AutoCloseable {
     private final NostrEventCache cache;
@@ -82,11 +79,13 @@ public final class NostrCacheRelay extends NostrRelay implements AutoCloseable {
         return cache;
     }
 
-    @Override public NostrRelayInfo getInfo() {
+    @Override
+    public NostrRelayInfo getInfo() {
         return new NostrRelayInfo(getUrl(), Map.of("name", "Local event cache", "description", "In-process verified event storage"));
     }
 
-    @Override public AsyncTask<NostrRelay> connect() {
+    @Override
+    public AsyncTask<NostrRelay> connect() {
         if (isConnected()) return AsyncTask.completed(this);
         updateStatus(Status.CONNECTED);
         if (pruning == null) pruneLater();
@@ -94,7 +93,8 @@ public final class NostrCacheRelay extends NostrRelay implements AutoCloseable {
         return AsyncTask.completed(this);
     }
 
-    @Override public AsyncTask<NostrRelay> disconnect(String reason, boolean reconnect) {
+    @Override
+    public AsyncTask<NostrRelay> disconnect(String reason, boolean reconnect) {
         if (pruning != null) { pruning.cancel(); pruning = null; }
         active.clear();
         updateStatus(Status.DISCONNECTED);
@@ -102,21 +102,23 @@ public final class NostrCacheRelay extends NostrRelay implements AutoCloseable {
         return AsyncTask.completed(this);
     }
 
-    @Override public void resetConnection() {
+    @Override
+    public void resetConnection() {
         connect();
     }
 
     private void pruneLater() {
         pruning = executor.runLater(() -> {
             if (isConnected()) {
-                cache.clean().then(ignored -> { if (isConnected()) pruneLater(); return null; })
+                cache.clean(64).then(ignored -> { if (isConnected()) pruneLater(); return null; })
                     .catchException(error -> { if (isConnected()) pruneLater(); });
             }
             return null;
         }, 1, TimeUnit.SECONDS);
     }
 
-    @Override public AsyncTask<NostrMessageAck> sendMessage(NostrMessage message) {
+    @Override
+    public AsyncTask<NostrMessageAck> sendMessage(NostrMessage message) {
         NostrMessageAck ack = NostrMessage.ack(this, message instanceof NostrSubscription ? ((NostrSubscription) message).getId() : "local",
             Instant.now(), null, null);
         for (NostrRelayComponent component : listeners) component.onRelaySend(this, message);
@@ -156,7 +158,8 @@ public final class NostrCacheRelay extends NostrRelay implements AutoCloseable {
         for (NostrRelayComponent component : listeners) if (!component.onRelayMessage(this, message)) break;
     }
 
-    @Override public void close() {
+    @Override
+    public void close() {
         disconnect("Cache relay closed", false);
         try { observation.close(); } catch (Exception ignored) { }
         executor.close();

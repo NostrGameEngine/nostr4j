@@ -12,13 +12,14 @@ import org.junit.Test;
 import org.ngengine.nostr4j.*;
 import org.ngengine.nostr4j.NostrPool;
 import org.ngengine.nostr4j.NostrSubscription;
-import org.ngengine.nostr4j.cache.NostrCacheRelay;
-import org.ngengine.nostr4j.cache.NostrMemoryOnlyEventCache;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.listeners.NostrRelayComponent;
 import org.ngengine.nostr4j.pool.fetchpolicy.NostrWaitForEventFetchPolicy;
 import org.ngengine.nostr4j.proto.NostrMessage;
 import org.ngengine.nostr4j.proto.NostrMessageAck;
+import org.ngengine.nostr4j.store.NostrCacheRelay;
+import org.ngengine.nostr4j.store.NostrEventCache;
+import org.ngengine.nostr4j.store.NostrInMemoryEventStore;
 import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEUtils;
 
@@ -213,7 +214,7 @@ public class TestConnectionBudget {
         NostrPool pool = new NostrPool();
         Relay a = new Relay("wss://a.test");
         Relay b = new Relay("wss://b.test");
-        NostrCacheRelay local = new NostrCacheRelay(new NostrMemoryOnlyEventCache(10));
+        NostrCacheRelay local = new NostrCacheRelay(new NostrEventCache(new NostrInMemoryEventStore(10)));
         try {
             pool.setConnectionBudget(1);
             a.setConnectionPriority(100);

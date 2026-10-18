@@ -56,8 +56,6 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import org.ngengine.nostr4j.cache.NostrCacheRelay;
-import org.ngengine.nostr4j.cache.NostrEventCache;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.event.SignedNostrEvent.ReceivedSignedNostrEvent;
 import org.ngengine.nostr4j.event.tracker.EventTracker;
@@ -76,6 +74,8 @@ import org.ngengine.nostr4j.proto.NostrMessageAck.Status;
 import org.ngengine.nostr4j.proto.impl.NostrClosedMessage;
 import org.ngengine.nostr4j.proto.impl.NostrEOSEMessage;
 import org.ngengine.nostr4j.proto.impl.NostrNoticeMessage;
+import org.ngengine.nostr4j.store.NostrCacheRelay;
+import org.ngengine.nostr4j.store.NostrEventCache;
 import org.ngengine.nostr4j.utils.UniqueId;
 import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEPlatform;
@@ -644,7 +644,8 @@ public class NostrPool {
         NostrFilter filter,
         int numEvents,
         boolean withEose,
-        @Nullable Duration timeout
+        @Nullable
+        Duration timeout
     ) {
         return fetch(Arrays.asList(filter), NostrWaitForEventFetchPolicy.get(e -> true, numEvents, withEose, timeout));
     }

@@ -5,8 +5,8 @@ import static org.junit.Assert.*;
 import java.lang.reflect.Field;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.List;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -15,8 +15,6 @@ import org.junit.Test;
 import org.ngengine.nostr4j.*;
 import org.ngengine.nostr4j.NostrPool;
 import org.ngengine.nostr4j.NostrSubscription;
-import org.ngengine.nostr4j.cache.NostrCacheRelay;
-import org.ngengine.nostr4j.cache.NostrMemoryOnlyEventCache;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.event.UnsignedNostrEvent;
 import org.ngengine.nostr4j.listeners.NostrRelayComponent;
@@ -27,6 +25,9 @@ import org.ngengine.nostr4j.proto.NostrMessage;
 import org.ngengine.nostr4j.proto.NostrMessageAck;
 import org.ngengine.nostr4j.proto.impl.NostrEOSEMessage;
 import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
+import org.ngengine.nostr4j.store.NostrCacheRelay;
+import org.ngengine.nostr4j.store.NostrEventCache;
+import org.ngengine.nostr4j.store.NostrInMemoryEventStore;
 import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEUtils;
 
@@ -35,9 +36,12 @@ public class TestPriorityCacheRelay {
         final List<NostrSubscription> requests=new CopyOnWriteArrayList<>();
         final AtomicInteger closes=new AtomicInteger(),publications=new AtomicInteger();
         Relay(String url) {super(url,NGEUtils.getPlatform().newAsyncExecutor(Relay.class),true);}
-        @Override public AsyncTask<NostrRelay> connect() {if(isConnected()) return AsyncTask.completed(this);updateStatus(Status.CONNECTED);for(NostrRelayComponent component:listeners) component.onRelayConnect(this);return AsyncTask.completed(this);}
-        @Override public AsyncTask<NostrRelay> disconnect(String reason,boolean reconnect) {updateStatus(Status.DISCONNECTED);executor.close();return AsyncTask.completed(this);}
-        @Override public AsyncTask<NostrMessageAck> sendMessage(NostrMessage message) {
+        @Override
+        public AsyncTask<NostrRelay> connect() {if(isConnected()) return AsyncTask.completed(this);updateStatus(Status.CONNECTED);for(NostrRelayComponent component:listeners) component.onRelayConnect(this);return AsyncTask.completed(this);}
+        @Override
+        public AsyncTask<NostrRelay> disconnect(String reason,boolean reconnect) {updateStatus(Status.DISCONNECTED);executor.close();return AsyncTask.completed(this);}
+        @Override
+        public AsyncTask<NostrMessageAck> sendMessage(NostrMessage message) {
             for(NostrRelayComponent component:listeners) component.onRelaySend(this,message);
             if(message instanceof NostrSubscription) requests.add((NostrSubscription)message);
             if(NostrMessage.toSerial(message).get(0).equals("CLOSE")) closes.incrementAndGet();
@@ -55,8 +59,9 @@ public class TestPriorityCacheRelay {
         assertTrue(condition.getAsBoolean());
     }
 
-    @Test public void cacheStreamsFirstButAllEoseIncludesUnstartedNetworkRelays() throws Exception {
-        NostrKeyPairSigner signer=NostrKeyPairSigner.generate();NostrMemoryOnlyEventCache cache=new NostrMemoryOnlyEventCache(10);NostrCacheRelay local=new NostrCacheRelay(cache);Relay remote=new Relay("wss://test.invalid");NostrPool pool=new NostrPool();
+    @Test
+    public void cacheStreamsFirstButAllEoseIncludesUnstartedNetworkRelays() throws Exception {
+        NostrKeyPairSigner signer=NostrKeyPairSigner.generate();NostrEventCache cache=new NostrEventCache(new NostrInMemoryEventStore(10));NostrCacheRelay local=new NostrCacheRelay(cache);Relay remote=new Relay("wss://test.invalid");NostrPool pool=new NostrPool();
         try {
             SignedNostrEvent event=signer.sign(new UnsignedNostrEvent().withKind(1).withContent("Cached")).await();cache.put(event.getId(),event).await();
             pool.addRelay(remote).await();pool.addRelay(local).await();CopyOnWriteArrayList<String> seen=new CopyOnWriteArrayList<String>();CopyOnWriteArrayList<Boolean> all=new CopyOnWriteArrayList<Boolean>();
@@ -66,16 +71,18 @@ public class TestPriorityCacheRelay {
         } finally {pool.clean();local.close();remote.disconnect("cleanup",false);signer.close();}
     }
 
-    @Test public void requestedCountCanFinishInCacheWithoutStartingLowerPriorityTier() throws Exception {
-        NostrKeyPairSigner signer=NostrKeyPairSigner.generate();NostrMemoryOnlyEventCache cache=new NostrMemoryOnlyEventCache(10);NostrCacheRelay local=new NostrCacheRelay(cache);Relay remote=new Relay("wss://test.invalid");NostrPool pool=new NostrPool();
+    @Test
+    public void requestedCountCanFinishInCacheWithoutStartingLowerPriorityTier() throws Exception {
+        NostrKeyPairSigner signer=NostrKeyPairSigner.generate();NostrEventCache cache=new NostrEventCache(new NostrInMemoryEventStore(10));NostrCacheRelay local=new NostrCacheRelay(cache);Relay remote=new Relay("wss://test.invalid");NostrPool pool=new NostrPool();
         try {
             SignedNostrEvent event=signer.sign(new UnsignedNostrEvent().withKind(1).withContent("Complete by ID")).await();cache.put(event.getId(),event).await();pool.addRelay(remote).await();pool.addRelay(local).await();
             assertEquals(1,pool.fetch(new NostrFilter().withId(event.getId()),1,false,Duration.ofSeconds(2)).await().size());assertTrue(remote.requests.isEmpty());
         } finally {pool.clean();local.close();remote.disconnect("cleanup",false);signer.close();}
     }
 
-    @Test public void networkCapturePreservesStoredFlagAndDirectCacheInsertsRemainLive() throws Exception {
-        NostrKeyPairSigner signer=NostrKeyPairSigner.generate();NostrMemoryOnlyEventCache cache=new NostrMemoryOnlyEventCache(10);NostrCacheRelay local=new NostrCacheRelay(cache);Relay remote=new Relay("wss://test.invalid");NostrPool pool=new NostrPool();
+    @Test
+    public void networkCapturePreservesStoredFlagAndDirectCacheInsertsRemainLive() throws Exception {
+        NostrKeyPairSigner signer=NostrKeyPairSigner.generate();NostrEventCache cache=new NostrEventCache(new NostrInMemoryEventStore(10));NostrCacheRelay local=new NostrCacheRelay(cache);Relay remote=new Relay("wss://test.invalid");NostrPool pool=new NostrPool();
         try {
             pool.addRelay(remote).await();pool.addRelay(local).await();assertEquals("Local event cache",local.getInfo().getName());
             CopyOnWriteArrayList<Boolean> seen=new CopyOnWriteArrayList<Boolean>();NostrSubscription sub=pool.subscribe(new NostrFilter().withKind(1));sub.addEventListener((s,e,stored)->seen.add(stored));sub.open();
@@ -88,21 +95,27 @@ public class TestPriorityCacheRelay {
         } finally {pool.clean();local.close();remote.disconnect("cleanup",false);signer.close();}
     }
 
-    @Test public void firstEosePolicyIsRespectedAndNetworkPublishesNeverUseLocalAcks() throws Exception {
-        NostrKeyPairSigner signer=NostrKeyPairSigner.generate();NostrMemoryOnlyEventCache cache=new NostrMemoryOnlyEventCache(10);NostrCacheRelay local=new NostrCacheRelay(cache);Relay remote=new Relay("wss://test.invalid");NostrPool pool=new NostrPool();
+    @Test
+    public void firstEosePolicyIsRespectedAndNetworkPublishesNeverUseLocalAcks() throws Exception {
+        NostrKeyPairSigner signer=NostrKeyPairSigner.generate();NostrEventCache cache=new NostrEventCache(new NostrInMemoryEventStore(10));NostrCacheRelay local=new NostrCacheRelay(cache);Relay remote=new Relay("wss://test.invalid");NostrPool pool=new NostrPool();
         try {
             pool.addRelay(local).await();pool.addRelay(remote).await();
             AsyncTask<List<SignedNostrEvent>> task=pool.fetch(List.of(new NostrFilter()),(sub,events,end)->new NostrSubAllListener(){
-                @Override public void onSubEose(NostrSubscription s,NostrRelay relay,boolean all){end.run();}
-                @Override public void onSubEvent(NostrSubscription s,SignedNostrEvent event,boolean stored){ }
-                @Override public void onSubOpen(NostrSubscription s){ }
-                @Override public void onSubClose(NostrSubscription s,List<String> reasons){ }
+                @Override
+                public void onSubEose(NostrSubscription s,NostrRelay relay,boolean all){end.run();}
+                @Override
+                public void onSubEvent(NostrSubscription s,SignedNostrEvent event,boolean stored){ }
+                @Override
+                public void onSubOpen(NostrSubscription s){ }
+                @Override
+                public void onSubClose(NostrSubscription s,List<String> reasons){ }
             });task.await();assertTrue(remote.requests.isEmpty());
             SignedNostrEvent event=signer.sign(new UnsignedNostrEvent().withKind(1).withContent("Network ACK")).await();List<AsyncTask<NostrMessageAck>> acknowledgements=pool.publish(event).await();assertEquals(1,acknowledgements.size());assertEquals(remote,acknowledgements.get(0).await().getRelay());
         } finally {pool.clean();local.close();remote.disconnect("cleanup",false);signer.close();}
     }
 
-    @Test public void priorityTimeoutFallsBackAndCancellationClosesReqWithoutDisconnectingRelay() throws Exception {
+    @Test
+    public void priorityTimeoutFallsBackAndCancellationClosesReqWithoutDisconnectingRelay() throws Exception {
         Relay high=new Relay("wss://high.invalid");high.setQueryPriority(10);Relay low=new Relay("wss://low.invalid");NostrPool pool=new NostrPool();pool.setPriorityTimeout(Duration.ofMillis(30));
         try {
             pool.addRelay(high).await();pool.addRelay(low).await();AsyncTask<List<SignedNostrEvent>> task=pool.fetch(new NostrFilter().withKind(1),10,false,Duration.ofSeconds(2));
@@ -110,7 +123,8 @@ public class TestPriorityCacheRelay {
         } finally {pool.clean();high.disconnect("cleanup",false);low.disconnect("cleanup",false);}
     }
 
-    @Test public void tierDeadlineIsNotAnEoseAndRemovingRelayUnblocksLowerPriority() throws Exception {
+    @Test
+    public void tierDeadlineIsNotAnEoseAndRemovingRelayUnblocksLowerPriority() throws Exception {
         Relay high=new Relay("wss://high.invalid");high.setQueryPriority(10);Relay low=new Relay("wss://low.invalid");NostrPool pool=new NostrPool();pool.setPriorityTimeout(Duration.ofMillis(30));
         try {
             pool.addRelay(high).await();pool.addRelay(low).await();CopyOnWriteArrayList<Boolean> all=new CopyOnWriteArrayList<Boolean>();
@@ -123,8 +137,9 @@ public class TestPriorityCacheRelay {
         } finally {pool.clean();high.disconnect("cleanup",false);low.disconnect("cleanup",false);}
     }
 
-    @Test public void cacheOnlyPoolCannotAcknowledgeNetworkPublication() throws Exception {
-        NostrKeyPairSigner signer=NostrKeyPairSigner.generate();NostrCacheRelay local=new NostrCacheRelay(new NostrMemoryOnlyEventCache(10));NostrPool pool=new NostrPool();
+    @Test
+    public void cacheOnlyPoolCannotAcknowledgeNetworkPublication() throws Exception {
+        NostrKeyPairSigner signer=NostrKeyPairSigner.generate();NostrCacheRelay local=new NostrCacheRelay(new NostrEventCache(new NostrInMemoryEventStore(10)));NostrPool pool=new NostrPool();
         try {
             pool.addRelay(local).await();SignedNostrEvent event=signer.sign(new UnsignedNostrEvent().withKind(1).withContent("No network")).await();
             try {pool.publish(event).await();fail("A local cache is not a network publication");}
@@ -132,8 +147,9 @@ public class TestPriorityCacheRelay {
         } finally {pool.clean();local.close();signer.close();}
     }
 
-    @Test public void liveCacheDeliveryDoesNotHoldTheSubscriptionRegistryMonitor() throws Exception {
-        NostrKeyPairSigner signer=NostrKeyPairSigner.generate();NostrMemoryOnlyEventCache cache=new NostrMemoryOnlyEventCache(10);NostrCacheRelay local=new NostrCacheRelay(cache);NostrPool pool=new NostrPool();
+    @Test
+    public void liveCacheDeliveryDoesNotHoldTheSubscriptionRegistryMonitor() throws Exception {
+        NostrKeyPairSigner signer=NostrKeyPairSigner.generate();NostrEventCache cache=new NostrEventCache(new NostrInMemoryEventStore(10));NostrCacheRelay local=new NostrCacheRelay(cache);NostrPool pool=new NostrPool();
         try {
             Field registry=NostrCacheRelay.class.getDeclaredField("active");registry.setAccessible(true);Object lock=registry.get(local);
             pool.addRelay(local).await();CopyOnWriteArrayList<Boolean> received=new CopyOnWriteArrayList<Boolean>();AtomicInteger eose=new AtomicInteger();
@@ -148,7 +164,7 @@ public class TestPriorityCacheRelay {
     @Test
     public void rejectedCacheInsertionDoesNotDeduplicateAValidLaterDelivery() throws Exception {
         NostrKeyPairSigner signer = NostrKeyPairSigner.generate();
-        NostrMemoryOnlyEventCache cache = new NostrMemoryOnlyEventCache(10);
+        NostrEventCache cache = new NostrEventCache(new NostrInMemoryEventStore(10));
         NostrCacheRelay local = new NostrCacheRelay(cache);
         Relay remote = new Relay("wss://test.invalid");
         NostrPool pool = new NostrPool();

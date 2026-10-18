@@ -38,6 +38,7 @@ tasks.register('cacheTest', Test) {
     filter {
         includeTestsMatching 'org.ngengine.nostr4j.unit.TestAnonSigner'
         includeTestsMatching 'org.ngengine.nostr4j.unit.TestEventCache'
+        includeTestsMatching 'org.ngengine.nostr4j.unit.TestEventStore'
         includeTestsMatching 'org.ngengine.nostr4j.unit.TestVStoreEventCache'
         includeTestsMatching 'org.ngengine.nostr4j.unit.TestPriorityCacheRelay'
         includeTestsMatching 'org.ngengine.nostr4j.unit.TestConnectionBudget'

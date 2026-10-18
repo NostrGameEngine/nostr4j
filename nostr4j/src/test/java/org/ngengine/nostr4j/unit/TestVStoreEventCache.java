@@ -52,11 +52,12 @@ import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import org.ngengine.nostr4j.NostrFilter;
 import org.ngengine.nostr4j.NostrPool;
-import org.ngengine.nostr4j.cache.NostrCacheRelay;
-import org.ngengine.nostr4j.cache.NostrVStoreEventCache;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.event.UnsignedNostrEvent;
 import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
+import org.ngengine.nostr4j.store.NostrCacheRelay;
+import org.ngengine.nostr4j.store.NostrEventCache;
+import org.ngengine.nostr4j.store.NostrVStoreEventStore;
 import org.ngengine.platform.AsyncTask;
 import org.ngengine.platform.NGEPlatform;
 import org.ngengine.platform.VStore;
@@ -71,6 +72,7 @@ public class TestVStoreEventCache {
         final AtomicInteger payloadReads = new AtomicInteger();
         final AtomicInteger listings = new AtomicInteger();
         volatile boolean failWrites;
+        volatile boolean failIndexWrites;
 
         @Override
         public AsyncTask<InputStream> read(String path) {
@@ -85,7 +87,7 @@ public class TestVStoreEventCache {
             return AsyncTask.completed(new ByteArrayOutputStream() {
                 @Override
                 public void close() throws IOException {
-                    if (failWrites) throw new IOException("Injected write failure");
+                    if (failWrites || failIndexWrites && path.contains("/index/") && path.endsWith(".json")) throw new IOException("Injected write failure");
                     files.put(path, toByteArray());
                 }
             });
@@ -121,7 +123,7 @@ public class TestVStoreEventCache {
     public void coldIdLookupUsesShardsWithoutListingAndMemoryEvictionPreservesBacking() throws Exception {
         Backend backend = new Backend();
         VStore store = new VStore(backend);
-        NostrVStoreEventCache cache = new NostrVStoreEventCache(store, 1);
+        NostrEventCache cache = new NostrEventCache(new NostrVStoreEventStore(store, 1));
         NostrKeyPairSigner signer = NostrKeyPairSigner.generate();
         try {
             SignedNostrEvent first = note(signer, "First");
@@ -135,7 +137,7 @@ public class TestVStoreEventCache {
             assertEquals(1, backend.payloadReads.get());
             assertEquals(second.getId(), cache.get(second.getId()).await().getId());
             assertEquals(2, backend.payloadReads.get());
-            NostrVStoreEventCache reopened = new NostrVStoreEventCache(store, 0);
+            NostrEventCache reopened = new NostrEventCache(new NostrVStoreEventStore(store, 0));
             assertEquals(first.getId(), reopened.get(first.getId()).await().getId());
             assertEquals(0, backend.listings.get());
             assertNull(reopened.get("0".repeat(64)).await());
@@ -149,7 +151,7 @@ public class TestVStoreEventCache {
         Backend backend = new Backend();
         VStore store = new VStore(backend);
         AtomicReference<Instant> now = new AtomicReference<>(Instant.now());
-        NostrVStoreEventCache cache = new NostrVStoreEventCache(store, 1, now::get);
+        NostrEventCache cache = new NostrEventCache(new NostrVStoreEventStore(store, 1), 4096, now::get);
         NostrKeyPairSigner signer = NostrKeyPairSigner.generate();
         try {
             cache.setTtl(Duration.ofSeconds(120)).await();
@@ -157,7 +159,7 @@ public class TestVStoreEventCache {
             cache.put(event.getId(), event).await();
             now.set(now.get().plusSeconds(60));
             cache.put(event.getId(), event).await();
-            NostrVStoreEventCache reopened = new NostrVStoreEventCache(store, 0, now::get);
+            NostrEventCache reopened = new NostrEventCache(new NostrVStoreEventStore(store, 0), 4096, now::get);
             reopened.setTtl(Duration.ofSeconds(120)).await();
             assertNotNull(reopened.get(event.getId()).await());
             now.set(now.get().plusSeconds(61));
@@ -171,7 +173,7 @@ public class TestVStoreEventCache {
         Backend backend = new Backend();
         backend.files.put("caller-owned.txt", new byte[] { 1, 2, 3 });
         VStore store = new VStore(backend);
-        NostrVStoreEventCache cache = new NostrVStoreEventCache(store, 1);
+        NostrEventCache cache = new NostrEventCache(new NostrVStoreEventStore(store, 1));
         NostrKeyPairSigner signer = NostrKeyPairSigner.generate();
         try {
             cache.setHonorDeletions(true).await();
@@ -181,7 +183,7 @@ public class TestVStoreEventCache {
             cache.put(deletion.getId(), deletion).await();
             assertNull(cache.get(event.getId()).await());
             cache.clear().await();
-            NostrVStoreEventCache reopened = new NostrVStoreEventCache(store, 0);
+            NostrEventCache reopened = new NostrEventCache(new NostrVStoreEventStore(store, 0));
             reopened.setHonorDeletions(true).await();
             assertTrue(reopened.isDeleted(event).await());
             reopened.put(event.getId(), event).await();
@@ -195,7 +197,7 @@ public class TestVStoreEventCache {
     public void filterQueriesHonorLatestVersionsAndLimitsAcrossColdPayloads() throws Exception {
         Backend backend = new Backend();
         VStore store = new VStore(backend);
-        NostrVStoreEventCache cache = new NostrVStoreEventCache(store, 1);
+        NostrEventCache cache = new NostrEventCache(new NostrVStoreEventStore(store, 1));
         NostrKeyPairSigner signer = NostrKeyPairSigner.generate();
         try {
             cache.setReplaceableTtl(null).await();
@@ -205,7 +207,7 @@ public class TestVStoreEventCache {
                 .withContent("Latest")).await();
             SignedNostrEvent note = note(signer, "Note");
             for (SignedNostrEvent event : List.of(old, latest, note)) cache.put(event.getId(), event).await();
-            NostrVStoreEventCache reopened = new NostrVStoreEventCache(store, 0);
+            NostrEventCache reopened = new NostrEventCache(new NostrVStoreEventStore(store, 0));
             reopened.setReplaceableTtl(null).await();
             assertEquals(List.of(latest.getId()), reopened.query(List.of(new NostrFilter().withKind(30023))).await()
                 .stream().map(SignedNostrEvent::getId).collect(java.util.stream.Collectors.toList()));
@@ -220,7 +222,7 @@ public class TestVStoreEventCache {
     public void failedBackingWritesAreVisibleAndDoNotPublishMemoryOnlySuccess() throws Exception {
         Backend backend = new Backend();
         VStore store = new VStore(backend);
-        NostrVStoreEventCache cache = new NostrVStoreEventCache(store, 2);
+        NostrEventCache cache = new NostrEventCache(new NostrVStoreEventStore(store, 2));
         AtomicInteger notifications = new AtomicInteger();
         cache.observe(event -> notifications.incrementAndGet());
         NostrKeyPairSigner signer = NostrKeyPairSigner.generate();
@@ -233,7 +235,7 @@ public class TestVStoreEventCache {
             backend.failWrites = false;
             cache.put(event.getId(), event).await();
             assertEquals(1, notifications.get());
-            assertNotNull(new NostrVStoreEventCache(store, 0).get(event.getId()).await());
+            assertNotNull(new NostrEventCache(new NostrVStoreEventStore(store, 0)).get(event.getId()).await());
         } finally { signer.close(); }
     }
 
@@ -244,24 +246,24 @@ public class TestVStoreEventCache {
         NostrKeyPairSigner signer = NostrKeyPairSigner.generate();
         try {
             SignedNostrEvent event = note(signer, "Authentic");
-            new NostrVStoreEventCache(store, 0).put(event.getId(), event).await();
+            new NostrEventCache(new NostrVStoreEventStore(store, 0)).put(event.getId(), event).await();
             Map<String, Object> envelope = NGEPlatform.get().fromJSON(
                 new String(backend.files.get(payload(event.getId())), StandardCharsets.UTF_8), Map.class);
             Map<String, Object> modified = new LinkedHashMap<>((Map<String, Object>) envelope.get("event"));
             modified.put("content", "Changed after insertion");
             envelope.put("event", modified);
             backend.files.put(payload(event.getId()), NGEPlatform.get().toJSON(envelope).getBytes(StandardCharsets.UTF_8));
-            assertThrows(Exception.class, () -> new NostrVStoreEventCache(store, 0).get(event.getId()).await());
+            assertThrows(Exception.class, () -> new NostrEventCache(new NostrVStoreEventStore(store, 0)).get(event.getId()).await());
         } finally { signer.close(); }
     }
 
     @Test
     public void realFileSystemStoreCanBeReopenedAndFeedsOrdinaryFetchPolicies() throws Exception {
         VStore store = new VStore(new FileSystemVStore(temporary.newFolder().toPath()));
-        NostrVStoreEventCache writer = new NostrVStoreEventCache(store, 1);
+        NostrEventCache writer = new NostrEventCache(new NostrVStoreEventStore(store, 1));
         NostrKeyPairSigner signer = NostrKeyPairSigner.generate();
         NostrPool pool = new NostrPool();
-        NostrCacheRelay relay = new NostrCacheRelay(new NostrVStoreEventCache(store, 0));
+        NostrCacheRelay relay = new NostrCacheRelay(new NostrEventCache(new NostrVStoreEventStore(store, 0)));
         try {
             SignedNostrEvent event = note(signer, "Persistent relay result");
             writer.put(event.getId(), event).await();
@@ -270,5 +272,179 @@ public class TestVStoreEventCache {
             assertEquals(1, results.size());
             assertEquals(event.getId(), results.get(0).getId());
         } finally { pool.clean(); relay.close(); signer.close(); }
+    }
+
+    @Test
+    public void indexedFiltersReadOnlyTheirResultsAfterReopening() throws Exception {
+        Backend backend = new Backend();
+        VStore files = new VStore(backend);
+        NostrVStoreEventStore writer = new NostrVStoreEventStore(files, 0);
+        NostrKeyPairSigner signer = NostrKeyPairSigner.generate();
+        NostrKeyPairSigner other = NostrKeyPairSigner.generate();
+        try {
+            List<SignedNostrEvent> expected = new ArrayList<>();
+            Instant start = Instant.now().minusSeconds(100);
+            for (int i = 0; i < 60; i++) {
+                NostrKeyPairSigner author = i % 2 == 0 ? signer : other;
+                SignedNostrEvent event = author.sign(new UnsignedNostrEvent().withKind(i % 3 == 0 ? 1 : 2)
+                    .withTag("t", i % 5 == 0 ? "wanted" : "other").createdAt(start.plusSeconds(i)).withContent("Event " + i)).await();
+                writer.addEvent(event).await();
+                if (i % 2 == 0 && i % 3 == 0 && i % 5 == 0) expected.add(event);
+            }
+            expected.sort(org.ngengine.nostr4j.store.NostrEventStore.ORDER);
+            NostrEventCache reader = new NostrEventCache(new NostrVStoreEventStore(files, 0));
+            NostrFilter filter = new NostrFilter().withAuthor(signer.getPublicKey().await()).withKind(1)
+                .withTag("t", "wanted").since(start).until(start.plusSeconds(59)).limit(1);
+            backend.payloadReads.set(0);
+            backend.listings.set(0);
+            assertEquals(expected.get(0).getId(), reader.query(List.of(filter)).await().get(0).getId());
+            assertEquals("Only the returned payload should be read", 1, backend.payloadReads.get());
+            assertEquals(1, backend.listings.get());
+            backend.payloadReads.set(0);
+            backend.listings.set(0);
+            assertEquals(expected.get(0).getId(), reader.query(List.of(filter)).await().get(0).getId());
+            assertEquals(1, backend.payloadReads.get());
+            assertEquals("The loaded index should avoid another listing", 0, backend.listings.get());
+            backend.payloadReads.set(0);
+            assertTrue(reader.query(List.of(filter.clone().limit(0))).await().isEmpty());
+            assertEquals(0, backend.payloadReads.get());
+        } finally { signer.close(); other.close(); }
+    }
+
+    @Test
+    public void missingMalformedAndInterruptedIndexesAreRebuilt() throws Exception {
+        Backend backend = new Backend();
+        VStore files = new VStore(backend);
+        NostrVStoreEventStore writer = new NostrVStoreEventStore(files, 0);
+        NostrKeyPairSigner signer = NostrKeyPairSigner.generate();
+        try {
+            List<SignedNostrEvent> saved = new ArrayList<>();
+            Instant start = Instant.now().minusSeconds(30);
+            for (int i = 0; i < 12; i++) {
+                SignedNostrEvent event = signer.sign(new UnsignedNostrEvent().withKind(1).withContent("Recovery " + i)
+                    .createdAt(start.plusSeconds(i))).await();
+                saved.add(event);
+                writer.addEvent(event).await();
+            }
+            for (int scenario = 0; scenario < 3; scenario++) {
+                if (scenario == 0) backend.files.keySet().removeIf(path -> path.contains("/index/") || path.endsWith("index-state.json"));
+                if (scenario == 1) {
+                    String bucket = backend.files.keySet().stream().filter(path -> path.contains("/index/") && path.endsWith(".json")).findFirst().orElseThrow();
+                    backend.files.put(bucket, "invalid JSON".getBytes(StandardCharsets.UTF_8));
+                }
+                if (scenario == 2) backend.files.put("nostr-event-cache/v1/index/dirty", new byte[] { 1 });
+                NostrVStoreEventStore reader = new NostrVStoreEventStore(files, 0);
+                backend.payloadReads.set(0);
+                assertEquals(saved.get(11).getId(), reader.query(List.of(new NostrFilter().limit(1))).await().get(0).getId());
+                assertEquals("Rebuild reads each payload once, then reads the result", 13, backend.payloadReads.get());
+                backend.payloadReads.set(0);
+                backend.listings.set(0);
+                assertEquals(1, reader.query(List.of(new NostrFilter().limit(1))).await().size());
+                assertEquals(1, backend.payloadReads.get());
+                assertEquals(0, backend.listings.get());
+            }
+        } finally { signer.close(); }
+    }
+
+    @Test
+    public void failedIndexWriteIsRecoveredWithoutLosingTheSavedEvent() throws Exception {
+        Backend backend = new Backend();
+        VStore files = new VStore(backend);
+        NostrEventCache cache = new NostrEventCache(new NostrVStoreEventStore(files, 0));
+        AtomicInteger notifications = new AtomicInteger();
+        cache.observe(event -> notifications.incrementAndGet());
+        NostrKeyPairSigner signer = NostrKeyPairSigner.generate();
+        try {
+            SignedNostrEvent first = note(signer, "Before interruption");
+            SignedNostrEvent second = note(signer, "Saved before index failure");
+            cache.put(first.getId(), first).await();
+            backend.failIndexWrites = true;
+            assertThrows(Exception.class, () -> cache.put(second.getId(), second).await());
+            assertEquals(1, notifications.get());
+            assertTrue(backend.files.containsKey(payload(second.getId())));
+            backend.failIndexWrites = false;
+            NostrEventCache reopened = new NostrEventCache(new NostrVStoreEventStore(files, 0));
+            assertEquals(2, reopened.query(List.of(new NostrFilter())).await().size());
+            assertFalse(backend.files.containsKey("nostr-event-cache/v1/index/dirty"));
+        } finally { signer.close(); }
+    }
+
+    @Test
+    public void incrementalCleanupChecksOnlyItsBatchAndDoesNotReadPayloads() throws Exception {
+        Backend backend = new Backend();
+        VStore files = new VStore(backend);
+        NostrVStoreEventStore store = new NostrVStoreEventStore(files, 0);
+        AtomicReference<Instant> now = new AtomicReference<>(Instant.now());
+        NostrEventCache cache = new NostrEventCache(store, 64, now::get);
+        NostrKeyPairSigner signer = NostrKeyPairSigner.generate();
+        try {
+            cache.setTtl(Duration.ofSeconds(10)).await();
+            for (int i = 0; i < 23; i++) {
+                SignedNostrEvent event = note(signer, "Cleanup " + i);
+                cache.put(event.getId(), event).await();
+            }
+            now.set(now.get().plusSeconds(11));
+            backend.payloadReads.set(0);
+            assertEquals(7, cache.clean(7).await().intValue());
+            assertEquals(16, store.size().await().intValue());
+            assertEquals(7, cache.clean(7).await().intValue());
+            assertEquals(7, cache.clean(7).await().intValue());
+            assertEquals(2, cache.clean(7).await().intValue());
+            assertEquals(0, store.size().await().intValue());
+            assertEquals("Expiry metadata should be enough for cleanup", 0, backend.payloadReads.get());
+        } finally { signer.close(); }
+    }
+
+    @Test
+    public void loadedReadersNoticeLaterWritesAndClearKeepsUnrelatedFiles() throws Exception {
+        Backend backend = new Backend();
+        VStore files = new VStore(backend);
+        NostrVStoreEventStore writer = new NostrVStoreEventStore(files, 0);
+        NostrVStoreEventStore reader = new NostrVStoreEventStore(files, 0);
+        NostrKeyPairSigner signer = NostrKeyPairSigner.generate();
+        try {
+            SignedNostrEvent first = signer.sign(new UnsignedNostrEvent().withKind(1).withContent("First")
+                .createdAt(Instant.now().minusSeconds(10))).await();
+            SignedNostrEvent second = note(signer, "Later write");
+            writer.addEvent(first).await();
+            assertEquals(first.getId(), reader.query(List.of(new NostrFilter().limit(1))).await().get(0).getId());
+            writer.addEvent(second).await();
+            backend.payloadReads.set(0);
+            assertEquals(second.getId(), reader.query(List.of(new NostrFilter().limit(1))).await().get(0).getId());
+            assertEquals(1, backend.payloadReads.get());
+            backend.files.put("nostr-event-cache/v1/events/caller.txt", new byte[] { 1 });
+            backend.files.put("nostr-event-cache/v1/index/caller.txt", new byte[] { 2 });
+            writer.clear().await();
+            assertTrue(reader.query(List.of(new NostrFilter())).await().isEmpty());
+            assertArrayEquals(new byte[] { 1 }, backend.files.get("nostr-event-cache/v1/events/caller.txt"));
+            assertArrayEquals(new byte[] { 2 }, backend.files.get("nostr-event-cache/v1/index/caller.txt"));
+        } finally { signer.close(); }
+    }
+
+    @Test
+    public void incrementalCleanupMovesPastLiveEntries() throws Exception {
+        Backend backend = new Backend();
+        VStore files = new VStore(backend);
+        NostrVStoreEventStore store = new NostrVStoreEventStore(files, 0);
+        AtomicReference<Instant> now = new AtomicReference<>(Instant.now());
+        NostrEventCache cache = new NostrEventCache(store, 64, now::get);
+        NostrKeyPairSigner signer = NostrKeyPairSigner.generate();
+        try {
+            cache.setTtl(Duration.ofSeconds(10)).await();
+            List<SignedNostrEvent> events = new ArrayList<>();
+            for (int i = 0; i < 11; i++) events.add(note(signer, "Mixed cleanup " + i));
+            events.sort(java.util.Comparator.comparing(SignedNostrEvent::getId));
+            for (int i = 0; i < events.size(); i++) {
+                SignedNostrEvent event = events.get(i);
+                Instant received = i < 4 ? now.get() : now.get().minusSeconds(20);
+                store.writeEntry(event.getId(), new org.ngengine.nostr4j.store.NostrEventStore.Entry(event, received)).await();
+            }
+            backend.payloadReads.set(0);
+            assertEquals(0, cache.clean(4).await().intValue());
+            assertEquals(4, cache.clean(4).await().intValue());
+            assertEquals(3, cache.clean(4).await().intValue());
+            assertEquals(4, store.size().await().intValue());
+            assertEquals(0, backend.payloadReads.get());
+        } finally { signer.close(); }
     }
 }
