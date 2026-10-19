@@ -39,14 +39,14 @@ The supported range is two to 64. Fewer direct connections mean more forwarding;
 !!! tip "Room size"
     The direct-peer budget limits connections, not room membership. Other participants remain reachable through the room's routes.
 
-## Onion routing
+## Encrypted forwarding
 
 Route setup uses layers of encryption. Each forwarding peer opens its layer to find the next hop. Application data stays encrypted for its destination.
 
 In the diagram, Bob forwards the packet while Carol decrypts the message.
 
 !!! warning "Privacy"
-    Forwarding peers can observe adjacent connections, timing and traffic volume. Onion routing protects the message contents from them; it does not guarantee anonymity.
+    Forwarding peers can observe adjacent connections, timing and traffic volume. Multi-hop routing protects the message contents from them; it does not guarantee anonymity.
 
 ## Broadcast to the room
 

@@ -18,6 +18,19 @@ tag and deploys the complete site to GitHub Pages. This wiring must be present
 in the commit you tag. It does not create another GitHub release or tag on the
 website branch.
 
+To republish the site without creating a library release, open **Actions →
+Redeploy website → Run workflow**, leave the branch set to `master`, and run it.
+This uses the current website sources from `gh-pages` and resolves GitHub's latest
+published release once (including prereleases), then builds the library and demos from that exact
+tag with release dependencies. It deploys to the live GitHub Pages site without
+creating a tag, creating a release, or republishing Maven artifacts. If no release
+is available, the build fails instead of falling back to master or snapshots.
+The entry-point workflow lives on `master` so GitHub can offer its manual button;
+the website and its build remain on `gh-pages`.
+
+The website workflow also accepts `latest` as `library_ref`; combine it with
+`deploy_live: false` to preview the latest release without replacing the live site.
+
 Release builds pass the tag version, without an optional `v` prefix, as Gradle's
 `VERSION`. Browser demos and the JVM backend select the same NGE Platform
 release from that library checkout's catalog. They resolve published artifacts

@@ -9,7 +9,7 @@ on:
   workflow_call:
     inputs:
       library_ref:
-        description: 'Exact Nostr4j release tag'
+        description: 'Exact Nostr4j release tag, or latest for the latest published release'
         type: string
         required: true
       deploy_live:
@@ -19,7 +19,7 @@ on:
   workflow_dispatch:
     inputs:
       library_ref:
-        description: 'Git ref (branch or tag) of nostr4j to build demos against'
+        description: 'Nostr4j branch, tag, or latest for the latest published release'
         required: false
         default: 'master'
       deploy_live:
@@ -68,6 +68,7 @@ jobs:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
           REQUESTED_REF: ${{ inputs.library_ref }}
           DEPLOY_LIVE: ${{ inputs.deploy_live }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: node scripts/site-build-settings.mjs
 
       - name: Checkout library sources (${{ steps.decide.outputs.ref }})

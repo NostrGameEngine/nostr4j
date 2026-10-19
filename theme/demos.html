@@ -118,7 +118,7 @@
         <!-- 4. Peer-to-peer game -->
         <section role="tabpanel" id="game" aria-labelledby="demo-tab-game" hidden>
           <div class="demo-card game" id="p2p-seas-game-demo">
-            <p>P2P Seas Game is a multiplayer sailing and treasure-hunting demo. Practice with two simulated captains or join other players. RTC onion routing carries messages across the room mesh.</p>
+            <p>P2P Seas Game is a multiplayer sailing and treasure-hunting demo. Practice with two simulated captains or join other players. RTC multi-hop routing carries messages across the room mesh.</p>
 
             <form id="seas-join" class="seas-panel">
               <label>Captain name<input type="text" id="seas-name" value="sailor" maxlength="24" autocomplete="off"></label>
@@ -151,7 +151,7 @@
               </div>
 
               <details id="seas-topo-panel">
-                <summary>Network / onion routes</summary>
+                <summary>Network / multi-hop routes</summary>
                 <p>Each peer keeps at most two direct neighbors. Routed messages cross intermediate peers with layered encryption. Public lobby membership and traffic timing are not anonymous.</p>
                 <label><input type="checkbox" id="seas-hl"> Highlight my routes</label>
                 <canvas id="seas-topo"></canvas>

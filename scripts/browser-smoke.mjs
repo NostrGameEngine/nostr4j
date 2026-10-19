@@ -220,9 +220,9 @@ try {
       const destination = await evaluate(`demoEvents.find(e => e.t === "peer" && e.node && e.node !== ${JSON.stringify(topology.self)} && !${JSON.stringify([...direct])}.includes(e.node))?.id || null`);
       assert.match(destination || '', /^[a-f0-9]{64}$/, 'No non-neighbor peer discovered');
       const probe = 'a1b2c3d4e5f60718';
-      await evaluate(`window.P2pSeasGame.sendTo(${JSON.stringify(destination)}, "seas-game", JSON.stringify({v:"psg1", type:"chat", text:"onion probe", probe:${JSON.stringify(probe)}}))`);
+      await evaluate(`window.P2pSeasGame.sendTo(${JSON.stringify(destination)}, "seas-game", JSON.stringify({v:"psg1", type:"chat", text:"multi-hop probe", probe:${JSON.stringify(probe)}}))`);
       await until(`demoEvents.some(e => e.t === "msg" && e.from === ${JSON.stringify(destination)} && (() => { try { return JSON.parse(e.body).probe === ${JSON.stringify(probe)}; } catch (_) { return false; } })())`, 45000);
-      console.log('Onion-routed echo from non-neighbor:', destination.slice(0, 12));
+      console.log('Multi-hop echo from non-neighbor:', destination.slice(0, 12));
     } else {
       await until('document.getElementById("seas-status").dataset.botReply === "true"', 65000);
       await until('demoEvents.some(e => e.t === "msg" && (() => { try { return JSON.parse(e.body).type === "pos"; } catch (_) { return false; } })())', 15000);
@@ -292,6 +292,8 @@ try {
     await evaluate('document.getElementById("seas-leave").click()');
     if (target === 'private') await until(`fetch(window.demoApiUrl("/api/config")).then(r => r.json()).then(c => c.privateGameRooms < ${roomsBeforeLeave})`);
   } else if (target === 'layout') {
+    assert.ok((await evaluate('Array.from(document.querySelectorAll(".capability-card h3"), item => item.textContent.trim())')).includes('Multi-Hop Routing'));
+    assert.ok(!/onion routing/i.test(await evaluate('document.body.innerText')));
     assert.equal(await evaluate('document.querySelector(".intro-lede").textContent.trim()'), 'A Java library for Nostr apps on desktop, mobile and the web.');
     assert.deepEqual(await evaluate('Array.from(document.querySelectorAll(".platform-logos li span"), item => item.textContent.trim())'), ['Linux', 'Windows', 'Mac', 'Android', 'iOS', 'Browser']);
     assert.ok(await evaluate('Array.from(document.querySelectorAll(".platform-logos img")).every(image => image.complete && image.naturalWidth > 0)'), 'Platform icon failed to load');

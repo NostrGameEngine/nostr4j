@@ -1,12 +1,12 @@
 # P2P Seas Game — wire protocol (`psg1`)
 
-All game traffic runs over a public dc4 `NostrRTCRoom` (Nostr4J onion-routed
+All game traffic runs over a public dc4 `NostrRTCRoom` (Nostr4J multi-hop
 WebRTC mesh). Two application channels exist on every logical socket:
 
 | RTC channel | Use |
 |---|---|
 | `seas-pos` | Position broadcasts (tree broadcast) |
-| `seas-game` | Everything else: unicast (onion-routed) and broadcasts |
+| `seas-game` | Everything else: unicast (multi-hop) and broadcasts |
 
 Framing: every datagram is one `WireCodec` frame —
 `[u32 big-endian length][UTF-8 JSON]`. Nostr4J delivers DataChannel messages
@@ -43,7 +43,7 @@ by the owner's peer, which is gone).
 ```
 All participants broadcast their current position and heading at a regular
 cadence, regardless of distance. The browser interpolates received positions
-and headings for smooth rendering. Onion routing still limits direct links.
+and headings for smooth rendering. Multi-hop routing still limits direct links.
 
 ## Combat
 
@@ -131,7 +131,7 @@ payment receipt.
 The (previous) owner announces the treasure is gone, so every client stops
 rendering trails/pings for that island.
 
-## Map trading (private, onion-routed)
+## Map trading (private, multi-hop)
 
 ### `mapOffer` — unicast
 ```json
@@ -147,7 +147,7 @@ rendering trails/pings for that island.
 {"v":"psg1","type":"mapAccept","mapId":"<mapId>","ok":true}
 ```
 On `ok:true` the sender deletes the map locally and the receiver adds it.
-Both messages use onion-routed unicast.
+Both messages use multi-hop unicast.
 
 ## Chat
 

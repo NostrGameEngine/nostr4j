@@ -71,7 +71,7 @@ import org.teavm.jso.JSObject;
  *   <li>{@code newIdentity()} — fresh demo-only {@code nsec} for this browser tab.</li>
  *   <li>{@code broadcastPos(jsonStr)} — tree broadcast on {@code seas-pos}.</li>
  *   <li>{@code broadcastGame(jsonStr)} — tree broadcast on {@code seas-game}.</li>
- *   <li>{@code sendTo(peerIdHex, channel, jsonStr)} — onion-routed unicast
+ *   <li>{@code sendTo(peerIdHex, channel, jsonStr)} — multi-hop unicast
  *       ({@code channel} is {@code seas-pos} or {@code seas-game}).</li>
  *   <li>{@code getTopology()} — pushes a {@code {"t":"topo",...}} event.</li>
  *   <li>{@code ban(peerIdHex, reason)} — cooperative local isolation.</li>
@@ -95,7 +95,7 @@ public final class P2pSeasGame {
     public static final String POS_CHANNEL = "seas-pos";
     public static final String GAME_CHANNEL = "seas-game";
 
-    /** Bounded-degree room: ~2-3 direct neighbors, everything else onion-routed. */
+    /** Bounded-degree room: ~2-3 direct neighbors, everything else multi-hop routed. */
     private static final int MAX_DIRECT_PEERS = 2;
 
     private static final List<String> DEFAULT_RELAYS = Arrays.asList("wss://relay.ngengine.org", "wss://relay2.ngengine.org");
@@ -515,7 +515,7 @@ public final class P2pSeasGame {
         }
     }
 
-    /** Onion-routed unicast to one peer on {@code seas-pos} or {@code seas-game}. */
+    /** Multi-hop unicast to one peer on {@code seas-pos} or {@code seas-game}. */
     public static void sendTo(String peerIdHex, String channel, String json) {
         NostrRTCRoom r = room;
         if (r == null || !joined) {
