@@ -422,12 +422,25 @@ public class TestNostrEvent {
         parsedEvent.getPubkey();
         assertTrue(parsedEvent.verify());
 
+        // NIP-01 hashes [0, pubkey, created_at, kind, tags, content], not the wire object's properties.
+        String expectedHashInput =
+            "[0,\"c56a8bec9a793b9b6be37a0d14e89e4c23a6d9a61b016d16e2f8df90254a63d4\",1742147457,1,[[\"a\",\"1\"],[\"b\",\"1\",\"2\",\"3\"],[\"expiration\",\"1742147457\"]],\"test123\"]";
+        String expectedId = "a908e34b0bef12578b983477791ad4c93ed8f115d5b339ab89503fc321078f75";
+        assertEquals(
+            expectedId,
+            NGEUtils.bytesToHex(
+                java.security.MessageDigest.getInstance("SHA-256").digest(expectedHashInput.getBytes(StandardCharsets.UTF_8))
+            )
+        );
+        assertEquals(expectedId, signedEvent.getId());
+        assertEquals(expectedId, NostrEvent.computeEventId(signedEvent.getPubkey().asHex(), event));
+        assertEquals(expectedId, NostrEvent.computeEventIdAsyncUncached(signedEvent.getPubkey().asHex(), event).await());
+
         String json = NostrMessage.toJSON(signedEvent);
         String expectedJson =
-            "[\"EVENT\",{\"sig\":\"2270df3c1461aab13e63ec36426f5d5d9f8d4435c4ab0c5717b7b533f2aba02126cc56349f7c98b234f7b5525b00e62dfd336ff6f10770ea097304406968ab16\",\"kind\":1,\"created_at\":1742147457,\"id\":\"a908e34b0bef12578b983477791ad4c93ed8f115d5b339ab89503fc321078f75\",\"content\":\"test123\",\"pubkey\":\"c56a8bec9a793b9b6be37a0d14e89e4c23a6d9a61b016d16e2f8df90254a63d4\",\"tags\":[[\"a\",\"1\"],[\"b\",\"1\",\"2\",\"3\"],[\"expiration\",\"1742147457\"]]}]";
+            "[\"EVENT\",{\"id\":\"a908e34b0bef12578b983477791ad4c93ed8f115d5b339ab89503fc321078f75\",\"pubkey\":\"c56a8bec9a793b9b6be37a0d14e89e4c23a6d9a61b016d16e2f8df90254a63d4\",\"kind\":1,\"content\":\"test123\",\"created_at\":1742147457,\"sig\":\"2270df3c1461aab13e63ec36426f5d5d9f8d4435c4ab0c5717b7b533f2aba02126cc56349f7c98b234f7b5525b00e62dfd336ff6f10770ea097304406968ab16\",\"tags\":[[\"a\",\"1\"],[\"b\",\"1\",\"2\",\"3\"],[\"expiration\",\"1742147457\"]]}]";
 
-        System.out.println(json);
-        assertEquals(json.trim(), expectedJson.trim());
+        assertEquals(expectedJson, json);
     }
 
     @Test
