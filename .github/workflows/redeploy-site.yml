@@ -1,0 +1,17 @@
+name: Redeploy website
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  website:
+    name: Publish website with the latest release
+    uses: NostrGameEngine/nostr4j/.github/workflows/site.yml@gh-pages
+    with:
+      library_ref: latest
+      deploy_live: true
