@@ -24,21 +24,34 @@ configurations.matching { it.name.endsWith('CompileClasspath') || it.name.endsWi
     )
 }
 
+def snapshotBuild = rootProject.version.toString().endsWith('-SNAPSHOT')
+def ngePlatformVersion = snapshotBuild
+    ? libs.versions.ngePlatformSnapshot.get()
+    : libs.versions.ngePlatform.get()
+
 repositories {
     mavenCentral()
-    maven { url = 'https://central.sonatype.com/repository/maven-snapshots/' }
+    if (snapshotBuild) {
+        maven { url = 'https://central.sonatype.com/repository/maven-snapshots/' }
+    }
 }
 
-def ngePlatformVersion = '0.3.0-SNAPSHOT'
+// Older release tags may still configure mavenLocal() in their root build.
+// A release must exercise published dependencies, not a developer's local snapshot.
+if (!snapshotBuild) {
+    rootProject.allprojects {
+        repositories.removeAll { it.name == 'MavenLocal' }
+    }
+}
 
 dependencies {
     implementation project(':nostr4j')
     implementation "org.ngengine:nge-platform-teavm:${ngePlatformVersion}"
-    implementation 'org.ngengine:bech32:1.2.1'
-    implementation 'org.ngengine:lnurl4j:0.0.6'
-    implementation 'org.ngengine:bolt11:0.0.2'
-    implementation 'jakarta.annotation:jakarta.annotation-api:2.1.1'
-    implementation 'org.slf4j:slf4j-api:2.0.16'
+    implementation(snapshotBuild ? libs.bech32.snapshot : libs.bech32)
+    implementation(snapshotBuild ? libs.lnurl4j.snapshot : libs.lnurl4j)
+    implementation(snapshotBuild ? libs.bolt11.snapshot : libs.bolt11)
+    implementation libs.jakarta.annotation.api
+    implementation "org.slf4j:slf4j-api:${libs.versions.slf4j.get()}"
 }
 
 // One TeaVM JS bundle per demo. Each bundle installs window.<Global> via JsBridge.
@@ -178,12 +191,42 @@ tasks.named('check') {
 dependencies {
     backendImplementation project(':nostr4j')
     backendImplementation "org.ngengine:nge-platform-jvm:${ngePlatformVersion}"
-    backendImplementation 'org.ngengine:bech32:1.2.1'
-    backendImplementation 'org.ngengine:lnurl4j:0.0.6'
-    backendImplementation 'org.ngengine:bolt11:0.0.2'
-    backendImplementation 'jakarta.annotation:jakarta.annotation-api:2.1.1'
-    backendImplementation 'org.slf4j:slf4j-api:2.0.16'
-    backendImplementation 'org.slf4j:slf4j-jdk14:2.0.16'
+    backendImplementation(snapshotBuild ? libs.bech32.snapshot : libs.bech32)
+    backendImplementation(snapshotBuild ? libs.lnurl4j.snapshot : libs.lnurl4j)
+    backendImplementation(snapshotBuild ? libs.bolt11.snapshot : libs.bolt11)
+    backendImplementation libs.jakarta.annotation.api
+    backendImplementation "org.slf4j:slf4j-api:${libs.versions.slf4j.get()}"
+    backendImplementation libs.slf4j.jdk14
+}
+
+tasks.register('verifyDemoDependencies') {
+    group = 'verification'
+    description = 'Verify browser and backend dependencies match the library build mode and platform version'
+    doLast {
+        logger.lifecycle("Site library version: {}; NGE Platform: {}; mode: {}", rootProject.version,
+            ngePlatformVersion, snapshotBuild ? 'snapshot' : 'release')
+        def classpaths = [configurations.compileClasspath, configurations.runtimeClasspath,
+            configurations.backendCompileClasspath, configurations.backendRuntimeClasspath,
+            project(':nostr4j').configurations.compileClasspath]
+        classpaths.each { configuration ->
+            configuration.resolvedConfiguration.rethrowFailure()
+            configuration.incoming.resolutionResult.allComponents.each { component ->
+                def module = component.moduleVersion
+                if (module == null) return
+                if (!snapshotBuild && module.version.toUpperCase().contains('SNAPSHOT')) {
+                    throw new GradleException("Release contains a snapshot dependency: ${module}")
+                }
+                if (module.group == 'org.ngengine' && module.name.startsWith('nge-platform-') &&
+                    module.version != ngePlatformVersion) {
+                    throw new GradleException("NGE Platform version mismatch: ${module}; expected ${ngePlatformVersion}")
+                }
+            }
+        }
+    }
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('verifyDemoDependencies')
 }
 
 tasks.register('backendJar', Jar) {

@@ -21,7 +21,7 @@ can_direct_mount() {
 run_mkdocs() {
     local cmd=("$@")
     if can_direct_mount; then
-        podman run --rm -it -e NOSTR4J_DEMO_API_BASE_URL="${NOSTR4J_DEMO_API_BASE_URL:-}" -v "$SCRIPT_DIR:/docs:z" "$MKDOCS_IMAGE" "${cmd[@]}"
+        podman run --rm -it -e NOSTR4J_DOC_VERSION -e NOSTR4J_DEMO_API_BASE_URL="${NOSTR4J_DEMO_API_BASE_URL:-}" -v "$SCRIPT_DIR:/docs:z" "$MKDOCS_IMAGE" "${cmd[@]}"
     else
         # Staging directory under /private/tmp which is shared with AppleHV
         local STAGE_DIR="/private/tmp/nostr4j-mkdocs-stage"
@@ -35,7 +35,7 @@ run_mkdocs() {
             --exclude='.gradle' \
             "$SCRIPT_DIR/" "$STAGE_DIR/"
         
-        podman run --rm -e NOSTR4J_DEMO_API_BASE_URL="${NOSTR4J_DEMO_API_BASE_URL:-}" -v "$STAGE_DIR:/docs" "$MKDOCS_IMAGE" "${cmd[@]}"
+        podman run --rm -e NOSTR4J_DOC_VERSION -e NOSTR4J_DEMO_API_BASE_URL="${NOSTR4J_DEMO_API_BASE_URL:-}" -v "$STAGE_DIR:/docs" "$MKDOCS_IMAGE" "${cmd[@]}"
         
         # Sync back output directory if build was run
         if [[ -d "$STAGE_DIR/_site" ]]; then
@@ -48,7 +48,7 @@ run_mkdocs() {
 cmd_serve() {
     echo "==> Starting MkDocs preview server with live reload on http://localhost:8000..."
     if can_direct_mount; then
-        podman run --rm -it -p 8000:8000 -e NOSTR4J_DEMO_API_BASE_URL="${NOSTR4J_DEMO_API_BASE_URL:-}" -v "$SCRIPT_DIR:/docs:z" "$MKDOCS_IMAGE" serve -a 0.0.0.0:8000
+        podman run --rm -it -p 8000:8000 -e NOSTR4J_DOC_VERSION -e NOSTR4J_DEMO_API_BASE_URL="${NOSTR4J_DEMO_API_BASE_URL:-}" -v "$SCRIPT_DIR:/docs:z" "$MKDOCS_IMAGE" serve -a 0.0.0.0:8000
     else
         local STAGE_DIR="/private/tmp/nostr4j-mkdocs-stage"
         mkdir -p "$STAGE_DIR"
@@ -82,7 +82,7 @@ cmd_serve() {
         SYNC_PID=$!
         trap 'kill "$SYNC_PID" 2>/dev/null || true' EXIT INT TERM
 
-        podman run --rm -it -p 8000:8000 -e NOSTR4J_DEMO_API_BASE_URL="${NOSTR4J_DEMO_API_BASE_URL:-}" -v "$STAGE_DIR:/docs" "$MKDOCS_IMAGE" serve -a 0.0.0.0:8000
+        podman run --rm -it -p 8000:8000 -e NOSTR4J_DOC_VERSION -e NOSTR4J_DEMO_API_BASE_URL="${NOSTR4J_DEMO_API_BASE_URL:-}" -v "$STAGE_DIR:/docs" "$MKDOCS_IMAGE" serve -a 0.0.0.0:8000
     fi
 }
 
@@ -101,6 +101,20 @@ cmd_build() {
 
 cmd_demos() {
     local REF="${1:-master}"
+    local BUILD_VERSION=""
+    local TAG="${REF#refs/tags/}"
+    if [[ "$TAG" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+([.-][A-Za-z0-9.-]+)?$ ]]; then
+        if [[ "$TAG" =~ [Ss][Nn][Aa][Pp][Ss][Hh][Oo][Tt] ]]; then
+            echo "Use a branch ref for a snapshot build." >&2
+            return 1
+        fi
+        BUILD_VERSION="${TAG#v}"
+        REF="refs/tags/$TAG"
+        export NOSTR4J_DOC_VERSION="$BUILD_VERSION"
+    elif [[ "$REF" == refs/tags/* ]]; then
+        echo "Invalid release tag: $REF" >&2
+        return 1
+    fi
     echo "==> Compiling browser demos and Javadoc against ref: $REF..."
 
     local CACHE_DIR
@@ -124,14 +138,16 @@ cmd_demos() {
     echo "--> Library commit: $(git -C "$MASTER_DIR" rev-parse HEAD)"
 
     # 2. Prepare nge-platforms dependency
-    local PLATFORMS_DIR="$CACHE_DIR/platforms"
-    if [[ ! -d "$PLATFORMS_DIR/.git" ]]; then
-        echo "--> Cloning nge-platforms into $PLATFORMS_DIR..."
-        git clone --depth 1 https://github.com/NostrGameEngine/nge-platforms.git "$PLATFORMS_DIR"
-    else
-        echo "--> Updating nge-platforms in $PLATFORMS_DIR..."
-        git -C "$PLATFORMS_DIR" fetch https://github.com/NostrGameEngine/nge-platforms.git master
-        git -C "$PLATFORMS_DIR" checkout --detach FETCH_HEAD
+    if [[ -z "$BUILD_VERSION" ]]; then
+        local PLATFORMS_DIR="$CACHE_DIR/platforms"
+        if [[ ! -d "$PLATFORMS_DIR/.git" ]]; then
+            echo "--> Cloning nge-platforms into $PLATFORMS_DIR..."
+            git clone --depth 1 https://github.com/NostrGameEngine/nge-platforms.git "$PLATFORMS_DIR"
+        else
+            echo "--> Updating nge-platforms in $PLATFORMS_DIR..."
+            git -C "$PLATFORMS_DIR" fetch https://github.com/NostrGameEngine/nge-platforms.git master
+            git -C "$PLATFORMS_DIR" checkout --detach FETCH_HEAD
+        fi
     fi
 
     # 3. Overlay site-demos into library checkout
@@ -148,13 +164,17 @@ cmd_demos() {
 
     # 4. Compile with Podman using JDK 25
     echo "--> Running Gradle compilation inside $JAVA_IMAGE container..."
-    podman run --rm -v "$CACHE_DIR:/workspace" -w /workspace "$JAVA_IMAGE" sh -c "
+    podman run --rm -e VERSION="$BUILD_VERSION" -v "$CACHE_DIR:/workspace" -w /workspace "$JAVA_IMAGE" sh -c '
         set -e
-        echo '--> Publishing platform modules to container Maven cache...'
-        cd /workspace/platforms && ./gradlew :nge-platform-common:publishToMavenLocal :nge-platform-jvm:publishToMavenLocal :nge-platform-teavm:publishToMavenLocal --no-daemon
-        echo '--> Compiling TeaVM demos and Javadoc from $REF...'
-        cd /workspace/master && ./gradlew :site-demos:buildAllDemos :site-demos:jvmSmokeTest :site-demos:documentationSmokeTest :site-demos:backendJar :nostr4j:javadoc --no-daemon
-    "
+        if [ -z "$VERSION" ]; then
+            echo "--> Publishing snapshot platform modules to container Maven cache..."
+            cd /workspace/platforms
+            ./gradlew :nge-platform-common:publishToMavenLocal :nge-platform-jvm:publishToMavenLocal :nge-platform-teavm:publishToMavenLocal --no-daemon
+        fi
+        echo "--> Compiling TeaVM demos and Javadoc..."
+        cd /workspace/master
+        ./gradlew :site-demos:verifyDemoDependencies :site-demos:buildAllDemos :site-demos:jvmSmokeTest :site-demos:documentationSmokeTest :site-demos:backendJar :nostr4j:javadoc --no-daemon
+    '
 
     # 5. Stage outputs to docs/
     echo "--> Staging compiled browser demos to docs/assets/demos/..."

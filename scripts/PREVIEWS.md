@@ -7,9 +7,23 @@ https://www.cloudflare.com/drop/llms.txt
 
 Open **Actions → Build and deploy site → the run → Summary → Temporary site
 preview**. The link is added only after the deployed homepage responds with the
-site content. Manual builds with `deploy_live: false` and tag preview builds
-use the same path. Release publication and `deploy_live: true` retain the
-GitHub Pages deployment.
+site content. Manual builds with `deploy_live: false` use the same path.
+For a release preview, select its tag as `library_ref`: the library and demos
+use release dependencies even though the preview is temporary.
+
+Publishing a GitHub release runs the library's `Build and Publish` workflow
+from the tagged commit. After its build and publication succeed, it calls the
+reusable website workflow on `gh-pages`, which checks out that exact library
+tag and deploys the complete site to GitHub Pages. This wiring must be present
+in the commit you tag. It does not create another GitHub release or tag on the
+website branch.
+
+Release builds pass the tag version, without an optional `v` prefix, as Gradle's
+`VERSION`. Browser demos and the JVM backend select the same NGE Platform
+release from that library checkout's catalog. They resolve published artifacts
+and reject snapshot dependencies or a mismatched platform version. Ordinary
+branch previews retain snapshot mode and compile the current platform sources.
+An explicit `deploy_live: true` also deploys to GitHub Pages.
 
 No Cloudflare secret is needed. The preview is public and is deleted after
 about 60 minutes. The bearer claim URL is not exposed in a public summary,

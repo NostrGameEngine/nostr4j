@@ -1,14 +1,21 @@
 # Build the website with MkDocs against the nostr4j library.
 # - On routine pushes to gh-pages: compiles against master and publishes a temporary Cloudflare preview.
-# - On release published: compiles against the release tag and publishes live to GitHub Pages.
+# - Called by the master release workflow: builds the tag with released dependencies and deploys live.
 name: Build and deploy site
 
 on:
   push:
     branches: [gh-pages]
-    tags: ['v*', '[0-9]*']
-  release:
-    types: [published]
+  workflow_call:
+    inputs:
+      library_ref:
+        description: 'Exact Nostr4j release tag'
+        type: string
+        required: true
+      deploy_live:
+        type: boolean
+        required: false
+        default: false
   workflow_dispatch:
     inputs:
       library_ref:
@@ -38,38 +45,30 @@ jobs:
     outputs:
       should_deploy: ${{ steps.decide.outputs.should_deploy }}
     steps:
-      - name: Decide library ref and deploy action
-        id: decide
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-          REQUESTED_REF: ${{ inputs.library_ref }}
-          DEPLOY_LIVE: ${{ inputs.deploy_live }}
-        run: |
-          if [ "$EVENT_NAME" = "release" ]; then
-            echo "ref=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
-            echo "should_deploy=true" >> "$GITHUB_OUTPUT"
-            echo "NOSTR4J_DOC_VERSION=${RELEASE_TAG#v}" >> "$GITHUB_ENV"
-          elif [ "$GITHUB_REF_TYPE" = "tag" ]; then
-            echo "ref=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
-            echo "should_deploy=false" >> "$GITHUB_OUTPUT"
-            echo "NOSTR4J_DOC_VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
-          elif [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            echo "ref=$REQUESTED_REF" >> "$GITHUB_OUTPUT"
-            echo "should_deploy=$DEPLOY_LIVE" >> "$GITHUB_OUTPUT"
-            if [[ "$REQUESTED_REF" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+([.-][A-Za-z0-9.-]+)?$ ]]; then
-              echo "NOSTR4J_DOC_VERSION=${REQUESTED_REF#v}" >> "$GITHUB_ENV"
-            fi
-          else
-            echo "ref=master" >> $GITHUB_OUTPUT
-            echo "should_deploy=false" >> $GITHUB_OUTPUT
-          fi
-
       - name: Checkout website sources
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event_name == 'push' && github.ref == 'refs/heads/gh-pages' && github.sha || 'gh-pages' }}
           path: website
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Check snapshot and release build selection
+        working-directory: website
+        run: node --test scripts/site-build-settings.test.mjs
+
+      - name: Decide library ref and deploy action
+        id: decide
+        working-directory: website
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          REQUESTED_REF: ${{ inputs.library_ref }}
+          DEPLOY_LIVE: ${{ inputs.deploy_live }}
+        run: node scripts/site-build-settings.mjs
 
       - name: Checkout library sources (${{ steps.decide.outputs.ref }})
         uses: actions/checkout@v4
@@ -78,6 +77,7 @@ jobs:
           path: library
 
       - name: Checkout NGE platform sources
+        if: steps.decide.outputs.release_build != 'true'
         uses: actions/checkout@v4
         with:
           repository: NostrGameEngine/nge-platforms
@@ -103,6 +103,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Publish current platform modules to the temporary Maven cache
+        if: steps.decide.outputs.release_build != 'true'
         working-directory: platforms
         run: ./gradlew :nge-platform-common:publishToMavenLocal :nge-platform-jvm:publishToMavenLocal :nge-platform-teavm:publishToMavenLocal --no-daemon
 
@@ -112,7 +113,7 @@ jobs:
 
       - name: Compile browser demos and generate API reference
         working-directory: library
-        run: ./gradlew :site-demos:buildAllDemos :site-demos:jvmSmokeTest :site-demos:documentationSmokeTest :site-demos:backendJar :nostr4j:javadoc --no-daemon
+        run: ./gradlew :site-demos:verifyDemoDependencies :site-demos:buildAllDemos :site-demos:jvmSmokeTest :site-demos:documentationSmokeTest :site-demos:backendJar :nostr4j:javadoc --no-daemon
 
       - name: Compile Java examples from documentation
         working-directory: website
@@ -166,12 +167,6 @@ jobs:
           name: site-preview
           path: website/_site
           retention-days: 14
-
-      - name: Set up Node for temporary previews
-        if: steps.decide.outputs.should_deploy != 'true'
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
 
       - name: Check preview deployment script
         if: steps.decide.outputs.should_deploy != 'true'
