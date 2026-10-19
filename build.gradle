@@ -71,10 +71,14 @@ allprojects {
 
 
     repositories {
-        mavenLocal()
+        if (projectVersion.endsWith('-SNAPSHOT')) {
+            mavenLocal()
+        }
         mavenCentral()
-        maven {
-            url = uri("https://central.sonatype.com/repository/maven-snapshots")
+        if (projectVersion.endsWith('-SNAPSHOT')) {
+            maven {
+                url = uri("https://central.sonatype.com/repository/maven-snapshots")
+            }
         }
     }
 }
