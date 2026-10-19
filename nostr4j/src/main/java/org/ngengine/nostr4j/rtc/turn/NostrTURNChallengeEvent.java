@@ -5,7 +5,7 @@
 package org.ngengine.nostr4j.rtc.turn;
 
 import jakarta.annotation.Nullable;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.event.UnsignedNostrEvent;
@@ -79,7 +79,7 @@ public final class NostrTURNChallengeEvent extends NostrTURNEvent {
 
     @Override
     protected AsyncTask<UnsignedNostrEvent> computeEvent(UnsignedNostrEvent event) {
-        Map<String, Object> content = new HashMap<>();
+        Map<String, Object> content = new LinkedHashMap<>();
         content.put("challenge", challenge);
         content.put("difficulty", requiredDifficulty);
         event.withContent(NGEPlatform.get().toJSON(content));

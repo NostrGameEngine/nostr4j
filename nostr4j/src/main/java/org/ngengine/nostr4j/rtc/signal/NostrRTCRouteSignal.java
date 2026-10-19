@@ -34,7 +34,7 @@ import jakarta.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.event.UnsignedNostrEvent;
@@ -121,11 +121,11 @@ public final class NostrRTCRouteSignal extends NostrRTCSignal {
 
     @Override
     protected final AsyncTask<UnsignedNostrEvent> computeEvent(UnsignedNostrEvent event) {
-        Map<String, Object> map = new HashMap<>();
+        Map<String, Object> map = new LinkedHashMap<>();
         map.put("turn", getTurnServer());
         ArrayList<Map<String, Object>> cs = new ArrayList<>();
         for (RTCTransportIceCandidate c : getCandidates()) {
-            HashMap<String, Object> cm = new HashMap<>();
+            Map<String, Object> cm = new LinkedHashMap<>();
             cm.put("candidate", c.getCandidate());
             cm.put("sdpMid", c.getSdpMid());
             cs.add(cm);

@@ -38,7 +38,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -326,7 +325,7 @@ public class SignedNostrEvent extends NostrMessage implements NostrEvent {
     @Override
     public Map<String, Object> toMap() {
         if (this.cachedFragment != null) return this.cachedFragment;
-        Map<String, Object> cachedFragment = new HashMap<String, Object>();
+        Map<String, Object> cachedFragment = new LinkedHashMap<String, Object>();
         cachedFragment.put("id", this.identifier.id);
         cachedFragment.put("pubkey", this.pubkey);
         cachedFragment.put("kind", this.kind);

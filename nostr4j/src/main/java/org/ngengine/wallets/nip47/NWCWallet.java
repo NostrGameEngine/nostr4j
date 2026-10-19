@@ -41,7 +41,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -314,7 +314,7 @@ public class NWCWallet implements Wallet {
                     throw new IllegalArgumentException("Method " + method + " is not supported by this wallet");
                 }
                 logger.finest("Making wallet request " + method);
-                Map<String, Object> content = new HashMap<>();
+                Map<String, Object> content = new LinkedHashMap<>();
                 content.put("method", method);
                 content.put("params", params);
                 String json = NGEPlatform.get().toJSON(content);
@@ -347,7 +347,7 @@ public class NWCWallet implements Wallet {
     }
 
     private Map<String, Object> mapOfNonNull(Object... keyValues) {
-        Map<String, Object> map = new HashMap<>();
+        Map<String, Object> map = new LinkedHashMap<>();
         for (int i = 0; i < keyValues.length; i += 2) {
             Object key = keyValues[i];
             Object value = keyValues[i + 1];
@@ -359,7 +359,7 @@ public class NWCWallet implements Wallet {
     }
 
     private Map<String, Object> evictNulls(Map<String, Object> map) {
-        Map<String, Object> out = new HashMap<>();
+        Map<String, Object> out = new LinkedHashMap<>();
         for (Map.Entry<String, Object> entry : map.entrySet()) {
             if (entry.getValue() != null) {
                 out.put(entry.getKey(), entry.getValue());
@@ -410,7 +410,7 @@ public class NWCWallet implements Wallet {
         if (tlvRecords != null) {
             for (NWCTLVRecord record : tlvRecords) {
                 if (tlvRecordsMap == null) {
-                    tlvRecordsMap = new HashMap<>();
+                    tlvRecordsMap = new LinkedHashMap<>();
                 }
                 tlvRecordsMap.put("type", NGEUtils.safeLong(record.type()));
                 tlvRecordsMap.put("value", NGEUtils.safeString(Objects.requireNonNull(record.value())));

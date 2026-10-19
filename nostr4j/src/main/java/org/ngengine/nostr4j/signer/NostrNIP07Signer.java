@@ -31,7 +31,7 @@
 
 package org.ngengine.nostr4j.signer;
 
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
@@ -63,7 +63,7 @@ public class NostrNIP07Signer implements NostrSigner {
     public AsyncTask<SignedNostrEvent> sign(UnsignedNostrEvent event) {
         NGEPlatform p = NGEPlatform.get();
 
-        Map<String, Object> params = new HashMap<>();
+        Map<String, Object> params = new LinkedHashMap<>();
         params.put("kind", event.getKind());
         params.put("content", event.getContent());
         params.put("tags", event.getTagRows());

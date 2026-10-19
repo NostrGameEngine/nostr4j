@@ -37,7 +37,7 @@ import java.time.Instant;
 import java.util.Calendar;
 import java.util.Collection;
 import java.util.Date;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import org.ngengine.lnurl.LnAddress;
@@ -57,7 +57,7 @@ public class Nip01UserMetadata implements Serializable {
 
     public Nip01UserMetadata() {
         this.sourceEvent = null;
-        this.metadata = new HashMap<>();
+        this.metadata = new LinkedHashMap<>();
     }
 
     /**
@@ -68,7 +68,7 @@ public class Nip01UserMetadata implements Serializable {
     public Nip01UserMetadata(Nip01UserMetadata source) {
         Objects.requireNonNull(source, "source");
         this.sourceEvent = source.sourceEvent;
-        this.metadata = new HashMap<>(source.metadata);
+        this.metadata = new LinkedHashMap<>(source.metadata);
     }
 
     public Nip01UserMetadata(NostrEvent source) {
@@ -244,7 +244,7 @@ public class Nip01UserMetadata implements Serializable {
         }
         Calendar cal = Calendar.getInstance();
         cal.setTime(birthday);
-        Map<String, Object> b = new HashMap<>();
+        Map<String, Object> b = new LinkedHashMap<>();
         b.put("year", cal.get(Calendar.YEAR));
         b.put("month", cal.get(Calendar.MONTH) + 1);
         b.put("day", cal.get(Calendar.DAY_OF_MONTH));
@@ -252,7 +252,7 @@ public class Nip01UserMetadata implements Serializable {
     }
 
     public void setBirthday(int year, int month, int day) {
-        Map<String, Object> b = new HashMap<>();
+        Map<String, Object> b = new LinkedHashMap<>();
         b.put("year", year);
         b.put("month", month);
         b.put("day", day);

@@ -8,7 +8,7 @@ package org.ngengine.nostr4j.rtc.routing.topology;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -234,7 +234,7 @@ public final class TopologyEventCodec {
     }
 
     private static String encodeContent(TopologySnapshot snapshot) {
-        Map<String, Object> root = new HashMap<String, Object>();
+        Map<String, Object> root = new LinkedHashMap<String, Object>();
         root.put("formatVersion", RoutingProtocol.VERSION);
         root.put("revision", Long.valueOf(snapshot.getRevision()));
         root.put("nodeId", snapshot.getNodeId().asHex());
@@ -243,7 +243,7 @@ public final class TopologyEventCodec {
         root.put("expiresAt", Long.valueOf(snapshot.getExpiresAt().getEpochSecond()));
         List<Map<String, Object>> neighbors = new ArrayList<Map<String, Object>>();
         for (TopologyNeighbor neighbor : snapshot.getNeighbors()) {
-            Map<String, Object> encoded = new HashMap<String, Object>();
+            Map<String, Object> encoded = new LinkedHashMap<String, Object>();
             encoded.put("nodeId", neighbor.getNodeId().asHex());
             encoded.put("pubkey", neighbor.getPubkey().asHex());
             encoded.put("sessionId", neighbor.getSessionId());

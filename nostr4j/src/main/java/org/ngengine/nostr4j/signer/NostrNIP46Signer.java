@@ -37,7 +37,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -699,7 +699,7 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
                     NGEPlatform platform = NGEUtils.getPlatform();
                     String requestId = UniqueId.getNext();
 
-                    Map<String, Object> reqBody = new HashMap<>();
+                    Map<String, Object> reqBody = new LinkedHashMap<>();
                     reqBody.put("id", requestId);
                     reqBody.put("method", method);
                     reqBody.put("params", params);
@@ -753,7 +753,7 @@ public class NostrNIP46Signer implements NostrSigner, NostrSubEventListener {
         String method = "sign_event";
         NGEPlatform platform = NGEUtils.getPlatform();
 
-        Map<String, Object> params = new HashMap<>();
+        Map<String, Object> params = new LinkedHashMap<>();
         params.put("kind", event.getKind());
         params.put("content", event.getContent());
         params.put("tags", event.getTagRows());

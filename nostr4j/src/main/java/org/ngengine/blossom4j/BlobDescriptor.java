@@ -33,7 +33,7 @@ package org.ngengine.blossom4j;
 
 import jakarta.annotation.Nullable;
 import java.time.Instant;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import org.ngengine.platform.NGEUtils;
@@ -142,8 +142,8 @@ public class BlobDescriptor {
     }
 
     public Map<String, Object> toMap() {
-        HashMap<String, Object> map = new HashMap<>();
+        Map<String, Object> map = new LinkedHashMap<>();
         map.putAll(extra);
-        return extra;
+        return map;
     }
 }

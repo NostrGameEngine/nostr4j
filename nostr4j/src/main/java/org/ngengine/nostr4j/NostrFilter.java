@@ -34,7 +34,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -81,7 +81,7 @@ public class NostrFilter extends NostrMessageFragment implements Cloneable {
             if (key.startsWith("#")) {
                 String tagKey = key.substring(1);
                 List<String> value = NGEUtils.safeStringList(entry.getValue());
-                if (tags == null) tags = new HashMap<>();
+                if (tags == null) tags = new LinkedHashMap<>();
                 tags.put(tagKey, value);
             }
         }
@@ -95,7 +95,7 @@ public class NostrFilter extends NostrMessageFragment implements Cloneable {
             cl.authors = authors != null ? new ArrayList<>(authors) : null;
             cl.kinds = kinds != null ? new ArrayList<>(kinds) : null;
             if (tags != null) {
-                cl.tags = new HashMap<>();
+                cl.tags = new LinkedHashMap<>();
                 for (Map.Entry<String, List<String>> entry : tags.entrySet()) {
                     cl.tags.put(entry.getKey(), entry.getValue() != null ? new ArrayList<>(entry.getValue()) : null);
                 }
@@ -172,7 +172,7 @@ public class NostrFilter extends NostrMessageFragment implements Cloneable {
     }
 
     public NostrFilter withTag(String key, String... values) {
-        if (tags == null) tags = new HashMap<>();
+        if (tags == null) tags = new LinkedHashMap<>();
         tags.put(key, Arrays.asList(values));
         return this;
     }
@@ -188,7 +188,7 @@ public class NostrFilter extends NostrMessageFragment implements Cloneable {
 
     @Override
     protected Map<String, Object> toMap() {
-        Map<String, Object> serial = new HashMap<>();
+        Map<String, Object> serial = new LinkedHashMap<>();
         if (ids != null) serial.put("ids", ids);
         if (authors != null) serial.put("authors", authors);
         if (kinds != null) serial.put("kinds", kinds);

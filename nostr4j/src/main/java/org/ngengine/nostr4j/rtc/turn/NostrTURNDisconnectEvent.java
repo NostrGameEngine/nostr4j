@@ -31,7 +31,7 @@
 
 package org.ngengine.nostr4j.rtc.turn;
 
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.event.UnsignedNostrEvent;
@@ -118,7 +118,7 @@ public final class NostrTURNDisconnectEvent extends NostrTURNEvent {
 
     @Override
     protected AsyncTask<UnsignedNostrEvent> computeEvent(UnsignedNostrEvent event) {
-        Map<String, Object> content = new HashMap<>();
+        Map<String, Object> content = new LinkedHashMap<>();
         content.put("reason", reason);
         content.put("error", Boolean.valueOf(error));
         event.withContent(NGEPlatform.get().toJSON(content));
