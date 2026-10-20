@@ -162,6 +162,9 @@ public final class NostrRTCRoom implements Closeable {
     private BlockingPacketQueue<NostrRTCChannel.PreparedPacket> pendingSendQueue(NostrRTCChannel channel) {
         synchronized (this) {
             if (closed) throw new IllegalStateException("Room is closed");
+            if (channel.isClosed() || channel.getSocket().isClosed()) throw new IllegalStateException(
+                "Logical channel owner is closed"
+            );
             return pendingSends.computeIfAbsent(channel, ignored -> newPendingSendQueue(channel));
         }
     }
@@ -332,15 +335,13 @@ public final class NostrRTCRoom implements Closeable {
 
         @Override
         public void onRTCChannelClosed(NostrRTCChannel channel) {
-            //  NostrRTCSocket socket = channel.getSocket();
-            // NostrPublicKey remotePubkey = socket.getRemotePeer().getPubkey();
-            // for (NostrRTCRoomPeerMessageListener listener : onMessageListeners) {
-            //     try {
-            //         listener.onRTCChannelClosed(remotePubkey, socket, channel);
-            //     } catch (Exception e) {
-            //         logger.log(Level.WARNING, "Error notifying listener", e);
-            //     }
-            // }
+            final BlockingPacketQueue<NostrRTCChannel.PreparedPacket> retired;
+            synchronized (NostrRTCRoom.this) {
+                retired = pendingSends.remove(channel);
+            }
+            // Terminal logical close only. Physical/TURN replacement retains this channel and queue.
+            // Completion callbacks may reenter the room or wait on another producer; do not hold its monitor.
+            if (retired != null) retired.close();
         }
 
         @Override
