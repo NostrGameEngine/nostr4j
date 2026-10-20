@@ -39,6 +39,15 @@ public interface NostrTURNChannelListener {
 
     void onTurnChannelClosed(NostrTURNChannel channel, String reason);
 
+    /**
+     * Whether this registration has a live logical owner that can replace a peer-closed physical handle.
+     * Queried after onTurnChannelClosed, so owner retirement during the callback must return false.
+     * Standalone TURN users remain terminal unless they explicitly provide this ownership contract.
+     */
+    default boolean isLogicalOwnerActive(NostrTURNChannel channel) {
+        return false;
+    }
+
     void onTurnChannelError(NostrTURNChannel channel, Throwable e);
 
     void onTurnChannelMessage(NostrTURNChannel channel, ByteBuffer payload);

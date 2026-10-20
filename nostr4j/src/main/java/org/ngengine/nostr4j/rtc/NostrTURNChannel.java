@@ -442,15 +442,15 @@ public final class NostrTURNChannel {
         return state == 2 || state == 1;
     }
 
-    private void closeFromPeer(String reason) {
+    private void closeFromPeer(String reason, boolean error) {
         if (closed) {
             return;
         }
         clearResurrectionBackoff();
         closed = true;
         cancelConnectAckTimeout();
-        failPendingWrites(new IllegalStateException("TURN channel closed by peer: " + reason));
-        disconnect();
+        // Detach the old physical registration before resolving any in-flight application write.
+        // Its logical owner may retain the immutable queued packet for a replacement transport.
         for (NostrTURNChannelListener l : listeners) {
             try {
                 l.onTurnChannelClosed(this, reason);
@@ -458,6 +458,29 @@ public final class NostrTURNChannel {
                 logger.log(Level.SEVERE, "Exception in listener", e);
             }
         }
+        boolean replacement = false;
+        if (!error) {
+            for (NostrTURNChannelListener l : listeners) {
+                try {
+                    replacement |= l.isLogicalOwnerActive(this);
+                } catch (Throwable e) {
+                    logger.log(Level.SEVERE, "Exception in owner liveness check", e);
+                }
+            }
+        }
+        String diagnosticReason = reason == null ? "" : reason.replaceAll("[\\p{Cntrl}]", "?");
+        if (diagnosticReason.length() > 128) diagnosticReason = diagnosticReason.substring(0, 128);
+        logger.log(
+            Level.INFO,
+            "TURN_PEER_CLOSED error={0} logicalReplacement={1} reason={2}",
+            new Object[] { Boolean.valueOf(error), Boolean.valueOf(replacement), diagnosticReason }
+        );
+        failPendingWrites(
+            replacement
+                ? new DeliveryTransportReplacedException("TURN")
+                : new IllegalStateException("TURN channel closed by peer: " + reason)
+        );
+        disconnect();
         closeLocalResources();
     }
 
@@ -831,7 +854,7 @@ public final class NostrTURNChannel {
                         }
                     }
 
-                    closeFromPeer(reason);
+                    closeFromPeer(reason, error);
                     break;
                 }
             default:

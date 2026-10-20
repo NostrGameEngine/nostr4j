@@ -848,6 +848,11 @@ public final class NostrRTCChannel {
         cleanup.run();
     }
 
+    private boolean isTurnLogicalOwnerActive() {
+        NostrTURNPool pool = socket.getTurnPool();
+        return !closed && !socket.isClosed() && (pool == null || !pool.isClosed());
+    }
+
     private void disposeTurnIfOwned(NostrTURNChannel expected) {
         Runnable cleanup;
         synchronized (socket) {
@@ -937,6 +942,11 @@ public final class NostrRTCChannel {
                             }
 
                             @Override
+                            public boolean isLogicalOwnerActive(NostrTURNChannel channel) {
+                                return isTurnLogicalOwnerActive();
+                            }
+
+                            @Override
                             public void onTurnChannelError(NostrTURNChannel channel, Throwable e) {
                                 onRTCChannelError(e);
                             }
@@ -969,7 +979,14 @@ public final class NostrRTCChannel {
                         }
 
                         @Override
-                        public void onTurnChannelClosed(NostrTURNChannel channel, String reason) {}
+                        public void onTurnChannelClosed(NostrTURNChannel channel, String reason) {
+                            disposeTurnIfOwned(channel);
+                        }
+
+                        @Override
+                        public boolean isLogicalOwnerActive(NostrTURNChannel channel) {
+                            return isTurnLogicalOwnerActive();
+                        }
 
                         @Override
                         public void onTurnChannelError(NostrTURNChannel channel, Throwable e) {
@@ -1000,6 +1017,11 @@ public final class NostrRTCChannel {
                         @Override
                         public void onTurnChannelClosed(NostrTURNChannel channel, String reason) {
                             disposeTurnIfOwned(channel);
+                        }
+
+                        @Override
+                        public boolean isLogicalOwnerActive(NostrTURNChannel channel) {
+                            return isTurnLogicalOwnerActive();
                         }
 
                         @Override
