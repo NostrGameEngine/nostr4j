@@ -17,9 +17,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.CancellationException;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.logging.Level;
@@ -61,6 +61,7 @@ public final class TopologyControlPlane implements Closeable {
     private final Duration expiration;
     private final Duration refreshInterval;
     private final AsyncExecutor executor;
+    private final AsyncExecutor legacyExecutor;
     private final TopologyEventCodec codec = new TopologyEventCodec();
     private final TopologySnapshotStore store = new TopologySnapshotStore();
     private final AtomicLong revision = new AtomicLong();
@@ -74,10 +75,15 @@ public final class TopologyControlPlane implements Closeable {
     private volatile boolean closed;
     // Handoff/close serialization never holds the control-plane monitor across pool or listener code.
     private final Object publicationHandoff = new Object();
+    private final Object legacyHandoff = new Object();
     private final Supplier<Instant> clock;
     private long lastCreatedAtSecond = Long.MIN_VALUE;
     private volatile Publication activePublication;
     private Publication pendingPublication;
+    private volatile LegacyPublication activeLegacyPublication;
+    private LegacyPublication pendingLegacyPublication;
+    private boolean legacyPumpScheduled;
+    private long lastLegacyRequestedRevision;
     private AsyncTask<Void> eligibilityTask;
     private long eligibilityGeneration;
     private List<TopologyNeighbor> currentNeighbors = Collections.emptyList();
@@ -120,6 +126,7 @@ public final class TopologyControlPlane implements Closeable {
             throw new IllegalArgumentException("Topology expiration exceeds limit");
         }
         this.executor = NGEUtils.getPlatform().newAsyncExecutor(TopologyControlPlane.class);
+        this.legacyExecutor = NGEUtils.getPlatform().newAsyncExecutor(LegacyPublication.class);
     }
 
     public synchronized void setListener(Listener listener) {
@@ -144,7 +151,7 @@ public final class TopologyControlPlane implements Closeable {
             .withTag("t", RoutingProtocol.TOPOLOGY_EVENT_TYPE)
             .withTag("P", scope.getRoomPubkey().asHex())
             .since(now.minus(expiration).truncatedTo(ChronoUnit.SECONDS))
-            .limit(RoutingLimits.MAX_TOPOLOGY_SNAPSHOTS);
+            .limit(2 * RoutingLimits.MAX_TOPOLOGY_SNAPSHOTS);
     }
 
     public void updatePresences(Collection<NostrRTCConnectSignal> announces, Instant now) {
@@ -156,6 +163,8 @@ public final class TopologyControlPlane implements Closeable {
                 if (announce == null || !announce.supportsRouting() || announce.isExpired(now)) continue;
                 NostrRTCPeer peer = announce.getPeer();
                 updated.put(presenceKey(peer.getPubkey().asHex(), scope.topologyAddress(peer.getSessionId())), peer);
+                // Both addresses only select a presence; the codec still verifies its complete authenticated scope.
+                updated.put(presenceKey(peer.getPubkey().asHex(), scope.legacyTopologyAddress(peer.getSessionId())), peer);
             }
             presences.clear();
             presences.putAll(updated);
@@ -192,7 +201,9 @@ public final class TopologyControlPlane implements Closeable {
             .catchException(error -> logger.log(Level.WARNING, "Failed to publish private topology snapshot", error));
     }
 
-    /** Requests the latest topology; pending callers share one bounded publication, not a snapshot queue. */
+    /**
+     * Requests the latest topology; pending callers share one bounded publication, not a snapshot queue.
+     */
     AsyncTask<SignedNostrEvent> publishNow(Instant requestedAt) {
         Objects.requireNonNull(requestedAt, "Publication request time cannot be null");
         Publication requested;
@@ -217,14 +228,19 @@ public final class TopologyControlPlane implements Closeable {
                     // Recheck at most a second later, including after a wall-clock rewind.
                     long delay = Math.max(1L, 1000L - now.getNano() / 1_000_000L);
                     final long generation = ++eligibilityGeneration;
-                    eligibilityTask = executor.runLater(() -> {
-                        synchronized (TopologyControlPlane.this) {
-                            if (closed || eligibilityGeneration != generation) return null;
-                            eligibilityTask = null;
-                        }
-                        pumpPublication();
-                        return null;
-                    }, delay, TimeUnit.MILLISECONDS);
+                    eligibilityTask =
+                        executor.runLater(
+                            () -> {
+                                synchronized (TopologyControlPlane.this) {
+                                    if (closed || eligibilityGeneration != generation) return null;
+                                    eligibilityTask = null;
+                                }
+                                pumpPublication();
+                                return null;
+                            },
+                            delay,
+                            TimeUnit.MILLISECONDS
+                        );
                 }
                 return;
             }
@@ -233,11 +249,18 @@ public final class TopologyControlPlane implements Closeable {
             eligibilityTask = null;
             Instant createdAt = Instant.ofEpochSecond(second);
             next = pendingPublication;
-            next.snapshot = new TopologySnapshot(
-                scope, localPeer.getPubkey(), localPeer.getSessionId(), revision.incrementAndGet(),
-                NodeId.derive(scope, localPeer.getPubkey(), localPeer.getSessionId()),
-                routingKeys.getPublicKey(), createdAt, createdAt.plus(expiration), currentNeighbors
-            );
+            next.snapshot =
+                new TopologySnapshot(
+                    scope,
+                    localPeer.getPubkey(),
+                    localPeer.getSessionId(),
+                    revision.incrementAndGet(),
+                    NodeId.derive(scope, localPeer.getPubkey(), localPeer.getSessionId()),
+                    routingKeys.getPublicKey(),
+                    createdAt,
+                    createdAt.plus(expiration),
+                    currentNeighbors
+                );
             lastCreatedAtSecond = second;
             pendingPublication = null;
             activePublication = next;
@@ -250,7 +273,11 @@ public final class TopologyControlPlane implements Closeable {
                 encoded = codec.encode(publication.snapshot, localPeer, roomKeys, publication.snapshot.getIssuedAt());
             }
             // Platform continuations can run inline; attach them after releasing the handoff mutex.
-            encoded.then(event -> { publishEncoded(publication, event); return null; })
+            encoded
+                .then(event -> {
+                    publishEncoded(publication, event);
+                    return null;
+                })
                 .catchException(error -> finishPublication(publication, null, error));
         } catch (Throwable error) {
             finishPublication(publication, null, error);
@@ -263,37 +290,158 @@ public final class TopologyControlPlane implements Closeable {
 
     private void publishEncoded(Publication publication, SignedNostrEvent event) {
         AsyncTask<List<AsyncTask<NostrMessageAck>>> published;
+        boolean handedOff = false;
+        boolean legacyRequested = false;
         try {
             synchronized (publicationHandoff) {
                 if (!ownsPublication(publication)) return;
+                handedOff = true;
                 published = pool.publish(event);
                 // A pool callback may reentrantly close this control plane.
                 if (!ownsPublication(publication)) return;
                 store.accept(publication.snapshot, clock.get());
             }
+            requestLegacyPublication(publication.snapshot, event);
+            legacyRequested = true;
             notifyChanged();
-            published.then(promises -> {
-                if (!ownsPublication(publication)) return null;
-                for (AsyncTask<NostrMessageAck> promise : promises) {
-                    promise.then(ack -> {
-                        if (!closed && ack.getStatus() == NostrMessageAck.Status.FAILURE) {
-                            logger.warning("Relay rejected private topology snapshot " + event.getId() + ": " + ack.getMessage());
-                        }
-                        return ack;
-                    }).catchException(error -> {
-                        if (!closed) {
-                            logger.log(Level.WARNING, "Failed to publish private topology snapshot " + event.getId(), error);
-                        }
-                    });
-                }
-                // Preserve the pool's existing ANY-ACK policy. An unrelated relay may have a
-                // much longer acknowledgement timeout; its observers must not gate the next topology.
-                finishPublication(publication, event, null);
-                return null;
-            }).catchException(error -> finishPublication(publication, null, error));
+            published
+                .then(promises -> {
+                    if (!ownsPublication(publication)) return null;
+                    for (AsyncTask<NostrMessageAck> promise : promises) {
+                        promise
+                            .then(ack -> {
+                                if (!closed && ack.getStatus() == NostrMessageAck.Status.FAILURE) {
+                                    logger.warning(
+                                        "Relay rejected private topology snapshot " + event.getId() + ": " + ack.getMessage()
+                                    );
+                                }
+                                return ack;
+                            })
+                            .catchException(error -> {
+                                if (!closed) {
+                                    logger.log(
+                                        Level.WARNING,
+                                        "Failed to publish private topology snapshot " + event.getId(),
+                                        error
+                                    );
+                                }
+                            });
+                    }
+                    // Preserve the pool's existing ANY-ACK policy. An unrelated relay may have a
+                    // much longer acknowledgement timeout; its observers must not gate the next topology.
+                    finishPublication(publication, event, null);
+                    return null;
+                })
+                .catchException(error -> finishPublication(publication, null, error));
         } catch (Throwable error) {
             finishPublication(publication, null, error);
+        } finally {
+            if (handedOff && !legacyRequested) requestLegacyPublication(publication.snapshot, event);
         }
+    }
+
+    private void requestLegacyPublication(TopologySnapshot snapshot, SignedNostrEvent compact) {
+        if (!scope.canPublishLegacyTopology(snapshot.getSessionId())) return;
+        boolean schedule;
+        synchronized (this) {
+            if (closed) return;
+            if (Long.compareUnsigned(snapshot.getRevision(), lastLegacyRequestedRevision) <= 0) return;
+            lastLegacyRequestedRevision = snapshot.getRevision();
+            pendingLegacyPublication = new LegacyPublication(snapshot, compact);
+            schedule = activeLegacyPublication == null && !legacyPumpScheduled;
+            if (schedule) legacyPumpScheduled = true;
+        }
+        if (schedule) scheduleLegacyPublication();
+    }
+
+    private void scheduleLegacyPublication() {
+        try {
+            legacyExecutor
+                .run(() -> {
+                    pumpLegacyPublication();
+                    return null;
+                })
+                .catchException(error -> {
+                    synchronized (this) {
+                        legacyPumpScheduled = false;
+                    }
+                    if (!closed) logger.log(Level.FINE, "Legacy topology publication task failed", error);
+                });
+        } catch (Throwable error) {
+            synchronized (this) {
+                legacyPumpScheduled = false;
+            }
+            if (!closed) logger.log(Level.FINE, "Could not schedule legacy topology publication", error);
+        }
+    }
+
+    private void pumpLegacyPublication() {
+        final LegacyPublication publication;
+        synchronized (this) {
+            legacyPumpScheduled = false;
+            if (closed || activeLegacyPublication != null || pendingLegacyPublication == null) return;
+            publication = pendingLegacyPublication;
+            pendingLegacyPublication = null;
+            activeLegacyPublication = publication;
+        }
+        try {
+            AsyncTask<SignedNostrEvent> encoded;
+            synchronized (legacyHandoff) {
+                if (!ownsLegacyPublication(publication)) return;
+                if (publication.snapshot.isExpired(clock.get())) {
+                    finishLegacyPublication(publication, null);
+                    return;
+                }
+                encoded = codec.encodeLegacy(publication.compact, publication.snapshot, localPeer);
+            }
+            encoded
+                .then(event -> {
+                    publishLegacyEncoded(publication, event);
+                    return null;
+                })
+                .catchException(error -> finishLegacyPublication(publication, error));
+        } catch (Throwable error) {
+            finishLegacyPublication(publication, error);
+        }
+    }
+
+    private boolean ownsLegacyPublication(LegacyPublication publication) {
+        return !closed && activeLegacyPublication == publication;
+    }
+
+    private void publishLegacyEncoded(LegacyPublication publication, SignedNostrEvent event) {
+        try {
+            AsyncTask<List<AsyncTask<NostrMessageAck>>> published;
+            synchronized (legacyHandoff) {
+                if (!ownsLegacyPublication(publication)) return;
+                if (publication.snapshot.isExpired(clock.get())) {
+                    finishLegacyPublication(publication, null);
+                    return;
+                }
+                published = pool.publish(event);
+            }
+            published
+                .then(promises -> {
+                    // Legacy relay acknowledgements never own the canonical publication result or its next revision.
+                    finishLegacyPublication(publication, null);
+                    return null;
+                })
+                .catchException(error -> finishLegacyPublication(publication, error));
+        } catch (Throwable error) {
+            finishLegacyPublication(publication, error);
+        }
+    }
+
+    private void finishLegacyPublication(LegacyPublication publication, Throwable error) {
+        boolean schedule;
+        synchronized (this) {
+            if (activeLegacyPublication != publication) return;
+            activeLegacyPublication = null;
+            schedule = !closed && pendingLegacyPublication != null && !legacyPumpScheduled;
+            if (schedule) legacyPumpScheduled = true;
+        }
+        if (!closed && error != null) logger.log(Level.FINE, "Legacy topology publication failed", error);
+        if (schedule) scheduleLegacyPublication();
     }
 
     private void finishPublication(Publication publication, SignedNostrEvent event, Throwable error) {
@@ -306,12 +454,27 @@ public final class TopologyControlPlane implements Closeable {
     }
 
     private static final class Publication {
+
         final DeferredEvent result = new DeferredEvent();
         TopologySnapshot snapshot;
     }
 
-    /** Completion can race the platform's asynchronous promise registration, including during close. */
+    private static final class LegacyPublication {
+
+        final TopologySnapshot snapshot;
+        final SignedNostrEvent compact;
+
+        LegacyPublication(TopologySnapshot snapshot, SignedNostrEvent compact) {
+            this.snapshot = snapshot;
+            this.compact = compact;
+        }
+    }
+
+    /**
+     * Completion can race the platform's asynchronous promise registration, including during close.
+     */
     private static final class DeferredEvent {
+
         private Consumer<SignedNostrEvent> resolve;
         private Consumer<Throwable> reject;
         private boolean done;
@@ -323,7 +486,11 @@ public final class TopologyControlPlane implements Closeable {
             SignedNostrEvent completed;
             Throwable error;
             synchronized (this) {
-                if (!done) { resolve = yes; reject = no; return; }
+                if (!done) {
+                    resolve = yes;
+                    reject = no;
+                    return;
+                }
                 completed = value;
                 error = failure;
             }
@@ -343,7 +510,9 @@ public final class TopologyControlPlane implements Closeable {
                 resolve = null;
                 reject = null;
             }
-            if (yes != null) { if (error == null) yes.accept(completed); else no.accept(error); }
+            if (yes != null) {
+                if (error == null) yes.accept(completed); else no.accept(error);
+            }
         }
     }
 
@@ -455,10 +624,21 @@ public final class TopologyControlPlane implements Closeable {
         CancellationException error = new CancellationException("Topology control plane is closed");
         if (active != null) active.result.finish(null, error);
         if (pending != null) pending.result.finish(null, error);
+        synchronized (legacyHandoff) {
+            synchronized (this) {
+                activeLegacyPublication = null;
+                pendingLegacyPublication = null;
+                legacyPumpScheduled = false;
+            }
+        }
         try {
             if (closingSubscription != null) closingSubscription.close();
         } finally {
-            executor.close();
+            try {
+                executor.close();
+            } finally {
+                legacyExecutor.close();
+            }
         }
         // The shared signer and pool retain their own physical lifecycle; late completions are fenced.
     }

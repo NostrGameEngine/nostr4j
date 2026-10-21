@@ -1028,7 +1028,7 @@ The public envelope is:
   "kind": 30350,
   "content": "<NIP-44 encrypted JSON>",
   "tags": [
-    ["d", "dc-topology:<room>:<protocol>:<application>:<session>"],
+    ["d", "dc-topology:<address digest>"],
     ["t", "dc-topology"],
     ["version", "dc4"],
     ["P", "<room pubkey>"],
@@ -1040,6 +1040,79 @@ The public envelope is:
   ]
 }
 ```
+
+### 16.1 Compact topology address
+
+Publishers **MUST** always use the compact address for the primary topology
+event, including when the legacy address would be short. Its `d` value is
+`dc-topology:` followed by the 64-character lowercase hexadecimal SHA-256
+digest of:
+
+```text
+ASCII("nip-dc-topology-address-v1") ||
+LP(room_pubkey_bytes) || LP(UTF8(protocol_id)) ||
+LP(UTF8(application_id)) || LP(UTF8(session_id))
+```
+
+`LP(value)` is its unsigned 32-bit byte length in big-endian order followed
+by the bytes themselves. The room public key is its raw 32-byte value, not
+its hexadecimal text. The domain has no length prefix or trailing NUL.
+The complete compact address is always 76 ASCII bytes. The event **MUST**
+contain exactly one `d` tag with exactly one value. Publishers **SHOULD**
+place it first in the tag array, including in legacy copies, to interoperate
+with relays that derive the replacement address from the first tag.
+
+For room public key
+`79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798`,
+protocol `proto`, application `app` and session `session`, the compact address is:
+
+```text
+dc-topology:ea6cf599766bf2470292a068de63386c3ef50fd06efe4e77e02cad9ce6b02f14
+```
+
+### 16.2 Legacy compatibility
+
+The legacy address is the exact UTF-8 string:
+
+```text
+dc-topology:<room_pubkey_hex>:<protocol_id>:<application_id>:<session_id>
+```
+
+For compatibility with existing dc4 clients, publishers **SHOULD** also
+publish a separately signed event with this legacy `d` **only if** the
+complete legacy address is at most 255 UTF-8 bytes (`length < 256`). An
+address longer than 255 bytes **MUST NOT** be published as a legacy copy.
+The limit counts bytes, not Unicode characters. The compact and legacy
+addresses **MUST NOT** be put in two `d` tags of the same event.
+
+Both copies **MUST** describe the same snapshot, with the same author,
+NodeId, revision, neighbors, routing public key, `created_at` and expiry.
+Publishers **SHOULD** reuse the encrypted content and roomproof; changing
+`d` still requires a separate event ID and signature. Legacy signing,
+publication failure or delayed acknowledgement **MUST NOT** gate compact
+publication or later compact revisions. Legacy work **MUST** remain bounded;
+when a legacy operation is delayed, intermediate pending legacy snapshots
+**MAY** be coalesced into the latest one. Expired or closed-session legacy
+work **MUST NOT** be handed to the relay.
+
+Readers **MUST** support the exact compact address and legacy addresses
+within the compatibility limit, derived from the authenticated scope and
+presence session. They **MUST**
+still verify the author signature, roomproof, complete scope, session,
+revision and expiry. The 255-byte rule limits legacy publication; readers
+**MAY** accept a valid longer legacy address delivered by a capable relay.
+Subscriptions **SHOULD** cover both representations, for example using kind,
+`t` and room `P` filters without requiring a particular `d` value. Readers
+using `#d` **SHOULD** include both supported addresses where the relay can
+query them. Copies are one logical snapshot: readers **MUST** deduplicate
+by NodeId and revision, not by Nostr event ID or `d`.
+
+This is a dc4 topology-address extension; signaling, payload formats and
+best-effort physical linking retain their existing rules. Legacy topology
+compatibility is unavailable for addresses above 255 bytes, and stricter
+relay policies or smaller tag indexes may also limit the legacy copy.
+
+### 16.3 Private topology content
 
 Neighbor identities, edge ids, transport classifications, and the routing
 public key **MUST NOT** appear in public tags. The author encrypts content with

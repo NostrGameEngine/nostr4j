@@ -5,8 +5,6 @@
  */
 package org.ngengine.nostr4j.rtc.routing.topology;
 
-import org.ngengine.nostr4j.RTCSettings;
-
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -20,6 +18,7 @@ import java.util.concurrent.TimeUnit;
 import org.junit.Test;
 import org.ngengine.nostr4j.NostrFilter;
 import org.ngengine.nostr4j.NostrPool;
+import org.ngengine.nostr4j.RTCSettings;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
 import org.ngengine.nostr4j.keypair.NostrKeyPair;
 import org.ngengine.nostr4j.proto.NostrMessageAck;
@@ -44,13 +43,17 @@ public class TestTopologyControlPlane {
         assertEquals(List.of(RoutingProtocol.TOPOLOGY_EVENT_TYPE), filter.getTagValues("t"));
         assertEquals(List.of(roomKeys.getPublicKey().asHex()), filter.getTagValues("P"));
         assertEquals(2, filter.getTags().size());
+        assertEquals(
+            Integer.valueOf(2 * org.ngengine.nostr4j.rtc.routing.RoutingLimits.MAX_TOPOLOGY_SNAPSHOTS),
+            filter.getLimit()
+        );
         assertFalse("protocol scope is validated after relay delivery", filter.getTags().containsKey("i"));
         assertFalse("application scope is validated after relay delivery", filter.getTags().containsKey("y"));
         assertFalse("multi-letter tags are not NIP-01 relay filter keys", filter.getTags().containsKey("version"));
     }
 
     @Test(timeout = 10_000)
-    public void testPublisherUsesMonotonicRevisionAndCreatedAt() {
+    public void testPublisherUsesMonotonicRevisionAndCreatedAt() throws Exception {
         NostrKeyPair roomKeys = new NostrKeyPair();
         NostrRTCLocalPeer local = new NostrRTCLocalPeer(
             RTCSettings.getDefault("control-app", "control-proto").withStunServers(Collections.emptyList()),
@@ -79,7 +82,10 @@ public class TestTopologyControlPlane {
             assertTrue(second.getCreatedAt().isAfter(first.getCreatedAt()));
             assertEquals(2, pool.events.size());
             assertTrue(pool.publishResult.isDone());
-            assertFalse("monotonic ordering must not manufacture a future publication", second.getCreatedAt().isAfter(Instant.now()));
+            assertFalse(
+                "monotonic ordering must not manufacture a future publication",
+                second.getCreatedAt().isAfter(Instant.now())
+            );
             assertEquals(1, control.getSnapshots(now).size());
         } finally {
             control.close();
@@ -207,7 +213,7 @@ public class TestTopologyControlPlane {
 
         @Override
         public AsyncTask<List<AsyncTask<NostrMessageAck>>> publish(SignedNostrEvent event) {
-            events.add(event);
+            if (event.getFirstTagFirstValue("d").matches("dc-topology:[0-9a-f]{64}")) events.add(event);
             return publishResult;
         }
     }

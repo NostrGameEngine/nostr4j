@@ -8,8 +8,8 @@ package org.ngengine.nostr4j.rtc.routing.topology;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -84,6 +84,31 @@ public final class TopologyEventCodec {
                     })
                     .compose(signer::sign);
             });
+    }
+
+    AsyncTask<SignedNostrEvent> encodeLegacy(SignedNostrEvent compact, TopologySnapshot snapshot, NostrRTCLocalPeer localPeer) {
+        RoutingScope scope = snapshot.getScope();
+        if (!scope.canPublishLegacyTopology(snapshot.getSessionId())) {
+            throw new IllegalArgumentException("Legacy topology address exceeds 255 UTF-8 bytes");
+        }
+        if (
+            !scope.topologyAddress(snapshot.getSessionId()).equals(compact.getFirstTagFirstValue("d")) ||
+            !snapshot.getPeerPubkey().equals(compact.getPubkey()) ||
+            !localPeer.getPubkey().equals(compact.getPubkey()) ||
+            !localPeer.getSessionId().equals(snapshot.getSessionId())
+        ) {
+            throw new IllegalArgumentException("Legacy copy does not match the local compact topology");
+        }
+        // Reuse the ciphertext, room proof, revision and timestamps; only the address and event signature change.
+        Map<String, Object> fields = new LinkedHashMap<>(compact.toMap());
+        List<List<String>> tags = new ArrayList<>();
+        tags.add(List.of("d", scope.legacyTopologyAddress(snapshot.getSessionId())));
+        for (List<String> tag : compact.getTagRows()) {
+            if (!"d".equals(tag.get(0))) tags.add(tag);
+        }
+        fields.put("tags", tags);
+        UnsignedNostrEvent legacy = new UnsignedNostrEvent(fields);
+        return localPeer.getSigner().sign(legacy);
     }
 
     public AsyncTask<TopologySnapshot> decode(
@@ -183,7 +208,14 @@ public final class TopologyEventCodec {
         if (!scope.getApplicationId().equals(event.getFirstTagFirstValue("y"))) {
             throw new IllegalArgumentException("Topology application scope mismatch");
         }
-        if (!scope.topologyAddress(presence.getSessionId()).equals(event.getFirstTagFirstValue("d"))) {
+        if (event.getTag("d") == null || event.getTag("d").size() != 1 || event.getFirstTag("d").size() != 1) {
+            throw new IllegalArgumentException("Topology must have exactly one address");
+        }
+        String address = event.getFirstTagFirstValue("d");
+        if (
+            !scope.topologyAddress(presence.getSessionId()).equals(address) &&
+            !scope.legacyTopologyAddress(presence.getSessionId()).equals(address)
+        ) {
             throw new IllegalArgumentException("Topology session scope mismatch");
         }
         if (!presence.getPubkey().equals(event.getPubkey())) {
