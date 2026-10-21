@@ -61,7 +61,6 @@ public class TestTopologyControlPlane {
         );
         RoutingScope scope = new RoutingScope(roomKeys.getPublicKey(), local.getProtocolId(), local.getApplicationId());
         CapturingPool pool = new CapturingPool();
-        pool.publishResult = AsyncTask.create((resolve, reject) -> {});
         TopologyControlPlane control = new TopologyControlPlane(
             scope,
             local,
@@ -79,7 +78,8 @@ public class TestTopologyControlPlane {
             assertEquals("2", second.getFirstTagFirstValue("revision"));
             assertTrue(second.getCreatedAt().isAfter(first.getCreatedAt()));
             assertEquals(2, pool.events.size());
-            assertFalse(pool.publishResult.isDone());
+            assertTrue(pool.publishResult.isDone());
+            assertFalse("monotonic ordering must not manufacture a future publication", second.getCreatedAt().isAfter(Instant.now()));
             assertEquals(1, control.getSnapshots(now).size());
         } finally {
             control.close();

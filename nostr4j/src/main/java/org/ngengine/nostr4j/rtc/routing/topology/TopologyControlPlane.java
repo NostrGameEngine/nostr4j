@@ -19,6 +19,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.CancellationException;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.ngengine.nostr4j.NostrFilter;
@@ -69,7 +72,14 @@ public final class TopologyControlPlane implements Closeable {
     private volatile AsyncTask<Void> debounceTask;
     private volatile boolean started;
     private volatile boolean closed;
-    private volatile long lastCreatedAtSecond;
+    // Handoff/close serialization never holds the control-plane monitor across pool or listener code.
+    private final Object publicationHandoff = new Object();
+    private final Supplier<Instant> clock;
+    private long lastCreatedAtSecond = Long.MIN_VALUE;
+    private volatile Publication activePublication;
+    private Publication pendingPublication;
+    private AsyncTask<Void> eligibilityTask;
+    private long eligibilityGeneration;
     private List<TopologyNeighbor> currentNeighbors = Collections.emptyList();
 
     public TopologyControlPlane(
@@ -81,6 +91,20 @@ public final class TopologyControlPlane implements Closeable {
         Duration expiration,
         Duration signalingInterval
     ) {
+        this(scope, localPeer, roomKeys, routingKeys, pool, expiration, signalingInterval, Instant::now);
+    }
+
+    TopologyControlPlane(
+        RoutingScope scope,
+        NostrRTCLocalPeer localPeer,
+        NostrKeyPair roomKeys,
+        NostrKeyPair routingKeys,
+        NostrPool pool,
+        Duration expiration,
+        Duration signalingInterval,
+        Supplier<Instant> clock
+    ) {
+        this.clock = Objects.requireNonNull(clock, "Topology clock cannot be null");
         this.scope = Objects.requireNonNull(scope, "Routing scope cannot be null");
         this.localPeer = Objects.requireNonNull(localPeer, "Local peer cannot be null");
         this.roomKeys = Objects.requireNonNull(roomKeys, "Room keypair cannot be null");
@@ -123,16 +147,22 @@ public final class TopologyControlPlane implements Closeable {
             .limit(RoutingLimits.MAX_TOPOLOGY_SNAPSHOTS);
     }
 
-    public synchronized void updatePresences(Collection<NostrRTCConnectSignal> announces, Instant now) {
-        Map<String, NostrRTCPeer> updated = new HashMap<String, NostrRTCPeer>();
-        for (NostrRTCConnectSignal announce : announces) {
-            if (announce == null || !announce.supportsRouting() || announce.isExpired(now)) continue;
-            NostrRTCPeer peer = announce.getPeer();
-            updated.put(presenceKey(peer.getPubkey().asHex(), scope.topologyAddress(peer.getSessionId())), peer);
+    public void updatePresences(Collection<NostrRTCConnectSignal> announces, Instant now) {
+        boolean changed;
+        synchronized (this) {
+            if (closed) return;
+            Map<String, NostrRTCPeer> updated = new HashMap<String, NostrRTCPeer>();
+            for (NostrRTCConnectSignal announce : announces) {
+                if (announce == null || !announce.supportsRouting() || announce.isExpired(now)) continue;
+                NostrRTCPeer peer = announce.getPeer();
+                updated.put(presenceKey(peer.getPubkey().asHex(), scope.topologyAddress(peer.getSessionId())), peer);
+            }
+            presences.clear();
+            presences.putAll(updated);
+            changed = store.removeExpired(now);
         }
-        presences.clear();
-        presences.putAll(updated);
-        if (store.removeExpired(now)) notifyChanged();
+        // Never call a listener under the state monitor: it can reentrantly close the control plane.
+        if (changed) notifyChanged();
     }
 
     public synchronized void requestPublish(Collection<TopologyNeighbor> neighbors) {
@@ -162,70 +192,165 @@ public final class TopologyControlPlane implements Closeable {
             .catchException(error -> logger.log(Level.WARNING, "Failed to publish private topology snapshot", error));
     }
 
+    /** Requests the latest topology; pending callers share one bounded publication, not a snapshot queue. */
     AsyncTask<SignedNostrEvent> publishNow(Instant requestedAt) {
-        final TopologySnapshot snapshot;
-        final Instant createdAt;
+        Objects.requireNonNull(requestedAt, "Publication request time cannot be null");
+        Publication requested;
         synchronized (this) {
             if (closed) return AsyncTask.failed(new IllegalStateException("Topology control plane is closed"));
-            long requestedSecond = requestedAt.getEpochSecond();
-            long nextSecond = Math.max(requestedSecond, lastCreatedAtSecond + 1L);
-            lastCreatedAtSecond = nextSecond;
-            createdAt = Instant.ofEpochSecond(nextSecond);
-            long nextRevision = revision.incrementAndGet();
-            snapshot =
-                new TopologySnapshot(
-                    scope,
-                    localPeer.getPubkey(),
-                    localPeer.getSessionId(),
-                    nextRevision,
-                    NodeId.derive(scope, localPeer.getPubkey(), localPeer.getSessionId()),
-                    routingKeys.getPublicKey(),
-                    createdAt,
-                    createdAt.plus(expiration),
-                    currentNeighbors
-                );
+            if (pendingPublication == null) pendingPublication = new Publication();
+            requested = pendingPublication;
         }
-        return codec
-            .encode(snapshot, localPeer, roomKeys, createdAt)
-            .then(event -> {
-                store.accept(snapshot, Instant.now());
-                pool
-                    .publish(event)
-                    .then(promises -> {
-                        for (AsyncTask<NostrMessageAck> published : promises) {
-                            published
-                                .then(ack -> {
-                                    if (ack.getStatus() == NostrMessageAck.Status.FAILURE) {
-                                        logger.warning(
-                                            "Relay rejected private topology snapshot " +
-                                            event.getId() +
-                                            ": " +
-                                            ack.getMessage()
-                                        );
-                                    }
-                                    return ack;
-                                })
-                                .catchException(error ->
-                                    logger.log(
-                                        Level.WARNING,
-                                        "Failed to publish private topology snapshot " + event.getId(),
-                                        error
-                                    )
-                                );
+        pumpPublication();
+        return requested.result.task;
+    }
+
+    private void pumpPublication() {
+        Publication next;
+        synchronized (this) {
+            if (closed || activePublication != null || pendingPublication == null) return;
+            // NIP-01 replacement is ordered by seconds, then event ID. Never manufacture future seconds.
+            Instant now = clock.get();
+            long second = now.getEpochSecond();
+            if (second <= lastCreatedAtSecond) {
+                if (eligibilityTask == null) {
+                    // Recheck at most a second later, including after a wall-clock rewind.
+                    long delay = Math.max(1L, 1000L - now.getNano() / 1_000_000L);
+                    final long generation = ++eligibilityGeneration;
+                    eligibilityTask = executor.runLater(() -> {
+                        synchronized (TopologyControlPlane.this) {
+                            if (closed || eligibilityGeneration != generation) return null;
+                            eligibilityTask = null;
                         }
+                        pumpPublication();
                         return null;
-                    })
-                    .catchException(error ->
-                        logger.log(Level.WARNING, "Failed to publish private topology snapshot " + event.getId(), error)
-                    );
-                notifyChanged();
-                return event;
-            });
+                    }, delay, TimeUnit.MILLISECONDS);
+                }
+                return;
+            }
+            if (eligibilityTask != null) eligibilityTask.cancel();
+            eligibilityGeneration++;
+            eligibilityTask = null;
+            Instant createdAt = Instant.ofEpochSecond(second);
+            next = pendingPublication;
+            next.snapshot = new TopologySnapshot(
+                scope, localPeer.getPubkey(), localPeer.getSessionId(), revision.incrementAndGet(),
+                NodeId.derive(scope, localPeer.getPubkey(), localPeer.getSessionId()),
+                routingKeys.getPublicKey(), createdAt, createdAt.plus(expiration), currentNeighbors
+            );
+            lastCreatedAtSecond = second;
+            pendingPublication = null;
+            activePublication = next;
+        }
+        final Publication publication = next;
+        try {
+            AsyncTask<SignedNostrEvent> encoded;
+            synchronized (publicationHandoff) {
+                if (!ownsPublication(publication)) return;
+                encoded = codec.encode(publication.snapshot, localPeer, roomKeys, publication.snapshot.getIssuedAt());
+            }
+            // Platform continuations can run inline; attach them after releasing the handoff mutex.
+            encoded.then(event -> { publishEncoded(publication, event); return null; })
+                .catchException(error -> finishPublication(publication, null, error));
+        } catch (Throwable error) {
+            finishPublication(publication, null, error);
+        }
+    }
+
+    private boolean ownsPublication(Publication publication) {
+        return !closed && activePublication == publication;
+    }
+
+    private void publishEncoded(Publication publication, SignedNostrEvent event) {
+        AsyncTask<List<AsyncTask<NostrMessageAck>>> published;
+        try {
+            synchronized (publicationHandoff) {
+                if (!ownsPublication(publication)) return;
+                published = pool.publish(event);
+                // A pool callback may reentrantly close this control plane.
+                if (!ownsPublication(publication)) return;
+                store.accept(publication.snapshot, clock.get());
+            }
+            notifyChanged();
+            published.then(promises -> {
+                if (!ownsPublication(publication)) return null;
+                for (AsyncTask<NostrMessageAck> promise : promises) {
+                    promise.then(ack -> {
+                        if (!closed && ack.getStatus() == NostrMessageAck.Status.FAILURE) {
+                            logger.warning("Relay rejected private topology snapshot " + event.getId() + ": " + ack.getMessage());
+                        }
+                        return ack;
+                    }).catchException(error -> {
+                        if (!closed) {
+                            logger.log(Level.WARNING, "Failed to publish private topology snapshot " + event.getId(), error);
+                        }
+                    });
+                }
+                // Preserve the pool's existing ANY-ACK policy. An unrelated relay may have a
+                // much longer acknowledgement timeout; its observers must not gate the next topology.
+                finishPublication(publication, event, null);
+                return null;
+            }).catchException(error -> finishPublication(publication, null, error));
+        } catch (Throwable error) {
+            finishPublication(publication, null, error);
+        }
+    }
+
+    private void finishPublication(Publication publication, SignedNostrEvent event, Throwable error) {
+        synchronized (this) {
+            if (closed || activePublication != publication) return;
+            activePublication = null;
+        }
+        publication.result.finish(event, error);
+        pumpPublication();
+    }
+
+    private static final class Publication {
+        final DeferredEvent result = new DeferredEvent();
+        TopologySnapshot snapshot;
+    }
+
+    /** Completion can race the platform's asynchronous promise registration, including during close. */
+    private static final class DeferredEvent {
+        private Consumer<SignedNostrEvent> resolve;
+        private Consumer<Throwable> reject;
+        private boolean done;
+        private SignedNostrEvent value;
+        private Throwable failure;
+        final AsyncTask<SignedNostrEvent> task = AsyncTask.create(this::bind);
+
+        private void bind(Consumer<SignedNostrEvent> yes, Consumer<Throwable> no) {
+            SignedNostrEvent completed;
+            Throwable error;
+            synchronized (this) {
+                if (!done) { resolve = yes; reject = no; return; }
+                completed = value;
+                error = failure;
+            }
+            if (error == null) yes.accept(completed); else no.accept(error);
+        }
+
+        void finish(SignedNostrEvent completed, Throwable error) {
+            Consumer<SignedNostrEvent> yes;
+            Consumer<Throwable> no;
+            synchronized (this) {
+                if (done) return;
+                done = true;
+                value = completed;
+                failure = error;
+                yes = resolve;
+                no = reject;
+                resolve = null;
+                reject = null;
+            }
+            if (yes != null) { if (error == null) yes.accept(completed); else no.accept(error); }
+        }
     }
 
     void acceptEvent(SignedNostrEvent event, Instant now) {
         NostrRTCPeer presence;
         synchronized (this) {
+            if (closed) return;
             String address = event.getFirstTagFirstValue("d");
             presence = presences.get(presenceKey(event.getPubkey().asHex(), address));
         }
@@ -242,7 +367,11 @@ public final class TopologyControlPlane implements Closeable {
             codec
                 .decode(event, scope, presence, roomKeys, now)
                 .then(snapshot -> {
-                    if (store.accept(snapshot, now)) notifyChanged();
+                    boolean changed;
+                    synchronized (TopologyControlPlane.this) {
+                        changed = !closed && store.accept(snapshot, now);
+                    }
+                    if (changed) notifyChanged();
                     return null;
                 })
                 .catchException(error -> logger.log(Level.FINE, "Rejected private topology event", error));
@@ -279,6 +408,7 @@ public final class TopologyControlPlane implements Closeable {
     }
 
     private void notifyChanged() {
+        if (closed) return;
         Listener current = listener;
         if (current != null) {
             try {
@@ -294,20 +424,42 @@ public final class TopologyControlPlane implements Closeable {
     }
 
     @Override
-    public synchronized void close() {
-        if (closed) return;
-        closed = true;
-        started = false;
-        if (debounceTask != null) debounceTask.cancel();
-        if (refreshTask != null) refreshTask.cancel();
-        debounceTask = null;
-        refreshTask = null;
-        if (subscription != null) subscription.close();
-        subscription = null;
-        presences.clear();
-        currentNeighbors = Collections.emptyList();
-        store.clear();
-        listener = null;
-        executor.close();
+    public void close() {
+        Publication active;
+        Publication pending;
+        NostrSubscription closingSubscription;
+        synchronized (publicationHandoff) {
+            synchronized (this) {
+                if (closed) return;
+                closed = true;
+                started = false;
+                if (debounceTask != null) debounceTask.cancel();
+                if (refreshTask != null) refreshTask.cancel();
+                if (eligibilityTask != null) eligibilityTask.cancel();
+                debounceTask = null;
+                refreshTask = null;
+                eligibilityTask = null;
+                eligibilityGeneration++;
+                active = activePublication;
+                pending = pendingPublication;
+                activePublication = null;
+                pendingPublication = null;
+                closingSubscription = subscription;
+                subscription = null;
+                presences.clear();
+                currentNeighbors = Collections.emptyList();
+                store.clear();
+                listener = null;
+            }
+        }
+        CancellationException error = new CancellationException("Topology control plane is closed");
+        if (active != null) active.result.finish(null, error);
+        if (pending != null) pending.result.finish(null, error);
+        try {
+            if (closingSubscription != null) closingSubscription.close();
+        } finally {
+            executor.close();
+        }
+        // The shared signer and pool retain their own physical lifecycle; late completions are fenced.
     }
 }
