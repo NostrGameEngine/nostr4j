@@ -155,24 +155,35 @@ public class BlossomEndpoint {
     }
 
     /**
-     * Only this explicitly configured server may supply the resulting URL.
+     * Validates the URL, hash and size of a blob descriptor.
      */
     public void validateDescriptor(BlobDescriptor descriptor) throws IOException {
-        URI base = URI.create(url), resource = URI.create(descriptor.getUrl());
-        String prefix = base.getPath() == null ? "/" : base.getPath();
+        final URI base;
+        final URI resource;
+        try {
+            base = URI.create(url);
+            resource = URI.create(descriptor.getUrl());
+        } catch (IllegalArgumentException invalidUrl) {
+            throw new IOException("Invalid Blossom descriptor URL", invalidUrl);
+        }
+        boolean sameOrigin =
+            Objects.equals(base.getScheme(), resource.getScheme()) &&
+            Objects.equals(base.getHost(), resource.getHost()) &&
+            base.getPort() == resource.getPort();
+        // Retain explicitly configured HTTP endpoints and path prefixes. A server
+        // cannot downgrade an HTTPS upload or introduce another HTTP destination.
+        String prefix = sameOrigin && base.getRawPath() != null ? base.getRawPath() : "/";
         if (!prefix.endsWith("/")) prefix += "/";
         if (
-            !Objects.equals(base.getScheme(), resource.getScheme()) ||
-            !Objects.equals(base.getHost(), resource.getHost()) ||
-            base.getPort() != resource.getPort() ||
+            resource.getHost() == null ||
+            !("https".equals(resource.getScheme()) || (sameOrigin && "http".equals(resource.getScheme()))) ||
             resource.getUserInfo() != null ||
-            resource.getQuery() != null ||
-            resource.getFragment() != null ||
-            !resource.getPath().startsWith(prefix) ||
+            resource.getRawPath() == null ||
+            !resource.getRawPath().startsWith(prefix) ||
             !descriptor.getSha256().matches("[a-f0-9]{64}") ||
             descriptor.getSize() < 0 ||
-            !resource.getPath().substring(prefix.length()).matches(descriptor.getSha256() + "(?:\\.[A-Za-z0-9]+)?")
-        ) throw new IOException("Untrusted Blossom descriptor URL or hash");
+            !resource.getRawPath().substring(prefix.length()).matches(descriptor.getSha256() + "(?:\\.[A-Za-z0-9]+)?")
+        ) throw new IOException("Invalid Blossom descriptor URL or hash");
     }
 
     public BlossomEndpoint(String url) {

@@ -1,10 +1,14 @@
-/** BSD 3-Clause License. Copyright (c) 2025, Riccardo Balbo. */
+/**
+ * BSD 3-Clause License. Copyright (c) 2025, Riccardo Balbo.
+ */
 package org.ngengine.blossom4j;
 
 import static org.junit.Assert.*;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.Map;
 import org.junit.Test;
 import org.ngengine.nostr4j.event.SignedNostrEvent;
@@ -34,23 +38,63 @@ public class TestBlossomIntegrity {
     }
 
     private static byte[] descriptor(String hash, int size) {
+        return descriptorAt("https://blob.example/" + hash, hash, size);
+    }
+
+    private static byte[] descriptorAt(String url, String hash, int size) {
         return NGEPlatform
             .get()
-            .toJSON(
-                Map.of(
-                    "url",
-                    "https://blob.example/" + hash,
-                    "sha256",
-                    hash,
-                    "size",
-                    size,
-                    "type",
-                    "application/octet-stream",
-                    "uploaded",
-                    1
-                )
-            )
+            .toJSON(Map.of("url", url, "sha256", hash, "size", size, "type", "application/octet-stream", "uploaded", 1))
             .getBytes(StandardCharsets.UTF_8);
+    }
+
+    @Test
+    public void uploadAcceptsCdnAndAccountScopedOriginsWithoutRequestingThem() throws Exception {
+        byte[] original = new byte[] { 1, 2, 3 };
+        String hash = NGEUtils.bytesToHex(NGEPlatform.get().sha256(original));
+        for (String origin : new String[] {
+            "https://blob.example",
+            "https://cdn.example",
+            "https://npub1account.blossom.band",
+        }) {
+            for (String suffix : new String[] { "", "?token=x%2Fy&download=1", "#preview", "?token=x%2Fy#preview" }) {
+                Stub endpoint = new Stub();
+                String resource = origin + "/" + hash + ".png" + suffix;
+                endpoint.response = descriptorAt(resource, hash, original.length);
+                assertEquals(resource, endpoint.upload(original, "image/png", null).await().blobs().get(0).getUrl());
+                assertEquals(1, endpoint.requests);
+                endpoint.response = descriptorAt(resource, "0".repeat(64), original.length);
+                expectFailure(endpoint.upload(original, "image/png", null));
+                endpoint.response = descriptorAt(resource, hash, original.length + 1);
+                expectFailure(endpoint.upload(original, "image/png", null));
+            }
+        }
+    }
+
+    @Test
+    public void descriptorRejectsUnsafeOrAmbiguousUrlsAndKeepsConfiguredHttpSupport() throws Exception {
+        String hash = "a".repeat(64);
+        BlossomEndpoint endpoint = new BlossomEndpoint("https://blob.example");
+        for (String url : new String[] {
+            "http://cdn.example/" + hash + ".png",
+            "file:///" + hash,
+            "javascript:alert(1)",
+            "/" + hash,
+            "https://user:secret@cdn.example/" + hash,
+            "https://cdn.example/elsewhere/" + hash,
+            "https://cdn.example/%2e%2e/" + hash,
+            "https://cdn.example/" + "b".repeat(64) + ".png",
+            "https://cdn.example/%61" + hash.substring(1),
+            "https://cdn.example/" + hash + ".png/extra",
+            "https://cdn.example/%",
+        }) {
+            BlobDescriptor descriptor = new BlobDescriptor(url, hash, 3, "image/png", Instant.EPOCH, null);
+            assertThrows(url, IOException.class, () -> endpoint.validateDescriptor(descriptor));
+        }
+        BlossomEndpoint local = new BlossomEndpoint("http://127.0.0.1:8080/prefix");
+        local.validateDescriptor(
+            new BlobDescriptor("http://127.0.0.1:8080/prefix/" + hash + ".png", hash, 3, "image/png", Instant.EPOCH, null)
+        );
     }
 
     private static void expectFailure(AsyncTask<?> task) {
@@ -63,6 +107,7 @@ public class TestBlossomIntegrity {
     private static class Stub extends BlossomEndpoint {
 
         byte[] response;
+        int requests;
 
         Stub() {
             super("https://blob.example");
@@ -75,6 +120,7 @@ public class TestBlossomIntegrity {
             Map<String, String> headers,
             SignedNostrEvent event
         ) {
+            requests++;
             return AsyncTask.completed(new NGEHttpResponse(200, Map.of(), response, true));
         }
 
@@ -86,6 +132,7 @@ public class TestBlossomIntegrity {
             byte[] body,
             SignedNostrEvent event
         ) {
+            requests++;
             return AsyncTask.completed(new NGEHttpResponse(200, Map.of(), response, true));
         }
     }
