@@ -38,6 +38,7 @@ tasks.register('cacheTest', Test) {
     filter {
         includeTestsMatching 'org.ngengine.nostr4j.nip53.TestNip53'
         includeTestsMatching 'org.ngengine.nostr4j.nip29.TestNip29LiveKit'
+        includeTestsMatching 'org.ngengine.nostr4j.nip51.TestNip51'
         includeTestsMatching 'org.ngengine.nostr4j.unit.TestAnonSigner'
         includeTestsMatching 'org.ngengine.nostr4j.unit.TestEventCache'
         includeTestsMatching 'org.ngengine.nostr4j.unit.TestEventStore'
