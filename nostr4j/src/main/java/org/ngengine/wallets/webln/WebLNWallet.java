@@ -36,6 +36,7 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -72,7 +73,7 @@ public class WebLNWallet implements Wallet {
     private volatile String receivingAddress;
     private final AsyncExecutor executor;
     private final Runnable closer;
-    private final Set<Consumer<Throwable>> pending = ConcurrentHashMap.newKeySet();
+    private final Set<Consumer<Throwable>> pending = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
     /**
      * Creates a browser wallet adapter without requesting provider permissions.
