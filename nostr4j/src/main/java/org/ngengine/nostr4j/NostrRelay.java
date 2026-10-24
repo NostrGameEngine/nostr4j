@@ -760,6 +760,22 @@ public class NostrRelay {
         return this.markForDisconnection != null;
     }
 
+    void reconnectIfUnresponsive(Instant connectedSince) {
+        runInRelayExecutor(
+            (res, rej) -> {
+                try {
+                    if (getStatus() == Status.CONNECTED && statusSince.equals(connectedSince) && !isMarkedForDisconnection()) {
+                        markForDisconnection = "killed by watchdog due to unresponsiveness";
+                        loop();
+                    }
+                } finally {
+                    res.accept(this);
+                }
+            },
+            true
+        );
+    }
+
     public AsyncTask<NostrRelay> disconnect(String reason) {
         return disconnect(reason, false);
     }

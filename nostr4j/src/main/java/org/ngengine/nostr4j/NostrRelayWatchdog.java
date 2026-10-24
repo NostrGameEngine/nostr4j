@@ -36,6 +36,7 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import org.ngengine.nostr4j.listeners.NostrRelayComponent;
 import org.ngengine.nostr4j.proto.NostrMessage;
@@ -52,20 +53,33 @@ public class NostrRelayWatchdog implements NostrRelayComponent {
     private final Map<NostrRelay, AtomicLong> scheduleGenerations = new ConcurrentHashMap<>();
 
     protected void runWatchdog(NostrRelay relay) {
-        if (relay.getStatus() != NostrRelay.Status.CONNECTED) {
-            return;
+        Instant connectedSince;
+        synchronized (relay) {
+            if (relay.getStatus() != NostrRelay.Status.CONNECTED) {
+                return;
+            }
+            connectedSince = relay.statusSince;
         }
-        NostrPool pool = new NostrPool();
+        AtomicBoolean responded = new AtomicBoolean();
+        NostrPool pool = new NostrPool() {
+            @Override
+            protected boolean onRelayMessage(NostrRelay source, NostrMessage message) {
+                responded.set(true);
+                return super.onRelayMessage(source, message);
+            }
+        };
         pool.addRelay(relay);
         pool
-            .fetch(new NostrFilter().limit(1).withKind(0), 1, Duration.ofMinutes(5))
+            .fetch(new NostrFilter().limit(1).withKind(0), 1, true, Duration.ofMinutes(5))
             .then(evs -> {
                 pool.clean();
+                // Fetch timeouts resolve with an empty list, just like a relay with no stored events.
+                if (!responded.get()) relay.reconnectIfUnresponsive(connectedSince);
                 return null;
             })
             .catchException(ex -> {
                 pool.clean();
-                relay.disconnect("killed by watchdog due to unresponsiveness", true);
+                relay.reconnectIfUnresponsive(connectedSince);
             });
     }
 
