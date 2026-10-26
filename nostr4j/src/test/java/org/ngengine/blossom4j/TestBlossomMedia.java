@@ -39,6 +39,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 import java.util.logging.Handler;
 import java.util.logging.Level;
 import java.util.logging.LogRecord;
@@ -247,6 +249,35 @@ public class TestBlossomMedia {
             assertEquals(12, first.mirrorCalls.get() + second.mirrorCalls.get());
         } finally {
             pool.close();
+        }
+    }
+
+    @Test
+    public void mirrorCandidatesAreCapturedBeforeAsynchronousAuthorization() throws Exception {
+        AtomicReference<Consumer<SignedNostrEvent>> authorize = new AtomicReference<>();
+        Server unavailable = new Server("https://unavailable.test");
+        unavailable.unsupported = true;
+        Server added = new Server("https://added.test");
+        String hash = NGEUtils.bytesToHex(NGEPlatform.get().sha256(new byte[] { 1, 2, 3 }));
+        try (
+            BlossomPool pool = new BlossomPool() {
+                @Override
+                protected AsyncTask<SignedNostrEvent> getAuthEvent(BlossomVerb verb, String message, String sha256) {
+                    return AsyncTask.create((resolve, reject) -> authorize.set(resolve));
+                }
+            }
+        ) {
+            pool.ensureEndpoint(unavailable);
+            AsyncTask<BlobDescriptor> first = pool.mirror("https://origin.test/picture.png", hash);
+            pool.ensureEndpoint(added);
+            authorize.get().accept(null);
+            assertThrows(Exception.class, first::await);
+            assertEquals(0, added.mirrorCalls.get());
+
+            AsyncTask<BlobDescriptor> next = pool.mirror("https://origin.test/picture.png", hash);
+            authorize.get().accept(null);
+            assertNotNull(next.await());
+            assertEquals(1, added.mirrorCalls.get());
         }
     }
 

@@ -117,13 +117,13 @@ public class BlossomPool implements Closeable {
 
     public AsyncTask<BlobDescriptor> mirror(String url, @Nullable String sha256) {
         if (closed) return AsyncTask.failed(new IOException("Blossom pool closed"));
-        if (endpoints.isEmpty()) return AsyncTask.failed(new IOException("No Blossom servers configured"));
+        List<BlossomEndpoint> candidates = new ArrayList<>(endpoints);
+        if (candidates.isEmpty()) return AsyncTask.failed(new IOException("No Blossom servers configured"));
         return (
             sha256 == null
                 ? AsyncTask.<SignedNostrEvent>completed(null)
                 : getAuthEvent(BlossomVerb.UPLOAD, "Mirror media", sha256)
         ).compose(token -> {
-                List<BlossomEndpoint> candidates = new ArrayList<>(endpoints);
                 // Browser entropy checks deliberately reject single-byte random samples.
                 int start = (NGEPlatform.get().randomBytes(32)[0] & 255) % candidates.size();
                 Collections.rotate(candidates, -start);
