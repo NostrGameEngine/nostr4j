@@ -33,6 +33,7 @@ package org.ngengine.nostr4j;
 import static org.ngengine.platform.NGEUtils.dbg;
 
 import jakarta.annotation.Nullable;
+import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -354,6 +355,58 @@ public class NostrPool {
         return sendMessage(ev);
     }
 
+    /**
+     * Retain rejection details even when no relay satisfies the pool policy.
+     */
+    private static IllegalStateException acknowledgementFailure(List<AsyncTask<NostrMessageAck>> promises) {
+        IllegalStateException failure = new IllegalStateException("Failed to achieve required acknowledgements");
+        for (int index = 0; index < promises.size(); index++) {
+            AsyncTask<NostrMessageAck> promise = promises.get(index);
+            // Only inspect terminal tasks; diagnostics must never wait for another relay.
+            if (!promise.isDone()) continue;
+            try {
+                NostrMessageAck ack = promise.await();
+                if (ack != null && ack.getStatus() == Status.FAILURE) {
+                    failure.addSuppressed(
+                        new IllegalStateException(
+                            "Relay " +
+                            acknowledgementRelay(ack.getRelay()) +
+                            " rejected publication: " +
+                            acknowledgementMessage(ack.getMessage())
+                        )
+                    );
+                }
+            } catch (Exception error) {
+                failure.addSuppressed(new IllegalStateException("Relay task " + index + " failed", error));
+            }
+        }
+        return failure;
+    }
+
+    private static String acknowledgementRelay(NostrRelay relay) {
+        if (relay == null) return "unknown";
+        try {
+            URI address = URI.create(relay.getUrl());
+            // Relay URLs may carry authentication in user-info or query parameters.
+            if (address.getHost() == null) return "unknown";
+            return new URI(address.getScheme(), null, address.getHost(), address.getPort(), null, null, null).toString();
+        } catch (Exception invalidAddress) {
+            return "unknown";
+        }
+    }
+
+    private static String acknowledgementMessage(String message) {
+        if (message == null || message.isEmpty()) return "no reason supplied";
+        int length = Math.min(message.length(), 512);
+        StringBuilder result = new StringBuilder(length + 3);
+        for (int index = 0; index < length; index++) {
+            char value = message.charAt(index);
+            result.append(Character.isISOControl(value) ? ' ' : value);
+        }
+        if (message.length() > length) result.append("...");
+        return result.toString();
+    }
+
     private AsyncTask<List<AsyncTask<NostrMessageAck>>> ack(
         List<AsyncTask<NostrMessageAck>> promises,
         NostrPoolAckPolicy ackPolicy
@@ -375,7 +428,7 @@ public class NostrPool {
                         if (ackPolicy.apply(promises) == Status.SUCCESS) {
                             if (finished.compareAndSet(false, true)) res.accept(promises);
                         } else if (left == 0 && finished.compareAndSet(false, true)) {
-                            rej.accept(new IllegalStateException("Failed to achieve required acknowledgements"));
+                            rej.accept(acknowledgementFailure(promises));
                         }
                     } catch (Throwable error) {
                         if (finished.compareAndSet(false, true)) rej.accept(error);
@@ -661,8 +714,7 @@ public class NostrPool {
         NostrFilter filter,
         int numEvents,
         boolean withEose,
-        @Nullable
-        Duration timeout
+        @Nullable Duration timeout
     ) {
         return fetch(Arrays.asList(filter), NostrWaitForEventFetchPolicy.get(e -> true, numEvents, withEose, timeout));
     }
