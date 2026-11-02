@@ -37,6 +37,7 @@ import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -61,6 +62,7 @@ import org.ngengine.nostr4j.event.UnsignedNostrEvent;
 import org.ngengine.nostr4j.proto.NostrMessage;
 import org.ngengine.nostr4j.proto.NostrMessageAck;
 import org.ngengine.nostr4j.proto.impl.NostrClosedMessage;
+import org.ngengine.nostr4j.proto.impl.NostrEOSEMessage;
 import org.ngengine.nostr4j.proto.impl.NostrNoticeMessage;
 import org.ngengine.nostr4j.signer.NostrKeyPairSigner;
 import org.ngengine.platform.AsyncTask;
@@ -119,11 +121,7 @@ public class TestRelayLoopScheduling {
                 AsyncTask<NostrMessageAck> second = relay.sendMessage(event);
                 awaitCondition(() -> attempts.get() == 2, 2000, "Both callers must reach the relay send queue");
                 RecordingWebsocketTransport transport = testPlatform.getLastTransport();
-                Assert.assertEquals(
-                    "Concurrent callers share one wire publication",
-                    1,
-                    transport.sentMessages.size()
-                );
+                Assert.assertEquals("Concurrent callers share one wire publication", 1, transport.sentMessages.size());
                 String response = "[\"OK\",\"" + event.getId() + "\"," + accepted + ",\"test acknowledgement\"]";
                 for (WebsocketTransportListener listener : transport.listeners) listener.onConnectionMessage(response);
                 awaitCondition(
@@ -131,14 +129,8 @@ public class TestRelayLoopScheduling {
                     2000,
                     "Publishing the same signed event twice must not orphan the first ACK promise"
                 );
-                Assert.assertEquals(
-                    accepted,
-                    first.await().getStatus() == NostrMessageAck.Status.SUCCESS
-                );
-                Assert.assertEquals(
-                    accepted,
-                    second.await().getStatus() == NostrMessageAck.Status.SUCCESS
-                );
+                Assert.assertEquals(accepted, first.await().getStatus() == NostrMessageAck.Status.SUCCESS);
+                Assert.assertEquals(accepted, second.await().getStatus() == NostrMessageAck.Status.SUCCESS);
                 relay.disconnect("test-cleanup").await();
             }
         } finally {
@@ -153,17 +145,12 @@ public class TestRelayLoopScheduling {
         try {
             relay.connect().await();
             relay.setAckTimeout(0, TimeUnit.SECONDS);
-            SignedNostrEvent event = signer
-                .sign(new UnsignedNostrEvent().withKind(1).withContent("Timeout fixture"))
-                .await();
+            SignedNostrEvent event = signer.sign(new UnsignedNostrEvent().withKind(1).withContent("Timeout fixture")).await();
             AsyncTask<NostrMessageAck> first = relay.sendMessage(event);
             AsyncTask<NostrMessageAck> second = relay.sendMessage(event);
             awaitCondition(() -> first.isDone() && second.isDone(), 4000, "An expired shared ACK must settle every caller");
             Assert.assertEquals(NostrMessageAck.Status.FAILURE, first.await().getStatus());
-            Assert.assertEquals(
-                NostrMessageAck.Status.FAILURE,
-                second.await().getStatus()
-            );
+            Assert.assertEquals(NostrMessageAck.Status.FAILURE, second.await().getStatus());
         } finally {
             relay.disconnect("test-cleanup").await();
             signer.getKeyPair().destroy();
@@ -188,9 +175,7 @@ public class TestRelayLoopScheduling {
                     }
                 }
             );
-            SignedNostrEvent event = signer
-                .sign(new UnsignedNostrEvent().withKind(1).withContent("Retry fixture"))
-                .await();
+            SignedNostrEvent event = signer.sign(new UnsignedNostrEvent().withKind(1).withContent("Retry fixture")).await();
             AsyncTask<NostrMessageAck> first = relay.sendMessage(event);
             AsyncTask<NostrMessageAck> second = relay.sendMessage(event);
             awaitCondition(
@@ -207,10 +192,7 @@ public class TestRelayLoopScheduling {
             }
             assertTrue("Both callers must settle when transport retries are exhausted", first.isDone() && second.isDone());
             Assert.assertEquals(NostrMessageAck.Status.FAILURE, first.await().getStatus());
-            Assert.assertEquals(
-                NostrMessageAck.Status.FAILURE,
-                second.await().getStatus()
-            );
+            Assert.assertEquals(NostrMessageAck.Status.FAILURE, second.await().getStatus());
         } finally {
             relay.disconnect("test-cleanup").await();
             signer.getKeyPair().destroy();
@@ -221,7 +203,7 @@ public class TestRelayLoopScheduling {
     public void walletShutdownDisconnectsOwnedRelaysAndPreservesSharedPool() throws Exception {
         org.ngengine.wallets.nip47.NWCUri uri = new org.ngengine.wallets.nip47.NWCUri(
             new org.ngengine.nostr4j.keypair.NostrKeyPair().getPublicKey(),
-            java.util.Collections.emptyList(),
+            Collections.emptyList(),
             "1".repeat(64),
             null
         );
@@ -303,23 +285,127 @@ public class TestRelayLoopScheduling {
 
     @Test
     public void budgetRotationsUseRealConnectionLifecycleAndReleaseOnlyTheLastHint() throws Exception {
-        NostrPool pool=new NostrPool();
-        NostrRelay preferred=new NostrRelay("wss://preferred.test").setConnectionPriority(100);
-        NostrRelay required=new NostrRelay("wss://required.test");
+        NostrPool pool = new NostrPool();
+        NostrRelay preferred = new NostrRelay("wss://preferred.test").setConnectionPriority(100);
+        NostrRelay required = new NostrRelay("wss://required.test");
         try {
-            pool.setConnectionBudget(1);pool.addRelay(preferred);pool.addRelay(required);
-            awaitCondition(preferred::isConnected,2000,"Preferred relay did not connect");
-            for(int i=0;i<5;i++) {
-                NostrSubscription first=pool.subscribe(new NostrFilter().withKind(1),List.of(required.getUrl()));
-                NostrSubscription second=pool.subscribe(new NostrFilter().withKind(1),List.of(required.getUrl()));
-                first.open();second.open();
-                awaitCondition(()->required.isConnected() && !preferred.isConnected(),2000,"Required relay did not replace automatic relay");
-                first.close();Thread.sleep(30);assertTrue(required.isConnected());
+            pool.setConnectionBudget(1);
+            pool.addRelay(preferred);
+            pool.addRelay(required);
+            awaitCondition(preferred::isConnected, 2000, "Preferred relay did not connect");
+            for (int i = 0; i < 5; i++) {
+                NostrSubscription first = pool.subscribe(new NostrFilter().withKind(1), List.of(required.getUrl()));
+                NostrSubscription second = pool.subscribe(new NostrFilter().withKind(1), List.of(required.getUrl()));
+                first.open();
+                second.open();
+                awaitCondition(
+                    () -> required.isConnected() && !preferred.isConnected(),
+                    2000,
+                    "Required relay did not replace automatic relay"
+                );
+                first.close();
+                Thread.sleep(30);
+                assertTrue(required.isConnected());
                 second.close();
-                try {awaitCondition(()->preferred.isConnected() && !required.isConnected(),2000,"Automatic connection did not return after the last owner closed");}
-                catch(AssertionError failure) {throw new AssertionError("Rotation "+i+": preferred="+preferred.getStatus()+", required="+required.getStatus(),failure);}
+                try {
+                    awaitCondition(
+                        () -> preferred.isConnected() && !required.isConnected(),
+                        2000,
+                        "Automatic connection did not return after the last owner closed"
+                    );
+                } catch (AssertionError failure) {
+                    throw new AssertionError(
+                        "Rotation " + i + ": preferred=" + preferred.getStatus() + ", required=" + required.getStatus(),
+                        failure
+                    );
+                }
             }
-        }finally {for(NostrRelay relay:pool.clean()) relay.disconnect("Fixture complete",false).await();}
+        } finally {
+            for (NostrRelay relay : pool.clean()) relay.disconnect("Fixture complete", false).await();
+        }
+    }
+
+    @Test
+    public void transportErrorReplaysOpenSubscriptionOnNewSocketAndResetsEose() throws Exception {
+        NostrPool pool = new NostrPool();
+        NostrRelay relay = new NostrRelay(TEST_RELAY_URL);
+        try {
+            pool.addRelay(relay).await();
+            NostrSubscription sub = pool.subscribe(new NostrFilter().withKind(25050));
+            sub.open();
+            RecordingWebsocketTransport transport = testPlatform.getLastTransport();
+            NostrRelaySubManager manager = relay.getComponent(NostrRelaySubManager.class);
+            awaitCondition(() -> transport.requestCount(sub.getSubId()) == 1, 3000, "Initial REQ missing from wire");
+            NostrSubscription retired = pool.subscribe(new NostrFilter().withKind(1));
+            retired.open();
+            awaitCondition(() -> transport.requestCount(retired.getSubId()) == 1, 3000, "Initial retired REQ missing");
+            retired.close();
+            awaitCondition(() -> manager.isClosed(retired.getSubId()), 3000, "Retired subscription not recorded");
+            manager.onRelayMessage(relay, new NostrEOSEMessage(sub.getSubId()));
+            Assert.assertTrue(manager.isEose(sub));
+            testPlatform.setAutoOpen(false);
+            transport.connected = false;
+            for (WebsocketTransportListener listener : transport.listeners) listener.onConnectionError(
+                new IOException("reset")
+            );
+            for (WebsocketTransportListener listener : transport.listeners) listener.onConnectionClosedByServer(
+                "lost connection"
+            );
+            awaitCondition(
+                () -> transport.connectCalls.get() >= 2 && !relay.isConnected(),
+                4000,
+                "Error did not schedule a reconnect"
+            );
+            transport.openConnection();
+            awaitCondition(
+                () -> transport.requestCount(sub.getSubId()) == 2,
+                4000,
+                "Reconnect must put a second REQ on the replacement socket"
+            );
+            Assert.assertTrue(manager.isActive(sub));
+            Assert.assertTrue("Closed-ID tombstones survive reconnect", manager.isClosed(retired.getSubId()));
+            Assert.assertEquals("A closed subscription must not be replayed", 1, transport.requestCount(retired.getSubId()));
+            Assert.assertFalse("Old socket EOSE cannot classify events on the replacement socket", manager.isEose(sub));
+            manager.onRelayMessage(relay, new NostrEOSEMessage(sub.getSubId()));
+            Assert.assertTrue(manager.isEose(sub));
+            sub.close();
+        } finally {
+            // If the assertion failed before the replacement opened, release
+            // the controllable transport before the ordinary pool cleanup.
+            RecordingWebsocketTransport transport = testPlatform.getLastTransport();
+            if (transport != null && !transport.isConnected()) transport.openConnection();
+            for (NostrRelay peer : pool.clean()) peer.disconnect("Fixture complete", false).await();
+        }
+    }
+
+    @Test
+    public void staleErrorAndCloseCannotResetConnectedReplacement() throws Exception {
+        NostrPool pool = new NostrPool();
+        NostrRelay relay = new NostrRelay(TEST_RELAY_URL);
+        AtomicInteger notices = new AtomicInteger();
+        try {
+            pool.addNoticeListener((source, message, error) -> notices.incrementAndGet());
+            pool.addRelay(relay).await();
+            NostrSubscription sub = pool.subscribe(new NostrFilter().withKind(25050));
+            sub.open();
+            RecordingWebsocketTransport transport = testPlatform.getLastTransport();
+            awaitCondition(() -> transport.requestCount(sub.getSubId()) == 1, 3000, "Initial REQ missing from wire");
+            int attempts = transport.connectCalls.get();
+            for (WebsocketTransportListener listener : transport.listeners) listener.onConnectionError(
+                new IOException("late error")
+            );
+            for (WebsocketTransportListener listener : transport.listeners) listener.onConnectionClosedByServer("late close");
+            awaitCondition(() -> notices.get() == 1, 3000, "The error notice was not delivered");
+            AsyncTask<NostrRelay> barrier = relay.connect();
+            awaitCondition(barrier::isDone, 3000, "Relay callback queue did not drain");
+            barrier.await();
+            Assert.assertTrue("A current connection must survive old terminal callbacks", relay.isConnected());
+            Assert.assertEquals(attempts, transport.connectCalls.get());
+            Assert.assertEquals(1, transport.requestCount(sub.getSubId()));
+            sub.close();
+        } finally {
+            for (NostrRelay peer : pool.clean()) peer.disconnect("Fixture complete", false).await();
+        }
     }
 
     @Test
@@ -336,39 +422,68 @@ public class TestRelayLoopScheduling {
 
     @Test
     public void cancelledSubscriptionsDiscardLateEventsBeforeSignatureWorkButActiveReadsStillVerify() throws Exception {
-        NostrKeyPairSigner signer=NostrKeyPairSigner.generate();
-        NostrPool pool=new NostrPool();NostrRelay relay=new NostrRelay(TEST_RELAY_URL);
-        AtomicInteger delivered=new AtomicInteger();
+        NostrKeyPairSigner signer = NostrKeyPairSigner.generate();
+        NostrPool pool = new NostrPool();
+        NostrRelay relay = new NostrRelay(TEST_RELAY_URL);
+        AtomicInteger delivered = new AtomicInteger();
         try {
             pool.addRelay(relay).await();
-            relay.addComponent(new NostrRelayLifecycleManager() {
-                @Override public boolean onRelayMessage(NostrRelay source,NostrMessage message) {
-                    if(message instanceof SignedNostrEvent) delivered.incrementAndGet();
-                    return true;
+            relay.addComponent(
+                new NostrRelayLifecycleManager() {
+                    @Override
+                    public boolean onRelayMessage(NostrRelay source, NostrMessage message) {
+                        if (message instanceof SignedNostrEvent) delivered.incrementAndGet();
+                        return true;
+                    }
                 }
-            });
-            SignedNostrEvent event=signer.sign(new UnsignedNostrEvent().withKind(1).withContent("Late event fixture")).await();
-            NostrSubscription sub=pool.subscribe(new NostrFilter().withKind(1));sub.open();
-            NostrRelaySubManager manager=relay.getComponent(NostrRelaySubManager.class);
-            awaitCondition(()->manager.isActive(sub),2000,"Subscription must be registered before the relay replies");
-            ArrayList<Object> wire=new ArrayList<Object>(NostrMessage.toSerial(event));wire.add(1,sub.getSubId());
-            String body=testPlatform.toJSON(wire);RecordingWebsocketTransport transport=testPlatform.getLastTransport();
-            for(WebsocketTransportListener listener:transport.listeners) listener.onConnectionMessage(body);
-            awaitCondition(()->delivered.get()==1,2000,"Active reads still deliver verified events");
-            sub.close();awaitCondition(()->manager.isClosed(sub.getSubId()),2000,"Cancellation must retire the subscription locally");
-            int verified=testPlatform.verifications.get();
-            for(int i=0;i<100;i++) for(WebsocketTransportListener listener:transport.listeners) listener.onConnectionMessage(body);
-            Assert.assertEquals(verified,testPlatform.verifications.get());Assert.assertEquals(1,delivered.get());
-            manager.onRelayBeforeSend(relay,sub);Assert.assertFalse("Reusing a subscription ID clears its old tombstone",manager.isClosed(sub.getSubId()));
-            @SuppressWarnings("unchecked") LinkedHashMap<String, Object> invalid=new LinkedHashMap<String,Object>((Map<String,Object>)wire.get(2));
-            invalid.put("sig","0".repeat(128));wire.set(2,invalid);
-            for(WebsocketTransportListener listener:transport.listeners) listener.onConnectionMessage(testPlatform.toJSON(wire));
-            awaitCondition(()->testPlatform.verifications.get()>verified,2000,"Active events must not bypass signature verification");
-            Thread.sleep(50);Assert.assertEquals(1,delivered.get());
-            for(int i=0;i<2000;i++) manager.onRelayMessage(relay,new NostrClosedMessage("closed-"+i,"fixture"));
-            Field closures=manager.getClass().getDeclaredField("closedSubscriptions");closures.setAccessible(true);
-            Assert.assertEquals(1024,((Map<?,?>)closures.get(manager)).size());
-        } finally {for(NostrRelay peer:pool.clean()) peer.disconnect("Fixture complete",false).await();signer.getKeyPair().destroy();}
+            );
+            SignedNostrEvent event = signer
+                .sign(new UnsignedNostrEvent().withKind(1).withContent("Late event fixture"))
+                .await();
+            NostrSubscription sub = pool.subscribe(new NostrFilter().withKind(1));
+            sub.open();
+            NostrRelaySubManager manager = relay.getComponent(NostrRelaySubManager.class);
+            awaitCondition(() -> manager.isActive(sub), 2000, "Subscription must be registered before the relay replies");
+            ArrayList<Object> wire = new ArrayList<Object>(NostrMessage.toSerial(event));
+            wire.add(1, sub.getSubId());
+            String body = testPlatform.toJSON(wire);
+            RecordingWebsocketTransport transport = testPlatform.getLastTransport();
+            for (WebsocketTransportListener listener : transport.listeners) listener.onConnectionMessage(body);
+            awaitCondition(() -> delivered.get() == 1, 2000, "Active reads still deliver verified events");
+            sub.close();
+            awaitCondition(() -> manager.isClosed(sub.getSubId()), 2000, "Cancellation must retire the subscription locally");
+            int verified = testPlatform.verifications.get();
+            for (
+                int i = 0;
+                i < 100;
+                i++
+            ) for (WebsocketTransportListener listener : transport.listeners) listener.onConnectionMessage(body);
+            Assert.assertEquals(verified, testPlatform.verifications.get());
+            Assert.assertEquals(1, delivered.get());
+            manager.onRelayBeforeSend(relay, sub);
+            Assert.assertFalse("Reusing a subscription ID clears its old tombstone", manager.isClosed(sub.getSubId()));
+            @SuppressWarnings("unchecked")
+            LinkedHashMap<String, Object> invalid = new LinkedHashMap<String, Object>((Map<String, Object>) wire.get(2));
+            invalid.put("sig", "0".repeat(128));
+            wire.set(2, invalid);
+            for (WebsocketTransportListener listener : transport.listeners) listener.onConnectionMessage(
+                testPlatform.toJSON(wire)
+            );
+            awaitCondition(
+                () -> testPlatform.verifications.get() > verified,
+                2000,
+                "Active events must not bypass signature verification"
+            );
+            Thread.sleep(50);
+            Assert.assertEquals(1, delivered.get());
+            for (int i = 0; i < 2000; i++) manager.onRelayMessage(relay, new NostrClosedMessage("closed-" + i, "fixture"));
+            Field closures = manager.getClass().getDeclaredField("closedSubscriptions");
+            closures.setAccessible(true);
+            Assert.assertEquals(1024, ((Map<?, ?>) closures.get(manager)).size());
+        } finally {
+            for (NostrRelay peer : pool.clean()) peer.disconnect("Fixture complete", false).await();
+            signer.getKeyPair().destroy();
+        }
     }
 
     private static NGEPlatform getInstalledPlatform() throws Exception {
@@ -444,10 +559,12 @@ public class TestRelayLoopScheduling {
 
         private volatile boolean autoOpen = true;
         private volatile RecordingWebsocketTransport lastTransport;
-        private final AtomicInteger verifications=new AtomicInteger();
+        private final AtomicInteger verifications = new AtomicInteger();
 
-        @Override public AsyncTask<Boolean> schnorrVerifyAsync(String data,String signature,byte[] publicKey) {
-            verifications.incrementAndGet();return super.schnorrVerifyAsync(data,signature,publicKey);
+        @Override
+        public AsyncTask<Boolean> schnorrVerifyAsync(String data, String signature, byte[] publicKey) {
+            verifications.incrementAndGet();
+            return super.schnorrVerifyAsync(data, signature, publicKey);
         }
 
         public void setAutoOpen(boolean autoOpen) {
@@ -469,7 +586,8 @@ public class TestRelayLoopScheduling {
 
         private final TestPlatform platform;
         private final List<WebsocketTransportListener> listeners = new CopyOnWriteArrayList<WebsocketTransportListener>();
-        private final List<String> sentMessages = new ArrayList<String>();
+        private final List<String> sentMessages = new CopyOnWriteArrayList<String>();
+        private final AtomicInteger connectCalls = new AtomicInteger();
         private volatile boolean connected;
         private volatile boolean withholdWrites;
         private final List<Consumer<Throwable>> failedWrites = new CopyOnWriteArrayList<>();
@@ -489,13 +607,22 @@ public class TestRelayLoopScheduling {
 
         @Override
         public AsyncTask<Void> connect(String url) {
-            connected = platform.autoOpen;
-            if (platform.autoOpen) {
-                for (WebsocketTransportListener listener : listeners) {
-                    listener.onConnectionOpen();
-                }
-            }
+            connectCalls.incrementAndGet();
+            connected = false;
+            if (platform.autoOpen) openConnection();
             return AsyncTask.completed(null);
+        }
+
+        private void openConnection() {
+            connected = true;
+            for (WebsocketTransportListener listener : listeners) listener.onConnectionOpen();
+        }
+
+        private long requestCount(String subscriptionId) {
+            return sentMessages
+                .stream()
+                .filter(message -> message.contains("\"REQ\"") && message.contains(subscriptionId))
+                .count();
         }
 
         @Override

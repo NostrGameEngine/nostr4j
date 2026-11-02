@@ -97,6 +97,9 @@ public class NostrRelayLifecycleManager implements NostrRelayComponent {
 
     @Override
     public boolean onRelayConnect(NostrRelay relay) {
+        // Subscription IDs belong to the previous WebSocket, even when an error
+        // transitioned the relay before its later close callback was processed.
+        this.subTracker.clear();
         this.keepAlive();
         scheduleInactivityCheck(relay);
         return true;

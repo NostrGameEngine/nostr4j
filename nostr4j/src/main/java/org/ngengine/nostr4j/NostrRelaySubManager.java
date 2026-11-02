@@ -75,6 +75,9 @@ public class NostrRelaySubManager implements NostrRelayComponent {
 
     @Override
     public boolean onRelayConnect(NostrRelay relay) {
+        // EOSE and active-read state belong to the old WebSocket. Closed-ID
+        // tombstones remain intact until the corresponding request is reopened.
+        this.subTracker.clear();
         return true;
     }
 

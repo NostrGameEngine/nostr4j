@@ -604,7 +604,9 @@ public class NostrRelay {
                                 .catchException(e -> {
                                     if (failures + 1 >= maxSendFailures) {
                                         logger.log(Level.WARNING, "Error sending message", e);
-                                        List<NostrMessageAck> acknowledgements = eventId == null ? null : waitingEventsAck.get(eventId);
+                                        List<NostrMessageAck> acknowledgements = eventId == null
+                                            ? null
+                                            : waitingEventsAck.get(eventId);
                                         if (
                                             acknowledgements != null &&
                                             acknowledgements.contains(result) &&
@@ -717,7 +719,9 @@ public class NostrRelay {
      *
      * @return query-tier priority
      */
-    public int getQueryPriority() { return queryPriority; }
+    public int getQueryPriority() {
+        return queryPriority;
+    }
 
     /**
      * Changes the priority used to order query tiers for newly created read plans.
@@ -726,7 +730,10 @@ public class NostrRelay {
      * @param priority new query priority; higher values are queried first
      * @return this relay
      */
-    public NostrRelay setQueryPriority(int priority) { queryPriority = priority; return this; }
+    public NostrRelay setQueryPriority(int priority) {
+        queryPriority = priority;
+        return this;
+    }
 
     public AsyncTask<NostrRelay> connect() {
         NGEPlatform platform = NGEUtils.getPlatform();
@@ -786,10 +793,10 @@ public class NostrRelay {
      * Call this on the relay executor; disconnections requested for other reasons are preserved.
      */
     void cancelBudgetDisconnection() {
-        if(!"Pool connection budget".equals(markForDisconnection)) return;
-        markForDisconnection=null;
+        if (!"Pool connection budget".equals(markForDisconnection)) return;
+        markForDisconnection = null;
         ConnectionCallback callback;
-        while((callback=disconnectCallbacks.poll())!=null) callback.call(null);
+        while ((callback = disconnectCallbacks.poll()) != null) callback.call(null);
     }
 
     public AsyncTask<NostrRelay> disconnect(String reason, boolean reconnect) {
@@ -878,7 +885,12 @@ public class NostrRelay {
             // CLOSE is local state. Do not spend CPU verifying buffered events for a retired read.
             // Untracked subscriptions retain their previous behavior; only known closures are suppressed.
             NostrRelaySubManager manager = getComponent(NostrRelaySubManager.class);
-            if ("EVENT".equals(prefix) && data.size() > 1 && manager != null && manager.isClosed(NGEUtils.safeString(data.get(1)))) return;
+            if (
+                "EVENT".equals(prefix) &&
+                data.size() > 1 &&
+                manager != null &&
+                manager.isClosed(NGEUtils.safeString(data.get(1)))
+            ) return;
             assert dbg(() -> {
                 logger.finest("Received message: " + msg);
             });
@@ -1193,7 +1205,10 @@ public class NostrRelay {
                                 logger.log(Level.WARNING, "Error cancelled by component: " + ex.getMessage(), ex);
                             }
                         }
-                        resetConnection();
+                        // A queued error from the preceding socket may arrive
+                        // after a replacement has already opened. Report it, but
+                        // never reset a transport that is currently connected.
+                        if (!connector.isConnected()) resetConnection();
                     } finally {
                         r0.accept(this);
                     }
